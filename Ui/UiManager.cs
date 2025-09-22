@@ -182,8 +182,6 @@ internal class UiManager : IUiManager {
         };
 
         EventHooks.LanguageHas += (key, sheet) => {
-            Logger.Info($"Language Has: {key}, {sheet}");
-
             if (key == "StartMultiplayerBtn" && sheet == "MainMenu") {
                 return true;
             }
@@ -191,16 +189,10 @@ internal class UiManager : IUiManager {
             return null;
         };
         EventHooks.LanguageGet += (key, sheet) => {
-            Logger.Info($"Language Get: {key}, {sheet}");
-            
             if (key == "StartMultiplayerBtn" && sheet == "MainMenu") {
                 return "Start Multiplayer";
             }
-            
-            if (key == "MODAL_PROGRESS" && sheet == "MainMenu" && _netClient.IsConnected) {
-                return "You will be disconnected";
-            }
-        
+
             return null;
         };
         
