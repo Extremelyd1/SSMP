@@ -35,13 +35,16 @@ internal class AnimationManager {
     /// <summary>
     /// Animations that are allowed to loop, because they need to transmit the effect.
     /// </summary>
-    private static readonly string[] AllowedLoopAnimations = ["Focus Get", "Run"];
+    private static readonly string[] AllowedLoopAnimations = [
+        "Airborne", 
+        "Wall Slide"
+    ];
 
     /// <summary>
     /// Clip names of animations that are handled by the animation controller.
     /// </summary>
     private static readonly string[] AnimationControllerClipNames = [
-        "Airborne"
+        // "Airborne"
     ];
 
     /// <summary>
@@ -165,6 +168,23 @@ internal class AnimationManager {
         { "Super Jump Loop", AnimationClip.SuperJumpLoop },
         { "Super Jump Hit Roof", AnimationClip.SuperJumpHitRoof },
         { "Super Jump Fall", AnimationClip.SuperJumpFall },
+        { "LookUp", AnimationClip.LookUp },
+        { "LookUpEnd", AnimationClip.LookUpEnd },
+        { "Surface In", AnimationClip.SurfaceIn },
+        { "Surface InToIdle", AnimationClip.SurfaceInToIdle },
+        { "Surface Idle", AnimationClip.SurfaceIdle },
+        { "Surface IdleToSwim", AnimationClip.SurfaceIdleToSwim },
+        { "Surface TurnToSwim", AnimationClip.SurfaceTurnToSwim },
+        { "Swim Dash", AnimationClip.SwimDash },
+        { "Swim Dash Turn", AnimationClip.SwimDashTurn },
+        { "Mantle Cancel To Jump", AnimationClip.MantleCancelToJump },
+        { "Mantle Cancel To Jump Backwards", AnimationClip.MantleCancelToJumpBackwards },
+        { "Wall Scramble Antic", AnimationClip.WallScrambleAntic },
+        { "Wall Scramble", AnimationClip.WallScramble },
+        { "Wall Scramble End", AnimationClip.WallScrambleEnd },
+        { "Wall Slash", AnimationClip.WallSlash },
+        { "Walljump Somersault", AnimationClip.WallJumpSomersault },
+        { "Airborne", AnimationClip.Airborne },
     };
 
     /// <summary>
