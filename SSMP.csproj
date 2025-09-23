@@ -56,10 +56,6 @@
         <PackageReference Include="Silksong.GameLibs" Version="1.1.0-silksong1.0.28650">
             <IncludeAssets>compile</IncludeAssets>
         </PackageReference>
-<!--        <PackageReference Include="MonoDetour.HookGen" Version="0.6.*" PrivateAssets="all">-->
-<!--            <IncludeAssets>compile</IncludeAssets>-->
-<!--        </PackageReference>-->
-<!--        <PackageReference Include="MonoDetour" Version="0.6.*"/>-->
         <PackageReference Include="BouncyCastle.Cryptography" Version="2.5.1"/>
     </ItemGroup>
 

@@ -10,6 +10,8 @@ internal class AltSlash : SlashBase {
     /// <inheritdoc/>
     public override void Play(GameObject playerObject, bool[] effectInfo) {
         // Call the base function with the correct parameters
-        // Play(playerObject, effectInfo, HeroController.instance.slashAltPrefab, SlashType.Alt);
+        // Normal slash is used here, because while the animation clip is called "Slash Alt", it uses the normal
+        // slash instance
+        Play(playerObject, effectInfo, HeroController.instance.normalSlash, SlashType.Alt);
     }
 }

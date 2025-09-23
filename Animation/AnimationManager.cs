@@ -170,10 +170,11 @@ internal class AnimationManager {
     /// <summary>
     /// Dictionary mapping animation clip enum values to IAnimationEffect instantiations.
     /// </summary>
-    private static readonly Dictionary<AnimationClip, IAnimationEffect> AnimationEffects =
-        new() {
-            
-        };
+    private static readonly Dictionary<AnimationClip, IAnimationEffect> AnimationEffects = new() {
+        { AnimationClip.Slash, new Slash() },
+        { AnimationClip.SlashAlt, new AltSlash() },
+        { AnimationClip.UpSlash, new UpSlash() },
+    };
 
     /// <summary>
     /// The net client for sending animation updates.

@@ -9,6 +9,6 @@ internal class UpSlash : SlashBase {
     /// <inheritdoc/>
     public override void Play(GameObject playerObject, bool[] effectInfo) {
         // Call the base function with the correct parameters
-        // Play(playerObject, effectInfo, HeroController.instance.upSlashPrefab, SlashType.Up);
+        Play(playerObject, effectInfo, HeroController.instance.upSlash, SlashType.Up);
     }
 }
