@@ -86,7 +86,8 @@ internal class AnimationManager {
         { "SitLook 4", AnimationClip.SitLook4 },
         { "Get Off", AnimationClip.GetOff },
         { "Land", AnimationClip.Land },
-        { "Run", AnimationClip.Run},
+        { "Run", AnimationClip.Run },
+        { "RunQ", AnimationClip.RunQ },
         { "Run To Idle", AnimationClip.RunToIdle },
         { "Idle", AnimationClip.Idle },
         { "Idle To Run", AnimationClip.IdleToRun },
@@ -127,9 +128,11 @@ internal class AnimationManager {
         { "Umbrella Inflate Antic", AnimationClip.UmbrellaInflateAntic },
         { "Walljump", AnimationClip.WallJump },
         { "Wall Slide", AnimationClip.WallSlide },
+        { "Wall Cling", AnimationClip.WallCling },
         { "Sit Fall Asleep", AnimationClip.SitFallAsleep },
         { "Umbrella Inflate", AnimationClip.UmbrellaInflate },
         { "Umbrella Float", AnimationClip.UmbrellaFloat },
+        { "Umbrella Deflate", AnimationClip.UmbrellaDeflate },
         { "Idle Rest", AnimationClip.IdleRest },
         { "Mantle Land To Run", AnimationClip.MantleLandToRun },
         { "Sit", AnimationClip.Sit },
@@ -142,6 +145,9 @@ internal class AnimationManager {
         { "Needolin StartCancelable", AnimationClip.NeedolinStartCancelable },
         { "Needolin End", AnimationClip.NeedolinEnd },
         { "Needolin Play", AnimationClip.NeedolinPlay },
+        { "NeedolinSit Start", AnimationClip.NeedolinSitStart },
+        { "NeedolinSit Play", AnimationClip.NeedolinSitPlay },
+        { "NeedolinSit End", AnimationClip.NeedolinSitEnd },
         { "Harpoon Antic", AnimationClip.HarpoonAntic },
         { "Harpoon Throw", AnimationClip.HarpoonThrow },
         { "Harpoon Catch", AnimationClip.HarpoonCatch },
@@ -177,6 +183,7 @@ internal class AnimationManager {
         { "Surface TurnToSwim", AnimationClip.SurfaceTurnToSwim },
         { "Swim Dash", AnimationClip.SwimDash },
         { "Swim Dash Turn", AnimationClip.SwimDashTurn },
+        { "Swim Dash Bonk", AnimationClip.SwimDashBonk },
         { "Mantle Cancel To Jump", AnimationClip.MantleCancelToJump },
         { "Mantle Cancel To Jump Backwards", AnimationClip.MantleCancelToJumpBackwards },
         { "Wall Scramble Antic", AnimationClip.WallScrambleAntic },
@@ -185,6 +192,106 @@ internal class AnimationManager {
         { "Wall Slash", AnimationClip.WallSlash },
         { "Walljump Somersault", AnimationClip.WallJumpSomersault },
         { "Airborne", AnimationClip.Airborne },
+        { "Sprint Bonk", AnimationClip.SprintBonk },
+        { "Slash Land Run", AnimationClip.SlashLandRun },
+        { "v3 Down Slash Antic", AnimationClip.V3DownSlashAntic },
+        { "v3 Down Slash", AnimationClip.V3DownSlash },
+        { "Dash Upper Antic", AnimationClip.DashUpperAntic },
+        { "Dash Upper", AnimationClip.DashUpper },
+        { "Dash Upper Recovery", AnimationClip.DashUpperRecovery },
+        { "Wanderer Dash Attack", AnimationClip.WandererDashAttack },
+        { "Wanderer Dash Attack Alt", AnimationClip.WandererDashAttackAlt },
+        { "DownSlash", AnimationClip.DownSlash },
+        { "DownSlashAlt", AnimationClip.DownSlashAlt },
+        { "SpinBall Antic", AnimationClip.SpinBallAntic },
+        { "SpinBall Launch", AnimationClip.SpinBallLaunch },
+        { "SpinBall", AnimationClip.SpinBall },
+        { "NeedleArt Dash", AnimationClip.NeedleArtDash },
+        
+        { "Rage Bind", AnimationClip.RageBind },
+        { "Rage Bind Quick", AnimationClip.RageBindQuick },
+        { "Rage Bind Long", AnimationClip.RageBindLong },
+        { "Rage Bind Grounded", AnimationClip.RageBindGrounded },
+        { "Rage Bind Quick Grounded", AnimationClip.RageBindQuickGrounded },
+        { "Rage Bind Long Grounded", AnimationClip.RageBindLongGrounded },
+        { "Rage Bind Burst", AnimationClip.RageBindBurst },
+        { "Rage Bind Burst Quick", AnimationClip.RageBindBurstQuick },
+        { "Rage Bind Burst Long", AnimationClip.RageBindBurstLong },
+        { "Land Q", AnimationClip.LandQ },
+        { "Rage Idle", AnimationClip.RageIdle },
+        { "Rage Idle End", AnimationClip.RageIdleEnd },
+        { "Dash Attack Antic 1", AnimationClip.DashAttackAntic1 },
+        { "Dash Attack 1", AnimationClip.DashAttack1 },
+        { "Dash Attack Antic 2", AnimationClip.DashAttackAntic2 },
+        { "Dash Attack 2", AnimationClip.DashAttack2 },
+        
+        { "BindCharge Witch", AnimationClip.BindChargeWitch },
+        { "BindCharge Witch Quick", AnimationClip.BindChargeWitchQuick },
+        { "BindCharge Witch Long", AnimationClip.BindChargeWitchLong },
+        
+        { "DownSpike Charge", AnimationClip.DownSpikeCharge },
+        { "Dash Attack Charge", AnimationClip.DashAttackCharge },
+        { "Quick Craft Ground", AnimationClip.QuickCraftGround },
+        { "Quick Craft Air", AnimationClip.QuickCraftAir },
+        { "Dash Attack Leap", AnimationClip.DashAttackLeap },
+        { "Dash Attack Slash", AnimationClip.DashAttackSlash },
+        { "BindCharge Ground Land", AnimationClip.BindChargeGroundLand },
+        { "BindCharge Heal Burst", AnimationClip.BindChargeHealBurst },
+        { "BindCharge End", AnimationClip.BindChargeEnd },
+        
+        { "BindCharge Twirl Air", AnimationClip.BindChargeTwirlAir },
+        { "BindCharge Twirl Ground", AnimationClip.BindChargeTwirlGround },
+        
+        { "NeedleThrow AnticG", AnimationClip.NeedleThrowAnticG },
+        { "NeedleThrow AnticA", AnimationClip.NeedleThrowAnticA },
+        { "NeedleThrow Throwing", AnimationClip.NeedleThrowThrowing },
+        { "NeedleThrow Catch", AnimationClip.NeedleThrowCatch },
+        
+        { "Parry Stance", AnimationClip.ParryStance },
+        { "Parry Stance Ground", AnimationClip.ParryStanceGround },
+        { "Parry Recover", AnimationClip.ParryRecover },
+        { "Parry Recover Ground", AnimationClip.ParryRecoverGround },
+        
+        { "AirSphere Attack", AnimationClip.AirSphereAttack },
+        { "AirSphere End", AnimationClip.AirSphereEnd },
+        
+        { "Silk Charge Antic", AnimationClip.SilkChargeAntic },
+        { "Silk Charge", AnimationClip.SilkCharge },
+        { "Silk Charge Recover", AnimationClip.SilkChargeRecover },
+        
+        { "Silk Bomb Antic", AnimationClip.SilkBombAntic },
+        { "Silk Bomb Loop", AnimationClip.SilkBombLoop },
+        { "Silk Bomb Recover", AnimationClip.SilkBombRecover },
+        
+        { "Sit Craft", AnimationClip.SitCraft },
+        { "ToolThrow Up", AnimationClip.ToolThrowUp },
+        { "ToolThrow Q", AnimationClip.ToolThrowQ },
+        { "ToolThrowAlt Q", AnimationClip.ToolThrowAltQ },
+        
+        { "Recoil Twirl", AnimationClip.RecoilTwirl },
+        { "DownSpikeBounce 1", AnimationClip.DownSpikeBounce1 },
+        { "DownSpikeBounce 2", AnimationClip.DownSpikeBounce2 },
+        
+        { "Charge Up", AnimationClip.ChargeUp },
+        
+        { "Idle Hurt", AnimationClip.IdleHurt },
+        { "TurnWalk", AnimationClip.TurnWalk },
+        { "Walk", AnimationClip.Walk },
+        { "Look Up Half", AnimationClip.LookUpHalf },
+        { "Look Up Half End", AnimationClip.LookUpHalfEnd },
+        { "LookDown Slight", AnimationClip.LookDownSlight },
+        { "LookDown Slight End", AnimationClip.LookDownSlightEnd },
+        
+        { "Scuttle Start", AnimationClip.ScuttleStart },
+        { "Scuttle Loop", AnimationClip.ScuttleLoop },
+        { "Scuttle End", AnimationClip.ScuttleEnd },
+        { "Scuttle Fall", AnimationClip.ScuttleFall },
+        { "Scuttle Vault", AnimationClip.ScuttleVault },
+        
+        { "Stun", AnimationClip.Stun },
+        { "Recoil", AnimationClip.Recoil },
+        
+        { "Grab Escape", AnimationClip.GrabEscape },
     };
 
     /// <summary>
@@ -700,6 +807,11 @@ internal class AnimationManager {
         var ignoreClipNames = new[] { "Quake Land 2" };
     
         for (var i = start + direction; i != num; i += direction) {
+            if (i >= frames.Length || i < 0) {
+                Logger.Warn("tk2dSpriteAnimator ProcessEvents index out of bounds!");
+                continue;
+            }
+
             if (i != 0 && !frames[i].triggerEvent || ignoreClipNames.Contains(self.CurrentClip.name)) {
                 continue;
             }
