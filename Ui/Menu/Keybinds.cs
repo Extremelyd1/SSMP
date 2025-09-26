@@ -13,6 +13,6 @@ internal class Keybinds : PlayerActionSet {
 
     public Keybinds() {
         OpenChat = CreatePlayerAction("OpenChat");
-        OpenChat.AddDefaultBinding(Key.T);
+        OpenChat.AddDefaultBinding(Key.Y);
     }
 }

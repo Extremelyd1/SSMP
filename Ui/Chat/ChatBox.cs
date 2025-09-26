@@ -4,7 +4,6 @@ using SSMP.Api.Client;
 using SSMP.Game.Settings;
 using SSMP.Imports;
 using SSMP.Ui.Component;
-using SSMP.Ui.Resources;
 using SSMP.Util;
 using UnityEngine;
 using UnityEngine.UI;
@@ -100,7 +99,7 @@ internal class ChatBox : IChatBox {
     /// <summary>
     /// Event that is called when the user submits a message in the chat input.
     /// </summary>
-    public event Action<string> ChatInputEvent;
+    public event Action<string>? ChatInputEvent;
 
     /// <summary>
     /// Construct the chat box in the given group and with the given mod settings.
@@ -168,7 +167,7 @@ internal class ChatBox : IChatBox {
         }
 
         if (_isOpen) {
-            if (InputHandler.Instance.inputActions.Pause.WasPressed) {
+            if (InputHandler.Instance.inputActions.Pause.IsPressed) {
                 HideChatInput();
             }
         } else if (modSettings.Keybinds.OpenChat.IsPressed) {
@@ -385,7 +384,6 @@ internal class ChatBox : IChatBox {
         heroActions.SwipeInventoryJournal.Enabled = enabled;
         heroActions.SwipeInventoryTools.Enabled = enabled;
         heroActions.SwipeInventoryQuests.Enabled = enabled;
-        heroActions.Pause.Enabled = enabled;
     }
 
     /// <summary>

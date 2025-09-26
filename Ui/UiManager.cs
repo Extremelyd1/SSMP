@@ -7,6 +7,7 @@ using SSMP.Game.Settings;
 using SSMP.Hooks;
 using SSMP.Networking.Client;
 using SSMP.Ui.Chat;
+using SSMP.Ui.Menu;
 using SSMP.Util;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -315,6 +316,8 @@ internal class UiManager : IUiManager {
         _connectInterface.ConnectButtonPressed += (address, port, username) => {
             RequestClientConnectEvent?.Invoke(address, port, username, false);
         };
+
+        _modSettings.Keybinds = new Keybinds();
     }
     
     /// <summary>
