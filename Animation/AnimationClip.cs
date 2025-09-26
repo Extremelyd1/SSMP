@@ -2,6 +2,7 @@ namespace SSMP.Animation;
 
 /// <summary>
 /// Enumeration of all possible animation clip names.
+/// Some have doc comments explaining when they are played. The ones missing are either unknown or self-explanatory.
 /// </summary>
 internal enum AnimationClip {
     // Sprite animator clip names

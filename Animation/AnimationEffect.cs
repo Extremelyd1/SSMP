@@ -1,5 +1,3 @@
-using SSMP.Util;
-using HutongGames.PlayMaker.Actions;
 using SSMP.Game.Settings;
 using UnityEngine;
 
@@ -15,10 +13,10 @@ internal abstract class AnimationEffect : IAnimationEffect {
     protected ServerSettings ServerSettings;
 
     /// <inheritdoc/>
-    public abstract void Play(GameObject playerObject, bool[] effectInfo);
+    public abstract void Play(GameObject playerObject, byte[]? effectInfo);
 
     /// <inheritdoc/>
-    public abstract bool[] GetEffectInfo();
+    public abstract byte[]? GetEffectInfo();
 
     /// <inheritdoc/>
     public void SetServerSettings(ServerSettings serverSettings) {

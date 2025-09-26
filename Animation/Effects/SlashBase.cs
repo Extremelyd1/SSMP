@@ -1,7 +1,10 @@
+using System;
 using System.Collections.Generic;
+using GlobalSettings;
 using SSMP.Util;
-using HutongGames.PlayMaker.Actions;
+using SSMP.Internals;
 using UnityEngine;
+using Logger = SSMP.Logging.Logger;
 using Object = UnityEngine.Object;
 
 namespace SSMP.Animation.Effects;
@@ -22,31 +25,87 @@ internal abstract class SlashBase : ParryableEffect {
     };
     
     /// <inheritdoc/>
-    public abstract override void Play(GameObject playerObject, bool[] effectInfo);
+    public abstract override void Play(GameObject playerObject, byte[]? effectInfo);
 
     /// <inheritdoc/>
-    public override bool[] GetEffectInfo() {
-        // var playerData = PlayerData.instance;
-        //
-        // return new[] {
-        //     playerData.GetInt(nameof(PlayerData.health)) == 1,
-        //     playerData.GetInt(nameof(PlayerData.health)) == playerData.GetInt(nameof(PlayerData.maxHealth)),
-        //     playerData.GetBool(nameof(PlayerData.equippedCharm_6)), // Fury of the fallen
-        //     playerData.GetBool(nameof(PlayerData.equippedCharm_13)), // Mark of pride
-        //     playerData.GetBool(nameof(PlayerData.equippedCharm_18)), // Long nail
-        //     playerData.GetBool(nameof(PlayerData.equippedCharm_35)) // Grubberfly's Elegy
-        // };
-        return [];
+    public override byte[]? GetEffectInfo() {
+        return [(byte) CrestTypeExt.FromInternal(PlayerData.instance.CurrentCrestID)];
     }
 
     /// <summary>
     /// Plays the slash animation for the given player.
     /// </summary>
     /// <param name="playerObject">The GameObject representing the player.</param>
-    /// <param name="effectInfo">A boolean array containing effect info.</param>
+    /// <param name="effectInfo">A byte array containing effect info.</param>
     /// <param name="nailSlash">The nail slash instance.</param>
     /// <param name="type">The type of nail slash.</param>
-    protected void Play(GameObject playerObject, bool[] effectInfo, NailSlash nailSlash, SlashType type) {
+    protected void Play(GameObject playerObject, byte[]? effectInfo, SlashType type) {
+        if (effectInfo == null || effectInfo.Length < 1) {
+            Logger.Error("Could not get null or empty effect info for SlashBase");
+            return;
+        }
+        
+        // Keep in mind that AltSlash should use normalSlash in HeroController and vice versa
+
+        var crestType = (CrestType) effectInfo[0];
+        var toolCrest = ToolItemManager.GetCrestByName(crestType.ToInternal());
+        if (toolCrest == null) {
+            Logger.Error($"Could not find unknown ToolCrest with type: {crestType}, {crestType.ToInternal()}");
+            return;
+        }
+
+        HeroController.ConfigGroup? configGroup = null;
+        foreach (var config in HeroController.instance.configs) {
+            if (config.Config == toolCrest.HeroConfig) {
+                configGroup = config;
+                break;
+            }
+        }
+
+        if (configGroup == null) {
+            // TODO: maybe remove this warning if we simply default to the first config
+            Logger.Warn($"Could not find ConfigGroup for ToolCrest with type: {crestType}, {crestType.ToInternal()}, falling back to default");
+
+            configGroup = HeroController.instance.configs[0];
+            if (configGroup == null) {
+                Logger.Error("HeroController ConfigGroup array has null at position '0'!");
+                return;
+            }
+        }
+
+        HeroController.ConfigGroup? overrideGroup = null;
+        foreach (var specialConfig in HeroController.instance.specialConfigs) {
+            if (specialConfig.Config == toolCrest.HeroConfig && specialConfig.Config != Gameplay.WarriorCrest.HeroConfig) {
+                overrideGroup = specialConfig;
+                break;
+            }
+        }
+
+        NailSlash? nailSlash = null;
+        switch (type) {
+            case SlashType.Normal:
+                nailSlash = GetPropertyFromConfigGroup(configGroup, overrideGroup, group => group.NormalSlash);
+                break;
+            case SlashType.Alt:
+                nailSlash = GetPropertyFromConfigGroup(configGroup, overrideGroup, group => group.AlternateSlash);
+                break;
+            case SlashType.Up:
+                nailSlash = GetPropertyFromConfigGroup(configGroup, overrideGroup, group => group.UpSlash);
+                break;
+            case SlashType.Wall:
+                nailSlash = GetPropertyFromConfigGroup(configGroup, overrideGroup, group => group.WallSlash);
+                break;
+            case SlashType.Down:
+            default:
+                Logger.Error($"Cannot play animation for unknown nail slash: {type}");
+                break;
+        }
+
+        if (nailSlash == null) {
+            Logger.Error("Cannot play animation with null NailSlash");
+            return;
+        }
+        
         // Get the attacks gameObject from the player object
         var playerAttacks = playerObject.FindGameObjectInChildren("Attacks");
 
@@ -98,6 +157,27 @@ internal abstract class SlashBase : ParryableEffect {
         anim.Play(clipByName, Mathf.Epsilon, clipByName.fps);
         
         // TODO: nail imbued from NailAttackBase
+    }
+
+    private static T? GetPropertyFromConfigGroup<T>(
+        HeroController.ConfigGroup configGroup,
+        HeroController.ConfigGroup? overrideGroup,
+        Func<HeroController.ConfigGroup, T?> getPropertyFunc
+    ) {
+        // If the override group is null, we get the value from the property from the normal group
+        if (overrideGroup == null) {
+            return getPropertyFunc.Invoke(configGroup);
+        }
+
+        // Get the value from the override group to check if it is null or not
+        var overrideGroupValue = getPropertyFunc.Invoke(overrideGroup);
+        if (overrideGroupValue == null) {
+            // It is null, so we get the value from the normal group
+            return getPropertyFunc.Invoke(configGroup);
+        }
+
+        // It is not null, so we return it
+        return overrideGroupValue;
     }
 
     /// <summary>

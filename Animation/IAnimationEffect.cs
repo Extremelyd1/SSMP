@@ -8,17 +8,17 @@ namespace SSMP.Animation;
 /// </summary>
 internal interface IAnimationEffect {
     /// <summary>
-    /// Plays the animation effect for the given player object and with additional boolean data array.
+    /// Plays the animation effect for the given player object and with additional byte data array.
     /// </summary>
     /// <param name="playerObject">The GameObject representing the player.</param>
-    /// <param name="effectInfo">A boolean array containing effect info.</param>
-    void Play(GameObject playerObject, bool[] effectInfo);
+    /// <param name="effectInfo">A byte array containing effect info.</param>
+    void Play(GameObject playerObject, byte[]? effectInfo);
 
     /// <summary>
     /// Get the effect info corresponding to this effect.
     /// </summary>
-    /// <returns>A boolean array containing effect info.</returns>
-    bool[] GetEffectInfo();
+    /// <returns>A byte array containing effect info.</returns>
+    byte[]? GetEffectInfo();
 
     /// <summary>
     /// Set the server settings so we can access it while playing the animation.

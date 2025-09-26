@@ -12,10 +12,10 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
     protected bool ShouldDoDamage;
 
     /// <inheritdoc/>
-    public abstract override void Play(GameObject playerObject, bool[] effectInfo);
+    public abstract override void Play(GameObject playerObject, byte[]? effectInfo);
 
     /// <inheritdoc/>
-    public abstract override bool[] GetEffectInfo();
+    public abstract override byte[]? GetEffectInfo();
 
     /// <summary>
     /// Sets whether this animation effect should deal damage.

@@ -131,8 +131,8 @@ internal class ClientUpdateManager : UdpUpdateManager<ServerUpdatePacket, Server
     /// </summary>
     /// <param name="clip">The animation clip.</param>
     /// <param name="frame">The frame of the animation.</param>
-    /// <param name="effectInfo">Boolean array of effect info.</param>
-    public void UpdatePlayerAnimation(AnimationClip clip, int frame = 0, bool[] effectInfo = null) {
+    /// <param name="effectInfo">Byte array of effect info.</param>
+    public void UpdatePlayerAnimation(AnimationClip clip, int frame = 0, byte[]? effectInfo = null) {
         lock (Lock) {
             var playerUpdate = FindOrCreatePlayerUpdate();
             playerUpdate.UpdateTypes.Add(PlayerUpdateType.Animation);

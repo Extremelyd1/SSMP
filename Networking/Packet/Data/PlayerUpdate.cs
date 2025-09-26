@@ -100,32 +100,10 @@ internal class PlayerUpdate : GenericClientData {
                 } else {
                     // Again, we first write the length of the effect info array
                     var numEffects = animationInfo.EffectInfo.Length;
-
                     packet.Write((byte) numEffects);
 
-                    byte currentByte = 0;
-                    byte currentBitValue = 1;
-
-                    // And then the values of the array itself
                     for (var j = 0; j < numEffects; j++) {
-                        if (animationInfo.EffectInfo[j]) {
-                            currentByte |= currentBitValue;
-                        }
-
-                        if (currentBitValue == 128) {
-                            // We have reached the last bit in our byte, so we reset
-                            packet.Write(currentByte);
-                            currentByte = 0;
-                            currentBitValue = 1;
-                        } else {
-                            // Otherwise we move on to the next bit by doubling the value
-                            currentBitValue *= 2;
-                        }
-                    }
-
-                    // If we haven't written this byte yet, we write it now
-                    if (currentBitValue != 128) {
-                        packet.Write(currentByte);
+                        packet.Write(animationInfo.EffectInfo[j]);
                     }
                 }
             }
@@ -180,22 +158,10 @@ internal class PlayerUpdate : GenericClientData {
                 var numEffects = packet.ReadByte();
                 // Check whether there is effect info to be read
                 if (numEffects != 0) {
-                    var effectInfo = new bool[numEffects];
-
-                    var currentByte = packet.ReadByte();
-                    byte currentBitValue = 1;
+                    var effectInfo = new byte[numEffects];
 
                     for (var j = 0; j < numEffects; j++) {
-                        effectInfo[j] = (currentByte & currentBitValue) != 0;
-
-                        if (currentBitValue == 128 && j != numEffects - 1) {
-                            // We have reached the last bit in our byte, so we read another
-                            currentByte = packet.ReadByte();
-                            currentBitValue = 1;
-                        } else {
-                            // Otherwise we move on to the next bit by doubling the value
-                            currentBitValue *= 2;
-                        }
+                        effectInfo[j] = packet.ReadByte();
                     }
 
                     // Save the effect info in the animation info instance
@@ -233,7 +199,7 @@ internal class AnimationInfo {
     public byte Frame { get; set; }
 
     /// <summary>
-    /// Boolean array containing additional effect info.
+    /// Byte array containing additional effect info.
     /// </summary>
-    public bool[] EffectInfo { get; set; }
+    public byte[]? EffectInfo { get; set; }
 }

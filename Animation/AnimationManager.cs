@@ -1,4 +1,3 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -7,7 +6,6 @@ using GlobalEnums;
 using HutongGames.PlayMaker.Actions;
 using SSMP.Animation.Effects;
 using SSMP.Collection;
-using SSMP.Fsm;
 using SSMP.Game;
 using SSMP.Game.Client;
 using SSMP.Game.Settings;
@@ -46,32 +44,6 @@ internal class AnimationManager {
     private static readonly string[] AnimationControllerClipNames = [
         // "Airborne"
     ];
-
-    /// <summary>
-    /// The animation effect for cancelling the Crystal Dash Charge. Stored since it needs to be called
-    /// manually sometimes.
-    /// </summary>
-    public static readonly CrystalDashChargeCancel CrystalDashChargeCancel = new CrystalDashChargeCancel();
-
-    /// <summary>
-    /// The animation effect for the focus. Stored since it needs to be called manually sometimes.
-    /// </summary>
-    private static readonly Focus Focus = new Focus();
-
-    /// <summary>
-    /// The animation effect for the focus burst. Stored since it needs to be called manually sometimes.
-    /// </summary>
-    private static readonly FocusBurst FocusBurst = new FocusBurst();
-
-    /// <summary>
-    /// The animation effect for the focus end. Stored since it needs to be called manually sometimes.
-    /// </summary>
-    public static readonly FocusEnd FocusEnd = new FocusEnd();
-
-    /// <summary>
-    /// The animation effect for the nail art charge end. Stored since it needs to be called manually sometimes.
-    /// </summary>
-    public static readonly NailArtEnd NailArtEnd = new NailArtEnd();
 
     /// <summary>
     /// Bi-directional lookup table for linking animation clip names with their respective animation clip enum
@@ -448,8 +420,8 @@ internal class AnimationManager {
     /// <param name="id">The ID of the player.</param>
     /// <param name="clipId">The ID of the animation clip.</param>
     /// <param name="frame">The frame that the animation should play from.</param>
-    /// <param name="effectInfo">A boolean array containing effect info for the animation.</param>
-    public void OnPlayerAnimationUpdate(ushort id, int clipId, int frame, bool[] effectInfo) {
+    /// <param name="effectInfo">A byte array containing effect info for the animation.</param>
+    public void OnPlayerAnimationUpdate(ushort id, int clipId, int frame, byte[]? effectInfo) {
         UpdatePlayerAnimation(id, clipId, frame);
 
         var animationClip = (AnimationClip) clipId;
@@ -834,8 +806,8 @@ internal class AnimationManager {
         }
     
         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.HazardDeath, 0, [
-            hazardType.Equals(HazardType.SPIKES),
-            hazardType.Equals(HazardType.ACID)
+            // hazardType.Equals(HazardType.SPIKES),
+            // hazardType.Equals(HazardType.ACID)
         ]);
     }
 

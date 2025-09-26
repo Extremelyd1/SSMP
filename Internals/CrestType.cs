@@ -1,0 +1,73 @@
+using System;
+
+namespace SSMP.Internals;
+
+/// <summary>
+/// Enumeration of Crest types.
+/// </summary>
+public enum CrestType : byte {
+    Hunter1 = 0,
+    Hunter2,
+    Hunter3,
+    Reaper,
+    Wanderer,
+    Beast,
+    Witch,
+    Architect,
+    Shaman
+}
+
+/// <summary>
+/// Extension methods for the CrestType enumeration to go from internal name to enum and vice versa.
+/// </summary>
+public static class CrestTypeExt {
+    public static string ToInternal(this CrestType crestType) {
+        switch (crestType) {
+            case CrestType.Hunter1:
+                return "Hunter"; // Not sure
+            case CrestType.Hunter2:
+                return "Hunter_v2"; // Not sure
+            case CrestType.Hunter3:
+                return "Hunter_v3";
+            case CrestType.Reaper:
+                return "Reaper";
+            case CrestType.Wanderer:
+                return "Wanderer";
+            case CrestType.Beast:
+                return "Warrior";
+            case CrestType.Witch:
+                return "Witch";
+            case CrestType.Architect:
+                return "Toolmaster";
+            case CrestType.Shaman:
+                return "Spell";
+            default:
+                throw new InvalidOperationException("Supplied CrestType does not exist!");
+        }
+    }
+
+    public static CrestType FromInternal(string crestType) {
+        switch (crestType) {
+            case "Hunter":
+                return CrestType.Hunter1; // Not sure
+            case "Hunter_v2":
+                return CrestType.Hunter2; // Not sure
+            case "Hunter_v3":
+                return CrestType.Hunter3;
+            case "Reaper":
+                return CrestType.Reaper;
+            case "Wanderer":
+                return CrestType.Wanderer;
+            case "Warrior":
+                return CrestType.Beast;
+            case "Witch":
+                return CrestType.Witch;
+            case "Toolmaster":
+                return CrestType.Architect;
+            case "Spell":
+                return CrestType.Shaman;
+            default:
+                throw new InvalidOperationException($"Supplied crestType (\"{crestType}\") does not exist!");
+        }
+    }
+}
