@@ -264,6 +264,11 @@ internal class AnimationManager {
         { "Recoil", AnimationClip.Recoil },
         
         { "Grab Escape", AnimationClip.GrabEscape },
+        
+        { "Idle Updraft", AnimationClip.IdleUpdraft },
+        { "Updraft Antic DJ", AnimationClip.UpdraftAnticDJ },
+        { "Updraft Rise", AnimationClip.UpdraftRise },
+        { "Updraft Rise Turn", AnimationClip.UpdraftRiseTurn },
     };
 
     /// <summary>
@@ -273,6 +278,7 @@ internal class AnimationManager {
         { AnimationClip.Slash, new Slash() },
         { AnimationClip.SlashAlt, new AltSlash() },
         { AnimationClip.UpSlash, new UpSlash() },
+        { AnimationClip.WallSlash, new WallSlash() },
     };
 
     /// <summary>

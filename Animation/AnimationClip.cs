@@ -380,6 +380,11 @@ internal enum AnimationClip {
     Recoil,
     
     GrabEscape,
+    
+    IdleUpdraft,
+    UpdraftAnticDJ,
+    UpdraftRise,
+    UpdraftRiseTurn,
 
     // Custom clip names
     DashEnd,
