@@ -147,7 +147,7 @@ internal class PlayerManager {
             typeof(Rigidbody2D),
             typeof(CoroutineCancelComponent)
         ) {
-            layer = 9
+            layer = 0
         };
         
         playerPrefab.transform.SetParent(_playerContainerPrefab.transform);
