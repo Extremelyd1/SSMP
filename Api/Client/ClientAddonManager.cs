@@ -213,6 +213,7 @@ internal class ClientAddonManager {
                 togglableAddon.Disabled = false;
 
                 _modSettings.DisabledAddons.Remove(addon.GetName());
+                _modSettings.Save();
 
                 return true;
             }
@@ -236,6 +237,7 @@ internal class ClientAddonManager {
                 togglableAddon.Disabled = true;
 
                 _modSettings.DisabledAddons.Add(addon.GetName());
+                _modSettings.Save();
 
                 return true;
             }

@@ -270,7 +270,7 @@ internal class ClientManager : IClientManager {
         }
         
         // Then authorize the key on the locally hosted server
-        serverManager.AuthorizeKey(_modSettings.AuthKey);
+        serverManager.AuthorizeKey(_modSettings.AuthKey!);
 
         // Register handlers for events from UI
         _uiManager.RequestClientConnectEvent += (address, port, username, autoConnect) => {

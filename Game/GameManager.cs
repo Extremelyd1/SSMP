@@ -15,31 +15,28 @@ namespace SSMP.Game;
 /// </summary>
 internal class GameManager {
     /// <summary>
-    /// The net client instance for the mod.
+    /// The UI manager instance for the mod.
     /// </summary>
-    public readonly NetClient NetClient;
+    private readonly UiManager _uiManager;
+
     /// <summary>
     /// The client manager instance for the mod.
     /// </summary>
-    public readonly ClientManager ClientManager;
+    private readonly ClientManager _clientManager;
     /// <summary>
     /// The server manager instance for the mod.
     /// </summary>
-    public readonly ModServerManager ServerManager;
+    private readonly ModServerManager _serverManager;
     
     /// <summary>
     /// Constructs this GameManager instance by instantiating all other necessary classes.
     /// </summary>
-    /// <param name="modSettings">The loaded ModSettings instance or null if no such instance could be
-    /// loaded.</param>
-    public GameManager(ModSettings modSettings) {
-        ThreadUtil.Instantiate();
-
-        TextureManager.LoadTextures();
+    public GameManager() {
+        var modSettings = ModSettings.Load();
 
         var packetManager = new PacketManager();
 
-        NetClient = new NetClient(packetManager);
+        var netClient = new NetClient(packetManager);
         var netServer = new NetServer(packetManager);
 
         var clientServerSettings = new ServerSettings();
@@ -48,28 +45,39 @@ internal class GameManager {
         }
         var serverServerSettings = modSettings.ServerSettings;
 
-        var uiManager = new UiManager(
+        _uiManager = new UiManager(
             modSettings,
-            NetClient
+            netClient
         );
-        uiManager.Initialize();
 
-        ServerManager = new ModServerManager(
+        _serverManager = new ModServerManager(
             netServer,
             packetManager,
             serverServerSettings,
-            uiManager,
+            _uiManager,
             modSettings
         );
-        ServerManager.Initialize();
 
-        ClientManager = new ClientManager(
-            NetClient,
+        _clientManager = new ClientManager(
+            netClient,
             packetManager,
-            uiManager,
+            _uiManager,
             clientServerSettings,
             modSettings
         );
-        ClientManager.Initialize(ServerManager);
+    }
+
+    /// <summary>
+    /// Initialize all the managers and static utilities.
+    /// </summary>
+    public void Initialize() {
+        ThreadUtil.Instantiate();
+
+        TextureManager.LoadTextures();
+
+        _uiManager.Initialize();
+        
+        _serverManager.Initialize();
+        _clientManager.Initialize(_serverManager);
     }
 }

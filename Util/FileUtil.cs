@@ -3,6 +3,7 @@ using System.IO;
 using System.Reflection;
 using Newtonsoft.Json;
 using SSMP.Logging;
+using UnityEngine.Device;
 
 namespace SSMP.Util;
 
@@ -16,7 +17,7 @@ internal static class FileUtil {
     /// <param name="filePath">The path of the file.</param>
     /// <typeparam name="T">The type of the object to load.</typeparam>
     /// <returns>An instance of the loaded object, or the default value if it could not be loaded.</returns>
-    public static T LoadObjectFromJsonFile<T>(string filePath) {
+    public static T? LoadObjectFromJsonFile<T>(string filePath) {
         try {
             var fileContents = File.ReadAllText(filePath);
 
@@ -84,6 +85,14 @@ internal static class FileUtil {
         var fileString = streamReader.ReadToEnd();
 
         return JsonConvert.DeserializeObject<T>(fileString);
+    }
+
+    /// <summary>
+    /// Get the path of the SSMP config directory within Silksong's config directory.
+    /// </summary>
+    /// <returns>The path as a string.</returns>
+    public static string GetConfigPath() {
+        return Path.Combine(Application.persistentDataPath, "ssmp");
     }
 
     /// <summary>

@@ -288,12 +288,13 @@ internal class ConnectInterface {
         }
 
         // Input values were valid, so we can store them in the settings
-        Logger.Debug($"Saving join address {address} in global settings");
-        Logger.Debug($"Saving join port {port} in global settings");
-        Logger.Debug($"Saving join username {username} in global settings");
+        Logger.Debug($"Saving join address {address} in mod settings");
+        Logger.Debug($"Saving join port {port} in mod settings");
+        Logger.Debug($"Saving join username {username} in mod settings");
         _modSettings.ConnectAddress = address;
         _modSettings.ConnectPort = port;
         _modSettings.Username = username;
+        _modSettings.Save();
 
         // Disable the connect button while we are trying to establish a connection
         _connectionButton.SetText(ConnectingText);

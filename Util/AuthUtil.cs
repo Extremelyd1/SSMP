@@ -43,7 +43,7 @@ internal static class AuthUtil {
     /// </summary>
     /// <param name="authKey">The authentication key in string form to check.</param>
     /// <returns>True if the given authentication key is valid, false otherwise.</returns>
-    public static bool IsValidAuthKey(string authKey) {
+    public static bool IsValidAuthKey(string? authKey) {
         if (authKey == null) {
             return false;
         }

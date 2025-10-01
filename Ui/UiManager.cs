@@ -318,6 +318,7 @@ internal class UiManager : IUiManager {
         };
 
         _modSettings.Keybinds = new Keybinds();
+        _modSettings.Save();
     }
     
     /// <summary>

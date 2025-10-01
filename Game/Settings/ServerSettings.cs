@@ -223,7 +223,7 @@ public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
     /// <param name="left">The first <see cref="ServerSettings"/> to compare.</param>
     /// <param name="right">The second <see cref="ServerSettings"/> to compare.</param>
     /// <returns>true if <paramref name="left"/> is equal to <paramref name="right"/>; false otherwise.</returns>
-    public static bool operator ==(ServerSettings left, ServerSettings right) {
+    public static bool operator ==(ServerSettings? left, ServerSettings? right) {
         return Equals(left, right);
     }
     
@@ -233,7 +233,7 @@ public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
     /// <param name="left">The first <see cref="ServerSettings"/> to compare.</param>
     /// <param name="right">The second <see cref="ServerSettings"/> to compare.</param>
     /// <returns>true if <paramref name="left"/> is not equal to <paramref name="right"/>; false otherwise.</returns>
-    public static bool operator !=(ServerSettings left, ServerSettings right) {
+    public static bool operator !=(ServerSettings? left, ServerSettings? right) {
         return !Equals(left, right);
     }
 }
