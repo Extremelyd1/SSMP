@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using GlobalSettings;
 using SSMP.Util;
 using SSMP.Internals;
@@ -13,22 +12,16 @@ namespace SSMP.Animation.Effects;
 /// Abstract base class for the animation effect of nail slashes.
 /// </summary>
 internal abstract class SlashBase : ParryableEffect {
-    /// <summary>
-    /// Base X and Y scales for the various slash types.
-    /// </summary>
-    private static readonly Dictionary<SlashType, Vector2> _baseScales = new() {
-        { SlashType.Normal, new Vector2(1.6011f, 1.6452f) },
-        { SlashType.Alt, new Vector2(1.257f, 1.4224f) },
-        { SlashType.Down, new Vector2(1.125f, 1.28f) },
-        { SlashType.Up, new Vector2(1.15f, 1.4f) },
-        { SlashType.Wall, new Vector2(1.62f, 1.6452f) }
-    };
-    
     /// <inheritdoc/>
     public abstract override void Play(GameObject playerObject, byte[]? effectInfo);
 
     /// <inheritdoc/>
-    public override byte[]? GetEffectInfo() {
+    public override byte[] GetEffectInfo() {
+        var crestType = CrestTypeExt.FromInternal(PlayerData.instance.CurrentCrestID);
+        if (crestType == CrestType.Beast) {
+            return [(byte) crestType, (byte) (HeroController.instance.warriorState.IsInRageMode ? 1 : 0)];
+        }
+        
         return [(byte) CrestTypeExt.FromInternal(PlayerData.instance.CurrentCrestID)];
     }
 
@@ -37,21 +30,23 @@ internal abstract class SlashBase : ParryableEffect {
     /// </summary>
     /// <param name="playerObject">The GameObject representing the player.</param>
     /// <param name="effectInfo">A byte array containing effect info.</param>
-    /// <param name="nailSlash">The nail slash instance.</param>
     /// <param name="type">The type of nail slash.</param>
     protected void Play(GameObject playerObject, byte[]? effectInfo, SlashType type) {
         if (effectInfo == null || effectInfo.Length < 1) {
             Logger.Error("Could not get null or empty effect info for SlashBase");
             return;
         }
-        
-        // Keep in mind that AltSlash should use normalSlash in HeroController and vice versa
 
         var crestType = (CrestType) effectInfo[0];
         var toolCrest = ToolItemManager.GetCrestByName(crestType.ToInternal());
         if (toolCrest == null) {
             Logger.Error($"Could not find unknown ToolCrest with type: {crestType}, {crestType.ToInternal()}");
             return;
+        }
+        
+        var isInBeastRageMode = false;
+        if (crestType == CrestType.Beast) {
+            isInBeastRageMode = effectInfo[1] == 1;
         }
 
         HeroController.ConfigGroup? configGroup = null;
@@ -75,19 +70,22 @@ internal abstract class SlashBase : ParryableEffect {
 
         HeroController.ConfigGroup? overrideGroup = null;
         foreach (var specialConfig in HeroController.instance.specialConfigs) {
-            if (specialConfig.Config == toolCrest.HeroConfig && specialConfig.Config != Gameplay.WarriorCrest.HeroConfig) {
+            if (specialConfig.Config == toolCrest.HeroConfig && 
+                (specialConfig.Config != Gameplay.WarriorCrest.HeroConfig || isInBeastRageMode)) {
                 overrideGroup = specialConfig;
                 break;
             }
         }
 
+        // For some reason the animation for the normal slash is used with the alt slash NailSlash component and
+        // vice versa. So for the first two slash types, the NailSlash component is switched.
         NailSlash? nailSlash = null;
         switch (type) {
             case SlashType.Normal:
-                nailSlash = GetPropertyFromConfigGroup(configGroup, overrideGroup, group => group.NormalSlash);
+                nailSlash = GetPropertyFromConfigGroup(configGroup, overrideGroup, group => group.AlternateSlash);
                 break;
             case SlashType.Alt:
-                nailSlash = GetPropertyFromConfigGroup(configGroup, overrideGroup, group => group.AlternateSlash);
+                nailSlash = GetPropertyFromConfigGroup(configGroup, overrideGroup, group => group.NormalSlash);
                 break;
             case SlashType.Up:
                 nailSlash = GetPropertyFromConfigGroup(configGroup, overrideGroup, group => group.UpSlash);
@@ -134,7 +132,7 @@ internal abstract class SlashBase : ParryableEffect {
         mesh.enabled = true;
 
         var animTriggerCounter = 0;
-        anim.AnimationEventTriggered = (animator, clip, frame) => {
+        anim.AnimationEventTriggered = (_, _, _) => {
             ++animTriggerCounter;
             if (animTriggerCounter == 1) {
                 poly.enabled = true;
@@ -144,7 +142,7 @@ internal abstract class SlashBase : ParryableEffect {
                 poly.enabled = false;
             }
         };
-        anim.AnimationCompleted = (animator, clip) => {
+        anim.AnimationCompleted = (_, _) => {
             poly.enabled = false;
             mesh.enabled = false;
             anim.AnimationEventTriggered = null;
