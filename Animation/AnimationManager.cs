@@ -94,6 +94,7 @@ internal class AnimationManager {
         { "DownSpike", AnimationClip.DownSpike },
         { "Downspike Recovery", AnimationClip.DownSpikeRecovery },
         { "Downspike Recovery Land", AnimationClip.DownSpikeRecoveryLand },
+        { "Downspike Followup", AnimationClip.DownSpikeFollowup },
         { "UpSlash", AnimationClip.UpSlash },
         { "Slash Land", AnimationClip.SlashLand },
         { "Slash_Charged", AnimationClip.SlashCharged },
@@ -279,6 +280,11 @@ internal class AnimationManager {
         { AnimationClip.SlashAlt, new AltSlash() },
         { AnimationClip.UpSlash, new UpSlash() },
         { AnimationClip.WallSlash, new WallSlash() },
+        { AnimationClip.DownSpike, new DownSpike() }, // Hunter Crest down slash
+        { AnimationClip.V3DownSlash, new DownSlash() },
+        { AnimationClip.DownSlash, new DownSlash() },
+        { AnimationClip.DownSlashAlt, new DownAltSlash() },
+        { AnimationClip.SpinBall, new DownSlash() }
     };
 
     /// <summary>
@@ -473,22 +479,49 @@ internal class AnimationManager {
         }
 
         var animationClip = (AnimationClip) clipId;
+
+        // Logger.Info($"Received PlayerAnimationUpdate: {animationClip}");
+
         if (!ClipEnumNames.ContainsSecond(animationClip)) {
             // This happens when we send custom clips, that can't be played by the sprite animator, so for now we
             // don't log it. This warning might be useful if we seem to be missing animations from the Knights
             // sprite animator.
 
-            // Logger.Get().Warn(this, $"Tried to update animation, but there was no entry for clip ID: {clipId}, enum: {animationClip}");
+            // Logger.Warn($"Tried to update animation, but there was no entry for clip ID: {clipId}, enum: {animationClip}");
             return;
         }
 
         var clipName = ClipEnumNames[animationClip];
 
+        // Logger.Info($"  clipName: {clipName}");
+
         // Get the sprite animator and check whether this clip can be played before playing it
         var spriteAnimator = playerObject.GetComponent<tk2dSpriteAnimator>();
-        if (spriteAnimator.GetClipByName(clipName) != null) {
-            spriteAnimator.PlayFromFrame(clipName, frame);
+
+        var clip = spriteAnimator.GetClipByName(clipName);
+        if (clip == null) {
+            // Clip does not exist in the default library, so we look for override libraries from the configs
+            foreach (var config in HeroController.instance.configs) {
+                var overrideLib = config.Config.heroAnimOverrideLib;
+                if (overrideLib == null) {
+                    continue;
+                }
+                
+                var configOverriddenClip = overrideLib.GetClipByName(clipName);
+                if (configOverriddenClip != null) {
+                    clip = configOverriddenClip;
+                    break;
+                }
+            }
+
+            if (clip == null) {
+                Logger.Info("Could not find clip in override libraries of hero controller configs");
+                return;
+            }
         }
+
+        // Logger.Info($"  playing clip: {clipName}");
+        spriteAnimator.PlayFromFrame(clip, frame);
     }
 
     /// <summary>
@@ -526,12 +559,16 @@ internal class AnimationManager {
             return;
         }
 
+        // Logger.Info($"  conditions 1: {clip.name.Equals(_lastAnimationClip)}, {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Once}, {!AllowedLoopAnimations.Contains(clip.name)}");
+
         // Skip event handling when we already handled this clip, unless it is a clip with wrap mode once
         if (clip.name.Equals(_lastAnimationClip)
             && clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Once
             && !AllowedLoopAnimations.Contains(clip.name)) {
             return;
         }
+
+        // Logger.Info($"  conditions 2: {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Loop}, {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.LoopSection}, {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Once}");
 
         // Skip clips that do not have the wrap mode loop, loop-section or once
         if (clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Loop &&
@@ -582,6 +619,8 @@ internal class AnimationManager {
         } else {
             _netClient.UpdateManager.UpdatePlayerAnimation(animationClip);
         }
+
+        // Logger.Info($"  Sending animation: {animationClip}");
 
         // Update the last clip name, since it changed
         _lastAnimationClip = clip.name;
@@ -747,6 +786,7 @@ internal class AnimationManager {
         var frame = clip.frames[index];
     
         if (index == 0 || frame.triggerEvent || AllowedLoopAnimations.Contains(clip.name)) {
+            // Logger.Info($"OnAnimationEvent from tk2dSpriteAnimatorOnWarpClipToLocalTime: {clip.name}, conditions: {index == 0}, {frame.triggerEvent}, {AllowedLoopAnimations.Contains(clip.name)}");
             OnAnimationEvent(clip);
         }
     }
@@ -782,7 +822,7 @@ internal class AnimationManager {
         var num = last + direction;
         var frames = self.CurrentClip.frames;
     
-        var ignoreClipNames = new[] { "Quake Land 2" };
+        var ignoreClipNames = new[] { "v3 Down Slash", "Downspike" };
     
         for (var i = start + direction; i != num; i += direction) {
             if (i >= frames.Length || i < 0) {
@@ -794,6 +834,7 @@ internal class AnimationManager {
                 continue;
             }
     
+            // Logger.Info($"OnAnimationEvent from tk2dSpriteAnimatorOnProcessEvents: {self.CurrentClip.name}, conditions: {i}, {frames[i].triggerEvent}");
             OnAnimationEvent(self.CurrentClip);
         }
     }

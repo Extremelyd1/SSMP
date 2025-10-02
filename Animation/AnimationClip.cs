@@ -50,6 +50,7 @@ internal enum AnimationClip {
     DownSpike,
     DownSpikeRecovery,
     DownSpikeRecoveryLand,
+    DownSpikeFollowup,
     UpSlash,
     SlashLand,
     SlashCharged,
