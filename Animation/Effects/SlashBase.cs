@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using GlobalSettings;
 using SSMP.Util;
 using SSMP.Internals;
@@ -119,6 +120,25 @@ internal abstract class SlashBase : ParryableEffect {
             return;
         }
         
+        // TODO: below fix is hacky, but only in this animation effect do we know that the user has the Witch crest
+        if (crestType == CrestType.Witch && type == SlashType.Down) {
+            // Witch down slash animation uses animation clip from override animation library in config group
+            // So we get the library from the already obtained config, get the clip by name and play it using the
+            // player's sprite animator
+            var overrideLib = configGroup.Config.heroAnimOverrideLib;
+            if (overrideLib == null) {
+                Logger.Warn("Witch crest down slash has null override animation lib");
+            } else {
+                var clip = overrideLib.GetClipByName("DownSpike");
+                if (clip == null) {
+                    Logger.Warn("Witch crest down slash override animation lib has no clip named 'DownSpike'");
+                } else {
+                    var spriteAnimator = playerObject.GetComponent<tk2dSpriteAnimator>();
+                    spriteAnimator.Play(clip);                    
+                }
+            }
+        }
+
         // Get the attacks gameObject from the player object
         var playerAttacks = playerObject.FindGameObjectInChildren("Attacks");
 
@@ -167,15 +187,81 @@ internal abstract class SlashBase : ParryableEffect {
             poly.enabled = false;
             mesh.enabled = false;
             anim.AnimationEventTriggered = null;
-            
-            Object.Destroy(slashParent);
+
+            if (crestType != CrestType.Shaman) {
+                Object.Destroy(slashParent);
+            }
         };
 
         var clipByName = anim.GetClipByName(animName);
         // TODO: FPS increase by Quickening from NailSlash
         anim.Play(clipByName, Mathf.Epsilon, clipByName.fps);
         
+        // TODO: there is still another visual detail missing with the slashes with Shaman crest around Hornet's needle
+        if (crestType == CrestType.Shaman) {
+            MonoBehaviourUtil.Instance.StartCoroutine(PlayNailSlashTravel(slashObj, slashParent));
+        }
+        
         // TODO: nail imbued from NailAttackBase
+    }
+
+    /// <summary>
+    /// Play the nail slash travel animation that is used for the movement of the nail slash when having the Shaman
+    /// crest equipped. This is a coroutine that mimics a lot of the functionality of the NailSlashTravel class, but
+    /// leaves out recoil and other player impacting behaviour.
+    /// </summary>
+    /// <param name="slashObj">The base slash object that should have the NailSlashTravel component.</param>
+    /// <param name="slashParent">The slash parent, so we can destroy it later.</param>
+    private IEnumerator PlayNailSlashTravel(GameObject slashObj, GameObject slashParent) {
+        var travelComp = slashObj.GetComponent<NailSlashTravel>();
+
+        travelComp.hasStarted = true;
+
+        if (travelComp.particles) {
+            travelComp.particles.Play(true);
+        }
+
+        yield return null;
+
+        var transform = travelComp.transform;
+        var worldPos = (Vector2) transform.position;
+
+        if (travelComp.distanceFiller) {
+            travelComp.distanceFiller.gameObject.SetActive(true);
+        }
+
+        travelComp.SetThunkerActive(true);
+        
+        // TODO: long needle tool distance multiplier (see NailSlashTravel.cs)
+
+        for (var elapsed = 0f; elapsed < travelComp.travelDuration; elapsed += Time.deltaTime) {
+            travelComp.elapsedT = elapsed / travelComp.travelDuration;
+
+            // setPosition action in NailSlashTravel.cs
+            var self = travelComp.travelDistance.MultiplyElements(
+                new Vector2(Mathf.Sign(transform.lossyScale.x), 1f)
+            );
+            var vec2 = self.MultiplyElements(1f); // TODO: insert multiplier here
+
+            var num = travelComp.travelCurve.Evaluate(travelComp.elapsedT);
+
+            transform.SetPosition2D(worldPos + vec2 * num);
+
+            if (travelComp.distanceFiller) {
+                var newXScale = Mathf.Abs(vec2.x) * num;
+                travelComp.distanceFiller.SetScaleX(newXScale);
+                travelComp.distanceFiller.SetLocalPositionX(newXScale * 0.5f);
+            }
+
+            yield return null;
+        }
+
+        // TODO: this is a bit of a hack, but we only want to destroy the slash parent once the particles are done
+        while (travelComp.particles && travelComp.particles.isPlaying) {
+            yield return new WaitForSeconds(0.5f);
+        }
+        
+        Object.Destroy(slashParent);
     }
 
     /// <summary>

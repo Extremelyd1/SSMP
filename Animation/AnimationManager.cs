@@ -822,7 +822,7 @@ internal class AnimationManager {
         var num = last + direction;
         var frames = self.CurrentClip.frames;
     
-        var ignoreClipNames = new[] { "v3 Down Slash", "Downspike" };
+        var ignoreClipNames = new[] { "v3 Down Slash", "DownSpike", "DownSlash" };
     
         for (var i = start + direction; i != num; i += direction) {
             if (i >= frames.Length || i < 0) {
