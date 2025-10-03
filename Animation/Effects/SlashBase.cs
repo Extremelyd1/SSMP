@@ -1,8 +1,10 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using GlobalSettings;
 using SSMP.Util;
 using SSMP.Internals;
+using SSMP.Networking.Packet;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
 using Object = UnityEngine.Object;
@@ -19,11 +21,27 @@ internal abstract class SlashBase : ParryableEffect {
     /// <inheritdoc/>
     public override byte[] GetEffectInfo() {
         var crestType = CrestTypeExt.FromInternal(PlayerData.instance.CurrentCrestID);
-        if (crestType == CrestType.Beast) {
-            return [(byte) crestType, (byte) (HeroController.instance.warriorState.IsInRageMode ? 1 : 0)];
+        var slashEffects = new HashSet<SlashEffect>();
+        if (crestType == CrestType.Beast && HeroController.instance.warriorState.IsInRageMode) {
+            slashEffects.Add(SlashEffect.BeastRageMode);
         }
-        
-        return [(byte) crestType];
+
+        var currentElement = HeroController.instance.NailImbuement.CurrentElement;
+        if (currentElement == NailElements.Fire) {
+            slashEffects.Add(SlashEffect.Flintslate);
+        } else if (currentElement == NailElements.Poison) {
+            slashEffects.Add(SlashEffect.FlintslatePollip);
+        }
+
+        if (Gameplay.LongNeedleTool.IsEquipped) {
+            slashEffects.Add(SlashEffect.Longclaw);
+        }
+
+        var packet = new Packet();
+        packet.Write((byte) crestType);
+        packet.WriteBitFlag(slashEffects);
+
+        return packet.ToArray();
     }
 
     /// <summary>
@@ -37,15 +55,12 @@ internal abstract class SlashBase : ParryableEffect {
             Logger.Error("Could not get null or empty effect info for SlashBase");
             return;
         }
+        
+        var packet = new Packet(effectInfo);
+        var crestType = (CrestType) packet.ReadByte();
+        var slashEffects = packet.ReadBitFlag<SlashEffect>();
 
-        var crestType = (CrestType) effectInfo[0];
-
-        var isInBeastRageMode = false;
-        if (crestType == CrestType.Beast) {
-            isInBeastRageMode = effectInfo[1] == 1;
-        }
-
-        Play(playerObject, type, crestType, isInBeastRageMode);
+        Play(playerObject, type, crestType, slashEffects);
     }
 
     /// <summary>
@@ -54,16 +69,25 @@ internal abstract class SlashBase : ParryableEffect {
     /// <param name="playerObject">The GameObject representing the player.</param>
     /// <param name="type">The type of nail slash.</param>
     /// <param name="crestType">The type of crest used by the player.</param>
-    /// <param name="isInBeastRageMode">Whether the player is in rage mode with the Beast crest.</param>
-    protected void Play(GameObject playerObject, SlashType type, CrestType crestType, bool isInBeastRageMode) {
+    /// <param name="slashEffects">Effects for the slash, such as the fire effect from Flintslate or being in bind
+    /// mode from the Beast crest.</param>
+    protected void Play(GameObject playerObject, SlashType type, CrestType crestType, ISet<SlashEffect> slashEffects) {
         var toolCrest = ToolItemManager.GetCrestByName(crestType.ToInternal());
         if (toolCrest == null) {
             Logger.Error($"Could not find unknown ToolCrest with type: {crestType}, {crestType.ToInternal()}");
             return;
         }
 
-        if (!GetConfigs(crestType, toolCrest, isInBeastRageMode, out var configGroup, out var overrideGroup)
-            || configGroup == null) {
+        var isInBeastRageMode = slashEffects.Contains(SlashEffect.BeastRageMode);
+
+        if (!GetConfigs(
+                crestType, 
+                toolCrest, 
+                isInBeastRageMode, 
+                out var configGroup, 
+                out var overrideGroup
+            ) || configGroup == null
+        ) {
             return;
         }
 
@@ -159,6 +183,7 @@ internal abstract class SlashBase : ParryableEffect {
         var mesh = slashObj.GetComponent<MeshRenderer>();
         var anim = slashObj.GetComponent<tk2dSpriteAnimator>();
         var animName = slash.animName;
+        var scale = slash.scale;
 
         Object.DestroyImmediate(slash);
         // For some attacks in crests, down slashes and down spikes, this component exists which will interfere
@@ -196,10 +221,24 @@ internal abstract class SlashBase : ParryableEffect {
         var clipByName = anim.GetClipByName(animName);
         // TODO: FPS increase by Quickening from NailSlash
         anim.Play(clipByName, Mathf.Epsilon, clipByName.fps);
+
+        var longclaw = slashEffects.Contains(SlashEffect.Longclaw);
         
         // TODO: there is still another visual detail missing with the slashes with Shaman crest around Hornet's needle
         if (crestType == CrestType.Shaman) {
-            MonoBehaviourUtil.Instance.StartCoroutine(PlayNailSlashTravel(slashObj, slashParent));
+            MonoBehaviourUtil.Instance.StartCoroutine(PlayNailSlashTravel(slashObj, slashParent, longclaw));
+        } else {
+            // This check is in the else for the Shaman crest check, because Shaman crest handles Longclaw differently
+            if (longclaw) {
+                var multiplier = Gameplay.LongNeedleMultiplier;
+                if (type == SlashType.Up) {
+                    multiplier = new Vector2(multiplier.y, multiplier.x);
+                }
+
+                slashObj.transform.localScale = new Vector3(scale.x * multiplier.x, scale.y * multiplier.y, scale.z);
+            } else {
+                slashObj.transform.localScale = scale;
+            }
         }
         
         // TODO: nail imbued from NailAttackBase
@@ -212,7 +251,8 @@ internal abstract class SlashBase : ParryableEffect {
     /// </summary>
     /// <param name="slashObj">The base slash object that should have the NailSlashTravel component.</param>
     /// <param name="slashParent">The slash parent, so we can destroy it later.</param>
-    private IEnumerator PlayNailSlashTravel(GameObject slashObj, GameObject slashParent) {
+    /// <param name="longclaw">Whether Longclaw is equipped and thus the Nail Slash should travel further.</param>
+    private IEnumerator PlayNailSlashTravel(GameObject slashObj, GameObject slashParent, bool longclaw) {
         var travelComp = slashObj.GetComponent<NailSlashTravel>();
 
         travelComp.hasStarted = true;
@@ -241,14 +281,16 @@ internal abstract class SlashBase : ParryableEffect {
             var self = travelComp.travelDistance.MultiplyElements(
                 new Vector2(Mathf.Sign(transform.lossyScale.x), 1f)
             );
-            var vec2 = self.MultiplyElements(1f); // TODO: insert multiplier here
+            if (longclaw) {
+                self = self.MultiplyElements(Gameplay.LongNeedleMultiplier);
+            }
 
             var num = travelComp.travelCurve.Evaluate(travelComp.elapsedT);
 
-            transform.SetPosition2D(worldPos + vec2 * num);
+            transform.SetPosition2D(worldPos + self * num);
 
             if (travelComp.distanceFiller) {
-                var newXScale = Mathf.Abs(vec2.x) * num;
+                var newXScale = Mathf.Abs(self.x) * num;
                 travelComp.distanceFiller.SetScaleX(newXScale);
                 travelComp.distanceFiller.SetLocalPositionX(newXScale * 0.5f);
             }
@@ -389,5 +431,15 @@ internal abstract class SlashBase : ParryableEffect {
         DownAlt,
         Up,
         Wall
+    }
+
+    /// <summary>
+    /// Enumeration of slash effects.
+    /// </summary>
+    protected enum SlashEffect {
+        BeastRageMode,
+        Longclaw,
+        Flintslate,
+        FlintslatePollip,
     }
 }
