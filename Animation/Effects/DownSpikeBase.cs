@@ -1,5 +1,7 @@
+using GlobalSettings;
 using SSMP.Util;
 using SSMP.Internals;
+using SSMP.Networking.Packet;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
 using Object = UnityEngine.Object;
@@ -13,11 +15,6 @@ internal abstract class DownSpikeBase : SlashBase {
     /// <inheritdoc/>
     public abstract override void Play(GameObject playerObject, byte[]? effectInfo);
 
-    /// <inheritdoc/>
-    public override byte[] GetEffectInfo() {
-        return [(byte) CrestTypeExt.FromInternal(PlayerData.instance.CurrentCrestID)];
-    }
-
     /// <summary>
     /// Plays the slash animation for the given player.
     /// </summary>
@@ -30,7 +27,10 @@ internal abstract class DownSpikeBase : SlashBase {
             return;
         }
 
-        var crestType = (CrestType) effectInfo[0];
+        var packet = new Packet(effectInfo);
+        var crestType = (CrestType) packet.ReadByte();
+        var slashEffects = packet.ReadBitFlag<SlashEffect>();
+
         var toolCrest = ToolItemManager.GetCrestByName(crestType.ToInternal());
         if (toolCrest == null) {
             Logger.Error($"Could not find unknown ToolCrest with type: {crestType}, {crestType.ToInternal()}");
@@ -38,7 +38,7 @@ internal abstract class DownSpikeBase : SlashBase {
         }
 
         if (crestType is CrestType.Witch or CrestType.Architect) {
-            Play(playerObject, SlashType.Down, crestType, false);
+            Play(playerObject, SlashType.Down, crestType, slashEffects);
             return;
         }
 
@@ -53,12 +53,12 @@ internal abstract class DownSpikeBase : SlashBase {
                 nailAttackBase = GetPropertyFromConfigGroup(configGroup, overrideGroup, group => group.Downspike);
                 break;
             default:
-                Logger.Error($"Cannot play animation for unknown nail slash: {type}");
+                Logger.Error($"Cannot play animation for unknown down spike: {type}");
                 break;
         }
 
         if (nailAttackBase == null) {
-            Logger.Error("Cannot play animation with null NailSlash");
+            Logger.Error("Cannot play animation with null NailAttackBase");
             return;
         }
         
@@ -82,6 +82,7 @@ internal abstract class DownSpikeBase : SlashBase {
         var mesh = slashObj.GetComponent<MeshRenderer>();
         var anim = slashObj.GetComponent<tk2dSpriteAnimator>();
         var animName = slash.animName;
+        var scale = slash.scale;
 
         Object.DestroyImmediate(slash);
         Object.DestroyImmediate(heroDownAttack);
@@ -103,6 +104,14 @@ internal abstract class DownSpikeBase : SlashBase {
         };
 
         anim.PlayFromFrame(animName, 0);
+        
+        var longclaw = slashEffects.Contains(SlashEffect.Longclaw);
+        if (longclaw) {
+            var multiplier = Gameplay.LongNeedleMultiplier;
+            slashObj.transform.localScale = new Vector3(scale.x * multiplier.x, scale.y * multiplier.y, scale.z);
+        } else {
+            slashObj.transform.localScale = scale;
+        }
 
         // TODO: nail imbued from NailAttackBase
     }
