@@ -224,8 +224,23 @@ internal abstract class SlashBase : ParryableEffect {
 
         var longclaw = slashEffects.Contains(SlashEffect.Longclaw);
         
-        // TODO: there is still another visual detail missing with the slashes with Shaman crest around Hornet's needle
         if (crestType == CrestType.Shaman) {
+            var castEffectObjName = type switch {
+                SlashType.Normal or SlashType.NormalAlt => "Shaman_blade_cast_effect Slash",
+                SlashType.Down => "Shaman_blade_cast_effect DownSlash",
+                SlashType.Up => "Shaman_blade_cast_effect UpSlash",
+                SlashType.Wall => "Shaman_blade_cast_effect WallSlash",
+                _ => null
+            };
+            
+            if (castEffectObjName != null) {
+                var castEffectObj = GetGameObjectInCrestObjectFromName(configGroup, castEffectObjName);
+                if (castEffectObj != null) {
+                    var newCastEffectObj = Object.Instantiate(castEffectObj, slashParent.transform);
+                    newCastEffectObj.SetActive(true);
+                }
+            }
+            
             MonoBehaviourUtil.Instance.StartCoroutine(PlayNailSlashTravel(slashObj, slashParent, longclaw));
         } else {
             // This check is in the else for the Shaman crest check, because Shaman crest handles Longclaw differently
@@ -272,8 +287,6 @@ internal abstract class SlashBase : ParryableEffect {
 
         travelComp.SetThunkerActive(true);
         
-        // TODO: long needle tool distance multiplier (see NailSlashTravel.cs)
-
         for (var elapsed = 0f; elapsed < travelComp.travelDuration; elapsed += Time.deltaTime) {
             travelComp.elapsedT = elapsed / travelComp.travelDuration;
 
@@ -394,31 +407,46 @@ internal abstract class SlashBase : ParryableEffect {
     /// <param name="gameObjectName">The name of the game object that has the component.</param>
     /// <returns>A nullable NailSlash component.</returns>
     private NailSlash? GetNailSlashInCrestObjectFromName(HeroController.ConfigGroup configGroup, string gameObjectName) {
-        var reaperNormalSlash = configGroup.NormalSlash;
-        if (reaperNormalSlash == null) {
+        var nailSlashObj = GetGameObjectInCrestObjectFromName(configGroup, gameObjectName);
+        if (nailSlashObj == null) {
+            return null;
+        }
+
+        return nailSlashObj.GetComponent<NailSlash>();
+    }
+
+    /// <summary>
+    /// Get the game object in a crest based on the given config group and the name of the game object.
+    /// </summary>
+    /// <param name="configGroup">The config group for the crest.</param>
+    /// <param name="gameObjectName">The name of the game object.</param>
+    /// <returns>A nullable game object.</returns>
+    private GameObject? GetGameObjectInCrestObjectFromName(HeroController.ConfigGroup configGroup, string gameObjectName) {
+        var normalSlash = configGroup.NormalSlash;
+        if (normalSlash == null) {
             Logger.Error("NormalSlash in crest config group is null");
             return null;
         }
 
-        var reaperNormalSlashObj = reaperNormalSlash.gameObject;
-        if (reaperNormalSlashObj == null) {
+        var normalSlashObj = normalSlash.gameObject;
+        if (normalSlashObj == null) {
             Logger.Error("NormalSlash game object in crest config group is null");
             return null;
         }
 
-        var reaperCrestObj = reaperNormalSlashObj.transform.parent.gameObject;
-        if (reaperCrestObj == null) {
+        var crestObj = normalSlashObj.transform.parent.gameObject;
+        if (crestObj == null) {
             Logger.Error("Crest game object as parent of slash is null");
             return null;
         }
 
-        var downSlashNewObj = reaperCrestObj.FindGameObjectInChildren(gameObjectName);
-        if (downSlashNewObj == null) {
+        var gameObjToFind = crestObj.FindGameObjectInChildren(gameObjectName);
+        if (gameObjToFind == null) {
             Logger.Error("Game object as child of crest object is null");
             return null;
         }
 
-        return downSlashNewObj.GetComponent<NailSlash>();
+        return gameObjToFind;
     }
 
     /// <summary>
