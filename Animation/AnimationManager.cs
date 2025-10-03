@@ -26,6 +26,12 @@ namespace SSMP.Animation;
 /// </summary>
 internal class AnimationManager {
     /// <summary>
+    /// Whether to log debug messages about animations. For debugging purposes this can be enabled so that all
+    /// animation events are logged.
+    /// </summary>
+    private static bool _debugLogAnimations = false;
+    
+    /// <summary>
     /// The distance threshold for playing certain effects.
     /// </summary>
     public const float EffectDistanceThreshold = 25f;
@@ -480,20 +486,20 @@ internal class AnimationManager {
 
         var animationClip = (AnimationClip) clipId;
 
-        // Logger.Info($"Received PlayerAnimationUpdate: {animationClip}");
+        if (_debugLogAnimations) Logger.Info($"Received PlayerAnimationUpdate: {animationClip}");
 
         if (!ClipEnumNames.ContainsSecond(animationClip)) {
             // This happens when we send custom clips, that can't be played by the sprite animator, so for now we
             // don't log it. This warning might be useful if we seem to be missing animations from the Knights
             // sprite animator.
 
-            // Logger.Warn($"Tried to update animation, but there was no entry for clip ID: {clipId}, enum: {animationClip}");
+            if (_debugLogAnimations) Logger.Warn($"Tried to update animation, but there was no entry for clip ID: {clipId}, enum: {animationClip}");
             return;
         }
 
         var clipName = ClipEnumNames[animationClip];
 
-        // Logger.Info($"  clipName: {clipName}");
+        if (_debugLogAnimations) Logger.Info($"  clipName: {clipName}");
 
         // Get the sprite animator and check whether this clip can be played before playing it
         var spriteAnimator = playerObject.GetComponent<tk2dSpriteAnimator>();
@@ -520,7 +526,7 @@ internal class AnimationManager {
             }
         }
 
-        // Logger.Info($"  playing clip: {clipName}");
+        if (_debugLogAnimations) Logger.Info($"  playing clip: {clipName}");
         spriteAnimator.PlayFromFrame(clip, frame);
     }
 
@@ -539,7 +545,7 @@ internal class AnimationManager {
     /// </summary>
     /// <param name="clip">The sprite animation clip.</param>
     private void OnAnimationEvent(tk2dSpriteAnimationClip clip) {
-        // Logger.Info($"Animation event with name: {clip.name}");
+        if (_debugLogAnimations) Logger.Info($"Animation event with name: {clip.name}");
 
         // If we are not connected, there is nothing to send to
         if (!_netClient.IsConnected) {
@@ -559,7 +565,7 @@ internal class AnimationManager {
             return;
         }
 
-        // Logger.Info($"  conditions 1: {clip.name.Equals(_lastAnimationClip)}, {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Once}, {!AllowedLoopAnimations.Contains(clip.name)}");
+        if (_debugLogAnimations) Logger.Info($"  conditions 1: {clip.name.Equals(_lastAnimationClip)}, {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Once}, {!AllowedLoopAnimations.Contains(clip.name)}");
 
         // Skip event handling when we already handled this clip, unless it is a clip with wrap mode once
         if (clip.name.Equals(_lastAnimationClip)
@@ -568,7 +574,7 @@ internal class AnimationManager {
             return;
         }
 
-        // Logger.Info($"  conditions 2: {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Loop}, {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.LoopSection}, {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Once}");
+        if (_debugLogAnimations) Logger.Info($"  conditions 2: {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Loop}, {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.LoopSection}, {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Once}");
 
         // Skip clips that do not have the wrap mode loop, loop-section or once
         if (clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Loop &&
@@ -620,7 +626,7 @@ internal class AnimationManager {
             _netClient.UpdateManager.UpdatePlayerAnimation(animationClip);
         }
 
-        // Logger.Info($"  Sending animation: {animationClip}");
+        if (_debugLogAnimations) Logger.Info($"  Sending animation: {animationClip}");
 
         // Update the last clip name, since it changed
         _lastAnimationClip = clip.name;
@@ -786,7 +792,7 @@ internal class AnimationManager {
         var frame = clip.frames[index];
     
         if (index == 0 || frame.triggerEvent || AllowedLoopAnimations.Contains(clip.name)) {
-            // Logger.Info($"OnAnimationEvent from tk2dSpriteAnimatorOnWarpClipToLocalTime: {clip.name}, conditions: {index == 0}, {frame.triggerEvent}, {AllowedLoopAnimations.Contains(clip.name)}");
+            if (_debugLogAnimations) Logger.Info($"OnAnimationEvent from tk2dSpriteAnimatorOnWarpClipToLocalTime: {clip.name}, conditions: {index == 0}, {frame.triggerEvent}, {AllowedLoopAnimations.Contains(clip.name)}");
             OnAnimationEvent(clip);
         }
     }
@@ -834,7 +840,7 @@ internal class AnimationManager {
                 continue;
             }
     
-            // Logger.Info($"OnAnimationEvent from tk2dSpriteAnimatorOnProcessEvents: {self.CurrentClip.name}, conditions: {i}, {frames[i].triggerEvent}");
+            if (_debugLogAnimations) Logger.Info($"OnAnimationEvent from tk2dSpriteAnimatorOnProcessEvents: {self.CurrentClip.name}, conditions: {i}, {frames[i].triggerEvent}");
             OnAnimationEvent(self.CurrentClip);
         }
     }
