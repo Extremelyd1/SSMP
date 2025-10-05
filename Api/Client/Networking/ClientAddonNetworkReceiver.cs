@@ -28,7 +28,7 @@ internal class ClientAddonNetworkReceiver {
     /// <summary>
     /// The packet instantiator for this network receiver.
     /// </summary>
-    protected Func<byte, IPacketData> PacketInstantiator;
+    protected Func<byte, IPacketData>? PacketInstantiator;
 
     /// <summary>
     /// The size of the packet ID space.
@@ -56,7 +56,7 @@ internal class ClientAddonNetworkReceiver {
 
         // Assign the addon packet info in the dictionary of the client update packet
         ClientUpdatePacket.AddonPacketInfoDict[ClientAddon.Id.Value] = new AddonPacketInfo(
-            PacketInstantiator,
+            PacketInstantiator!,
             PacketIdSize
         );
 
@@ -146,11 +146,9 @@ internal class ClientAddonNetworkReceiver<TPacketId> :
                 "Given packet ID was not part of enum when creating this network receiver");
         }
 
-        if (!PacketHandlers.ContainsKey(idValue)) {
+        if (!PacketHandlers.Remove(idValue)) {
             throw new InvalidOperationException("Could not remove nonexistent addon packet handler");
         }
-
-        PacketHandlers.Remove(idValue);
 
         if (ClientAddon.Id.HasValue) {
             PacketManager.DeregisterClientAddonUpdatePacketHandler(ClientAddon.Id.Value, idValue);

@@ -22,10 +22,10 @@ public abstract class Addon {
     /// <summary>
     /// The network sender object if it has been registered.
     /// </summary>
-    internal object NetworkSender;
+    internal object? NetworkSender;
 
     /// <summary>
     /// The network receiver object if it has been registered.
     /// </summary>
-    internal object NetworkReceiver;
+    internal object? NetworkReceiver;
 }

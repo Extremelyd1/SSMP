@@ -10,7 +10,7 @@ public abstract class ServerAddon : Addon.Addon {
     /// <summary>
     /// The server API interface.
     /// </summary>
-    protected IServerApi ServerApi { get; private set; }
+    protected IServerApi? ServerApi { get; private set; }
 
     /// <summary>
     /// The logger for logger information.
@@ -54,7 +54,7 @@ public abstract class ServerAddon : Addon.Addon {
     /// <returns>The name of the addon or a substring of the first valid characters of its name.</returns>
     internal string GetName() {
         if (Name.Length > MaxNameLength) {
-            return Name.Substring(0, MaxNameLength);
+            return Name[..MaxNameLength];
         }
 
         return Name;
@@ -66,7 +66,7 @@ public abstract class ServerAddon : Addon.Addon {
     /// <returns>The version of the addon or a substring of the first valid characters of its version.</returns>
     internal string GetVersion() {
         if (Version.Length > MaxVersionLength) {
-            return Version.Substring(0, MaxVersionLength);
+            return Version[..MaxVersionLength];
         }
 
         return Version;

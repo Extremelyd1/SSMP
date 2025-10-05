@@ -349,7 +349,7 @@ internal class NetClient : INetClient {
         if (addon.NetworkReceiver == null) {
             networkReceiver = new ClientAddonNetworkReceiver<TPacketId>(addon, _packetManager);
             addon.NetworkReceiver = networkReceiver;
-        } else if (!(addon.NetworkReceiver is IClientAddonNetworkReceiver<TPacketId>)) {
+        } else if (addon.NetworkReceiver is not IClientAddonNetworkReceiver<TPacketId>) {
             throw new InvalidOperationException(
                 "Cannot request network receivers with differing generic parameters");
         }

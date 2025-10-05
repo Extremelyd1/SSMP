@@ -92,7 +92,7 @@ public interface IServerManager {
     event Action<IServerPlayer> PlayerEnterSceneEvent;
 
     /// <summary>
-    /// Event that is called when a players leaves a scene.
+    /// Event that is called when a player leaves a scene.
     /// </summary>
     event Action<IServerPlayer> PlayerLeaveSceneEvent;
 

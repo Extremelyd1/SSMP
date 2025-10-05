@@ -5,7 +5,7 @@ namespace SSMP.Api.Eventing.ServerEvents;
 /// <summary>
 /// Event for when a player sends a chat message.
 /// </summary>
-public interface IPlayerChatEvent : Cancellable {
+public interface IPlayerChatEvent : ICancellable {
     /// <summary>
     /// The player that sent the chat message.
     /// </summary>

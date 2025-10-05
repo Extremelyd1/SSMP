@@ -595,26 +595,4 @@ internal class UiManager : IUiManager {
     }
 
     #endregion
-
-    #region IUiManager methods
-
-    /// <inheritdoc />
-    public void DisableTeamSelection() {
-    }
-
-    /// <inheritdoc />
-    public void EnableTeamSelection() {
-    }
-
-    /// <inheritdoc />
-    public void DisableSkinSelection() {
-        // SettingsInterface.OnAddonSetSkinSelection(false);
-    }
-
-    /// <inheritdoc />
-    public void EnableSkinSelection() {
-        // SettingsInterface.OnAddonSetSkinSelection(true);
-    }
-
-    #endregion
 }

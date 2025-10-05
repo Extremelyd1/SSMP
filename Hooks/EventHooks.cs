@@ -5,6 +5,7 @@ using GlobalEnums;
 using MonoMod.RuntimeDetour;
 using SSMP.Logging;
 using TeamCherry.Localization;
+// ReSharper disable NotAccessedField.Local
 
 namespace SSMP.Hooks;
 
@@ -20,22 +21,22 @@ public static class EventHooks {
                                               System.Reflection.BindingFlags.NonPublic |
                                               System.Reflection.BindingFlags.Instance;
 
-    private static Hook _uiManagerAwakeHook;
-    private static Hook _uiManagerSetStateHook;
-    private static Hook _uiManagerUIGoToMainMenuHook;
-    private static Hook _uiManagerReturnToMainMenuHook;
+    private static Hook? _uiManagerAwakeHook;
+    private static Hook? _uiManagerSetStateHook;
+    private static Hook? _uiManagerUIGoToMainMenuHook;
+    private static Hook? _uiManagerReturnToMainMenuHook;
 
     private static Hook? _languageHasHook;
     private static Hook? _languageGetHook;
 
-    private static Hook _gameManagerStartNewGameHook;
-    private static Hook _gameManagerContinueGameHook;
+    private static Hook? _gameManagerStartNewGameHook;
+    private static Hook? _gameManagerContinueGameHook;
 
-    private static Hook _spriteAnimatorPlayHook;
-    private static Hook _spriteAnimatorWarpClipToLocalTimeHook;
-    private static Hook _spriteAnimatorProcessEventsHook;
+    private static Hook? _spriteAnimatorPlayHook;
+    private static Hook? _spriteAnimatorWarpClipToLocalTimeHook;
+    private static Hook? _spriteAnimatorProcessEventsHook;
 
-    private static Hook _heroControllerUpdateHook;
+    private static Hook? _heroControllerUpdateHook;
 
     public static event Action<UIManager, UIState>? UIManagerSetStatePostFix;
     public static event Action? UIManagerUIGoToMainMenu;
@@ -47,11 +48,11 @@ public static class EventHooks {
     public static event Action? GameManagerStartNewGame;
     public static event Action? GameManagerContinueGame;
 
-    public static event Action<tk2dSpriteAnimator, tk2dSpriteAnimationClip, float, float> SpriteAnimatorPlay;
-    public static event Action<tk2dSpriteAnimator, tk2dSpriteAnimationClip, float> SpriteAnimatorWarpClipToLocalTime;
-    public static event Action<tk2dSpriteAnimator, int, int, int> SpriteAnimatorProcessEvents;
+    public static event Action<tk2dSpriteAnimator, tk2dSpriteAnimationClip, float, float>? SpriteAnimatorPlay;
+    public static event Action<tk2dSpriteAnimator, tk2dSpriteAnimationClip, float>? SpriteAnimatorWarpClipToLocalTime;
+    public static event Action<tk2dSpriteAnimator, int, int, int>? SpriteAnimatorProcessEvents;
     
-    public static event Action<HeroController> HeroControllerUpdate;
+    public static event Action<HeroController>? HeroControllerUpdate;
 
     public static void Initialize() {
         _uiManagerAwakeHook = new Hook(

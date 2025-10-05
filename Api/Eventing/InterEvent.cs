@@ -12,7 +12,7 @@ public class InterEvent {
     /// <summary>
     /// List containing event subscriptions for this event.
     /// </summary>
-    private readonly List<EventSubscription> _subscriptions = new List<EventSubscription>();
+    private readonly List<EventSubscription> _subscriptions = [];
 
     /// <summary>
     /// Unsubscribes an action from the event by its token.

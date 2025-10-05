@@ -121,7 +121,7 @@ internal class ClientManager : IClientManager {
     /// <summary>
     /// The username that was last used to connect with.
     /// </summary>
-    private string _username;
+    private string? _username;
 
     /// <summary>
     /// Keeps track of the last updated location of the local player object.
@@ -136,7 +136,7 @@ internal class ClientManager : IClientManager {
     /// <summary>
     /// The last scene that the player was in, to check whether we should be sending that we left a certain scene.
     /// </summary>
-    private string _lastScene;
+    private string? _lastScene;
 
     /// <summary>
     /// Whether full synchronisation is enabled for the server we are connected to.
@@ -152,17 +152,17 @@ internal class ClientManager : IClientManager {
     /// Event for when the server settings change after being received from the server.
     /// The parameter for the action is a copy of the last received server settings.
     /// </summary>
-    public event Action<ServerSettings> ServerSettingsChangedEvent;
+    public event Action<ServerSettings>? ServerSettingsChangedEvent;
 
     /// <summary>
     /// Event for when the player's team changes after being received from the server.
     /// </summary>
-    public event Action<Team> TeamChangedEvent;
+    public event Action<Team>? TeamChangedEvent;
     
     /// <summary>
     /// Event for when the player's skin changes after being received from the server.
     /// </summary>
-    public event Action<byte> SkinChangedEvent;
+    public event Action<byte>? SkinChangedEvent;
     
     #endregion
 
@@ -178,7 +178,7 @@ internal class ClientManager : IClientManager {
                 throw new Exception("Client is not connected, username is undefined");
             }
 
-            return _username;
+            return _username!;
         }
     }
 
@@ -186,22 +186,22 @@ internal class ClientManager : IClientManager {
     public IReadOnlyCollection<IClientPlayer> Players => _playerData.Values;
 
     /// <inheritdoc />
-    public event Action ConnectEvent;
+    public event Action? ConnectEvent;
 
     /// <inheritdoc />
-    public event Action DisconnectEvent;
+    public event Action? DisconnectEvent;
 
     /// <inheritdoc />
-    public event Action<IClientPlayer> PlayerConnectEvent;
+    public event Action<IClientPlayer>? PlayerConnectEvent;
 
     /// <inheritdoc />
-    public event Action<IClientPlayer> PlayerDisconnectEvent;
+    public event Action<IClientPlayer>? PlayerDisconnectEvent;
 
     /// <inheritdoc />
-    public event Action<IClientPlayer> PlayerEnterSceneEvent;
+    public event Action<IClientPlayer>? PlayerEnterSceneEvent;
 
     /// <inheritdoc />
-    public event Action<IClientPlayer> PlayerLeaveSceneEvent;
+    public event Action<IClientPlayer>? PlayerLeaveSceneEvent;
 
     /// <inheritdoc />
     public Team Team => _playerManager.LocalPlayerTeam;
@@ -262,7 +262,7 @@ internal class ClientManager : IClientManager {
         
         RegisterCommands();
         
-        // ModHooks.FinishedLoadingModsHook += _addonManager.LoadAddons;
+        _addonManager.LoadAddons();
         
         // Check if there is a valid authentication key and if not, generate a new one
         if (!AuthUtil.IsValidAuthKey(_modSettings.AuthKey)) {
@@ -319,9 +319,6 @@ internal class ClientManager : IClientManager {
         EventHooks.HeroControllerUpdate += OnHeroControllerUpdate;
         
         CustomHooks.AfterEnterSceneHeroTransformed += OnEnterScene;
-        
-        // Register application quit handler
-        // ModHooks.ApplicationQuitHook += OnApplicationQuit;
     }
 
     /// <summary>
@@ -487,7 +484,7 @@ internal class ClientManager : IClientManager {
             address,
             port,
             username,
-            _modSettings.AuthKey,
+            _modSettings.AuthKey!,
             _addonManager.GetNetworkedAddonData()
         );
     }
@@ -659,7 +656,7 @@ internal class ClientManager : IClientManager {
         if (HeroController.instance && HeroController.instance.gameObject) {
             _playerManager.AddNameToPlayer(
                 HeroController.instance.gameObject,
-                _username,
+                _username!,
                 _playerManager.LocalPlayerTeam
             );
         }
@@ -681,7 +678,7 @@ internal class ClientManager : IClientManager {
         if (_netClient.IsConnected) {
             _playerManager.AddNameToPlayer(
                 HeroController.instance.gameObject, 
-                _username,
+                _username!,
                 _playerManager.LocalPlayerTeam
             );
         }
@@ -1269,43 +1266,21 @@ internal class ClientManager : IClientManager {
         Disconnect();
     }
 
-    /// <summary>
-    /// Callback method for when the local user quits the application.
-    /// </summary>
-    private void OnApplicationQuit() {
-        if (!_netClient.IsConnected) {
-            return;
-        }
-
-        // Send a disconnect packet before exiting the application
-        Logger.Debug("Sending PlayerDisconnect packet");
-        _netClient.UpdateManager.SetPlayerDisconnect();
-        _netClient.Disconnect();
-    }
-
     #endregion
 
     #region IClientManager methods
 
     /// <inheritdoc />
-    public IClientPlayer GetPlayer(ushort id) {
+    public IClientPlayer? GetPlayer(ushort id) {
         return TryGetPlayer(id, out var player) ? player : null;
     }
 
     /// <inheritdoc />
-    public bool TryGetPlayer(ushort id, out IClientPlayer player) {
+    public bool TryGetPlayer(ushort id, out IClientPlayer? player) {
         var found = _playerData.TryGetValue(id, out var playerData);
         player = playerData;
 
         return found;
-    }
-
-    /// <inheritdoc />
-    public void ChangeTeam(Team team) {
-    }
-
-    /// <inheritdoc />
-    public void ChangeSkin(byte skinId) {
     }
 
     #endregion

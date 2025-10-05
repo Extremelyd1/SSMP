@@ -27,17 +27,13 @@ internal abstract class AddonLoader {
     ];
 
     /// <summary>
-    /// The directory in which to look for assembly files.
-    /// </summary>
-    /// <returns>A string denoting the path of the current directory.</returns>
-    protected abstract string GetCurrentDirectoryPath();
-
-    /// <summary>
     /// Get the paths for all assembly files in the HKMP directory.
     /// </summary>
     /// <returns>A string array containing file paths.</returns>
-    private string[] GetAssemblyPaths() {
-        return Directory.GetFiles(GetCurrentDirectoryPath(), AssemblyFilePattern);
+    private static string[] GetAssemblyPaths() {
+        var path = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
+        
+        return Directory.GetFiles(path, AssemblyFilePattern);
     }
 
     /// <summary>
@@ -111,8 +107,6 @@ internal abstract class AddonLoader {
                 }
 
                 addons.Add(addon);
-                // We only allow a single class extending the addon subclass
-                break;
             }
         }
 

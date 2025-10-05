@@ -10,7 +10,7 @@ namespace SSMP.Api.Server;
 /// </summary>
 internal class ServerAddonManager {
     /// <summary>
-    /// A list of addons that were registered by an assembly outside of SSMP. These addons still
+    /// A list of addons that were registered by an assembly outside SSMP. These addons still
     /// need to be initialized with the server API.
     /// </summary>
     private static readonly List<ServerAddon> RegisteredAddons;
@@ -32,10 +32,10 @@ internal class ServerAddonManager {
     private readonly Dictionary<(string, string), ServerAddon> _networkedAddons;
 
     /// <summary>
-    /// Static constructor that initializes the list of addons registered outside of SSMP.
+    /// Static constructor that initializes the list of addons registered outside SSMP.
     /// </summary>
     static ServerAddonManager() {
-        RegisteredAddons = new List<ServerAddon>();
+        RegisteredAddons = [];
     }
 
     /// <summary>
@@ -60,7 +60,7 @@ internal class ServerAddonManager {
         var addonLoader = new ServerAddonLoader();
         var addons = addonLoader.LoadAddons();
 
-        // Now we add the addons that were registered by assemblies outside of HKMP
+        // Now we add the addons that were registered by assemblies outside HKMP
         addons.AddRange(RegisteredAddons);
 
         // Keep track of currently loaded addon names, so we can prevent duplicates
@@ -94,7 +94,7 @@ internal class ServerAddonManager {
                 Logger.Warn(
                     $"Could not initialize addon {addon.GetName()}, exception:\n{e}");
 
-                // If the initialize failed, we remove it again from the networked addon dict
+                // If the initialization failed, we remove it again from the networked addon dict
                 _networkedAddons.Remove((addon.GetName(), addon.GetVersion()));
 
                 continue;
@@ -130,7 +130,7 @@ internal class ServerAddonManager {
     }
 
     /// <summary>
-    /// Register and addon class from outside of SSMP.
+    /// Register and addon class from outside SSMP.
     /// </summary>
     /// <param name="serverAddon">The server addon instance.</param>
     public static void RegisterAddon(ServerAddon serverAddon) {

@@ -38,7 +38,7 @@ public interface IClientManager {
     /// </summary>
     /// <param name="id">The ID of the player.</param>
     /// <returns>The player with the given ID, or null if no such player exists.</returns>
-    IClientPlayer GetPlayer(ushort id);
+    IClientPlayer? GetPlayer(ushort id);
 
     /// <summary>
     /// Try to get a specific player by their ID.
@@ -46,21 +46,7 @@ public interface IClientManager {
     /// <param name="id">The ID of the player.</param>
     /// <param name="player">The parameter that will contain the player if it exists.</param>
     /// <returns>True if the player was found, false otherwise.</returns>
-    bool TryGetPlayer(ushort id, out IClientPlayer player);
-
-    /// <summary>
-    /// Changes the team of the local player.
-    /// </summary>
-    /// <param name="team">The team value.</param>
-    [Obsolete("ChangeTeam is deprecated. Team changes are handled by the IServerManager.")]
-    void ChangeTeam(Team team);
-
-    /// <summary>
-    /// Changes the skin of the local player.
-    /// </summary>
-    /// <param name="skinId">The ID of the skin.</param>
-    [Obsolete("ChangeSkin is deprecated. Skin changes are handled by the IServerManager.")]
-    void ChangeSkin(byte skinId);
+    bool TryGetPlayer(ushort id, out IClientPlayer? player);
 
     /// <summary>
     /// Event that is called when the local user connects to a server.

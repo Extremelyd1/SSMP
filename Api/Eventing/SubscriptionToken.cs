@@ -5,6 +5,7 @@ namespace SSMP.Api.Eventing;
 /// <summary>
 /// Subscription token for an event. Allows you to unsubscribe from an event.
 /// </summary>
+// ReSharper disable once ClassWithVirtualMembersNeverInherited.Global
 public class SubscriptionToken : IEquatable<SubscriptionToken>, IDisposable {
     /// <summary>
     /// Unique identifier for this token.
@@ -14,19 +15,19 @@ public class SubscriptionToken : IEquatable<SubscriptionToken>, IDisposable {
     /// <summary>
     /// The action that should be executed on unsubscribe.
     /// </summary>
-    private Action<SubscriptionToken> _unsubscribeAction;
+    private Action<SubscriptionToken>? _unsubscribeAction;
 
     /// <summary>
     /// Constructor for the subscription token with a given unsubscribe action.
     /// </summary>
     /// <param name="unsubscribeAction">The action that should be executed on unsubscribe.</param>
-    public SubscriptionToken(Action<SubscriptionToken> unsubscribeAction) {
+    public SubscriptionToken(Action<SubscriptionToken>? unsubscribeAction) {
         _unsubscribeAction = unsubscribeAction;
-        _guid = new Guid();
+        _guid = Guid.NewGuid();
     }
 
     /// <inheritdoc />
-    public bool Equals(SubscriptionToken other) {
+    public bool Equals(SubscriptionToken? other) {
         if (other == null) {
             return false;
         }
@@ -35,7 +36,7 @@ public class SubscriptionToken : IEquatable<SubscriptionToken>, IDisposable {
     }
 
     /// <inheritdoc />
-    public override bool Equals(object obj) {
+    public override bool Equals(object? obj) {
         return ReferenceEquals(this, obj) || Equals(obj as SubscriptionToken);
     }
 

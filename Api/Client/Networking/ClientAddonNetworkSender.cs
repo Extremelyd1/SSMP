@@ -94,7 +94,7 @@ internal class ClientAddonNetworkSender<TPacketId> :
             throw new InvalidOperationException(NoClientAddonId);
         }
 
-        _netClient.UpdateManager.SetAddonDataAsCollection<TPacketData>(
+        _netClient.UpdateManager.SetAddonDataAsCollection(
             _clientAddon.Id.Value,
             idValue,
             _packetIdSize,
