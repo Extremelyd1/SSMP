@@ -6,15 +6,13 @@ namespace SSMP.Internals;
 /// Enumeration of Crest types.
 /// </summary>
 public enum CrestType : byte {
-    Hunter1 = 0,
-    Hunter2,
-    Hunter3,
+    Hunter = 0,
     Reaper,
     Wanderer,
     Beast,
     Witch,
     Architect,
-    Shaman
+    Shaman,
 }
 
 /// <summary>
@@ -23,12 +21,8 @@ public enum CrestType : byte {
 public static class CrestTypeExt {
     public static string ToInternal(this CrestType crestType) {
         switch (crestType) {
-            case CrestType.Hunter1:
-                return "Hunter"; // Not sure
-            case CrestType.Hunter2:
-                return "Hunter_v2"; // Not sure
-            case CrestType.Hunter3:
-                return "Hunter_v3";
+            case CrestType.Hunter:
+                return "Hunter";
             case CrestType.Reaper:
                 return "Reaper";
             case CrestType.Wanderer:
@@ -49,11 +43,9 @@ public static class CrestTypeExt {
     public static CrestType FromInternal(string crestType) {
         switch (crestType) {
             case "Hunter":
-                return CrestType.Hunter1; // Not sure
             case "Hunter_v2":
-                return CrestType.Hunter2; // Not sure
             case "Hunter_v3":
-                return CrestType.Hunter3;
+                return CrestType.Hunter;
             case "Reaper":
                 return CrestType.Reaper;
             case "Wanderer":

@@ -91,53 +91,13 @@ internal abstract class SlashBase : ParryableEffect {
             return;
         }
 
-        // For some reason the animation for the normal slash is used with the alt slash NailSlash component and
-        // vice versa. So for the first two slash types, the NailSlash component is switched.
-        // This is also the case for the normal down slash and alt down slash for the Wanderer crest.
-        NailAttackBase? nailAttackBase = null;
-        switch (type) {
-            case SlashType.Normal:
-                nailAttackBase = GetPropertyFromConfigGroup(configGroup, overrideGroup, group => group.AlternateSlash);
-                break;
-            case SlashType.NormalAlt:
-                nailAttackBase = GetPropertyFromConfigGroup(configGroup, overrideGroup, group => group.NormalSlash);
-                break;
-            case SlashType.Up:
-                nailAttackBase = GetPropertyFromConfigGroup(configGroup, overrideGroup, group => group.UpSlash);
-                break;
-            case SlashType.Wall:
-                nailAttackBase = GetPropertyFromConfigGroup(configGroup, overrideGroup, group => group.WallSlash);
-                break;
-            case SlashType.Down:
-                switch (crestType) {
-                    case CrestType.Wanderer:
-                        nailAttackBase = GetPropertyFromConfigGroup(
-                            configGroup, overrideGroup, group => group.AltDownSlash);
-                        break;
-                    case CrestType.Reaper:
-                    case CrestType.Witch:
-                    case CrestType.Architect:
-                        nailAttackBase = GetNailSlashInCrestObjectFromName(configGroup, "DownSlash New");
-                        break;
-                    case CrestType.Beast:
-                        nailAttackBase = GetNailSlashInCrestObjectFromName(
-                            configGroup,
-                            isInBeastRageMode ? "SpinSlash Rage" : "SpinSlash"
-                        );
-                        break;
-                    case CrestType.Shaman:
-                        nailAttackBase = GetNailSlashInCrestObjectFromName(configGroup, "DownSlash");
-                        break;
-                }
-
-                break;
-            case SlashType.DownAlt:
-                nailAttackBase = GetPropertyFromConfigGroup(configGroup, overrideGroup, group => group.DownSlash);
-                break;
-            default:
-                Logger.Error($"Cannot play animation for unknown nail slash: {type}");
-                break;
-        }
+        var nailAttackBase = GetNailAttackBase(
+            type, 
+            crestType, 
+            isInBeastRageMode, 
+            configGroup, 
+            overrideGroup
+        );
 
         if (nailAttackBase == null) {
             Logger.Error("Cannot play animation with null NailSlash");
@@ -193,10 +153,137 @@ internal abstract class SlashBase : ParryableEffect {
         }
 
         slashParent.SetActive(true);
-        
-        audio.Play();
+
+        var relAudioSource = AudioUtil.GetAudioSourceObject(playerObject);
+        relAudioSource.transform.parent = slashParent.transform;
+        relAudioSource.clip = audio.clip;
+        relAudioSource.Play();
+
         mesh.enabled = true;
 
+        HandleSlashSpriteAnimation(anim, poly, mesh, crestType, slashParent, animName);
+
+        var longclaw = slashEffects.Contains(SlashEffect.Longclaw);
+        
+        if (crestType == CrestType.Shaman) {
+            var castEffectObjName = type switch {
+                SlashType.Normal or SlashType.NormalAlt => "Shaman_blade_cast_effect Slash",
+                SlashType.Down => "Shaman_blade_cast_effect DownSlash",
+                SlashType.Up => "Shaman_blade_cast_effect UpSlash",
+                SlashType.Wall => "Shaman_blade_cast_effect WallSlash",
+                _ => null
+            };
+            
+            if (castEffectObjName != null) {
+                var castEffectObj = GetGameObjectInCrestObjectFromName(configGroup, castEffectObjName);
+                if (castEffectObj != null) {
+                    var newCastEffectObj = Object.Instantiate(castEffectObj, slashParent.transform);
+                    newCastEffectObj.SetActive(true);
+                }
+            }
+            
+            MonoBehaviourUtil.Instance.StartCoroutine(PlayNailSlashTravel(slashObj, slashParent, longclaw));
+        } else {
+            // This method is in the else for the Shaman crest check, because Shaman crest handles Longclaw differently
+            ApplyLongclawMultiplier(longclaw, type, slashObj, scale);
+        }
+        
+        // TODO: nail imbued from NailAttackBase
+    }
+
+    protected void ApplyLongclawMultiplier(bool longclaw, SlashType type, GameObject slashObj, Vector3 scale) {
+        if (longclaw) {
+            var multiplier = Gameplay.LongNeedleMultiplier;
+            if (type == SlashType.Up) {
+                multiplier = new Vector2(multiplier.y, multiplier.x);
+            }
+
+            slashObj.transform.localScale = new Vector3(scale.x * multiplier.x, scale.y * multiplier.y, scale.z);
+        } else {
+            slashObj.transform.localScale = scale;
+        }
+    }
+
+    /// <summary>
+    /// Gets the NailAttackBase component from the given parameters. This is then used as a template for playing
+    /// the slash animation according to its behaviour. Can be overridden by extending classes to get a different
+    /// base.
+    /// </summary>
+    /// <returns>A nullable NailAttackBase instance.</returns>
+    protected virtual NailAttackBase? GetNailAttackBase(
+        SlashType type,
+        CrestType crestType,
+        bool isInBeastRageMode,
+        HeroController.ConfigGroup configGroup,
+        HeroController.ConfigGroup? overrideGroup
+    ) {
+        // For some reason the animation for the normal slash is used with the alt slash NailSlash component and
+        // vice versa. So for the first two slash types, the NailSlash component is switched.
+        // This is also the case for the normal down slash and alt down slash for the Wanderer crest.
+        switch (type) {
+            case SlashType.Normal:
+                return GetPropertyFromConfigGroup(configGroup, overrideGroup, group => group.AlternateSlash);
+            case SlashType.NormalAlt:
+                return GetPropertyFromConfigGroup(configGroup, overrideGroup, group => group.NormalSlash);
+            case SlashType.Up:
+                return GetPropertyFromConfigGroup(configGroup, overrideGroup, group => group.UpSlash);
+            case SlashType.Wall:
+                return GetPropertyFromConfigGroup(configGroup, overrideGroup, group => group.WallSlash);
+            case SlashType.Down:
+                switch (crestType) {
+                    case CrestType.Wanderer:
+                        return GetPropertyFromConfigGroup(
+                            configGroup, overrideGroup, group => group.AltDownSlash);
+                    case CrestType.Reaper:
+                    case CrestType.Witch:
+                    case CrestType.Architect:
+                        return GetNailSlashInCrestObjectFromName(configGroup, "DownSlash New");
+                    case CrestType.Beast:
+                        return GetNailSlashInCrestObjectFromName(
+                            configGroup,
+                            isInBeastRageMode ? "SpinSlash Rage" : "SpinSlash"
+                        );
+                    case CrestType.Shaman:
+                        return GetNailSlashInCrestObjectFromName(configGroup, "DownSlash");
+                }
+
+                break;
+            case SlashType.DownAlt:
+                return GetPropertyFromConfigGroup(configGroup, overrideGroup, group => group.DownSlash);
+            case SlashType.DownSpike:
+                return GetPropertyFromConfigGroup(configGroup, overrideGroup, group => group.Downspike);
+            case SlashType.Dash:
+                return GetPropertyFromConfigGroup<NailAttackBase>(
+                    configGroup, 
+                    overrideGroup, 
+                    group => GetNailAttackBaseComponentFromObject(group.DashStab)
+                );
+            case SlashType.DashAlt:
+                return GetPropertyFromConfigGroup<NailAttackBase>(
+                    configGroup, 
+                    overrideGroup, 
+                    group => GetNailAttackBaseComponentFromObject(group.DashStabAlt)
+                );
+            default:
+                Logger.Error($"Cannot play animation for unknown nail slash: {type}");
+                break;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Separate method that handles only the sprite animation of the nail slash, which is overridden in
+    /// <see cref="DownSpike"/>, which uses a slightly different way of playing and handling the sprite animation.
+    /// </summary>
+    protected virtual void HandleSlashSpriteAnimation(
+        tk2dSpriteAnimator anim,
+        PolygonCollider2D poly,
+        MeshRenderer mesh,
+        CrestType crestType,
+        GameObject slashParent,
+        string animName
+    ) {
         var animTriggerCounter = 0;
         anim.AnimationEventTriggered = (_, _, _) => {
             ++animTriggerCounter;
@@ -221,42 +308,25 @@ internal abstract class SlashBase : ParryableEffect {
         var clipByName = anim.GetClipByName(animName);
         // TODO: FPS increase by Quickening from NailSlash
         anim.Play(clipByName, Mathf.Epsilon, clipByName.fps);
+    }
 
-        var longclaw = slashEffects.Contains(SlashEffect.Longclaw);
-        
-        if (crestType == CrestType.Shaman) {
-            var castEffectObjName = type switch {
-                SlashType.Normal or SlashType.NormalAlt => "Shaman_blade_cast_effect Slash",
-                SlashType.Down => "Shaman_blade_cast_effect DownSlash",
-                SlashType.Up => "Shaman_blade_cast_effect UpSlash",
-                SlashType.Wall => "Shaman_blade_cast_effect WallSlash",
-                _ => null
-            };
-            
-            if (castEffectObjName != null) {
-                var castEffectObj = GetGameObjectInCrestObjectFromName(configGroup, castEffectObjName);
-                if (castEffectObj != null) {
-                    var newCastEffectObj = Object.Instantiate(castEffectObj, slashParent.transform);
-                    newCastEffectObj.SetActive(true);
-                }
-            }
-            
-            MonoBehaviourUtil.Instance.StartCoroutine(PlayNailSlashTravel(slashObj, slashParent, longclaw));
-        } else {
-            // This check is in the else for the Shaman crest check, because Shaman crest handles Longclaw differently
-            if (longclaw) {
-                var multiplier = Gameplay.LongNeedleMultiplier;
-                if (type == SlashType.Up) {
-                    multiplier = new Vector2(multiplier.y, multiplier.x);
-                }
-
-                slashObj.transform.localScale = new Vector3(scale.x * multiplier.x, scale.y * multiplier.y, scale.z);
-            } else {
-                slashObj.transform.localScale = scale;
-            }
+    /// <summary>
+    /// Get the <see cref="NailAttackBase"/> component from the given game object. Can be either a
+    /// <see cref="NailSlash"/> or <see cref="DashStabNailAttack"/>.
+    /// </summary>
+    /// <param name="gameObj"></param>
+    /// <returns></returns>
+    protected NailAttackBase? GetNailAttackBaseComponentFromObject(GameObject gameObj) {
+        if (gameObj == null) {
+            return null;
         }
-        
-        // TODO: nail imbued from NailAttackBase
+
+        var dashStabNailAttack = gameObj.GetComponent<DashStabNailAttack>();
+        if (dashStabNailAttack != null) {
+            return dashStabNailAttack;
+        }
+
+        return gameObj.GetComponent<NailSlash>();
     }
 
     /// <summary>
@@ -452,13 +522,16 @@ internal abstract class SlashBase : ParryableEffect {
     /// <summary>
     /// Enumeration of nail slash types.
     /// </summary>
-    protected enum SlashType {
+    public enum SlashType {
         Normal,
         NormalAlt,
         Down,
         DownAlt,
+        DownSpike,
         Up,
-        Wall
+        Wall,
+        Dash,
+        DashAlt,
     }
 
     /// <summary>

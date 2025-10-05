@@ -52,6 +52,11 @@ internal class AnimationManager {
     ];
 
     /// <summary>
+    /// Animation effect for various dash slashes, which is used for multiple animation clips.
+    /// </summary>
+    private static readonly AnimationEffect DashSlashAntic = new DashSlashAntic();
+
+    /// <summary>
     /// Bi-directional lookup table for linking animation clip names with their respective animation clip enum
     /// values.
     /// </summary>
@@ -282,16 +287,25 @@ internal class AnimationManager {
     /// Dictionary mapping animation clip enum values to IAnimationEffect instantiations.
     /// </summary>
     private static readonly Dictionary<AnimationClip, IAnimationEffect> AnimationEffects = new() {
-        { AnimationClip.Slash, new Slash() },
-        { AnimationClip.SlashAlt, new AltSlash() },
-        { AnimationClip.UpSlash, new UpSlash() },
-        { AnimationClip.WallSlash, new WallSlash() },
+        { AnimationClip.Slash, new Slash(SlashBase.SlashType.Normal) },
+        { AnimationClip.SlashAlt, new Slash(SlashBase.SlashType.NormalAlt) },
+        { AnimationClip.UpSlash, new Slash(SlashBase.SlashType.Up) },
+        { AnimationClip.WallSlash, new Slash(SlashBase.SlashType.Wall) },
         { AnimationClip.DownSpike, new DownSpike() }, // Hunter Crest down slash
-        { AnimationClip.V3DownSlash, new DownSlash() },
-        { AnimationClip.DownSlash, new DownSlash() },
-        { AnimationClip.DownSlashAlt, new DownAltSlash() },
-        { AnimationClip.SpinBall, new DownSlash() }
+        { AnimationClip.V3DownSlash, new Slash(SlashBase.SlashType.Down) },
+        { AnimationClip.DownSlash, new Slash(SlashBase.SlashType.Down) },
+        { AnimationClip.DownSlashAlt, new Slash(SlashBase.SlashType.DownAlt) },
+        { AnimationClip.SpinBall, new Slash(SlashBase.SlashType.Down) },
+        { AnimationClip.DashAttackAntic, DashSlashAntic },
+        { AnimationClip.DashAttack, new DashSlash() },
+        { AnimationClip.DashUpperAntic, DashSlashAntic },
+        { AnimationClip.DashUpper, new DashSlashReaper() },
+        { AnimationClip.WandererDashAttack, new Slash(SlashBase.SlashType.Dash) },
+        { AnimationClip.WandererDashAttackAlt, new Slash(SlashBase.SlashType.DashAlt) },
+        { AnimationClip.DashAttackCharge, DashSlashAntic },
+        
     };
+    // TODO: implement all animation effects for sprint slashes (dash slashes/stabs). See Sprint FSM in shared templates
 
     /// <summary>
     /// The net client for sending animation updates.
