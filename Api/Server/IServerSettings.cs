@@ -11,11 +11,6 @@ public interface IServerSettings {
     public bool IsPvpEnabled { get; }
 
     /// <summary>
-    /// Whether player object will damage the local player.
-    /// </summary>
-    public bool IsBodyDamageEnabled { get; }
-
-    /// <summary>
     /// Whether to always show map icons.
     /// </summary>
     public bool AlwaysShowMapIcons { get; }

@@ -16,11 +16,6 @@ public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
     public bool IsPvpEnabled { get; set; }
 
     /// <inheritdoc />
-    [SettingAlias("bodydamage")]
-    [ModMenuSetting("Body Damage", "If PvP is on, whether player hitboxes do damage")]
-    public bool IsBodyDamageEnabled { get; set; } = true;
-
-    /// <inheritdoc />
     [SettingAlias("globalmapicons")]
     [ModMenuSetting("Global Map Icons", "Always show map icons for all players")]
     public bool AlwaysShowMapIcons { get; set; }

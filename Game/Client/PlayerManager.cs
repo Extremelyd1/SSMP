@@ -147,7 +147,7 @@ internal class PlayerManager {
             typeof(Rigidbody2D),
             typeof(CoroutineCancelComponent)
         ) {
-            layer = 0
+            layer = 11
         };
         
         playerPrefab.transform.SetParent(_playerContainerPrefab.transform);
@@ -180,12 +180,12 @@ internal class PlayerManager {
         rigidbody.bodyType = RigidbodyType2D.Kinematic;
 
         // Add some extra gameObjects related to animation effects
-        new GameObject("Attacks") { layer = 9 }.transform.SetParent(playerPrefab.transform);
-        new GameObject("Bind Effects") { layer = 9 }.transform.SetParent(playerPrefab.transform);
-        new GameObject("Effects") { layer = 9 }.transform.SetParent(playerPrefab.transform);
-        new GameObject("Charm Effects") { layer = 9 }.transform.SetParent(playerPrefab.transform);
-        new GameObject("Special Attacks") { layer = 9 }.transform.SetParent(playerPrefab.transform);
-        new GameObject("Tool Effects") { layer = 9 }.transform.SetParent(playerPrefab.transform);
+        new GameObject("Attacks").transform.SetParent(playerPrefab.transform);
+        new GameObject("Bind Effects").transform.SetParent(playerPrefab.transform);
+        new GameObject("Effects").transform.SetParent(playerPrefab.transform);
+        new GameObject("Charm Effects").transform.SetParent(playerPrefab.transform);
+        new GameObject("Special Attacks").transform.SetParent(playerPrefab.transform);
+        new GameObject("Tool Effects").transform.SetParent(playerPrefab.transform);
 
         CreateUsername(_playerContainerPrefab);
 
@@ -440,18 +440,6 @@ internal class PlayerManager {
         playerData.PlayerObject = playerObject;
         playerData.Team = team;
         playerData.SkinId = skinId;
-
-        // Set whether this player should have body damage
-        // Only if:
-        // PvP is enabled and body damage is enabled AND
-        // (the teams are not equal or if either doesn't have a team)
-        ToggleBodyDamage(
-            playerData,
-            _serverSettings.IsPvpEnabled && _serverSettings.IsBodyDamageEnabled &&
-            (team != LocalPlayerTeam
-             || team.Equals(Team.None)
-             || LocalPlayerTeam.Equals(Team.None))
-        );
     }
 
     /// <summary>
@@ -566,17 +554,6 @@ internal class PlayerManager {
         var textMeshObject = nameObject.GetComponent<TextMeshPro>();
 
         ChangeNameColor(textMeshObject, team);
-
-        // Toggle body damage on if:
-        // PvP is enabled and body damage is enabled AND
-        // (the teams are not equal or if either doesn't have a team)
-        ToggleBodyDamage(
-            playerData,
-            _serverSettings.IsPvpEnabled && _serverSettings.IsBodyDamageEnabled &&
-            (team != LocalPlayerTeam
-             || team.Equals(Team.None)
-             || LocalPlayerTeam.Equals(Team.None))
-        );
     }
 
     /// <summary>
@@ -590,23 +567,6 @@ internal class PlayerManager {
 
         var textMeshObject = nameObject.GetComponent<TextMeshPro>();
         ChangeNameColor(textMeshObject, team);
-
-        foreach (var playerData in _playerData.Values) {
-            if (!playerData.IsInLocalScene) {
-                continue;
-            }
-
-            // Toggle body damage on if:
-            // PvP is enabled and body damage is enabled AND
-            // (the teams are not equal or if either doesn't have a team)
-            ToggleBodyDamage(
-                playerData,
-                _serverSettings.IsPvpEnabled && _serverSettings.IsBodyDamageEnabled &&
-                (playerData.Team != LocalPlayerTeam
-                 || playerData.Team.Equals(Team.None)
-                 || LocalPlayerTeam.Equals(Team.None))
-            );
-        }
     }
 
     /// <summary>
@@ -718,19 +678,8 @@ internal class PlayerManager {
     /// <summary>
     /// Callback method for when the server settings are updated.
     /// </summary>
-    /// <param name="pvpOrBodyDamageChanged">Whether the PvP or body damage settings changed.</param>
     /// <param name="displayNamesChanged">Whether the display names setting changed.</param>
-    public void OnServerSettingsUpdated(bool pvpOrBodyDamageChanged, bool displayNamesChanged) {
-        if (pvpOrBodyDamageChanged) {
-            // Loop over all player objects
-            foreach (var playerData in _playerData.Values) {
-                if (playerData.IsInLocalScene) {
-                    // Enable the DamageHero component based on whether both PvP and body damage are enabled
-                    ToggleBodyDamage(playerData, _serverSettings.IsPvpEnabled && _serverSettings.IsBodyDamageEnabled);
-                }
-            }
-        }
-
+    public void OnServerSettingsUpdated(bool displayNamesChanged) {
         if (displayNamesChanged) {
             foreach (var playerData in _playerData.Values) {
                 var nameObject = playerData.PlayerContainer.FindGameObjectInChildren(UsernameObjectName);
@@ -775,27 +724,5 @@ internal class PlayerManager {
         nameObject.transform.SetParent(playerContainer.transform);
 
         return nameObject;
-    }
-
-    /// <summary>
-    /// Toggle the body damage for the given player data.
-    /// </summary>
-    /// <param name="playerData">The client player data.</param>
-    /// <param name="enabled">Whether body damage is enabled.</param>
-    private void ToggleBodyDamage(ClientPlayerData playerData, bool enabled) {
-        var playerObject = playerData.PlayerObject;
-        if (!playerObject) {
-            return;
-        }
-
-        // We need to move the player object to the correct layer so it can interact with nail swings etc.
-        // Also toggle the enabled state of the DamageHero component
-        if (enabled) {
-            playerObject.layer = 11;
-            playerObject.GetComponent<DamageHero>().enabled = true;
-        } else {
-            playerObject.layer = 9;
-            playerObject.GetComponent<DamageHero>().enabled = false;
-        }
     }
 }

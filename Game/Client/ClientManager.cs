@@ -987,8 +987,6 @@ internal class ClientManager : IClientManager {
     /// </summary>
     /// <param name="update">The <see cref="ServerSettingsUpdate"/> packet data.</param>
     private void OnServerSettingsUpdated(ServerSettingsUpdate update) {
-        var pvpChanged = false;
-        var bodyDamageChanged = false;
         var displayNamesChanged = false;
         var alwaysShowMapChanged = false;
         var onlyCompassChanged = false;
@@ -999,20 +997,7 @@ internal class ClientManager : IClientManager {
 
         // Check whether the PvP state changed
         if (_serverSettings.IsPvpEnabled != newServerSettings.IsPvpEnabled) {
-            pvpChanged = true;
-
             var message = $"PvP is now {(newServerSettings.IsPvpEnabled ? "enabled" : "disabled")}";
-
-            UiManager.InternalChatBox.AddMessage(message);
-            Logger.Info(message);
-        }
-
-        // Check whether the body damage state changed
-        if (_serverSettings.IsBodyDamageEnabled != newServerSettings.IsBodyDamageEnabled) {
-            bodyDamageChanged = true;
-
-            var message =
-                $"Body damage is now {(newServerSettings.IsBodyDamageEnabled ? "enabled" : "disabled")}";
 
             UiManager.InternalChatBox.AddMessage(message);
             Logger.Info(message);
@@ -1077,8 +1062,8 @@ internal class ClientManager : IClientManager {
         ServerSettingsChangedEvent?.Invoke(newServerSettings);
 
         // Only update the player manager if the either PvP or body damage have been changed
-        if (pvpChanged || bodyDamageChanged || displayNamesChanged) {
-            _playerManager.OnServerSettingsUpdated(pvpChanged || bodyDamageChanged, displayNamesChanged);
+        if (displayNamesChanged) {
+            _playerManager.OnServerSettingsUpdated(displayNamesChanged);
         }
 
         if (alwaysShowMapChanged || onlyCompassChanged) {
