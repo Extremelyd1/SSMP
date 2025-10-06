@@ -420,4 +420,4 @@ InitTestScene*.unity
 .idea/
 */lib/
 */Lib/
-LocalBuildProperties.props
+SilksongPath.props

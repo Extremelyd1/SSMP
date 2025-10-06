@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SSMP", "SSMP\SSMP.csproj", "{5EA55B06-181D-4031-A61A-85BA60F106AB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SSMPServer", "SSMPServer\SSMPServer.csproj", "{6AAF3681-32CB-4470-BA06-7203A907FCB5}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{5EA55B06-181D-4031-A61A-85BA60F106AB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5EA55B06-181D-4031-A61A-85BA60F106AB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5EA55B06-181D-4031-A61A-85BA60F106AB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5EA55B06-181D-4031-A61A-85BA60F106AB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6AAF3681-32CB-4470-BA06-7203A907FCB5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6AAF3681-32CB-4470-BA06-7203A907FCB5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6AAF3681-32CB-4470-BA06-7203A907FCB5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6AAF3681-32CB-4470-BA06-7203A907FCB5}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
