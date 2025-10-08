@@ -156,7 +156,11 @@ internal class SkinManager {
     /// Reset the skin of the given player to the default skin.
     /// </summary>
     /// <param name="playerObject">The GameObject representing the player.</param>
-    public void ResetPlayerSkin(GameObject playerObject) {
+    public void ResetPlayerSkin(GameObject? playerObject) {
+        if (playerObject == null) {
+            return;
+        }
+        
         UpdatePlayerSkin(playerObject, 0);
     }
 

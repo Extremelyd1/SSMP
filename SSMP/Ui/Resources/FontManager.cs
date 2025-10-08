@@ -11,12 +11,12 @@ internal static class FontManager {
     /// <summary>
     /// The font used for UI.
     /// </summary>
-    public static Font UIFontRegular;
+    public static Font UIFontRegular = null!;
 
     /// <summary>
     /// The font used for usernames above player objects.
     /// </summary>
-    public static TMP_FontAsset InGameNameFont;
+    public static TMP_FontAsset InGameNameFont = null!;
 
     /// <summary>
     /// Load the fonts by trying to find them in the game through Unity.

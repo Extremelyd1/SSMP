@@ -1,23 +1,24 @@
+
 namespace SSMP.Math;
 
 /// <summary>
-/// Class for two dimensional vectors.
+/// Class for two-dimensional vectors.
 /// </summary>
 public class Vector2 {
     /// <summary>
     /// The zero (0, 0) vector.
     /// </summary>
-    public static readonly Vector2 Zero = new Vector2(0, 0);
+    public static readonly Vector2 Zero = new(0, 0);
 
     /// <summary>
     /// The X coordinate of this vector.
     /// </summary>
-    public float X { get; set; }
+    public float X { get; }
 
     /// <summary>
     /// The Y coordinate of this vector.
     /// </summary>
-    public float Y { get; set; }
+    public float Y { get; }
 
     /// <summary>
     /// Construct a vector with the given X and Y values.
@@ -30,8 +31,8 @@ public class Vector2 {
     }
 
     /// <inheritdoc />
-    public override bool Equals(object obj) {
-        if (!(obj is Vector2 vector2)) {
+    public override bool Equals(object? obj) {
+        if (obj is not Vector2 vector2) {
             return false;
         }
 
@@ -43,7 +44,7 @@ public class Vector2 {
     /// </summary>
     /// <param name="other">The vector to compare with the current vector.</param>
     /// <returns>true if the given vector is equal to the current object; otherwise, false.</returns>
-    private bool Equals(Vector2 other) {
+    private bool Equals(Vector2? other) {
         if (other == null) {
             return false;
         }
@@ -64,9 +65,9 @@ public class Vector2 {
     /// <param name="lhs">The left-hand side to compare.</param>
     /// <param name="rhs">The right-hand side to compare.</param>
     /// <returns>true if the given vectors are equal; otherwise, false.</returns>
-    public static bool operator ==(Vector2 lhs, Vector2 rhs) {
-        if ((object) lhs == null) {
-            return (object) rhs == null;
+    public static bool operator ==(Vector2? lhs, Vector2? rhs) {
+        if (lhs is null) {
+            return rhs is null;
         }
 
         return lhs.Equals(rhs);
@@ -78,7 +79,7 @@ public class Vector2 {
     /// <param name="lhs">The left-hand side to compare.</param>
     /// <param name="rhs">The right-hand side to compare.</param>
     /// <returns>true if the given vectors are not equal; otherwise, false.</returns>
-    public static bool operator !=(Vector2 lhs, Vector2 rhs) {
+    public static bool operator !=(Vector2? lhs, Vector2? rhs) {
         return !(lhs == rhs);
     }
 

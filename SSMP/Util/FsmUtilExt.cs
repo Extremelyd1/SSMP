@@ -16,7 +16,7 @@ public static class FsmUtilExt {
     /// <param name="stateName">The name of the state.</param>
     /// <param name="index">The index of the action within that state.</param>
     /// <returns>The FsmStateAction from the FSM or null if the action could not be found.</returns>
-    public static FsmStateAction GetAction(this PlayMakerFSM fsm, string stateName, int index) {
+    public static FsmStateAction? GetAction(this PlayMakerFSM fsm, string stateName, int index) {
         foreach (var t in fsm.FsmStates) {
             if (t.Name != stateName) {
                 continue;
@@ -40,7 +40,7 @@ public static class FsmUtilExt {
     /// <param name="index">The index of the action within that state.</param>
     /// <typeparam name="T">The type of the action that extends FsmStateAction.</typeparam>
     /// <returns>The action from the FSM or null if the action could not be found.</returns>
-    public static T GetAction<T>(this PlayMakerFSM fsm, string stateName, int index) where T : FsmStateAction {
+    public static T? GetAction<T>(this PlayMakerFSM fsm, string stateName, int index) where T : FsmStateAction {
         return GetAction(fsm, stateName, index) as T;
     }
 
@@ -52,11 +52,12 @@ public static class FsmUtilExt {
     /// <typeparam name="T">The type of the action that extends FsmStateAction.</typeparam>
     /// <returns>The action from the FSM or null if the action could not be found.</returns>
     public static T GetFirstAction<T>(this PlayMakerFSM fsm, string stateName) where T : FsmStateAction {
-        return fsm.GetState(stateName)?.Actions.OfType<T>().FirstOrDefault();
+        return fsm.GetState(stateName).Actions.OfType<T>().FirstOrDefault() ??
+               throw new ArgumentException($"FSM state \"{stateName}\" does not have action of type \"{typeof(T)}\"", nameof(stateName));
     }
 
     /// <summary>
-    /// Get a FSM state by its name.
+    /// Get an FSM state by its name.
     /// </summary>
     /// <param name="fsm">The FSM instance.</param>
     /// <param name="stateName">The name of the state.</param>
@@ -65,7 +66,7 @@ public static class FsmUtilExt {
         return fsm.FsmStates.Where(t => t.Name == stateName)
             .Select(t => new { t, actions = t.Actions })
             .Select(t1 => t1.t)
-            .FirstOrDefault();
+            .FirstOrDefault() ?? throw new ArgumentException($"FSM does not have state with name \"{stateName}\"", nameof(stateName));
     }
 
     /// <summary>
@@ -97,7 +98,7 @@ public static class FsmUtilExt {
     public static void InsertMethod(this PlayMakerFSM fsm, string stateName, int index, Action method) {
         InsertAction(fsm, stateName, new InvokeMethod(method), index);
     }
-    
+
     /// <summary>
     /// Removes an action from a specific state in a FSM.
     /// </summary>
@@ -106,7 +107,10 @@ public static class FsmUtilExt {
     /// <param name="index">The index of the action within the state.</param>
     public static void RemoveAction(this PlayMakerFSM fsm, string stateName, int index) {
         var state = fsm.GetState(stateName);
-        
+        if (state == null) {
+            throw new ArgumentException("FSM does not have a state with the given name", nameof(stateName));
+        }
+
         var origActions = state.Actions;
         var actions = new FsmStateAction[origActions.Length - 1];
         for (var i = 0; i < index; i++) {
@@ -128,6 +132,9 @@ public static class FsmUtilExt {
     /// <typeparam name="T">The type of the action to remove.</typeparam>
     public static void RemoveFirstAction<T>(this PlayMakerFSM fsm, string stateName) {
         var state = fsm.GetState(stateName);
+        if (state == null) {
+            throw new ArgumentException("FSM does not have a state with the given name", nameof(stateName));
+        }
 
         var skipped = false;
         state.Actions = state.Actions.Where(a => {
@@ -164,7 +171,7 @@ internal class InvokeMethod : FsmStateAction {
 
     /// <inheritdoc />
     public override void OnEnter() {
-        _action?.Invoke();
+        _action.Invoke();
         Finish();
     }
 }

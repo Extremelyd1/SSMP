@@ -63,27 +63,27 @@ internal class NetServer : INetServer {
     /// <summary>
     /// Byte array containing leftover data that was not processed as a packet yet.
     /// </summary>
-    private byte[] _leftoverData;
+    private byte[]? _leftoverData;
 
     /// <summary>
     /// Cancellation token source for all threads of the server.
     /// </summary>
-    private CancellationTokenSource _taskTokenSource;
+    private CancellationTokenSource? _taskTokenSource;
 
     /// <summary>
     /// Event that is called when a client times out.
     /// </summary>
-    public event Action<ushort> ClientTimeoutEvent;
+    public event Action<ushort>? ClientTimeoutEvent;
 
     /// <summary>
     /// Event that is called when the server shuts down.
     /// </summary>
-    public event Action ShutdownEvent;
+    public event Action? ShutdownEvent;
 
     /// <summary>
     /// Event that is called when a new client wants to connect.
     /// </summary>
-    public event Action<NetServerClient, ClientInfo, ServerInfo> ConnectionRequestEvent;
+    public event Action<NetServerClient, ClientInfo, ServerInfo>? ConnectionRequestEvent;
 
     /// <inheritdoc />
     public bool IsStarted { get; private set; }
@@ -363,7 +363,7 @@ internal class NetServer : INetServer {
         IsStarted = false;
 
         // Request cancellation for the tasks that are still running
-        _taskTokenSource.Cancel();
+        _taskTokenSource?.Cancel();
         _taskTokenSource?.Dispose();
 
         // Invoke the shutdown event to notify all registered parties of the shutdown
@@ -394,7 +394,7 @@ internal class NetServer : INetServer {
     /// <param name="id">The ID of the client.</param>
     /// <returns>The update manager for the client, or null if there does not exist a client with the
     /// given ID.</returns>
-    public ServerUpdateManager GetUpdateManagerForClient(ushort id) {
+    public ServerUpdateManager? GetUpdateManagerForClient(ushort id) {
         if (!_clientsById.TryGetValue(id, out var netServerClient)) {
             return null;
         }
@@ -466,13 +466,13 @@ internal class NetServer : INetServer {
             throw new InvalidOperationException("Addon has no ID assigned");
         }
 
-        ServerAddonNetworkReceiver<TPacketId> networkReceiver = null;
+        ServerAddonNetworkReceiver<TPacketId>? networkReceiver = null;
 
         // Check whether an existing network receiver exists
         if (addon.NetworkReceiver == null) {
             networkReceiver = new ServerAddonNetworkReceiver<TPacketId>(addon, _packetManager);
             addon.NetworkReceiver = networkReceiver;
-        } else if (!(addon.NetworkReceiver is IServerAddonNetworkReceiver<TPacketId>)) {
+        } else if (addon.NetworkReceiver is not IServerAddonNetworkReceiver<TPacketId>) {
             throw new InvalidOperationException(
                 "Cannot request network receivers with differing generic parameters");
         }
@@ -480,11 +480,11 @@ internal class NetServer : INetServer {
         // After we know that this call did not use a different generic, we can update packet info
         ServerUpdatePacket.AddonPacketInfoDict[addon.Id.Value] = new AddonPacketInfo(
             // Transform the packet instantiator function from a TPacketId as parameter to byte
-            networkReceiver?.TransformPacketInstantiator(packetInstantiator),
+            networkReceiver?.TransformPacketInstantiator(packetInstantiator)!,
             (byte) Enum.GetValues(typeof(TPacketId)).Length
         );
 
-        return addon.NetworkReceiver as IServerAddonNetworkReceiver<TPacketId>;
+        return (addon.NetworkReceiver as IServerAddonNetworkReceiver<TPacketId>)!;
     }
 }
 
@@ -495,12 +495,12 @@ internal class ReceivedData {
     /// <summary>
     /// The DTLS server client that sent this data.
     /// </summary>
-    public DtlsServerClient DtlsServerClient { get; init; }
+    public required DtlsServerClient DtlsServerClient { get; init; }
     
     /// <summary>
     /// Byte array of the buffer containing received data.
     /// </summary>
-    public byte[] Buffer { get; init; }
+    public required byte[] Buffer { get; init; }
     
     /// <summary>
     /// The number of bytes in the buffer that were received. The rest of the buffer is empty.

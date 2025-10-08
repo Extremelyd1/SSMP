@@ -3,6 +3,7 @@ using SSMP.Networking.Client;
 using SSMP.Networking.Packet.Data;
 using SSMP.Util;
 using UnityEngine;
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
 
 namespace SSMP.Game.Client.Entity.Component; 
 

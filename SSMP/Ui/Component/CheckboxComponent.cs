@@ -35,7 +35,7 @@ internal class CheckboxComponent : Component, ICheckboxComponent {
     /// <summary>
     /// The delegate that is executed when the checkbox is toggled. 
     /// </summary>
-    private OnToggle _onToggle;
+    private OnToggle? _onToggle;
 
     /// <summary>
     /// Whether this checkbox is interactable.
@@ -98,27 +98,27 @@ internal class CheckboxComponent : Component, ICheckboxComponent {
         var isMouseDown = false;
         var isHover = false;
 
-        AddEventTrigger(eventTrigger, EventTriggerType.PointerEnter, data => {
+        AddEventTrigger(eventTrigger, EventTriggerType.PointerEnter, _ => {
             isHover = true;
 
             if (_interactable) {
                 _bgImage.sprite = bgSprite.Hover;
             }
         });
-        AddEventTrigger(eventTrigger, EventTriggerType.PointerExit, data => {
+        AddEventTrigger(eventTrigger, EventTriggerType.PointerExit, _ => {
             isHover = false;
             if (_interactable && !isMouseDown) {
                 _bgImage.sprite = bgSprite.Neutral;
             }
         });
-        AddEventTrigger(eventTrigger, EventTriggerType.PointerDown, data => {
+        AddEventTrigger(eventTrigger, EventTriggerType.PointerDown, _ => {
             isMouseDown = true;
 
             if (_interactable) {
                 _bgImage.sprite = bgSprite.Active;
             }
         });
-        AddEventTrigger(eventTrigger, EventTriggerType.PointerUp, data => {
+        AddEventTrigger(eventTrigger, EventTriggerType.PointerUp, _ => {
             isMouseDown = false;
 
             if (_interactable) {

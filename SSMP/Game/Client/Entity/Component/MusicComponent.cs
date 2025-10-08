@@ -10,6 +10,12 @@ using SSMP.Util;
 using UnityEngine;
 using UnityEngine.Audio;
 using Logger = SSMP.Logging.Logger;
+// ReSharper disable ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
+// ReSharper disable UnusedMember.Local
+// ReSharper disable UnusedAutoPropertyAccessor.Local
+// ReSharper disable InconsistentNaming
+#pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
 
 namespace SSMP.Game.Client.Entity.Component;
 
@@ -309,10 +315,10 @@ internal class MusicComponent : EntityComponent {
         CustomHooks.TransitionToAudioSnapshotFromFsmAction -= OnTransitionToAudioSnapshot;
     }
 
-    /// <summary>
-    /// Hook for when an FSM becomes enabled. Used to check for ApplyMusicCue or TransitionToAudioSnapshot actions
-    /// such that their audio data can be added to the lists of data.
-    /// </summary>
+    // /// <summary>
+    // /// Hook for when an FSM becomes enabled. Used to check for ApplyMusicCue or TransitionToAudioSnapshot actions
+    // /// such that their audio data can be added to the lists of data.
+    // /// </summary>
     // private static void OnFsmEnable(On.PlayMakerFSM.orig_OnEnable orig, PlayMakerFSM self) {
     //     orig(self);
     //     

@@ -22,29 +22,29 @@ internal class DtlsServer {
     /// <summary>
     /// The DTLS server protocol instance from which to start establishing connections with clients.
     /// </summary>
-    private DtlsServerProtocol _serverProtocol;
+    private DtlsServerProtocol? _serverProtocol;
 
     /// <summary>
     /// The TLS client for communicating supported cipher suites and handling certificates.
     /// </summary>
-    private ServerTlsServer _tlsServer;
+    private ServerTlsServer? _tlsServer;
 
     /// <summary>
     /// The socket instance for the underlying networking.
     /// The server only uses a single socket for all connections given that with UDP, we cannot create more than one
     /// on the same listening port.
     /// </summary>
-    private Socket _socket;
+    private Socket? _socket;
 
     /// <summary>
     /// The server datagram transport that provides networking to the DTLS server.
     /// </summary>
-    private ServerDatagramTransport _currentDatagramTransport;
+    private ServerDatagramTransport? _currentDatagramTransport;
 
     /// <summary>
     /// Token source for cancellation tokens for the accept and receive loop tasks.
     /// </summary>
-    private CancellationTokenSource _cancellationTokenSource;
+    private CancellationTokenSource? _cancellationTokenSource;
 
     /// <summary>
     /// Dictionary mapping IP endpoints to DTLS server client instances. This keeps track of individual clients
@@ -55,7 +55,7 @@ internal class DtlsServer {
     /// <summary>
     /// Event that is called when data is received from the given DTLS server client.
     /// </summary>
-    public event Action<DtlsServerClient, byte[], int> DataReceivedEvent;
+    public event Action<DtlsServerClient, byte[], int>? DataReceivedEvent;
 
     /// <summary>
     /// The port that the server is started on.
@@ -112,12 +112,10 @@ internal class DtlsServer {
     /// </summary>
     /// <param name="endPoint">The IP endpoint of the client.</param>
     public void DisconnectClient(IPEndPoint endPoint) {
-        if (!_dtlsClients.TryGetValue(endPoint, out var dtlsServerClient)) {
+        if (!_dtlsClients.Remove(endPoint, out var dtlsServerClient)) {
             Logger.Warn("Could not find DtlsServerClient to disconnect");
             return;
         }
-
-        _dtlsClients.Remove(endPoint);
 
         InternalDisconnectClient(dtlsServerClient);
     }
@@ -128,10 +126,10 @@ internal class DtlsServer {
     /// </summary>
     /// <param name="dtlsServerClient"></param>
     private void InternalDisconnectClient(DtlsServerClient dtlsServerClient) {
-        dtlsServerClient.ReceiveLoopTokenSource?.Cancel();
-        dtlsServerClient.ReceiveLoopTokenSource?.Dispose();
+        dtlsServerClient.ReceiveLoopTokenSource.Cancel();
+        dtlsServerClient.ReceiveLoopTokenSource.Dispose();
 
-        dtlsServerClient.DtlsTransport?.Close();
+        dtlsServerClient.DtlsTransport.Close();
         dtlsServerClient.DatagramTransport.Dispose();
     }
 
@@ -141,6 +139,11 @@ internal class DtlsServer {
     /// <param name="cancellationToken">The cancellation token to cancel the loop.</param>
     private void SocketReceiveLoop(CancellationToken cancellationToken) {
         while (!cancellationToken.IsCancellationRequested) {
+            if (_socket == null) {
+                Logger.Error("Socket was null during receive call");
+                break;
+            }
+            
             EndPoint endPoint = new IPEndPoint(IPAddress.Any, 0);
 
             var numReceived = 0;
@@ -171,6 +174,11 @@ internal class DtlsServer {
             if (!_dtlsClients.TryGetValue(ipEndPoint, out var dtlsServerClient)) {
                 Logger.Debug($"Received data on server socket from unknown IP ({ipEndPoint}), length: {numReceived}");
 
+                if (_currentDatagramTransport == null) {
+                    Logger.Error("Could not handle received data from new client, current datagram transport is null");
+                    continue;
+                }
+
                 serverDatagramTransport = _currentDatagramTransport;
                 // Set the IP endpoint of the datagram transport instance so it can send data to the correct IP
                 serverDatagramTransport.IPEndPoint = ipEndPoint;
@@ -194,11 +202,21 @@ internal class DtlsServer {
     /// </summary>
     /// <param name="cancellationToken">The cancellation token to cancel the loop.</param>
     private void AcceptLoop(CancellationToken cancellationToken) {
+        if (_serverProtocol == null) {
+            Logger.Error("Could not start accept loop because server protocol is null");
+            return;
+        }
+        
         var serverProtocol = _serverProtocol;
-        ServerDatagramTransport datagramTransport = null;
+        ServerDatagramTransport? datagramTransport = null;
 
         while (!cancellationToken.IsCancellationRequested) {
             Logger.Debug("Creating new ServerDatagramTransport for handling new connection");
+
+            if (_socket == null) {
+                Logger.Error("Socket is null while accepting connection");
+                break;
+            }
 
             datagramTransport = new ServerDatagramTransport(_socket);
             _currentDatagramTransport = datagramTransport;
@@ -218,6 +236,10 @@ internal class DtlsServer {
             }
 
             var endPoint = datagramTransport.IPEndPoint;
+            if (endPoint == null) {
+                Logger.Warn("Endpoint for accepted client is null, cannot finish accepting connection");
+                continue;
+            }
 
             Logger.Debug($"Accepted DTLS connection on socket, endpoint: {endPoint}");
 

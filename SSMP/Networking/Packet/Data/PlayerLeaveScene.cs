@@ -7,7 +7,7 @@ internal class ClientPlayerLeaveScene : GenericClientData {
     /// <summary>
     /// The name of the scene that the player left.
     /// </summary>
-    public string SceneName { get; set; }
+    public string SceneName { get; set; } = null!;
     
     /// <summary>
     /// Construct the client player leave scene data.
@@ -39,11 +39,11 @@ internal class ServerPlayerLeaveScene : IPacketData {
 
     /// <inheritdoc />
     public bool DropReliableDataIfNewerExists => false;
-    
+
     /// <summary>
     /// The name of the scene that the player left.
     /// </summary>
-    public string SceneName { get; set; }
+    public string SceneName { get; set; } = null!;
     
     /// <inheritdoc />
     public void WriteData(IPacket packet) {

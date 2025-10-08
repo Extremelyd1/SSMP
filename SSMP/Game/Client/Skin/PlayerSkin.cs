@@ -14,7 +14,7 @@ internal class PlayerSkin {
     /// <summary>
     /// The hornet texture for the skin, or null if it does not have it.
     /// </summary>
-    public Texture HornetTexture { get; private set; }
+    public Texture? HornetTexture { get; private set; }
 
     /// <summary>
     /// Whether this skin contains the sprint texture.
@@ -24,7 +24,7 @@ internal class PlayerSkin {
     /// <summary>
     /// The sprint texture for the skin, or null if it does not have it.
     /// </summary>
-    public Texture SprintTexture { get; private set; }
+    public Texture? SprintTexture { get; private set; }
 
     /// <summary>
     /// Set the hornet texture for the skin.

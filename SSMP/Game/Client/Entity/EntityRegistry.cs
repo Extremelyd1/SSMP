@@ -1,11 +1,11 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using SSMP.Game.Client.Entity.Component;
 using SSMP.Util;
 using UnityEngine;
-using Logger = SSMP.Logging.Logger;
 // ReSharper disable ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
 #pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
 #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
@@ -28,10 +28,9 @@ internal static class EntityRegistry {
     private static List<EntityRegistryEntry> Entries { get; }
 
     static EntityRegistry() {
-        Entries = FileUtil.LoadObjectFromEmbeddedJson<List<EntityRegistryEntry>>(EntityRegistryFilePath);
-        if (Entries == null) {
-            Logger.Warn("Could not load entity registry");
-        }
+        var loadedEntries = FileUtil.LoadObjectFromEmbeddedJson<List<EntityRegistryEntry>>(EntityRegistryFilePath);
+
+        Entries = loadedEntries ?? throw new InvalidDataException("Could not deserialize entries from embedded JSON");
     }
 
     /// <summary>

@@ -268,14 +268,14 @@ internal static class CopyUtil {
     /// <param name="objectDict">Dictionary containing references between objects in the original instance and
     /// the copied instance.</param>
     /// <returns>A copied Material instance.</returns>
-    private static Material SmartCopyMaterial(Material original, Dictionary<object, object> objectDict) {
+    private static Material? SmartCopyMaterial(Material original, Dictionary<object, object> objectDict) {
         // First check whether the given material is null, because then we can return null as well
         if (original == null) {
             return null;
         }
 
-        if (objectDict.ContainsKey(original)) {
-            return (Material) objectDict[original];
+        if (objectDict.TryGetValue(original, out var value)) {
+            return (Material) value;
         }
 
         var newMaterial = new Material(original);
@@ -291,12 +291,12 @@ internal static class CopyUtil {
     /// <param name="objectDict">Dictionary containing references between objects in the original instance and
     /// the copied instance.</param>
     /// <returns>A copied array of Material instances.</returns>
-    private static Material[] SmartCopyMaterialArray(Material[] original, Dictionary<object, object> objectDict) {
-        if (objectDict.ContainsKey(original)) {
-            return (Material[]) objectDict[original];
+    private static Material?[] SmartCopyMaterialArray(Material[] original, Dictionary<object, object> objectDict) {
+        if (objectDict.TryGetValue(original, out var value)) {
+            return (Material[]) value;
         }
 
-        var newMaterials = new Material[original.Length];
+        var newMaterials = new Material?[original.Length];
         for (var i = 0; i < original.Length; i++) {
             newMaterials[i] = SmartCopyMaterial(original[i], objectDict);
         }

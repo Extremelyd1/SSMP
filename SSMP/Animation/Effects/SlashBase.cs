@@ -125,6 +125,10 @@ internal abstract class SlashBase : ParryableEffect {
 
         // Get the attacks gameObject from the player object
         var playerAttacks = playerObject.FindGameObjectInChildren("Attacks");
+        if (playerAttacks == null) {
+            Logger.Warn("Player object does not have player attacks child, cannot play slash");
+            return;
+        }
 
         var slashParent = new GameObject("Slash Parent");
         slashParent.transform.SetParent(playerAttacks.transform);

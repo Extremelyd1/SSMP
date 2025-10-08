@@ -40,7 +40,7 @@ public interface IServerPlayer {
     /// <summary>
     /// The last known position of the player.
     /// </summary>
-    Vector2 Position { get; }
+    Vector2? Position { get; }
 
     /// <summary>
     /// Whether the player has an active map icon.
@@ -50,7 +50,7 @@ public interface IServerPlayer {
     /// <summary>
     /// The last known map position of the player.
     /// </summary>
-    Vector2 MapPosition { get; }
+    Vector2? MapPosition { get; }
 
     /// <summary>
     /// The scale of the player as a bool indicating whether they should be flipped.

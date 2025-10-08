@@ -13,7 +13,7 @@ internal static class GameObjectUtil {
     /// <param name="gameObject">The GameObject to search in.</param>
     /// <param name="name">The name of the GameObject to search for.</param>
     /// <returns>The GameObject if found, null otherwise.</returns>
-    public static GameObject FindGameObjectInChildren(
+    public static GameObject? FindGameObjectInChildren(
         this GameObject gameObject,
         string name
     ) {
@@ -49,7 +49,7 @@ internal static class GameObjectUtil {
     /// </summary>
     /// <param name="name">The name of the GameObject.</param>
     /// <returns>The GameObject is it exists, null otherwise.</returns>
-    public static GameObject FindInactiveGameObject(string name) {
+    public static GameObject? FindInactiveGameObject(string name) {
         var transforms = Resources.FindObjectsOfTypeAll<Transform>();
         foreach (var transform in transforms) {
             if (transform.hideFlags == HideFlags.None) {

@@ -43,7 +43,7 @@ internal class AnnounceCommand : IServerCommand {
         var message = $"<SERVER>: {string.Join(" ", args)[(Trigger.Length + 1)..]}";
 
         foreach (var playerData in _playerData.Values) {
-            _netServer.GetUpdateManagerForClient(playerData.Id).AddChatMessage(message);
+            _netServer.GetUpdateManagerForClient(playerData.Id)?.AddChatMessage(message);
         }
     }
 }

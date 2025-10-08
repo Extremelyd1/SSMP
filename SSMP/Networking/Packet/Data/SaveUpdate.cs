@@ -17,11 +17,11 @@ internal class SaveUpdate : IPacketData {
     /// The index of the save data entry that got updated.
     /// </summary>
     public ushort SaveDataIndex { get; set; }
-    
+
     /// <summary>
     /// The encoded value of the save data in a byte array.
     /// </summary>
-    public byte[] Value { get; set; }
+    public byte[] Value { get; set; } = null!;
 
     /// <inheritdoc />
     public void WriteData(IPacket packet) {

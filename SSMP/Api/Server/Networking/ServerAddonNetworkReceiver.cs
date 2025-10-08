@@ -100,6 +100,6 @@ internal class ServerAddonNetworkReceiver<TPacketId> :
     internal Func<byte, IPacketData> TransformPacketInstantiator(
         Func<TPacketId, IPacketData> packetInstantiator
     ) {
-        return byteId => packetInstantiator(PacketIdLookup[byteId]);
+        return byteId => packetInstantiator(PacketIdLookup[byteId]!);
     }
 }

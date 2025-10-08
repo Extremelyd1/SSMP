@@ -18,7 +18,7 @@ internal class ServerSettingsUpdate : IPacketData {
     /// <summary>
     /// The server settings instance.
     /// </summary>
-    public ServerSettings ServerSettings { get; set; }
+    public ServerSettings ServerSettings { get; set; } = null!;
 
     /// <inheritdoc />
     public void WriteData(IPacket packet) {

@@ -15,7 +15,7 @@ public class ModMenuSettingAttribute : Attribute {
     /// <summary>
     /// The description that the entry should show as on the mod menu.
     /// </summary>
-    public string Description { get; private set; }
+    public string? Description { get; private set; }
 
     /// <summary>
     /// Constructs the attribute with the given name and no description.

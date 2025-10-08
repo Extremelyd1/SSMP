@@ -27,7 +27,7 @@ internal class ChatMessage {
     /// <summary>
     /// The current coroutine responsible for fading out the message after a delay.
     /// </summary>
-    private Coroutine _fadeCoroutine;
+    private Coroutine? _fadeCoroutine;
 
     /// <summary>
     /// The current alpha of the message.

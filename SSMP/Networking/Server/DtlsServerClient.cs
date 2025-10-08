@@ -11,18 +11,18 @@ internal class DtlsServerClient {
     /// <summary>
     /// The DTLS transport instance.
     /// </summary>
-    public DtlsTransport DtlsTransport { get; init; }
+    public required DtlsTransport DtlsTransport { get; init; }
     /// <summary>
     /// The server datagram transport. 
     /// </summary>
-    public ServerDatagramTransport DatagramTransport { get; init; }
+    public required ServerDatagramTransport DatagramTransport { get; init; }
     /// <summary>
     /// The IP endpoint of the client.
     /// </summary>
-    public IPEndPoint EndPoint { get; init; }
+    public required IPEndPoint EndPoint { get; init; }
 
     /// <summary>
     /// The cancellation token source for the "receive loop".
     /// </summary>
-    public CancellationTokenSource ReceiveLoopTokenSource { get; init; }
+    public required CancellationTokenSource ReceiveLoopTokenSource { get; init; }
 }

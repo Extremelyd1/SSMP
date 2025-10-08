@@ -50,12 +50,12 @@ internal abstract class Component : IComponent {
 
         _transform.sizeDelta = size;
 
-        GameObject.transform.SetParent(UiManager.UiGameObject.transform, false);
+        GameObject.transform.SetParent(UiManager.UiGameObject!.transform, false);
 
         _activeSelf = true;
 
         _componentGroup = componentGroup;
-        componentGroup?.AddComponent(this);
+        componentGroup.AddComponent(this);
     }
 
     /// <inheritdoc />

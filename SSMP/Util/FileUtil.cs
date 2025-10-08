@@ -34,7 +34,7 @@ internal static class FileUtil {
     /// <param name="path">The path of the embedded file.</param>
     /// <typeparam name="T">The type of the object to load.</typeparam>
     /// <returns>An instance of the loaded object, or the default value if it could not be loaded.</returns>
-    public static T LoadObjectFromEmbeddedJson<T>(string path) {
+    public static T? LoadObjectFromEmbeddedJson<T>(string path) {
         try {
             var resourceStream = Assembly.GetExecutingAssembly().GetManifestResourceStream(path);
             if (resourceStream == null) {
@@ -74,7 +74,7 @@ internal static class FileUtil {
     /// <param name="resourcePath">The path of the embedded resource.</param>
     /// <typeparam name="T">The type of the object to load.</typeparam>
     /// <returns>An instance of the loaded object, or the default value if it could not be loaded.</returns>
-    public static T LoadObjectFromResourcePath<T>(string resourcePath) {
+    public static T? LoadObjectFromResourcePath<T>(string resourcePath) {
         var resourceStream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourcePath);
         if (resourceStream == null) {
             Logger.Warn($"Could not read resource at path: {resourcePath}");
@@ -102,7 +102,7 @@ internal static class FileUtil {
     /// <exception cref="Exception">Thrown if the assembly can not be found or the directory of the assembly
     /// can not be found.</exception>
     public static string GetCurrentPath() {
-        Assembly assembly = null;
+        Assembly? assembly = null;
 
         try {
             assembly = Assembly.GetEntryAssembly();

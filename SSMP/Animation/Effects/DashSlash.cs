@@ -32,6 +32,10 @@ internal class DashSlash : SlashBase {
             var dashStabNailAttackPrefab = configGroup.DashStab.GetComponent<DashStabNailAttack>();
             
             var playerAttacks = playerObject.FindGameObjectInChildren("Attacks");
+            if (playerAttacks == null) {
+                Logger.Warn("Player object does not have player attacks child, cannot play dash slash");
+                return;
+            }
 
             var slashParent = new GameObject("Dash Slash Parent");
             slashParent.transform.SetParent(playerAttacks.transform);
@@ -77,6 +81,10 @@ internal class DashSlash : SlashBase {
             
             // TODO: Add charged dash stab/slash, see alternative states in Sprint FSM for Architect/Toolmaster
             var playAudioEvent = sprintFsm.GetFirstAction<PlayAudioEvent>("Drill Attack Unch");
+            if (playAudioEvent == null) {
+                return;
+            }
+            
             AudioUtil.PlayAudioEventAtPlayerObject(playAudioEvent, playerObject);
         }
     }

@@ -160,7 +160,7 @@ internal class ClientAddonNetworkReceiver<TPacketId> :
     /// </summary>
     /// <param name="packetInstantiator"></param>
     public void AssignAddonPacketInfo(Func<TPacketId, IPacketData> packetInstantiator) {
-        PacketInstantiator = byteId => packetInstantiator(_packetIdLookup[byteId]);
+        PacketInstantiator = byteId => packetInstantiator(_packetIdLookup[byteId]!);
         PacketIdSize = (byte) Enum.GetValues(typeof(TPacketId)).Length;
     }
 }

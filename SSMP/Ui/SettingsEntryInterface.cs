@@ -40,12 +40,12 @@ internal class SettingsEntryInterface {
     /// <summary>
     /// The input component if it is an input entry.
     /// </summary>
-    private readonly IInputComponent _input;
+    private readonly IInputComponent? _input;
 
     /// <summary>
-    /// The checkbox component if it is an checkbox entry.
+    /// The checkbox component if it is a checkbox entry.
     /// </summary>
-    private readonly ICheckboxComponent _checkbox;
+    private readonly ICheckboxComponent? _checkbox;
 
     /// <summary>
     /// The type of the settings entry.
@@ -65,7 +65,7 @@ internal class SettingsEntryInterface {
     /// <summary>
     /// The coroutine that delays applying the setting if the entry is volatile.
     /// </summary>
-    private Coroutine _currentInputWaitApplyRoutine;
+    private Coroutine? _currentInputWaitApplyRoutine;
 
     public SettingsEntryInterface(
         ComponentGroup componentGroup,
@@ -156,7 +156,7 @@ internal class SettingsEntryInterface {
     /// </summary>
     /// <exception cref="Exception">Thrown if the value of the entry could not be retrieved.</exception>
     public void ApplySetting() {
-        if (_type == typeof(byte)) {
+        if (_type == typeof(byte) && _input != null) {
             if (!byte.TryParse(_input.GetInput(), out var intValue)) {
                 _applySetting(_defaultValue);
                 return;
@@ -166,7 +166,7 @@ internal class SettingsEntryInterface {
             return;
         }
 
-        if (_type == typeof(bool)) {
+        if (_type == typeof(bool) && _checkbox != null) {
             _applySetting(_checkbox.IsToggled);
             return;
         }
@@ -179,9 +179,9 @@ internal class SettingsEntryInterface {
     /// </summary>
     /// <param name="interactable">Whether the entry is interactable.</param>
     public void SetInteractable(bool interactable) {
-        if (_type == typeof(byte)) {
+        if (_type == typeof(byte) && _input != null) {
             _input.SetInteractable(interactable);
-        } else if (_type == typeof(bool)) {
+        } else if (_type == typeof(bool) && _checkbox != null) {
             _checkbox.SetInteractable(interactable);
         }
 

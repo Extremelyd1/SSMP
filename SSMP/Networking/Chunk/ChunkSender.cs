@@ -70,18 +70,18 @@ internal abstract class ChunkSender {
     /// Array of stopwatches that keep track of the elapsed time since we have last sent the slice with the same ID.
     /// If this time is smaller than a certain threshold, we do not send the slice again yet.
     /// </summary>
-    private readonly Stopwatch[] _sliceStopwatches;
+    private readonly Stopwatch?[] _sliceStopwatches;
 
     /// <summary>
     /// Cancellation token source for cancelling the send task.
     /// </summary>
-    private CancellationTokenSource _sendTaskTokenSource;
+    private CancellationTokenSource? _sendTaskTokenSource;
 
     /// <summary>
     /// Event that is called when we finish sending data. This is registered internally when the
     /// <see cref="FinishSendingData"/> method is called and we are waiting for the current chunk to finish sending.
     /// </summary>
-    private event Action FinishSendingDataEvent;
+    private event Action? FinishSendingDataEvent;
 
     /// <summary>
     /// Construct the chunk sender by initializing the blocking collection and manual reset event, and allocating the
@@ -125,16 +125,16 @@ internal abstract class ChunkSender {
         // If we aren't currently sending and the queue does not contain any packets to send, we immediately invoke
         // the callback and return
         if (!_isSending && _toSendPackets.Count == 0) {
-            callback?.Invoke();
+            callback.Invoke();
             return;
         }
 
         // Otherwise, we register the event
         // We do it like this so we can deregister the event immediately after it is called, so it doesn't trigger
         // more than once
-        Action lambda = null;
+        Action? lambda = null;
         lambda = () => {
-            callback?.Invoke();
+            callback.Invoke();
             FinishSendingDataEvent -= lambda;
         };
         FinishSendingDataEvent += lambda;

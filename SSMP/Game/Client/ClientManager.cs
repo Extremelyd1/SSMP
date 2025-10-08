@@ -858,9 +858,11 @@ internal class ClientManager : IClientManager {
         _playerManager.RecyclePlayer(id);
 
         playerData.IsInLocalScene = false;
-        foreach (Transform child in playerData.PlayerObject.transform) {
-            foreach (Transform grandChild in child) {
-                Object.Destroy(grandChild.gameObject);
+        if (playerData.PlayerObject) {
+            foreach (Transform child in playerData.PlayerObject.transform) {
+                foreach (Transform grandChild in child) {
+                    Object.Destroy(grandChild.gameObject);
+                }
             }
         }
 

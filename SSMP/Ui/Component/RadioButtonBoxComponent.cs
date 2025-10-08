@@ -58,7 +58,7 @@ internal class RadioButtonBoxComponent : Component, IRadioButtonBoxComponent {
     /// <summary>
     /// Delegate that is executed when the value changes.
     /// </summary>
-    private OnValueChange _onValueChange;
+    private OnValueChange? _onValueChange;
 
     public RadioButtonBoxComponent(
         ComponentGroup componentGroup,

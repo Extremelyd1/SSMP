@@ -6,6 +6,7 @@ using HutongGames.PlayMaker.Actions;
 using SSMP.Game.Client.Entity.Action;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
+#pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
 
 namespace SSMP.Game.Client.Entity; 
 

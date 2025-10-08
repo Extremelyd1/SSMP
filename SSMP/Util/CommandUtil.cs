@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using SSMP.Api.Server;
 using SSMP.Game.Server;
 
@@ -19,7 +20,7 @@ internal static class CommandUtil {
     public static bool TryGetPlayerByName(
         IEnumerable<IServerPlayer> players,
         string username,
-        out IServerPlayer player
+        [MaybeNullWhen(false)] out IServerPlayer player
     ) {
         foreach (var onlinePlayer in players) {
             if (onlinePlayer.Username.ToLower().Equals(username.ToLower())) {
@@ -43,7 +44,7 @@ internal static class CommandUtil {
     public static bool TryGetPlayerByAuthKey(
         IEnumerable<ServerPlayerData> players,
         string authKey,
-        out ServerPlayerData player
+        [MaybeNullWhen(false)] out ServerPlayerData player
     ) {
         foreach (var onlinePlayer in players) {
             if (onlinePlayer.AuthKey.ToLower().Equals(authKey.ToLower())) {
@@ -67,7 +68,7 @@ internal static class CommandUtil {
     public static bool TryGetPlayerByIpAddress(
         IEnumerable<ServerPlayerData> players,
         string ipAddress,
-        out ServerPlayerData player
+        [MaybeNullWhen(false)] out ServerPlayerData player
     ) {
         foreach (var onlinePlayer in players) {
             if (onlinePlayer.IpAddressString.Equals(ipAddress)) {

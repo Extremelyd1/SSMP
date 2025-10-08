@@ -1,6 +1,7 @@
 using System;
 using SSMP.Networking.Client;
 using UnityEngine;
+#pragma warning disable CS8603 // Possible null reference return.
 
 namespace SSMP.Game.Client.Entity.Component; 
 

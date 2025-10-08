@@ -98,7 +98,7 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     /// <summary>
     /// The Socket instance to use to send packets.
     /// </summary>
-    public DtlsTransport DtlsTransport { get; set; }
+    public DtlsTransport? DtlsTransport { get; set; }
 
     /// <summary>
     /// The current send rate in milliseconds between sending packets.
@@ -113,7 +113,7 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     /// <summary>
     /// Event that is called when the client times out.
     /// </summary>
-    public event Action TimeoutEvent;
+    public event Action? TimeoutEvent;
 
     /// <summary>
     /// Construct the update manager with a UDP socket.

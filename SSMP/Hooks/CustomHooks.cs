@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using HutongGames.PlayMaker;
 using HutongGames.PlayMaker.Actions;
@@ -35,53 +36,28 @@ public static class CustomHooks {
     ];
 
     /// <summary>
-    /// IL Hook instance for the HeroController Start hook.
-    /// </summary>
-    private static ILHook _heroControllerStartIlHook;
-    /// <summary>
-    /// IL Hook instance for the HeroController EnterSceneDreamGate hook.
-    /// </summary>
-    private static ILHook _heroControllerEnterSceneDreamGateIlHook;
-    /// <summary>
-    /// IL Hook instance for the HeroController EnterScene hook.
-    /// </summary>
-    private static ILHook _heroControllerEnterSceneIlHook;
-    /// <summary>
-    /// IL Hook instance for the HeroController EnterHeroSubHorizontal hook.
-    /// </summary>
-    private static ILHook _heroControllerEnterSubIlHook;
-    /// <summary>
-    /// IL Hook instance for the HeroController Respawn hook.
-    /// </summary>
-    private static ILHook _heroControllerRespawnIlHook;
-    /// <summary>
-    /// On Hook instance for the HeroController Start hook.
-    /// </summary>
-    private static Hook _heroControllerOnStartHook;
-
-    /// <summary>
     /// Event for when the player object is done being transformed (changed position, scale) after entering a scene.
     /// </summary>
-    public static event Action AfterEnterSceneHeroTransformed;
+    public static event Action? AfterEnterSceneHeroTransformed;
 
     /// <summary>
     /// Event for when the AudioManager.ApplyMusicCue method is called from the ApplyMusicCue FSM action.
     /// </summary>
-    public static event Action<ApplyMusicCue> ApplyMusicCueFromFsmAction;
+    public static event Action<ApplyMusicCue>? ApplyMusicCueFromFsmAction;
 
     /// <summary>
     /// Event for when the AudioMixerSnapshot.TransitionTo method is called from the TransitionToAudioSnapshot FSM
     /// action.
     /// </summary>
-    public static event Action<TransitionToAudioSnapshot> TransitionToAudioSnapshotFromFsmAction;
+    public static event Action<TransitionToAudioSnapshot>? TransitionToAudioSnapshotFromFsmAction;
 
     /// <summary>
     /// Internal event for <see cref="HeroControllerStartAction"/>.
     /// </summary>
-    private static event Action HeroControllerStartActionInternal;
+    private static event Action? HeroControllerStartActionInternal;
     
     /// <summary>
-    /// Event that executes when the HeroController starts or executes its subscriber immediately if the HeroContoller
+    /// Event that executes when the HeroController starts or executes its subscriber immediately if the HeroController
     /// is already active.
     /// </summary>
     public static event Action HeroControllerStartAction {
@@ -99,47 +75,29 @@ public static class CustomHooks {
     /// <summary>
     /// Initialize the class by registering the IL/On hooks.
     /// </summary>
+    [SuppressMessage("ReSharper", "ObjectCreationAsStatement")]
     public static void Initialize() {
-        _heroControllerStartIlHook = new ILHook(
-            typeof(HeroController).GetMethod(nameof(HeroController.Start), BindingFlags),
-            HeroControllerOnStartIL
-        );
-        _heroControllerEnterSceneDreamGateIlHook = new ILHook(
+        new ILHook(
             typeof(HeroController).GetMethod(nameof(HeroController.EnterSceneDreamGate), BindingFlags),
             HeroControllerOnEnterSceneDreamGate
         );
         
         var type = typeof(HeroController).GetNestedType("<EnterScene>d__961", BindingFlags);
-        _heroControllerEnterSceneIlHook = new ILHook(type.GetMethod("MoveNext", BindingFlags), HeroControllerOnEnterScene);
+        new ILHook(type.GetMethod("MoveNext", BindingFlags), HeroControllerOnEnterScene);
 
         type = typeof(HeroController).GetNestedType("<EnterHeroSubHorizontal>d__962", BindingFlags);
-        _heroControllerEnterSubIlHook =
-            new ILHook(type.GetMethod("MoveNext", BindingFlags), HeroControllerOnEnterHeroSubHorizontal);
+        new ILHook(type.GetMethod("MoveNext", BindingFlags), HeroControllerOnEnterHeroSubHorizontal);
 
         type = typeof(HeroController).GetNestedType("<Respawn>d__969", BindingFlags);
-        _heroControllerRespawnIlHook = new ILHook(type.GetMethod("MoveNext", BindingFlags), HeroControllerOnRespawn);
+        new ILHook(type.GetMethod("MoveNext", BindingFlags), HeroControllerOnRespawn);
 
         // IL.HutongGames.PlayMaker.Actions.ApplyMusicCue.OnEnter += ApplyMusicCueOnEnter;
         // IL.HutongGames.PlayMaker.Actions.TransitionToAudioSnapshot.OnEnter += TransitionToAudioSnapshotOnEnter;
 
-        _heroControllerOnStartHook = new Hook(
+        new Hook(
             typeof(HeroController).GetMethod(nameof(HeroController.Start), BindingFlags), 
             HeroControllerOnStart
         );
-    }
-
-    /// <summary>
-    /// IL Hook for the HeroController Start method. Calls an event within the method.
-    /// </summary>
-    private static void HeroControllerOnStartIL(ILContext il) {
-        try {
-            // Create a cursor for this context
-            var c = new ILCursor(il);
-
-            EmitAfterEnterSceneEventHeroInPosition(c);
-        } catch (Exception e) {
-            Logger.Error($"Could not change HeroControllerOnStart IL: \n{e}");
-        }
     }
 
     /// <summary>
@@ -241,6 +199,7 @@ public static class CustomHooks {
     /// IL Hook for the ApplyMusicCue OnEnter method. Calls an event in the method after the ApplyMusicCue call is
     /// made.
     /// </summary>
+    // ReSharper disable once UnusedMember.Local
     private static void ApplyMusicCueOnEnter(ILContext il) {
         try {
             // Create a cursor for this context
@@ -268,6 +227,7 @@ public static class CustomHooks {
     /// IL Hook for the TransitionToAudioSnapshot OnEnter method. Calls an event in the method after the TransitionTo
     /// call is made.
     /// </summary>
+    // ReSharper disable once UnusedMember.Local
     private static void TransitionToAudioSnapshotOnEnter(ILContext il) {
         try {
             // Create a cursor for this context

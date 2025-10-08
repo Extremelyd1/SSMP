@@ -43,11 +43,6 @@ internal class ConnectInterface {
     /// </summary>
     private readonly ModSettings _modSettings;
 
-    /// <summary>
-    /// The component group of the connect UI.
-    /// </summary>
-    private readonly ComponentGroup _connectGroup;
-
     // /// <summary>
     // /// The component group of the client settings UI.
     // /// </summary>
@@ -56,47 +51,42 @@ internal class ConnectInterface {
     /// <summary>
     /// The username input component.
     /// </summary>
-    private IInputComponent _usernameInput;
+    private readonly IInputComponent _usernameInput;
 
     /// <summary>
     /// The address input component.
     /// </summary>
-    private IInputComponent _addressInput;
+    private readonly IInputComponent _addressInput;
 
     /// <summary>
     /// The port input component.
     /// </summary>
-    private IInputComponent _portInput;
+    private readonly IInputComponent _portInput;
 
     /// <summary>
     /// The connection (connect or disconnect) button component.
     /// </summary>
-    private IButtonComponent _connectionButton;
-
-    /// <summary>
-    /// The server host button component.
-    /// </summary>
-    private IButtonComponent _serverButton;
+    private readonly IButtonComponent _connectionButton;
 
     /// <summary>
     /// The feedback text component.
     /// </summary>
-    private ITextComponent _feedbackText;
+    private readonly ITextComponent _feedbackText;
 
     /// <summary>
     /// The coroutine that hides the feedback text after a delay.
     /// </summary>
-    private Coroutine _feedbackHideCoroutine;
+    private Coroutine? _feedbackHideCoroutine;
 
     /// <summary>
     /// Event that is executed when the connect button is pressed.
     /// </summary>
-    public event Action<string, int, string> ConnectButtonPressed;
+    public event Action<string, int, string>? ConnectButtonPressed;
 
     /// <summary>
     /// Event that is executed when the start hosting button is pressed.
     /// </summary>
-    public event Action<string, int> StartHostButtonPressed;
+    public event Action<string, int>? StartHostButtonPressed;
 
     public ConnectInterface(
         ModSettings modSettings,
@@ -105,10 +95,96 @@ internal class ConnectInterface {
     ) {
         _modSettings = modSettings;
 
-        _connectGroup = connectGroup;
         // _settingsGroup = settingsGroup;
+        // Now we can start adding individual components to our UI
+        // Keep track of current x and y of objects we want to place
+        var x = 1920f / 2f;
+        var y = 1080f - 400f;
 
-        CreateConnectUi();
+        const float labelHeight = 20f;
+
+        // ReSharper disable once ObjectCreationAsStatement
+        new TextComponent(
+            connectGroup,
+            new Vector2(x + TextIndentWidth, y),
+            new Vector2(212f, labelHeight),
+            "Username",
+            UiManager.NormalFontSize,
+            alignment: TextAnchor.MiddleLeft
+        );
+
+        y -= labelHeight + 14f;
+
+        _usernameInput = new InputComponent(
+            connectGroup,
+            new Vector2(x, y),
+            _modSettings.Username,
+            "Username",
+            characterLimit: 20,
+            onValidateInput: (_, _, addedChar) => char.IsLetterOrDigit(addedChar) ? addedChar : '\0'
+        );
+
+        y -= InputComponent.DefaultHeight + 20f;
+
+        // ReSharper disable once ObjectCreationAsStatement
+        new TextComponent(
+            connectGroup,
+            new Vector2(x + TextIndentWidth, y),
+            new Vector2(212f, labelHeight),
+            "Server IP and port",
+            UiManager.NormalFontSize,
+            alignment: TextAnchor.MiddleLeft
+        );
+
+        y -= labelHeight + 14f;
+
+        _addressInput = new IpInputComponent(
+            connectGroup,
+            new Vector2(x, y),
+            _modSettings.ConnectAddress,
+            "IP Address"
+        );
+
+        y -= InputComponent.DefaultHeight + 8f;
+
+        var joinPort = _modSettings.ConnectPort;
+        _portInput = new PortInputComponent(
+            connectGroup,
+            new Vector2(x, y),
+            joinPort == -1 ? "" : joinPort.ToString(),
+            "Port"
+        );
+
+        y -= InputComponent.DefaultHeight + 20f;
+
+        _connectionButton = new ButtonComponent(
+            connectGroup,
+            new Vector2(x, y),
+            ConnectText
+        );
+        _connectionButton.SetOnPress(OnConnectButtonPressed);
+
+        y -= ButtonComponent.DefaultHeight + 8f;
+
+        IButtonComponent serverButton = new ButtonComponent(
+            connectGroup,
+            new Vector2(x, y),
+            StartHostingText
+        );
+        serverButton.SetOnPress(OnStartButtonPressed);
+
+        y -= ButtonComponent.DefaultHeight + 8f;
+
+        _feedbackText = new TextComponent(
+            connectGroup,
+            new Vector2(x, y),
+            new Vector2(240f, labelHeight),
+            new Vector2(0.5f, 1f),
+            "",
+            UiManager.SubTextFontSize,
+            alignment: TextAnchor.UpperCenter
+        );
+        _feedbackText.SetActive(false);
     }
 
     /// <summary>
@@ -161,101 +237,6 @@ internal class ConnectInterface {
         // Enable the connect button again
         _connectionButton.SetText(ConnectText);
         _connectionButton.SetInteractable(true);
-    }
-
-    /// <summary>
-    /// Create the connection UI.
-    /// </summary>
-    private void CreateConnectUi() {
-        // Now we can start adding individual components to our UI
-        // Keep track of current x and y of objects we want to place
-        var x = 1920f / 2f;
-        var y = 1080f - 400f;
-
-        const float labelHeight = 20f;
-
-        // ReSharper disable once ObjectCreationAsStatement
-        new TextComponent(
-            _connectGroup,
-            new Vector2(x + TextIndentWidth, y),
-            new Vector2(212f, labelHeight),
-            "Username",
-            UiManager.NormalFontSize,
-            alignment: TextAnchor.MiddleLeft
-        );
-
-        y -= labelHeight + 14f;
-
-        _usernameInput = new InputComponent(
-            _connectGroup,
-            new Vector2(x, y),
-            _modSettings.Username,
-            "Username",
-            characterLimit: 20,
-            onValidateInput: (_, _, addedChar) => char.IsLetterOrDigit(addedChar) ? addedChar : '\0'
-        );
-
-        y -= InputComponent.DefaultHeight + 20f;
-
-        // ReSharper disable once ObjectCreationAsStatement
-        new TextComponent(
-            _connectGroup,
-            new Vector2(x + TextIndentWidth, y),
-            new Vector2(212f, labelHeight),
-            "Server IP and port",
-            UiManager.NormalFontSize,
-            alignment: TextAnchor.MiddleLeft
-        );
-
-        y -= labelHeight + 14f;
-
-        _addressInput = new IpInputComponent(
-            _connectGroup,
-            new Vector2(x, y),
-            _modSettings.ConnectAddress,
-            "IP Address"
-        );
-
-        y -= InputComponent.DefaultHeight + 8f;
-
-        var joinPort = _modSettings.ConnectPort;
-        _portInput = new PortInputComponent(
-            _connectGroup,
-            new Vector2(x, y),
-            joinPort == -1 ? "" : joinPort.ToString(),
-            "Port"
-        );
-
-        y -= InputComponent.DefaultHeight + 20f;
-
-        _connectionButton = new ButtonComponent(
-            _connectGroup,
-            new Vector2(x, y),
-            ConnectText
-        );
-        _connectionButton.SetOnPress(OnConnectButtonPressed);
-
-        y -= ButtonComponent.DefaultHeight + 8f;
-
-        _serverButton = new ButtonComponent(
-            _connectGroup,
-            new Vector2(x, y),
-            StartHostingText
-        );
-        _serverButton.SetOnPress(OnStartButtonPressed);
-
-        y -= ButtonComponent.DefaultHeight + 8f;
-
-        _feedbackText = new TextComponent(
-            _connectGroup,
-            new Vector2(x, y),
-            new Vector2(240f, labelHeight),
-            new Vector2(0.5f, 1f),
-            "",
-            UiManager.SubTextFontSize,
-            alignment: TextAnchor.UpperCenter
-        );
-        _feedbackText.SetActive(false);
     }
 
     /// <summary>

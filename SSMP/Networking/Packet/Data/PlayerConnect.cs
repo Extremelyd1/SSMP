@@ -7,7 +7,7 @@ internal class PlayerConnect : GenericClientData {
     /// <summary>
     /// The username of the connecting player.
     /// </summary>
-    public string Username { get; set; }
+    public string Username { get; set; } = null!;
 
     /// <summary>
     /// Construct the player connect data.

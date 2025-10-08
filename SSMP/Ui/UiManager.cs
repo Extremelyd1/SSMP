@@ -7,7 +7,6 @@ using SSMP.Game.Settings;
 using SSMP.Hooks;
 using SSMP.Networking.Client;
 using SSMP.Ui.Chat;
-using SSMP.Ui.Menu;
 using SSMP.Util;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -67,38 +66,38 @@ internal class UiManager : IUiManager {
     /// <summary>
     /// The global GameObject in which all UI is created.
     /// </summary>
-    internal static GameObject UiGameObject;
+    internal static GameObject? UiGameObject;
 
     /// <summary>
     /// The chat box instance.
     /// </summary>
-    internal static ChatBox InternalChatBox;
+    internal static ChatBox InternalChatBox = null!;
 
     /// <summary>
     /// Event for when something is input in the chat box.
     /// </summary>
-    internal static event Action<string> ChatInputEvent;
+    internal static event Action<string>? ChatInputEvent;
     
     /// <summary>
     /// Event that is fired when a server is requested to be hosted from the UI.
     /// </summary>
-    public event Action<int> RequestServerStartHostEvent;
+    public event Action<int>? RequestServerStartHostEvent;
 
     /// <summary>
     /// Event that is fired when a server is requested to be stopped.
     /// </summary>
-    public event Action RequestServerStopHostEvent;
+    public event Action? RequestServerStopHostEvent;
 
     /// <summary>
     /// Event that is fired when a connection is requested with the given username, IP, port and whether it was a
     /// connection from hosting.
     /// </summary>
-    public event Action<string, int, string, bool> RequestClientConnectEvent;
+    public event Action<string, int, string, bool>? RequestClientConnectEvent;
 
     /// <summary>
     /// Event that is fired when a disconnect is requested.
     /// </summary>
-    public event Action RequestClientDisconnectEvent;
+    public event Action? RequestClientDisconnectEvent;
 
     /// <summary>
     /// The mod settings for SSMP.
@@ -113,40 +112,48 @@ internal class UiManager : IUiManager {
     /// <summary>
     /// The connect interface.
     /// </summary>
-    private ConnectInterface _connectInterface;
+    private ConnectInterface _connectInterface = null!;
 
-    private EventSystem _eventSystem;
+    private EventSystem _eventSystem = null!;
     
     /// <summary>
     /// The group that controls the connection UI.
     /// </summary>
-    private ComponentGroup _connectGroup;
+    private ComponentGroup _connectGroup = null!;
 
-    private ComponentGroup _inGameGroup;
+    private ComponentGroup? _inGameGroup;
     
     /// <summary>
     /// The ping interface.
     /// </summary>
-    private PingInterface _pingInterface;
+    private PingInterface _pingInterface = null!;
 
     /// <summary>
     /// List of event trigger entries for the original back triggers for the save selection screen. These triggers are
     /// stored when they are override to get back to our connection menu.
     /// </summary>
-    private List<EventTrigger.Entry> _originalBackTriggers;
+    private List<EventTrigger.Entry> _originalBackTriggers = null!;
 
     /// <summary>
     /// Callback action to execute when save slot selection is finished. The boolean parameter indicates whether a
     /// save slot was selected (true) or the menu was exited through the back button (false). 
     /// </summary>
-    private Action<bool> _saveSlotSelectedAction;
+    private Action<bool>? _saveSlotSelectedAction;
 
     #endregion
 
     #region IUiManager properties
 
     /// <inheritdoc />
-    public IChatBox ChatBox => InternalChatBox;
+    public IChatBox ChatBox {
+        get {
+            if (InternalChatBox == null) {
+                throw new InvalidOperationException("UiManager is not initialized yet, cannot obtain chat box");
+            }
+
+            return InternalChatBox;
+        }
+    }
 
     #endregion
 
@@ -378,7 +385,7 @@ internal class UiManager : IUiManager {
     /// the save menu.
     /// </summary>
     private void OnStartNewGame() {
-        _saveSlotSelectedAction.Invoke(true);
+        _saveSlotSelectedAction?.Invoke(true);
     }
 
     /// <summary>
@@ -386,7 +393,7 @@ internal class UiManager : IUiManager {
     /// the save menu.
     /// </summary>
     private void OnContinueGame() {
-        _saveSlotSelectedAction.Invoke(true);
+        _saveSlotSelectedAction?.Invoke(true);
     }
 
     /// <summary>
@@ -538,7 +545,7 @@ internal class UiManager : IUiManager {
             EventHooks.GameManagerStartNewGame -= OnStartNewGame;
             EventHooks.GameManagerContinueGame -= OnContinueGame;
 
-            _saveSlotSelectedAction.Invoke(false);
+            _saveSlotSelectedAction?.Invoke(false);
             
             UM.StartCoroutine(GoToMultiplayerMenu());
             

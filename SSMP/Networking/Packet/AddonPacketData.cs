@@ -38,7 +38,7 @@ internal class AddonPacketData {
     /// <summary>
     /// Byte array containing all raw packet ID bytes.
     /// </summary>
-    private byte[] _packetIdArray;
+    private byte[]? _packetIdArray;
 
     /// <summary>
     /// Construct this addon packet data class with the packet ID size.

@@ -113,7 +113,7 @@ internal class BanCommand : IServerCommand {
                 commandSender.SendMessage("Auth key has been banned");
 
                 if (foundPlayerWithAuthKey) {
-                    DisconnectPlayer(playerWithAuthKey);
+                    DisconnectPlayer(playerWithAuthKey!);
                 }
 
                 return;
@@ -125,7 +125,7 @@ internal class BanCommand : IServerCommand {
                 return;
             }
 
-            _banList.AddIp(playerWithAuthKey.IpAddressString);
+            _banList.AddIp(playerWithAuthKey!.IpAddressString);
             commandSender.SendMessage($"IP address '{playerWithAuthKey.IpAddressString}' has been banned");
 
             DisconnectPlayer(playerWithAuthKey);

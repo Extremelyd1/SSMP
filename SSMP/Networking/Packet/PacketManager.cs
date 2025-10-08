@@ -874,7 +874,7 @@ internal class PacketManager {
     /// <param name="numReceived">Number of received bytes in the buffer.</param>
     /// <param name="leftoverData">Reference byte array that should be filled with leftover data.</param>
     /// <returns>A list of packets that were constructed from the received data.</returns>
-    public static List<Packet> HandleReceivedData(byte[] buffer, int numReceived, ref byte[] leftoverData) {
+    public static List<Packet> HandleReceivedData(byte[] buffer, int numReceived, ref byte[]? leftoverData) {
         // Make a new byte array exactly the length of number of received bytes and fill it
         var receivedData = new byte[numReceived];
         for (var i = 0; i < numReceived; i++) {
@@ -910,7 +910,7 @@ internal class PacketManager {
     /// <param name="data">Byte array of data to construct packets from.</param>
     /// <param name="leftover">The array that should be filled with leftover data.</param>
     /// <returns>A list of packets constructed from this data.</returns>
-    private static List<Packet> ByteArrayToPackets(byte[] data, ref byte[] leftover) {
+    private static List<Packet> ByteArrayToPackets(byte[] data, ref byte[]? leftover) {
         var packets = new List<Packet>();
 
         // Keep track of current index in the data array

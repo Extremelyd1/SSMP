@@ -66,7 +66,7 @@ internal class PlayerManager {
     /// <summary>
     /// The player container prefab GameObject.
     /// </summary>
-    private GameObject _playerContainerPrefab;
+    private GameObject? _playerContainerPrefab;
 
     /// <summary>
     /// A queue of pre-instantiated players that will be used when spawning a player.
@@ -203,10 +203,19 @@ internal class PlayerManager {
     /// <returns>A new GameObject representing the player container.</returns>
     private GameObject CreateNewPlayerContainer() {
         var playerContainer = Object.Instantiate(_playerContainerPrefab);
+        if (playerContainer == null) {
+            throw new Exception("Could not create new player container, instantiation failed");
+        }
+        
         Object.DontDestroyOnLoad(playerContainer);
         playerContainer.name = PlayerContainerName;
 
-        MakeUniqueSpriteAnimator(playerContainer.FindGameObjectInChildren(PlayerObjectPrefabName));
+        var playerObj = playerContainer.FindGameObjectInChildren(PlayerObjectPrefabName);
+        if (playerObj == null) {
+            throw new Exception("Player object could not be found in instantiated player container");
+        }
+
+        MakeUniqueSpriteAnimator(playerObj);
 
         return playerContainer;
     }
@@ -234,15 +243,20 @@ internal class PlayerManager {
     /// Update the scale of a player with the given boolean.
     /// </summary>
     /// <param name="id">The ID of the player.</param>
-    /// <param name="scale">The new scale as a boolean, true indicating a X scale of 1,
-    /// false indicating a X scale of -1.</param>
+    /// <param name="scale">The new scale as a boolean, true indicating an X scale of 1,
+    /// false indicating an X scale of -1.</param>
     public void UpdateScale(ushort id, bool scale) {
         if (!_playerData.TryGetValue(id, out var playerData) || !playerData.IsInLocalScene) {
-            // Logger.Info($"Tried to update scale for ID {id} while player data did not exists");
+            // Logger.Info($"Tried to update scale for ID {id} while player data did not exist");
             return;
         }
 
         var playerObject = playerData.PlayerObject;
+        if (playerObject == null) {
+            Logger.Warn("Could not update scale of player, because player object is null");
+            return;
+        }
+        
         SetPlayerObjectBoolScale(playerObject, scale);
     }
 
@@ -275,7 +289,7 @@ internal class PlayerManager {
     /// </summary>
     /// <param name="id">The player ID.</param>
     /// <returns>The GameObject for the player.</returns>
-    public GameObject GetPlayerObject(ushort id) {
+    public GameObject? GetPlayerObject(ushort id) {
         if (!_playerData.TryGetValue(id, out var playerData) || !playerData.IsInLocalScene) {
             Logger.Debug($"Tried to get the player data that does not exists for ID {id}");
             return null;
@@ -422,6 +436,9 @@ internal class PlayerManager {
         playerContainer.transform.SetPosition2D(position.X, position.Y);
 
         var playerObject = playerContainer.FindGameObjectInChildren(PlayerObjectPrefabName);
+        if (playerObject == null) {
+            throw new Exception("Player object could not be found in player container while spawning player");
+        }
 
         SetPlayerObjectBoolScale(playerObject, scale);
 
@@ -544,12 +561,16 @@ internal class PlayerManager {
         // Update the team in the player data
         playerData.Team = team;
 
-        if (!playerData.IsInLocalScene) {
+        if (!playerData.IsInLocalScene || playerData.PlayerContainer == null) {
             return;
         }
 
         // Get the name object and update the color based on the new team
         var nameObject = playerData.PlayerContainer.FindGameObjectInChildren(UsernameObjectName);
+        if (nameObject == null) {
+            throw new Exception("Name object could not be found in player container while updating player team");
+        }
+        
         var textMeshObject = nameObject.GetComponent<TextMeshPro>();
 
         ChangeNameColor(textMeshObject, team);
@@ -563,6 +584,9 @@ internal class PlayerManager {
         LocalPlayerTeam = team;
 
         var nameObject = HeroController.instance.gameObject.FindGameObjectInChildren(UsernameObjectName);
+        if (nameObject == null) {
+            throw new Exception("Name object could not be found in hero controller object while updating local player team");
+        }
 
         var textMeshObject = nameObject.GetComponent<TextMeshPro>();
         ChangeNameColor(textMeshObject, team);
@@ -607,6 +631,11 @@ internal class PlayerManager {
 
         // If the player is not in the local scene, we don't have to apply the skin update to the player object
         if (!playerData.IsInLocalScene) {
+            return;
+        }
+
+        if (playerData.PlayerObject == null) {
+            Logger.Warn("Could not update player skin, because player object is null");
             return;
         }
 
@@ -681,6 +710,10 @@ internal class PlayerManager {
     public void OnServerSettingsUpdated(bool displayNamesChanged) {
         if (displayNamesChanged) {
             foreach (var playerData in _playerData.Values) {
+                if (playerData.PlayerContainer == null) {
+                    continue;
+                }
+                
                 var nameObject = playerData.PlayerContainer.FindGameObjectInChildren(UsernameObjectName);
                 if (nameObject) {
                     nameObject.SetActive(_serverSettings.DisplayNames);

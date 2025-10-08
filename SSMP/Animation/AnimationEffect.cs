@@ -10,7 +10,7 @@ internal abstract class AnimationEffect : IAnimationEffect {
     /// <summary>
     /// The current <see cref="ServerSettings"/> instance.
     /// </summary>
-    protected ServerSettings ServerSettings;
+    protected ServerSettings ServerSettings = null!;
 
     /// <inheritdoc/>
     public abstract void Play(GameObject playerObject, byte[]? effectInfo);

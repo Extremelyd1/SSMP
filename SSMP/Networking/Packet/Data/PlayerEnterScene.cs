@@ -11,12 +11,12 @@ internal class ClientPlayerEnterScene : GenericClientData {
     /// <summary>
     /// The username of the player.
     /// </summary>
-    public string Username { get; set; }
+    public string Username { get; set; } = null!;
 
     /// <summary>
     /// The position of the player.
     /// </summary>
-    public Vector2 Position { get; set; }
+    public Vector2 Position { get; set; } = null!;
 
     /// <summary>
     /// The scale of the player.
@@ -221,12 +221,12 @@ internal class ServerPlayerEnterScene : IPacketData {
     /// <summary>
     /// The new scene name that the player entered.
     /// </summary>
-    public string NewSceneName { get; set; }
+    public string NewSceneName { get; set; } = null!;
 
     /// <summary>
     /// The position of the player.
     /// </summary>
-    public Vector2 Position { get; set; }
+    public Vector2 Position { get; set; } = null!;
 
     /// <summary>
     /// The scale of the player.

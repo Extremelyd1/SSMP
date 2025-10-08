@@ -1,4 +1,5 @@
 using System;
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
 
 namespace SSMP.Game.Client.Save; 
 
@@ -29,7 +30,7 @@ internal class PersistentItemKey : IEquatable<PersistentItemKey> {
     }
 
     /// <inheritdoc />
-    public override bool Equals(object obj) {
+    public override bool Equals(object? obj) {
         if (ReferenceEquals(null, obj)) {
             return false;
         }
@@ -48,7 +49,7 @@ internal class PersistentItemKey : IEquatable<PersistentItemKey> {
     /// <inheritdoc />
     public override int GetHashCode() {
         unchecked {
-            return ((Id != null ? Id.GetHashCode() : 0) * 397) ^ (SceneName != null ? SceneName.GetHashCode() : 0);
+            return ((Id.GetHashCode()) * 397) ^ (SceneName.GetHashCode());
         }
     }
     

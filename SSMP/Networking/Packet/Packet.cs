@@ -15,7 +15,7 @@ internal class Packet : IPacket {
     /// <summary>
     /// Byte array used as a readable buffer.
     /// </summary>
-    private byte[] _readableBuffer;
+    private readonly byte[] _readableBuffer;
 
     /// <summary>
     /// The current position in the buffer to read.
@@ -32,25 +32,17 @@ internal class Packet : IPacket {
     /// </summary>
     /// <param name="data"></param>
     public Packet(byte[] data) {
-        _buffer = new List<byte>();
-
-        SetBytes(data);
-    }
-
-    /// <summary>
-    /// Simply creates an empty packet to write data into.
-    /// </summary>
-    public Packet() {
-        _buffer = new List<byte>();
-    }
-
-    /// <summary>
-    /// Sets the content of the packet to the given byte array of data.
-    /// </summary>
-    /// <param name="data">The byte to set this packet to.</param>
-    private void SetBytes(byte[] data) {
+        _buffer = [];
         _buffer.AddRange(data);
         _readableBuffer = _buffer.ToArray();
+    }
+
+    /// <summary>
+    /// Creates an empty packet to write data into.
+    /// </summary>
+    public Packet() {
+        _buffer = [];
+        _readableBuffer = [];
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using SSMP.Game.Client.Save;
 using SSMP.Logging;
 using SSMP.Networking.Packet.Data;
@@ -65,6 +66,10 @@ internal class ServerSaveData {
         }
         
         var deserializedOverrides = FileUtil.LoadObjectFromEmbeddedJson<ModSaveFile.PlayerDataEntries>(GodseekerFilePath);
+        if (deserializedOverrides == null) {
+            throw new InvalidDataException("Could not deserialize save data overrides from embedded JSON");
+        }
+        
         GodseekerOverrides = EncodeUtil.ConvertToServerSaveData(new ModSaveFile.SaveData {
             PlayerDataEntries = deserializedOverrides
         });

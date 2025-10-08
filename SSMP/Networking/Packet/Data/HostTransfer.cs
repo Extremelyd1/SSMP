@@ -9,11 +9,11 @@ internal class HostTransfer : IPacketData {
 
     /// <inheritdoc />
     public bool DropReliableDataIfNewerExists => true;
-    
+
     /// <summary>
     /// The name of the scene in which the player becomes the scene host.
     /// </summary>
-    public string SceneName { get; set; }
+    public string SceneName { get; set; } = null!;
 
     /// <inheritdoc />
     public void WriteData(IPacket packet) {

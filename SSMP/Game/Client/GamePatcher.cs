@@ -1,12 +1,11 @@
 using System;
-using System.Reflection;
 using GlobalEnums;
 using Mono.Cecil.Cil;
 using MonoMod.Cil;
-using MonoMod.RuntimeDetour;
 using SSMP.Networking.Client;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
+// ReSharper disable UnusedMember.Local
 
 namespace SSMP.Game.Client;
 
@@ -15,25 +14,20 @@ namespace SSMP.Game.Client;
 /// correctly.
 /// </summary>
 internal class GamePatcher {
-    /// <summary>
-    /// The binding flags for obtaining certain types for hooking.
-    /// </summary>
-    private const BindingFlags BindingFlags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+    // /// <summary>
+    // /// The binding flags for obtaining certain types for hooking.
+    // /// </summary>
+    // private const BindingFlags BindingFlags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
 
     /// <summary>
     /// The NetClient instance to check if we are connected to a server.
     /// </summary>
     private readonly NetClient _netClient;
 
-    /// <summary>
-    /// The IL Hook for the bridge lever method.
-    /// </summary>
-    private ILHook? _bridgeLeverIlHook;
-
     public GamePatcher(NetClient netClient) {
         _netClient = netClient;
     }
-    
+
     /// <summary>
     /// Register the hooks.
     /// </summary>
@@ -46,9 +40,6 @@ internal class GamePatcher {
         // IL.HealthManager.TakeDamage += HealthManagerOnTakeDamage;
 
         // On.BridgeLever.OnTriggerEnter2D += BridgeLeverOnTriggerEnter2D;
-
-        var type = typeof(BridgeLever).GetNestedType("<OpenBridge>d__13", BindingFlags);
-        _bridgeLeverIlHook = new ILHook(type.GetMethod("MoveNext", BindingFlags), BridgeLeverOnOpenBridge);
         
         // On.HutongGames.PlayMaker.Actions.CallMethodProper.DoMethodCall += CallMethodProperOnDoMethodCall;
         
@@ -70,8 +61,6 @@ internal class GamePatcher {
         // IL.HealthManager.TakeDamage -= HealthManagerOnTakeDamage;
         
         // On.BridgeLever.OnTriggerEnter2D -= BridgeLeverOnTriggerEnter2D;
-        
-        _bridgeLeverIlHook?.Dispose();
         
         // On.HutongGames.PlayMaker.Actions.CallMethodProper.DoMethodCall -= CallMethodProperOnDoMethodCall;
         
@@ -341,124 +330,10 @@ internal class GamePatcher {
         }
     }
     
-    /// <summary>
-    /// Whether the local player hit the bridge lever.
-    /// </summary>
-    private bool _localPlayerBridgeLever;
-    
-    /// <summary>
-    /// On Hook that stores a boolean depending on whether the local player hit the bridge lever or not. Used in the
-    /// IL Hook below.
-    /// </summary>
-    // private void BridgeLeverOnTriggerEnter2D(On.BridgeLever.orig_OnTriggerEnter2D orig, BridgeLever self, Collider2D collision) {
-    //     var activated = self.activated;
-    //     
-    //     if (!activated && collision.tag == "Nail Attack") {
-    //         _localPlayerBridgeLever = collision.transform.parent?.parent?.tag == "Player";
-    //     }
-    //     
-    //     orig(self, collision);
-    // }
-    
-    /// <summary>
-    /// IL Hook to modify the OpenBridge method of BridgeLever to exclude locking players in place that did not hit
-    /// the lever.
-    /// </summary>
-    private void BridgeLeverOnOpenBridge(ILContext il) {
-        try {
-            // Create a cursor for this context
-            var c = new ILCursor(il);
-
-            // Define the collection of instructions that matches the FreezeMoment call
-            Func<Instruction, bool>[] freezeMomentInstructions = [
-                i => i.MatchCall(typeof(global::GameManager), "get_instance"),
-                i => i.MatchLdcI4(1),
-                i => i.MatchCallvirt(typeof(global::GameManager), "FreezeMoment")
-            ];
-
-            // Goto after the FreezeMoment call
-            c.GotoNext(MoveType.Before, freezeMomentInstructions);
-            
-            // Emit a delegate that puts the boolean on the stack
-            c.EmitDelegate(() => _localPlayerBridgeLever);
-
-            // Define the label to branch to
-            var afterFreezeLabel = c.DefineLabel();
-            
-            // Then emit an instruction that branches to after the freeze if the boolean is false
-            c.Emit(OpCodes.Brfalse, afterFreezeLabel);
-
-            // Goto after the FreezeMoment call
-            c.GotoNext(MoveType.After, freezeMomentInstructions);
-            
-            // Mark the label after the FreezeMoment call so we branch here
-            c.MarkLabel(afterFreezeLabel);
-            
-            // Goto after the rumble call
-            c.GotoNext(
-                MoveType.After,
-                i => i.MatchCall(typeof(GameCameras), "get_instance"),
-                i => i.MatchLdfld(typeof(GameCameras), "cameraShakeFSM"),
-                i => i.MatchLdstr("RumblingMed"),
-                i => i.MatchLdcI4(1),
-                i => i.MatchCall(typeof(FSMUtility), "SetBool")
-            );
-            
-            // Emit a delegate that puts the boolean on the stack
-            c.EmitDelegate(() => _localPlayerBridgeLever);
-            
-            // Define the label to branch to
-            var afterRoarEnterLabel = c.DefineLabel();
-            
-            // Emit another instruction that branches over the roar enter FSM calls
-            c.Emit(OpCodes.Brfalse, afterRoarEnterLabel);
-            
-            // Goto after the roar enter call
-            c.GotoNext(
-                MoveType.After, 
-                i => i.MatchLdstr("ROAR ENTER"),
-                i => i.MatchLdcI4(0),
-                i => i.MatchCall(typeof(FSMUtility), "SendEventToGameObject")
-            );
-            
-            // Mark the label after the Roar Enter call so we branch here
-            c.MarkLabel(afterRoarEnterLabel);
-            
-            // Define the collection of instructions that matches the roar exit FSM call
-            Func<Instruction, bool>[] roarExitInstructions = [
-                i => i.MatchCall(typeof(HeroController), "get_instance"),
-                i => i.MatchCallvirt(typeof(Component), "get_gameObject"),
-                i => i.MatchLdstr("ROAR EXIT"),
-                i => i.MatchLdcI4(0),
-                i => i.MatchCall(typeof(FSMUtility), "SendEventToGameObject")
-            ];
-            
-            // Goto before the roar exit FSM call 
-            c.GotoNext(MoveType.Before, roarExitInstructions);
-            
-            // Emit a delegate that puts the boolean on the stack
-            c.EmitDelegate(() => _localPlayerBridgeLever);
-            
-            // Define the label to branch to
-            var afterRoarExitLabel = c.DefineLabel();
-            
-            // Emit the last instruction to branch over the roar exit call
-            c.Emit(OpCodes.Brfalse, afterRoarExitLabel);
-            
-            // Goto after the roar exit FSM call
-            c.GotoNext(MoveType.After, roarExitInstructions);
-            
-            // Mark the label so we branch here
-            c.MarkLabel(afterRoarExitLabel);
-        } catch (Exception e) {
-            Logger.Error($"Could not change BridgeLever#OnOpenBridge IL: \n{e}");
-        }
-    }
-    
-    /// <summary>
-    /// Hook for the 'DoMethodCall' method in the 'CallMethodProper' FSM action. This is used for the Crystal Shot
-    /// game object to ensure that knockback is not applied to the local player if a remote player hits the crystal.
-    /// </summary>
+    // /// <summary>
+    // /// Hook for the 'DoMethodCall' method in the 'CallMethodProper' FSM action. This is used for the Crystal Shot
+    // /// game object to ensure that knockback is not applied to the local player if a remote player hits the crystal.
+    // /// </summary>
     // private void CallMethodProperOnDoMethodCall(
     //     On.HutongGames.PlayMaker.Actions.CallMethodProper.orig_DoMethodCall orig, 
     //     HutongGames.PlayMaker.Actions.CallMethodProper self
@@ -575,10 +450,11 @@ internal class GamePatcher {
     }
     
     // TODO: this is a temporary solution and requires further investigation on why this happens
-    /// <summary>
-    /// Hook for the 'Ignore' method in the 'IgnoreHeroCollision' MonoBehaviour. This is simply a hook that doesn't do
-    /// anything, but prevents NRE's happening in the method do to it now being redirected by MonoMod.
-    /// </summary>
+
+    // /// <summary>
+    // /// Hook for the 'Ignore' method in the 'IgnoreHeroCollision' MonoBehaviour. This is simply a hook that doesn't do
+    // /// anything, but prevents NRE's happening in the method do to it now being redirected by MonoMod.
+    // /// </summary>
     // private void IgnoreHeroCollisionOnIgnore(On.IgnoreHeroCollision.orig_Ignore orig, IgnoreHeroCollision self) {
     //     if (!self) {
     //         Logger.Error("IgnoreHeroCollision's object is null, cannot do collision check");
@@ -595,10 +471,10 @@ internal class GamePatcher {
     //     orig(self);
     // }
     
-    /// <summary>
-    /// Hook for the 'OnEnable' method in the 'SceneAdditiveLoadConditional' MonoBehaviour. This is to change certain
-    /// conditions about additional scene loads where they should happen regardless of the condition in multiplayer.
-    /// </summary>
+    // /// <summary>
+    // /// Hook for the 'OnEnable' method in the 'SceneAdditiveLoadConditional' MonoBehaviour. This is to change certain
+    // /// conditions about additional scene loads where they should happen regardless of the condition in multiplayer.
+    // /// </summary>
     // private void SceneAdditiveLoadConditionalOnEnable(
     //     On.SceneAdditiveLoadConditional.orig_OnEnable orig, 
     //     SceneAdditiveLoadConditional self

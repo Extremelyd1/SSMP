@@ -2,7 +2,6 @@ using System;
 using GlobalEnums;
 using SSMP.Api.Client;
 using SSMP.Game.Settings;
-using SSMP.Imports;
 using SSMP.Ui.Component;
 using SSMP.Util;
 using UnityEngine;
@@ -84,7 +83,7 @@ internal class ChatBox : IChatBox {
     /// <summary>
     /// Array containing the latest messages.
     /// </summary>
-    private readonly ChatMessage[] _messages;
+    private readonly ChatMessage?[] _messages;
 
     /// <summary>
     /// The chat input component.
@@ -231,7 +230,7 @@ internal class ChatBox : IChatBox {
             InputHandler.Instance.StopMouseInput();
             InputHandler.Instance.PreventPause();
             SetEnabledHeroActions(false);
-            DebugMod.SetLockKeyBinds(true);
+            // DebugMod.SetLockKeyBinds(true);
         }
     }
 
@@ -252,7 +251,7 @@ internal class ChatBox : IChatBox {
         InputHandler.Instance.inputActions.Pause.ClearInputState();
         InputHandler.Instance.AllowPause();
         SetEnabledHeroActions(true);
-        DebugMod.SetLockKeyBinds(false);
+        // DebugMod.SetLockKeyBinds(false);
     }
 
     /// <inheritdoc />
@@ -406,8 +405,8 @@ internal class ChatBox : IChatBox {
     /// </summary>
     /// <returns>true if either challenge UI from pantheons or bosses is open; otherwise false.</returns>
     private static bool IsGodHomeMenuOpen() {
-        var bossChallengeUi = Object.FindObjectsOfType<BossChallengeUI>();
-        var bossDoorChallengeUi = Object.FindObjectsOfType<BossDoorChallengeUI>();
+        var bossChallengeUi = Object.FindObjectsByType<BossChallengeUI>(FindObjectsSortMode.None);
+        var bossDoorChallengeUi = Object.FindObjectsByType<BossDoorChallengeUI>(FindObjectsSortMode.None);
 
         return bossChallengeUi.Length != 0 || bossDoorChallengeUi.Length != 0;
     }

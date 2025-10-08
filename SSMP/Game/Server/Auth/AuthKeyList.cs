@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
 using SSMP.Util;
+using Logger = SSMP.Logging.Logger;
 
 namespace SSMP.Game.Server.Auth;
 
@@ -13,7 +14,7 @@ internal class AuthKeyList {
     /// <summary>
     /// The name of the file that stores the keys.
     /// </summary>
-    protected string FileName { get; set; }
+    protected string? FileName { get; set; }
 
     /// <summary>
     /// Set of approved authentication keys.
@@ -69,6 +70,11 @@ internal class AuthKeyList {
     /// Write this authentication key list to a file.
     /// </summary>
     protected void WriteToFile() {
+        if (FileName == null) {
+            Logger.Error("Could not write auth key list to file, because file name is null");
+            return;
+        }
+        
         FileUtil.WriteObjectToJsonFile(
             this,
             Path.Combine(FileUtil.GetCurrentPath(), FileName)

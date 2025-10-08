@@ -83,10 +83,13 @@ internal class ServerTlsServer : AbstractTlsServer {
         
         if (File.Exists(KeyPairFilePath)) {
             Logger.Info("KeyPair file exists, loading...");
-            return LoadECDHKeyPair();
+            var keyPair = LoadECDHKeyPair();
+            if (keyPair != null) {
+                return keyPair;
+            }
         }
 
-        Logger.Info("KeyPair file does not exist, generating and storing...");
+        Logger.Info("KeyPair file does not exist or could not be loaded, generating and storing...");
         var generatedKeyPair = GenerateECDHKeyPair(GetECBuiltInBinaryDomainParameters());
         WriteObjectAsPemToFile(KeyPairFilePath, generatedKeyPair);
 
@@ -97,7 +100,7 @@ internal class ServerTlsServer : AbstractTlsServer {
     /// Load the ECDH key pair from file.
     /// </summary>
     /// <returns>The loaded asymmetric EC key pair, or null if the file could not be found or read.</returns>
-    private AsymmetricCipherKeyPair LoadECDHKeyPair() {
+    private AsymmetricCipherKeyPair? LoadECDHKeyPair() {
         string fileContents;
         try {
             fileContents = File.ReadAllText(KeyPairFilePath);
@@ -153,10 +156,13 @@ internal class ServerTlsServer : AbstractTlsServer {
 
         if (File.Exists(CertificateFilePath)) {
             Logger.Info("Certificate file exists, loading...");
-            return LoadCertificate();
+            var cert = LoadCertificate();
+            if (cert != null) {
+                return cert;
+            }
         }
 
-        Logger.Info("Certificate does not exist, generating and storing...");
+        Logger.Info("Certificate does not exist or could not be loaded, generating and storing...");
         var generatedCertificate = GenerateCertificate(
             new X509Name("CN=TestCA"),
             new X509Name("CN=TestEE"),
@@ -172,7 +178,7 @@ internal class ServerTlsServer : AbstractTlsServer {
     /// Load the X509 certificate from file.
     /// </summary>
     /// <returns>The loaded certificate, or null if the file could not be found or read.</returns>
-    private X509Certificate LoadCertificate() {
+    private X509Certificate? LoadCertificate() {
         string fileContents;
         try {
             fileContents = File.ReadAllText(CertificateFilePath);

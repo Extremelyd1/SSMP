@@ -52,7 +52,7 @@ internal class ServerUpdateManager : UdpUpdateManager<ClientUpdatePacket, Client
         Func<T> constructFunc
     ) where T : IPacketData, new() {
         PacketDataCollection<T> packetDataCollection;
-        IPacketData packetData = null;
+        IPacketData? packetData = null;
 
         // First check whether there actually exists a data collection for this packet ID
         if (CurrentUpdatePacket.TryGetSendingPacketData(packetId, out var iPacketDataAsCollection)) {
@@ -279,7 +279,7 @@ internal class ServerUpdateManager : UdpUpdateManager<ClientUpdatePacket, Client
     /// <param name="clipId">The ID of the animation clip.</param>
     /// <param name="frame">The frame of the animation.</param>
     /// <param name="effectInfo">Byte array containing effect info.</param>
-    public void UpdatePlayerAnimation(ushort id, ushort clipId, byte frame, byte[] effectInfo) {
+    public void UpdatePlayerAnimation(ushort id, ushort clipId, byte frame, byte[]? effectInfo) {
         lock (Lock) {
             var playerUpdate = FindOrCreatePacketData<PlayerUpdate>(id, ClientUpdatePacketId.PlayerUpdate);
             playerUpdate.UpdateTypes.Add(PlayerUpdateType.Animation);

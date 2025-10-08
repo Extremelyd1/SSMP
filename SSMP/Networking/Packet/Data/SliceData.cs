@@ -31,7 +31,7 @@ internal class SliceData : IPacketData {
     /// <summary>
     /// Byte array containing the data of this slice.
     /// </summary>
-    public byte[] Data { get; set; }
+    public byte[] Data { get; set; } = null!;
 
     /// <inheritdoc />
     public void WriteData(IPacket packet) {

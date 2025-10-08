@@ -26,30 +26,30 @@ internal class DtlsClient {
     /// <summary>
     /// The socket instance for the underlying networking.
     /// </summary>
-    private Socket _socket;
+    private Socket? _socket;
     /// <summary>
     /// The TLS client for communicating supported cipher suites and handling certificates.
     /// </summary>
-    private ClientTlsClient _tlsClient;
+    private ClientTlsClient? _tlsClient;
     /// <summary>
     /// The client datagram transport that provides networking to the DTLS client.
     /// </summary>
-    private ClientDatagramTransport _clientDatagramTransport;
+    private ClientDatagramTransport? _clientDatagramTransport;
 
     /// <summary>
     /// Token source for cancellation tokens for the receive task.
     /// </summary>
-    private CancellationTokenSource _receiveTaskTokenSource;
+    private CancellationTokenSource? _receiveTaskTokenSource;
 
     /// <summary>
     /// DTLS transport instance from establishing a connection to a server.
     /// </summary>
-    public DtlsTransport DtlsTransport { get; private set; }
+    public DtlsTransport? DtlsTransport { get; private set; }
     
     /// <summary>
     /// Event that is called when data is received from the server. 
     /// </summary>
-    public event Action<byte[], int> DataReceivedEvent;
+    public event Action<byte[], int>? DataReceivedEvent;
 
     /// <summary>
     /// Try to establish a connection to a server with the given address and port.
@@ -135,6 +135,11 @@ internal class DtlsClient {
     /// <param name="cancellationToken">The cancellation token to cancel the loop.</param>
     private void SocketReceiveLoop(CancellationToken cancellationToken) {
         while (!cancellationToken.IsCancellationRequested) {
+            if (_socket == null) {
+                Logger.Error("Socket was null during receive call");
+                break;
+            }
+            
             EndPoint endPoint = new IPEndPoint(IPAddress.Any, 0);
             
             var numReceived = 0;
@@ -157,6 +162,11 @@ internal class DtlsClient {
 
             if (cancellationToken.IsCancellationRequested) {
                 Logger.Debug("Cancellation requested");
+                break;
+            }
+
+            if (_clientDatagramTransport == null) {
+                Logger.Warn("Client datagram transport was null, cannot receive data");
                 break;
             }
 

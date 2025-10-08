@@ -1,3 +1,4 @@
+using System;
 using SSMP.Game.Settings;
 using SSMP.Networking.Client;
 using SSMP.Ui.Component;
@@ -63,6 +64,11 @@ internal class PingInterface {
         // Since we are initially not connected, we disable the object by default
         pingComponentGroup.SetActive(false);
 
+        if (TextureManager.NetworkIcon == null) {
+            throw new Exception("Network icon is not defined, cannot create ping interface");
+        }
+
+        // ReSharper disable once ObjectCreationAsStatement
         new ImageComponent(
             pingComponentGroup,
             new Vector2(

@@ -18,7 +18,7 @@ internal class ChatMessage : IPacketData {
     /// <summary>
     /// The message string.
     /// </summary>
-    public string Message { get; set; }
+    public string Message { get; set; } = null!;
 
     /// <inheritdoc />
     public void WriteData(IPacket packet) {

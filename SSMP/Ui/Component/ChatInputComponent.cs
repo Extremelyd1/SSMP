@@ -14,14 +14,12 @@ internal class ChatInputComponent : InputComponent {
     /// <summary>
     /// List of characters that are disallowed to be input.
     /// </summary>
-    private static readonly List<char> DisallowedChars = new() {
-        '\n'
-    };
+    private static readonly List<char> DisallowedChars = ['\n'];
     
     /// <summary>
     /// Action that is executed when the user submits the input field.
     /// </summary>
-    public event Action<string> OnSubmit;
+    public event Action<string>? OnSubmit;
 
     public ChatInputComponent(
         ComponentGroup componentGroup,

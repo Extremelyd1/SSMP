@@ -44,7 +44,7 @@ internal abstract class ChunkReceiver {
     /// <summary>
     /// Event that is called when the entirety of a chunk is received.
     /// </summary>
-    public event Action<Packet.Packet> ChunkReceivedEvent;
+    public event Action<Packet.Packet>? ChunkReceivedEvent;
 
     /// <summary>
     /// Construct the chunk receiver by allocating the readonly arrays with their maximally used lengths.

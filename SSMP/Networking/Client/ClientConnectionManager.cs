@@ -24,7 +24,7 @@ internal class ClientConnectionManager : ConnectionManager {
     /// <summary>
     /// Event that is called when server info is received from the server we are trying to connect to.
     /// </summary>
-    public event Action<ServerInfo> ServerInfoReceivedEvent;
+    public event Action<ServerInfo>? ServerInfoReceivedEvent;
 
     /// <summary>
     /// Construct the connection manager with the given packet manager and chunk sender, and receiver instances.

@@ -36,6 +36,6 @@ internal class PlayerChatEvent : ServerEvent, IPlayerChatEvent {
     /// <inheritdoc />
     public PlayerChatEvent(IServerPlayer player, string message) {
         Player = player;
-        Message = message;
+        _message = message;
     }
 }

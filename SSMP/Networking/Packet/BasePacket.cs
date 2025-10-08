@@ -30,12 +30,12 @@ internal abstract class BasePacket<TPacketId> where TPacketId : Enum {
     /// <summary>
     /// The combination of normal and resent packet data cached in case it needs to be queried multiple times.
     /// </summary>
-    protected Dictionary<TPacketId, IPacketData> CachedAllPacketData;
+    protected Dictionary<TPacketId, IPacketData>? CachedAllPacketData;
 
     /// <summary>
     /// The combination of addon and resent addon data cached in case it needs to be queried multiple times.
     /// </summary>
-    protected Dictionary<byte, AddonPacketData> CachedAllAddonData;
+    protected Dictionary<byte, AddonPacketData>? CachedAllAddonData;
 
     /// <summary>
     /// Whether the dictionary containing all packet data is cached already or needs to be calculated first.
@@ -262,7 +262,7 @@ internal abstract class BasePacket<TPacketId> where TPacketId : Enum {
             // If this bit was set in our flag, we add the type to the list
             if ((dataPacketIdFlag & currentTypeValue) != 0) {
                 var iPacketData = InstantiatePacketDataFromId(packetId);
-                iPacketData?.ReadData(packet);
+                iPacketData.ReadData(packet);
 
                 packetData[packetId] = iPacketData;
             }
@@ -471,7 +471,9 @@ internal abstract class BasePacket<TPacketId> where TPacketId : Enum {
             CacheAllPacketData();
         }
 
-        return CachedAllPacketData;
+        // After the above conditional caching, we know that the cached packet data variable is non-null
+        // Compiler doesn't however, therefore the null-forgiving operator
+        return CachedAllPacketData!;
     }
 
     /// <summary>
@@ -483,7 +485,9 @@ internal abstract class BasePacket<TPacketId> where TPacketId : Enum {
             CacheAllPacketData();
         }
 
-        return CachedAllAddonData;
+        // After the above conditional caching, we know that the cached packet data variable is non-null
+        // Compiler doesn't however, therefore the null-forgiving operator
+        return CachedAllAddonData!;
     }
 
     /// <summary>

@@ -11,12 +11,12 @@ internal class MonoBehaviourUtil : MonoBehaviour {
     /// <summary>
     /// The instance of this class.
     /// </summary>
-    public static MonoBehaviourUtil Instance;
+    public static MonoBehaviourUtil Instance = null!;
 
     /// <summary>
     /// Event that is execute each Unity update tick.
     /// </summary>
-    public event Action OnUpdateEvent;
+    public event Action? OnUpdateEvent;
 
     public void Awake() {
         if (Instance != null) {

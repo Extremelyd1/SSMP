@@ -34,11 +34,11 @@ internal class ServerConnectionManager : ConnectionManager {
     /// <summary>
     /// Event that is called when the client has sent the client info, and thus we can check the connection request.
     /// </summary>
-    public event Action<ushort, ClientInfo, ServerInfo> ConnectionRequestEvent;
+    public event Action<ushort, ClientInfo, ServerInfo>? ConnectionRequestEvent;
     /// <summary>
     /// Event that is called when the connection times out.
     /// </summary>
-    public event Action ConnectionTimeoutEvent;
+    public event Action? ConnectionTimeoutEvent;
 
     public ServerConnectionManager(
         PacketManager packetManager,

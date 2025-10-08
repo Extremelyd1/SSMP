@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using SSMP.Animation;
 using SSMP.Api.Command.Server;
@@ -15,6 +16,7 @@ using SSMP.Game.Server.Auth;
 using SSMP.Game.Server.Save;
 using SSMP.Game.Settings;
 using SSMP.Logging;
+using SSMP.Math;
 using SSMP.Networking;
 using SSMP.Networking.Packet;
 using SSMP.Networking.Packet.Data;
@@ -151,19 +153,19 @@ internal abstract class ServerManager : IServerManager {
     public IServerSettings ServerSettings => InternalServerSettings;
 
     /// <inheritdoc />
-    public event Action<IServerPlayer> PlayerConnectEvent;
+    public event Action<IServerPlayer>? PlayerConnectEvent;
 
     /// <inheritdoc />
-    public event Action<IServerPlayer> PlayerDisconnectEvent;
+    public event Action<IServerPlayer>? PlayerDisconnectEvent;
 
     /// <inheritdoc />
-    public event Action<IServerPlayer> PlayerEnterSceneEvent;
+    public event Action<IServerPlayer>? PlayerEnterSceneEvent;
 
     /// <inheritdoc />
-    public event Action<IServerPlayer> PlayerLeaveSceneEvent;
+    public event Action<IServerPlayer>? PlayerLeaveSceneEvent;
 
     /// <inheritdoc />
-    public event Action<IPlayerChatEvent> PlayerChatEvent;
+    public event Action<IPlayerChatEvent>? PlayerChatEvent;
 
     #endregion
 
@@ -205,7 +207,7 @@ internal abstract class ServerManager : IServerManager {
         _kickCommand = new KickCommand(this);
         _teamCommand = new TeamCommand(this);
         _skinCommand = new SkinCommand(this);
-        // _copySaveCommand = new CopySaveCommand(this, ServerSaveData);
+        _copySaveCommand = new CopySaveCommand(this, ServerSaveData);
     }
 
     #region Internal server manager methods
@@ -459,7 +461,7 @@ internal abstract class ServerManager : IServerManager {
                 _netServer.GetUpdateManagerForClient(idPlayerDataPair.Key)?.AddPlayerEnterSceneData(
                     playerData.Id,
                     playerData.Username,
-                    playerData.Position,
+                    playerData.Position ?? Vector2.Zero,
                     playerData.Scale,
                     playerData.Team,
                     playerData.SkinId,
@@ -475,7 +477,7 @@ internal abstract class ServerManager : IServerManager {
                 enterSceneList.Add(new ClientPlayerEnterScene {
                     Id = idPlayerDataPair.Key,
                     Username = otherPlayerData.Username,
-                    Position = otherPlayerData.Position,
+                    Position = otherPlayerData.Position ?? Vector2.Zero,
                     Scale = otherPlayerData.Scale,
                     Team = otherPlayerData.Team,
                     SkinId = otherPlayerData.SkinId,
@@ -977,7 +979,7 @@ internal abstract class ServerManager : IServerManager {
     /// <param name="timeout">Whether the disconnect was due to connection timeout.</param>
     /// <param name="sceneName">The name of the scene that the player left (if known from a received packet), or null
     /// if no such name is known.</param>
-    private void HandlePlayerLeaveScene(ushort id, bool disconnected, bool timeout = false, string sceneName = null) {
+    private void HandlePlayerLeaveScene(ushort id, bool disconnected, bool timeout = false, string? sceneName = null) {
         if (!_playerData.TryGetValue(id, out var playerData)) {
             Logger.Warn($"Handling player leave scene (dc: {disconnected}) for ID {id}, but player is not in mapping");
             return;
@@ -1023,7 +1025,7 @@ internal abstract class ServerManager : IServerManager {
                 // We check if the player is the scene host, which will never be the case if FullSync is disabled
                 if (playerData.IsSceneHost) {
                     // If the leaving player was the scene host, we can make this player the new scene host
-                    updateManager.SetSceneHostTransfer(sceneName);
+                    updateManager?.SetSceneHostTransfer(sceneName);
 
                     // Reset the scene host variable in the leaving player, so only a single other player
                     // becomes the scene host
@@ -1036,9 +1038,9 @@ internal abstract class ServerManager : IServerManager {
                 }
 
                 if (disconnected) {
-                    updateManager.AddPlayerDisconnectData(id, username, timeout);
+                    updateManager?.AddPlayerDisconnectData(id, username, timeout);
                 } else {
-                    updateManager.AddPlayerLeaveSceneData(id, sceneName);
+                    updateManager?.AddPlayerLeaveSceneData(id, sceneName);
                 }
             }
         }
@@ -1138,7 +1140,7 @@ internal abstract class ServerManager : IServerManager {
     /// <param name="team">The team to change the player to.</param>
     /// <param name="reason">The reason if the team could not be updated, otherwise null.</param>
     /// <returns>True if the player's team was updated, false otherwise.</returns>
-    public bool TryUpdatePlayerTeam(ushort id, Team team, out string reason) {
+    public bool TryUpdatePlayerTeam(ushort id, Team team, [MaybeNullWhen(true)] out string reason) {
         if (!_playerData.TryGetValue(id, out var playerData)) {
             Logger.Warn($"Received PlayerTeamUpdate data, but player with ID {id} is not in mapping");
 
@@ -1182,7 +1184,7 @@ internal abstract class ServerManager : IServerManager {
     /// <param name="skinId">The ID of the skin to change the player to.</param>
     /// <param name="reason">The reason if the skin could not be updated, otherwise null.</param>
     /// <returns>True if the player's team was updated, false otherwise.</returns>
-    public bool TryUpdatePlayerSkin(ushort id, byte skinId, out string reason) {
+    public bool TryUpdatePlayerSkin(ushort id, byte skinId, [MaybeNullWhen(true)] out string reason) {
         if (!_playerData.TryGetValue(id, out var playerData)) {
             Logger.Warn($"Received PlayerSkinUpdate data, but player with ID {id} is not in mapping");
             
@@ -1315,6 +1317,13 @@ internal abstract class ServerManager : IServerManager {
         }
 
         var addonData = clientInfo.AddonData;
+        if (addonData == null) {
+            Logger.Warn("  Addon data was null for client");
+            
+            serverInfo.ConnectionResult = ServerConnectionResult.RejectedOther;
+            serverInfo.ConnectionRejectedMessage = "Internal error";
+            return;
+        }
 
         // Construct a string that contains all addons and respective versions by mapping the items in the addon data
         var addonStringList = string.Join(", ", addonData.Select(addon => $"{addon.Identifier} v{addon.Version}"));
@@ -1523,7 +1532,7 @@ internal abstract class ServerManager : IServerManager {
             Logger.Info("  Player is not authorized");
             
             SendMessage(id, "You are not authorized to change server settings");
-            _netServer.GetUpdateManagerForClient(id).UpdateServerSettings(InternalServerSettings);
+            _netServer.GetUpdateManagerForClient(id)?.UpdateServerSettings(InternalServerSettings);
             
             return;
         }
@@ -1697,7 +1706,7 @@ internal abstract class ServerManager : IServerManager {
                     continue;
                 }
 
-                _netServer.GetUpdateManagerForClient(otherId).SetSaveUpdate(packet.SaveDataIndex, packet.Value);
+                _netServer.GetUpdateManagerForClient(otherId)?.SetSaveUpdate(packet.SaveDataIndex, packet.Value);
             }
         }
     }
@@ -1707,12 +1716,12 @@ internal abstract class ServerManager : IServerManager {
     #region IServerManager methods
 
     /// <inheritdoc />
-    public IServerPlayer GetPlayer(ushort id) {
+    public IServerPlayer? GetPlayer(ushort id) {
         return TryGetPlayer(id, out var player) ? player : null;
     }
 
     /// <inheritdoc />
-    public bool TryGetPlayer(ushort id, out IServerPlayer player) {
+    public bool TryGetPlayer(ushort id, [MaybeNullWhen(false)] out IServerPlayer player) {
         var found = _playerData.TryGetValue(id, out var playerData);
         player = playerData;
 

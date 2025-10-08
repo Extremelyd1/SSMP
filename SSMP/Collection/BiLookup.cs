@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 namespace SSMP.Collection;
 
@@ -83,14 +84,14 @@ public class BiLookup<TFirst, TSecond> : IEnumerable<KeyValuePair<TFirst, TSecon
     /// <param name="index">The index to find the value for.</param>
     /// <param name="value">Will contain the value for the given index if found. Default otherwise.</param>
     /// <returns>True if the value for the index was found, false otherwise.</returns>
-    public bool TryGetValue(TFirst index, out TSecond? value) {
+    public bool TryGetValue(TFirst index, [MaybeNullWhen(false)][NotNullWhen(true)] out TSecond value) {
         if (!ContainsFirst(index)) {
             value = default;
             return false;
         }
 
         value = GetByFirst(index);
-        return true;
+        return value != null;
     }
 
     /// <summary>
@@ -99,14 +100,14 @@ public class BiLookup<TFirst, TSecond> : IEnumerable<KeyValuePair<TFirst, TSecon
     /// <param name="index">The index to find the value for.</param>
     /// <param name="value">Will contain the value for the given index if found. Default otherwise.</param>
     /// <returns>True if the value for the index was found, false otherwise.</returns>
-    public bool TryGetValue(TSecond index, out TFirst? value) {
+    public bool TryGetValue(TSecond index, [MaybeNullWhen(false)][NotNullWhen(true)] out TFirst value) {
         if (!ContainsSecond(index)) {
             value = default;
             return false;
         }
 
         value = GetBySecond(index);
-        return true;
+        return value != null;
     }
 
     /// <summary>

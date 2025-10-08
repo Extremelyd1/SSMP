@@ -22,23 +22,23 @@ internal class ServerInfo : IPacketData {
     /// <summary>
     /// The message detailing why the connection was rejected if it was.
     /// </summary>
-    public string ConnectionRejectedMessage { get; set; }
-    
+    public string ConnectionRejectedMessage { get; set; } = null!;
+
     /// <summary>
     /// List of addon data that the server uses.
     /// </summary>
-    public List<AddonData> AddonData { get; set; }
+    public List<AddonData> AddonData { get; set; } = [];
 
     /// <summary>
     /// The order in which the addons have been assigned IDs.
     /// </summary>
-    public byte[] AddonOrder { get; set; }
+    public byte[] AddonOrder { get; set; } = null!;
 
     /// <summary>
     /// The server settings for the server. Packaged as a <see cref="Data.ServerSettingsUpdate"/> to allow serialization
     /// to packet data.
     /// </summary>
-    public ServerSettingsUpdate ServerSettingsUpdate { get; set; }
+    public ServerSettingsUpdate ServerSettingsUpdate { get; set; } = null!;
 
     /// <summary>
     /// Whether full synchronisation is enabled for the server.
@@ -48,12 +48,12 @@ internal class ServerInfo : IPacketData {
     /// <summary>
     /// The save data currently used on the server.
     /// </summary>
-    public CurrentSave CurrentSave { get; set; }
+    public CurrentSave CurrentSave { get; set; } = null!;
 
     /// <summary>
     /// List of ID, username pairs for each connected client.
     /// </summary>
-    public List<(ushort, string)> PlayerInfo { get; set; }
+    public List<(ushort, string)> PlayerInfo { get; set; } = null!;
 
     /// <inheritdoc />
     public void WriteData(IPacket packet) {
@@ -83,7 +83,7 @@ internal class ServerInfo : IPacketData {
         }
 
         if (ConnectionResult == ServerConnectionResult.InvalidAddons) {
-            AddonData ??= new List<AddonData>();
+            AddonData ??= [];
             
             var addonDataLength = (byte) System.Math.Min(byte.MaxValue, AddonData.Count);
 

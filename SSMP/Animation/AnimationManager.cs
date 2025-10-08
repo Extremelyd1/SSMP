@@ -1,9 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
-using GlobalEnums;
-using HutongGames.PlayMaker.Actions;
 using SSMP.Animation.Effects;
 using SSMP.Collection;
 using SSMP.Game;
@@ -13,11 +10,8 @@ using SSMP.Hooks;
 using SSMP.Networking.Client;
 using SSMP.Networking.Packet.Data;
 using SSMP.Util;
-using UnityEngine;
 using UnityEngine.SceneManagement;
 using Logger = SSMP.Logging.Logger;
-using Object = UnityEngine.Object;
-using Random = UnityEngine.Random;
 
 namespace SSMP.Animation;
 
@@ -320,12 +314,12 @@ internal class AnimationManager {
     /// <summary>
     /// The last animation clip sent.
     /// </summary>
-    private string _lastAnimationClip;
+    private string? _lastAnimationClip;
 
-    /// <summary>
-    /// Whether the animation controller was responsible for the last clip that was sent.
-    /// </summary>
-    private bool _animationControllerWasLastSent;
+    // /// <summary>
+    // /// Whether the animation controller was responsible for the last clip that was sent.
+    // /// </summary>
+    // private bool _animationControllerWasLastSent;
 
     /// <summary>
     /// Whether we should stop sending animations until the scene has changed.
@@ -337,35 +331,35 @@ internal class AnimationManager {
     /// </summary>
     private bool _dashHasEnded = true;
 
-    /// <summary>
-    /// Whether the player has sent that they stopped crystal dashing.
-    /// </summary>
-    private bool _hasSentCrystalDashEnd = true;
+    // /// <summary>
+    // /// Whether the player has sent that they stopped crystal dashing.
+    // /// </summary>
+    // private bool _hasSentCrystalDashEnd = true;
 
-    /// <summary>
-    /// Whether the charge effect was last update active.
-    /// </summary>
-    private bool _lastChargeEffectActive;
+    // /// <summary>
+    // /// Whether the charge effect was last update active.
+    // /// </summary>
+    // private bool _lastChargeEffectActive;
+    //
+    // /// <summary>
+    // /// Whether the charged effect was last update active
+    // /// </summary>
+    // private bool _lastChargedEffectActive;
 
-    /// <summary>
-    /// Whether the charged effect was last update active
-    /// </summary>
-    private bool _lastChargedEffectActive;
+    // /// <summary>
+    // /// Stopwatch to keep track of a delay before being able to send another update for the charged effect.
+    // /// </summary>
+    // private readonly Stopwatch _chargedEffectStopwatch;
+    //
+    // /// <summary>
+    // /// Stopwatch to keep track of a delay before being able to send another update for the charged end effect.
+    // /// </summary>
+    // private readonly Stopwatch _chargedEndEffectStopwatch;
 
-    /// <summary>
-    /// Stopwatch to keep track of a delay before being able to send another update for the charged effect.
-    /// </summary>
-    private readonly Stopwatch _chargedEffectStopwatch;
-
-    /// <summary>
-    /// Stopwatch to keep track of a delay before being able to send another update for the charged end effect.
-    /// </summary>
-    private readonly Stopwatch _chargedEndEffectStopwatch;
-
-    /// <summary>
-    /// Whether the player was wall sliding last update.
-    /// </summary>
-    private bool _lastWallSlideActive;
+    // /// <summary>
+    // /// Whether the player was wall sliding last update.
+    // /// </summary>
+    // private bool _lastWallSlideActive;
 
     public AnimationManager(
         NetClient netClient,
@@ -374,8 +368,8 @@ internal class AnimationManager {
         _netClient = netClient;
         _playerManager = playerManager;
 
-        _chargedEffectStopwatch = new Stopwatch();
-        _chargedEndEffectStopwatch = new Stopwatch();
+        // _chargedEffectStopwatch = new Stopwatch();
+        // _chargedEndEffectStopwatch = new Stopwatch();
     }
 
     /// <summary>
@@ -615,15 +609,6 @@ internal class AnimationManager {
             _dashHasEnded = false;
         }
 
-        // Keep track of when the player sends the start and end of the crystal dash animation
-        if (clip.name.Equals("SD Dash Test1")) {
-            _hasSentCrystalDashEnd = false;
-        }
-
-        if (clip.name.Equals("SD Air Brake Test1") || clip.name.Equals("SD Hit Wall Test1")) {
-            _hasSentCrystalDashEnd = true;
-        }
-
         if (!ClipEnumNames.ContainsFirst(clip.name)) {
             Logger.Warn($"Player sprite animator played unknown clip, name: {clip.name}");
             return;
@@ -645,67 +630,67 @@ internal class AnimationManager {
         // Update the last clip name, since it changed
         _lastAnimationClip = clip.name;
 
-        // We have sent a different clip, so we can reset this
-        _animationControllerWasLastSent = false;
+        // // We have sent a different clip, so we can reset this
+        // _animationControllerWasLastSent = false;
     }
 
-    /// <summary>
-    /// Callback method on the HeroAnimationController#Play method.
-    /// </summary>
-    /// <param name="self">The hero animation controller instance.</param>
-    /// <param name="clipName">The name of the clip to play.</param>
-    private void HeroAnimationControllerOnPlay(HeroAnimationController self, string clipName) {
-        OnAnimationControllerPlay(clipName, 0);
-    }
-
-    /// <summary>
-    /// Callback method on the HeroAnimationController#PlayFromFrame method.
-    /// </summary>
-    /// <param name="self">The hero animation controller instance.</param>
-    /// <param name="clipName">The name of the clip to play.</param>
-    /// <param name="frame">The frame from which to play the clip.</param>
-    private void HeroAnimationControllerOnPlayFromFrame(HeroAnimationController self, string clipName, int frame) {
-        OnAnimationControllerPlay(clipName, frame);
-    }
-
-    /// <summary>
-    /// Callback method when the HeroAnimationController plays an animation.
-    /// </summary>
-    /// <param name="clipName">The name of the clip to play.</param>
-    /// <param name="frame">The frame from which to play the clip.</param>
-    private void OnAnimationControllerPlay(string clipName, int frame) {
-        // If we are not connected, there is nothing to send to
-        if (!_netClient.IsConnected) {
-            return;
-        }
-
-        // If this is not a clip that should be handled by the animation controller hook, we return
-        if (!AnimationControllerClipNames.Contains(clipName)) {
-            return;
-        }
-
-        // If the animation controller is responsible for the last sent clip, we skip
-        // this is to ensure that we don't spam packets of the same clip
-        if (!_animationControllerWasLastSent) {
-            if (!ClipEnumNames.ContainsFirst(clipName)) {
-                Logger.Warn($"Player animation controller played unknown clip, name: {clipName}");
-                return;
-            }
-
-            var clipId = ClipEnumNames[clipName];
-
-            _netClient.UpdateManager.UpdatePlayerAnimation(clipId, frame);
-
-            // This was the last clip we sent
-            _animationControllerWasLastSent = true;
-        }
-    }
-
-    /// <summary>
-    /// Callback method on the HeroController#CancelDash method.
-    /// </summary>
-    /// <param name="orig">The original method.</param>
-    /// <param name="self">The HeroController instance.</param>
+    // /// <summary>
+    // /// Callback method on the HeroAnimationController#Play method.
+    // /// </summary>
+    // /// <param name="self">The hero animation controller instance.</param>
+    // /// <param name="clipName">The name of the clip to play.</param>
+    // private void HeroAnimationControllerOnPlay(HeroAnimationController self, string clipName) {
+    //     OnAnimationControllerPlay(clipName, 0);
+    // }
+    //
+    // /// <summary>
+    // /// Callback method on the HeroAnimationController#PlayFromFrame method.
+    // /// </summary>
+    // /// <param name="self">The hero animation controller instance.</param>
+    // /// <param name="clipName">The name of the clip to play.</param>
+    // /// <param name="frame">The frame from which to play the clip.</param>
+    // private void HeroAnimationControllerOnPlayFromFrame(HeroAnimationController self, string clipName, int frame) {
+    //     OnAnimationControllerPlay(clipName, frame);
+    // }
+    //
+    // /// <summary>
+    // /// Callback method when the HeroAnimationController plays an animation.
+    // /// </summary>
+    // /// <param name="clipName">The name of the clip to play.</param>
+    // /// <param name="frame">The frame from which to play the clip.</param>
+    // private void OnAnimationControllerPlay(string clipName, int frame) {
+    //     // If we are not connected, there is nothing to send to
+    //     if (!_netClient.IsConnected) {
+    //         return;
+    //     }
+    //
+    //     // If this is not a clip that should be handled by the animation controller hook, we return
+    //     if (!AnimationControllerClipNames.Contains(clipName)) {
+    //         return;
+    //     }
+    //
+    //     // If the animation controller is responsible for the last sent clip, we skip
+    //     // this is to ensure that we don't spam packets of the same clip
+    //     if (!_animationControllerWasLastSent) {
+    //         if (!ClipEnumNames.ContainsFirst(clipName)) {
+    //             Logger.Warn($"Player animation controller played unknown clip, name: {clipName}");
+    //             return;
+    //         }
+    //
+    //         var clipId = ClipEnumNames[clipName];
+    //
+    //         _netClient.UpdateManager.UpdatePlayerAnimation(clipId, frame);
+    //
+    //         // This was the last clip we sent
+    //         _animationControllerWasLastSent = true;
+    //     }
+    // }
+    //
+    // /// <summary>
+    // /// Callback method on the HeroController#CancelDash method.
+    // /// </summary>
+    // /// <param name="orig">The original method.</param>
+    // /// <param name="self">The HeroController instance.</param>
     // private void HeroControllerOnCancelDash(On.HeroController.orig_CancelDash orig, HeroController self) {
     //     orig(self);
     //
@@ -719,65 +704,65 @@ internal class AnimationManager {
     //     // The dash has ended, so we can send a new one when we dash
     //     _dashHasEnded = true;
     // }
-
-    /// <summary>
-    /// Callback method for when the hero updates.
-    /// </summary>
-    private void OnHeroUpdateHook() {
-        // If we are not connected, there is nothing to send to
-        if (!_netClient.IsConnected) {
-            return;
-        }
-
-        var chargeEffectActive = HeroController.instance.artChargeEffect.activeSelf;
-        var chargedEffectActive = HeroController.instance.artChargedEffect.activeSelf;
-
-        if (chargeEffectActive && !_lastChargeEffectActive) {
-            // Charge effect is now active, which wasn't last update, so we can send the charge animation packet
-            _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.NailArtCharge);
-        }
-
-        if (chargedEffectActive && !_lastChargedEffectActive) {
-            if (!_chargedEffectStopwatch.IsRunning || _chargedEffectStopwatch.ElapsedMilliseconds > 100) {
-                // Charged effect is now active, which wasn't last update, so we can send the charged animation packet
-                _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.NailArtCharged);
-
-                // Start the stopwatch to make sure this animation is not triggered repeatedly
-                _chargedEffectStopwatch.Restart();
-            }
-        }
-
-        if (!chargeEffectActive && _lastChargeEffectActive && !chargedEffectActive) {
-            // The charge effect is now inactive and we are not fully charged
-            // This means that we cancelled the nail art charge
-            _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.NailArtChargeEnd);
-        }
-
-        if (!chargedEffectActive && _lastChargedEffectActive) {
-            if (!_chargedEndEffectStopwatch.IsRunning || _chargedEndEffectStopwatch.ElapsedMilliseconds > 100) {
-                // The charged effect is now inactive, so we are done with the nail art
-                _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.NailArtChargeEnd);
-
-                // Set the delay variable to make sure this animation is not triggered repeatedly
-                _chargedEndEffectStopwatch.Restart();
-            }
-        }
-
-        // Update the latest states
-        _lastChargeEffectActive = chargeEffectActive;
-        _lastChargedEffectActive = chargedEffectActive;
-
-        // Obtain the current wall slide state
-        var wallSlideActive = HeroController.instance.cState.wallSliding;
-
-        if (!wallSlideActive && _lastWallSlideActive) {
-            // We were wall sliding last update, but not anymore, so we send a wall slide end animation
-            _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.WallSlideEnd);
-        }
-
-        // Update the last state
-        _lastWallSlideActive = wallSlideActive;
-    }
+    //
+    // /// <summary>
+    // /// Callback method for when the hero updates.
+    // /// </summary>
+    // private void OnHeroUpdateHook() {
+    //     // If we are not connected, there is nothing to send to
+    //     if (!_netClient.IsConnected) {
+    //         return;
+    //     }
+    //
+    //     var chargeEffectActive = HeroController.instance.artChargeEffect.activeSelf;
+    //     var chargedEffectActive = HeroController.instance.artChargedEffect.activeSelf;
+    //
+    //     if (chargeEffectActive && !_lastChargeEffectActive) {
+    //         // Charge effect is now active, which wasn't last update, so we can send the charge animation packet
+    //         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.NailArtCharge);
+    //     }
+    //
+    //     if (chargedEffectActive && !_lastChargedEffectActive) {
+    //         if (!_chargedEffectStopwatch.IsRunning || _chargedEffectStopwatch.ElapsedMilliseconds > 100) {
+    //             // Charged effect is now active, which wasn't last update, so we can send the charged animation packet
+    //             _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.NailArtCharged);
+    //
+    //             // Start the stopwatch to make sure this animation is not triggered repeatedly
+    //             _chargedEffectStopwatch.Restart();
+    //         }
+    //     }
+    //
+    //     if (!chargeEffectActive && _lastChargeEffectActive && !chargedEffectActive) {
+    //         // The charge effect is now inactive and we are not fully charged
+    //         // This means that we cancelled the nail art charge
+    //         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.NailArtChargeEnd);
+    //     }
+    //
+    //     if (!chargedEffectActive && _lastChargedEffectActive) {
+    //         if (!_chargedEndEffectStopwatch.IsRunning || _chargedEndEffectStopwatch.ElapsedMilliseconds > 100) {
+    //             // The charged effect is now inactive, so we are done with the nail art
+    //             _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.NailArtChargeEnd);
+    //
+    //             // Set the delay variable to make sure this animation is not triggered repeatedly
+    //             _chargedEndEffectStopwatch.Restart();
+    //         }
+    //     }
+    //
+    //     // Update the latest states
+    //     _lastChargeEffectActive = chargeEffectActive;
+    //     _lastChargedEffectActive = chargedEffectActive;
+    //
+    //     // Obtain the current wall slide state
+    //     var wallSlideActive = HeroController.instance.cState.wallSliding;
+    //
+    //     if (!wallSlideActive && _lastWallSlideActive) {
+    //         // We were wall sliding last update, but not anymore, so we send a wall slide end animation
+    //         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.WallSlideEnd);
+    //     }
+    //
+    //     // Update the last state
+    //     _lastWallSlideActive = wallSlideActive;
+    // }
 
     /// <summary>
     /// Callback method on the tk2dSpriteAnimator#WarpClipToLocalTime method. This method executes
@@ -859,37 +844,37 @@ internal class AnimationManager {
         }
     }
 
-    /// <summary>
-    /// Callback method on the HeroController#DieFromHazard method.
-    /// </summary>
-    /// <param name="self">The HeroController instance.</param>
-    /// <param name="hazardType">The type of hazard.</param>
-    /// <param name="angle">The angle at which the hero entered the hazard.</param>
-    /// <returns>An enumerator for this coroutine.</returns>
-    private void HeroControllerOnDieFromHazard(HeroController self, HazardType hazardType, float angle) {
-        // If we are not connected, there is nothing to send to
-        if (!_netClient.IsConnected) {
-            return;
-        }
-    
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.HazardDeath, 0, [
-            // hazardType.Equals(HazardType.SPIKES),
-            // hazardType.Equals(HazardType.ACID)
-        ]);
-    }
-
-    /// <summary>
-    /// Callback method on the GameManager#HazardRespawn method.
-    /// </summary>
-    /// <param name="self">The GameManager instance.</param>
-    private void GameManagerOnHazardRespawn(GameManager self) {
-        // If we are not connected, there is nothing to send to
-        if (!_netClient.IsConnected) {
-            return;
-        }
-    
-        // _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.HazardRespawn);
-    }
+    // /// <summary>
+    // /// Callback method on the HeroController#DieFromHazard method.
+    // /// </summary>
+    // /// <param name="self">The HeroController instance.</param>
+    // /// <param name="hazardType">The type of hazard.</param>
+    // /// <param name="angle">The angle at which the hero entered the hazard.</param>
+    // /// <returns>An enumerator for this coroutine.</returns>
+    // private void HeroControllerOnDieFromHazard(HeroController self, HazardType hazardType, float angle) {
+    //     // If we are not connected, there is nothing to send to
+    //     if (!_netClient.IsConnected) {
+    //         return;
+    //     }
+    //
+    //     _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.HazardDeath, 0, [
+    //         // hazardType.Equals(HazardType.SPIKES),
+    //         // hazardType.Equals(HazardType.ACID)
+    //     ]);
+    // }
+    //
+    // /// <summary>
+    // /// Callback method on the GameManager#HazardRespawn method.
+    // /// </summary>
+    // /// <param name="self">The GameManager instance.</param>
+    // private void GameManagerOnHazardRespawn(GameManager self) {
+    //     // If we are not connected, there is nothing to send to
+    //     if (!_netClient.IsConnected) {
+    //         return;
+    //     }
+    //
+    //     // _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.HazardRespawn);
+    // }
 
     /// <summary>
     /// Callback method for when a player death is received.
@@ -900,20 +885,20 @@ internal class AnimationManager {
         MonoBehaviourUtil.Instance.StartCoroutine(PlayDeathAnimation(data.Id));
     }
 
-    /// <summary>
-    /// Callback method for when the local player dies.
-    /// </summary>
-    private void OnDeath() {
-        // If we are not connected, there is nothing to send to
-        if (!_netClient.IsConnected) {
-            return;
-        }
-
-        Logger.Debug("Client has died, sending PlayerDeath data");
-
-        // Let the server know that we have died            
-        _netClient.UpdateManager.SetDeath();
-    }
+    // /// <summary>
+    // /// Callback method for when the local player dies.
+    // /// </summary>
+    // private void OnDeath() {
+    //     // If we are not connected, there is nothing to send to
+    //     if (!_netClient.IsConnected) {
+    //         return;
+    //     }
+    //
+    //     Logger.Debug("Client has died, sending PlayerDeath data");
+    //
+    //     // Let the server know that we have died            
+    //     _netClient.UpdateManager.SetDeath();
+    // }
 
     /// <summary>
     /// Play the death animation for the player with the given ID.
@@ -921,113 +906,114 @@ internal class AnimationManager {
     /// <param name="id">The ID of the player.</param>
     /// <returns>An enumerator for the coroutine.</returns>
     private IEnumerator PlayDeathAnimation(ushort id) {
-        Logger.Debug("Starting death animation");
+        Logger.Debug($"Starting death animation for ID: {id}");
+        yield break;
 
-        // Get the player object corresponding to this ID
-        var playerObject = _playerManager.GetPlayerObject(id);
-
-        // Get the sprite animator and start playing the Death animation
-        var animator = playerObject.GetComponent<tk2dSpriteAnimator>();
-        animator.Stop();
-        animator.PlayFromFrame("Death", 0);
-
-        // Obtain the duration for the animation
-        var deathAnimationDuration = animator.GetClipByName("Death").Duration;
-
-        // After half a second we want to throw out the nail (as defined in the FSM)
-        yield return new WaitForSeconds(0.5f);
-
-        // Calculate the duration remaining until the death animation is finished
-        var remainingDuration = deathAnimationDuration - 0.5f;
-
-        // Obtain the local player object, to copy actions from
-        var localPlayerObject = HeroController.instance.gameObject;
-
-        // Get the FSM for the Hero Death
-        var heroDeathAnimFsm = localPlayerObject
-            .FindGameObjectInChildren("Hero Death")
-            .LocateMyFSM("Hero Death Anim");
-
-        // Get the nail fling object from the Blow state
-        var nailObject = heroDeathAnimFsm.GetFirstAction<FlingObjectsFromGlobalPool>("Blow");
-
-        // Spawn it relative to the player
-        var nailGameObject = nailObject.gameObject.Value.Spawn(
-            playerObject.transform.position,
-            Quaternion.Euler(Vector3.zero)
-        );
-
-        // Get the rigidbody component that we need to throw around
-        var nailRigidBody = nailGameObject.GetComponent<Rigidbody2D>();
-
-        // Get a random speed and angle and calculate the rigidbody velocity
-        var speed = Random.Range(18, 22);
-        float angle = Random.Range(50, 130);
-        var velX = speed * Mathf.Cos(angle * ((float) System.Math.PI / 180f));
-        var velY = speed * Mathf.Sin(angle * ((float) System.Math.PI / 180f));
-
-        // Set the velocity so it starts moving
-        nailRigidBody.velocity = new Vector2(velX, velY);
-
-        // Wait for the remaining duration of the death animation
-        yield return new WaitForSeconds(remainingDuration);
-
-        // Now we can disable the player object so it isn't visible anymore
-        playerObject.SetActive(false);
-
-        // Check which direction we are facing, we need this in a few variables
-        var facingRight = playerObject.transform.localScale.x > 0;
-
-        // Depending on which direction the player was facing, choose a state
-        var stateName = "Head Left";
-        if (facingRight) {
-            stateName = "Head Right";
-        }
-
-        // Obtain a head object from the either Head states and instantiate it
-        var headObject = heroDeathAnimFsm.GetFirstAction<CreateObject>(stateName);
-        var headGameObject = Object.Instantiate(
-            headObject.gameObject.Value,
-            playerObject.transform.position + new Vector3(facingRight ? 0.2f : -0.2f, -0.02f, -0.01f),
-            Quaternion.identity
-        );
-
-        // Get the rigidbody component of the head object
-        var headRigidBody = headGameObject.GetComponent<Rigidbody2D>();
-
-        // Calculate the angle at which we are going to throw 
-        var headAngle = 15f * Mathf.Cos((facingRight ? 100f : 80f) * ((float) System.Math.PI / 180f));
-
-        // Now set the velocity as this angle
-        headRigidBody.velocity = new Vector2(headAngle, headAngle);
-
-        // Finally add required torque (according to the FSM)
-        headRigidBody.AddTorque(facingRight ? 20f : -20f);
+        // // Get the player object corresponding to this ID
+        // var playerObject = _playerManager.GetPlayerObject(id);
+        //
+        // // Get the sprite animator and start playing the Death animation
+        // var animator = playerObject.GetComponent<tk2dSpriteAnimator>();
+        // animator.Stop();
+        // animator.PlayFromFrame("Death", 0);
+        //
+        // // Obtain the duration for the animation
+        // var deathAnimationDuration = animator.GetClipByName("Death").Duration;
+        //
+        // // After half a second we want to throw out the nail (as defined in the FSM)
+        // yield return new WaitForSeconds(0.5f);
+        //
+        // // Calculate the duration remaining until the death animation is finished
+        // var remainingDuration = deathAnimationDuration - 0.5f;
+        //
+        // // Obtain the local player object, to copy actions from
+        // var localPlayerObject = HeroController.instance.gameObject;
+        //
+        // // Get the FSM for the Hero Death
+        // var heroDeathAnimFsm = localPlayerObject
+        //     .FindGameObjectInChildren("Hero Death")
+        //     .LocateMyFSM("Hero Death Anim");
+        //
+        // // Get the nail fling object from the Blow state
+        // var nailObject = heroDeathAnimFsm.GetFirstAction<FlingObjectsFromGlobalPool>("Blow");
+        //
+        // // Spawn it relative to the player
+        // var nailGameObject = nailObject.gameObject.Value.Spawn(
+        //     playerObject.transform.position,
+        //     Quaternion.Euler(Vector3.zero)
+        // );
+        //
+        // // Get the rigidbody component that we need to throw around
+        // var nailRigidBody = nailGameObject.GetComponent<Rigidbody2D>();
+        //
+        // // Get a random speed and angle and calculate the rigidbody velocity
+        // var speed = Random.Range(18, 22);
+        // float angle = Random.Range(50, 130);
+        // var velX = speed * Mathf.Cos(angle * ((float) System.Math.PI / 180f));
+        // var velY = speed * Mathf.Sin(angle * ((float) System.Math.PI / 180f));
+        //
+        // // Set the velocity so it starts moving
+        // nailRigidBody.velocity = new Vector2(velX, velY);
+        //
+        // // Wait for the remaining duration of the death animation
+        // yield return new WaitForSeconds(remainingDuration);
+        //
+        // // Now we can disable the player object so it isn't visible anymore
+        // playerObject.SetActive(false);
+        //
+        // // Check which direction we are facing, we need this in a few variables
+        // var facingRight = playerObject.transform.localScale.x > 0;
+        //
+        // // Depending on which direction the player was facing, choose a state
+        // var stateName = "Head Left";
+        // if (facingRight) {
+        //     stateName = "Head Right";
+        // }
+        //
+        // // Obtain a head object from the either Head states and instantiate it
+        // var headObject = heroDeathAnimFsm.GetFirstAction<CreateObject>(stateName);
+        // var headGameObject = Object.Instantiate(
+        //     headObject.gameObject.Value,
+        //     playerObject.transform.position + new Vector3(facingRight ? 0.2f : -0.2f, -0.02f, -0.01f),
+        //     Quaternion.identity
+        // );
+        //
+        // // Get the rigidbody component of the head object
+        // var headRigidBody = headGameObject.GetComponent<Rigidbody2D>();
+        //
+        // // Calculate the angle at which we are going to throw 
+        // var headAngle = 15f * Mathf.Cos((facingRight ? 100f : 80f) * ((float) System.Math.PI / 180f));
+        //
+        // // Now set the velocity as this angle
+        // headRigidBody.velocity = new Vector2(headAngle, headAngle);
+        //
+        // // Finally add required torque (according to the FSM)
+        // headRigidBody.AddTorque(facingRight ? 20f : -20f);
     }
 
-    /// <summary>
-    /// Callback method on the HeroController#RelinquishControl method.
-    /// </summary>
-    /// <param name="self">The HeroController instance.</param>
-    private void HeroControllerOnRelinquishControl(HeroController self) {
-        // If we are not connected, there is no need to send
-        if (!_netClient.IsConnected) {
-            return;
-        }
-    
-        // If we need to stop sending until a scene change occurs, we skip
-        if (_stopSendingAnimationUntilSceneChange) {
-            return;
-        }
-    
-        // If the player has not sent the end of the crystal dash animation then we need to do it now,
-        // because crystal dash is cancelled when relinquishing control
-        if (!_hasSentCrystalDashEnd) {
-            // _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.SDAirBrake);
-        }
-    
-        // _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.DashEnd);
-    }
+    // /// <summary>
+    // /// Callback method on the HeroController#RelinquishControl method.
+    // /// </summary>
+    // /// <param name="self">The HeroController instance.</param>
+    // private void HeroControllerOnRelinquishControl(HeroController self) {
+    //     // If we are not connected, there is no need to send
+    //     if (!_netClient.IsConnected) {
+    //         return;
+    //     }
+    //
+    //     // If we need to stop sending until a scene change occurs, we skip
+    //     if (_stopSendingAnimationUntilSceneChange) {
+    //         return;
+    //     }
+    //
+    //     // If the player has not sent the end of the crystal dash animation then we need to do it now,
+    //     // because crystal dash is cancelled when relinquishing control
+    //     if (!_hasSentCrystalDashEnd) {
+    //         // _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.SDAirBrake);
+    //     }
+    //
+    //     // _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.DashEnd);
+    // }
 
     /// <summary>
     /// Get the AnimationClip enum value for the currently playing animation of the local player.

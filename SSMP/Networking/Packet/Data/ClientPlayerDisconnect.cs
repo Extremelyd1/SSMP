@@ -7,7 +7,7 @@ internal class ClientPlayerDisconnect : GenericClientData {
     /// <summary>
     /// The username of the player that disconnected.
     /// </summary>
-    public string Username { get; set; }
+    public string Username { get; set; } = null!;
 
     /// <summary>
     /// Whether the player timed out or disconnected normally.

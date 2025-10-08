@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Linq;
 using System.Reflection;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
@@ -49,22 +48,22 @@ internal static class TextureManager {
     /// <summary>
     /// The radio button toggle sprite.
     /// </summary>
-    public static Sprite RadioButtonToggle;
+    public static Sprite RadioButtonToggle = null!;
 
     /// <summary>
     /// The checkbox toggle sprite.
     /// </summary>
-    public static Sprite CheckBoxToggle;
+    public static Sprite CheckBoxToggle = null!;
 
     /// <summary>
     /// The HKMP logo sprite.
     /// </summary>
-    public static Sprite HkmpLogo;
+    public static Sprite HkmpLogo = null!;
 
     /// <summary>
     /// The network icon sprite.
     /// </summary>
-    public static Sprite NetworkIcon;
+    public static Sprite NetworkIcon = null!;
 
     /// <summary>
     /// Load texture by searching for the embedded resources in the assembly.
@@ -86,7 +85,7 @@ internal static class TextureManager {
                     var splitName = name.Split('.');
                     var textureName = splitName[splitName.Length - 2];
 
-                    Stream textureDataStream;
+                    Stream? textureDataStream;
                     try {
                         textureDataStream = Assembly.GetExecutingAssembly()
                             .GetManifestResourceStream(ImagePathPrefix + textureName + TextureDataSuffix);
@@ -148,9 +147,9 @@ internal static class TextureManager {
     /// </summary>
     /// <param name="manifestResourceName">The name of the manifest resource.</param>
     /// <returns>The Texture2D instance if it could be loaded; otherwise null.</returns>
-    private static Texture2D GetTextureFromManifestResource(string manifestResourceName) {
+    private static Texture2D? GetTextureFromManifestResource(string manifestResourceName) {
         // Get the texture stream from assembly by name
-        Stream textureStream;
+        Stream? textureStream;
 
         try {
             textureStream = Assembly.GetExecutingAssembly().GetManifestResourceStream(manifestResourceName);
@@ -166,19 +165,23 @@ internal static class TextureManager {
         }
 
         // Read texture stream to byte buffer
-        var byteBuffer = new byte[textureStream.Length];
+        var readBuffer = new byte[textureStream.Length];
+        int numReadBytes;
 
         try {
-            textureStream.Read(byteBuffer, 0, byteBuffer.Length);
+            numReadBytes = textureStream.Read(readBuffer, 0, readBuffer.Length);
         } catch (Exception e) {
             Logger.Error(
                 $"Could not read resource stream for texture with name \"{manifestResourceName}\":\n{e}");
             return null;
         }
 
+        var textureBuffer = new byte[numReadBytes];
+        Array.Copy(readBuffer, textureBuffer, numReadBytes);
+
         // Create texture object and load buffer into texture
         var texture = new Texture2D(1, 1);
-        texture.LoadImage(byteBuffer.ToArray(), true);
+        texture.LoadImage(textureBuffer, true);
 
         return texture;
     }

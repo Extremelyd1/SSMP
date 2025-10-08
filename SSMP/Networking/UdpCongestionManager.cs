@@ -2,7 +2,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using SSMP.Logging;
-using SSMP.Networking.Packet;
 using SSMP.Networking.Packet.Update;
 
 namespace SSMP.Networking;
@@ -321,12 +320,12 @@ internal class SentPacket<TPacket, TPacketId>
     /// <summary>
     /// The packet that was sent.
     /// </summary>
-    public TPacket Packet { get; set; }
+    public required TPacket Packet { get; init; }
 
     /// <summary>
     /// The stopwatch keeping track of the time it takes for the packet to get acknowledged.
     /// </summary>
-    public Stopwatch Stopwatch { get; set; }
+    public required Stopwatch Stopwatch { get; init; }
 
     /// <summary>
     /// Whether the sent packet was marked as lost because it took too long to get an acknowledgement.

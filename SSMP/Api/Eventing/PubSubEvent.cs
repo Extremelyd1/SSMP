@@ -23,6 +23,10 @@ public class PubSubEvent<TPayload> : InterEvent {
     /// </summary>
     /// <param name="payload">The payload to publish.</param>
     public void Publish(TPayload payload) {
+        if (payload == null) {
+            throw new Exception("Cannot publish event with null payload");
+        }
+
         PublishInternal(payload);
     }
 }

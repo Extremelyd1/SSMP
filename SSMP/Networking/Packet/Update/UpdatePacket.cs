@@ -308,7 +308,7 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
         
         // Iteratively add the resent packet data, but make sure to merge it with existing data
         foreach (var resentPacketData in ResendPacketData.Values) {
-            AddResendData(resentPacketData, CachedAllPacketData);
+            AddResendData(resentPacketData, CachedAllPacketData!);
         }
         
         // Iteratively add the resent addon data, but make sure to merge it with existing data
@@ -317,7 +317,7 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
                 var addonId = addonIdDataPair.Key;
                 var addonPacketData = addonIdDataPair.Value;
 
-                if (CachedAllAddonData.TryGetValue(addonId, out var existingAddonPacketData)) {
+                if (CachedAllAddonData!.TryGetValue(addonId, out var existingAddonPacketData)) {
                     AddResendData(addonPacketData.PacketData, existingAddonPacketData.PacketData);
                 } else {
                     CachedAllAddonData[addonId] = addonPacketData;

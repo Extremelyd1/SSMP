@@ -33,22 +33,22 @@ internal class NetClient : INetClient {
     /// <summary>
     /// Event that is called when the client connects to a server.
     /// </summary>
-    public event Action<ServerInfo> ConnectEvent;
+    public event Action<ServerInfo>? ConnectEvent;
 
     /// <summary>
     /// Event that is called when the client fails to connect to a server.
     /// </summary>
-    public event Action<ConnectionFailedResult> ConnectFailedEvent;
+    public event Action<ConnectionFailedResult>? ConnectFailedEvent;
 
     /// <summary>
     /// Event that is called when the client disconnects from a server.
     /// </summary>
-    public event Action DisconnectEvent;
+    public event Action? DisconnectEvent;
 
     /// <summary>
     /// Event that is called when the client times out from a connection.
     /// </summary>
-    public event Action TimeoutEvent;
+    public event Action? TimeoutEvent;
 
     /// <summary>
     /// The connection status of the client.
@@ -80,7 +80,7 @@ internal class NetClient : INetClient {
     /// <summary>
     /// Byte array containing received data that was not included in a packet object yet.
     /// </summary>
-    private byte[] _leftoverData;
+    private byte[]? _leftoverData;
 
     /// <summary>
     /// Construct the net client with the given packet manager.
@@ -262,7 +262,7 @@ internal class NetClient : INetClient {
             throw new NotImplementedException("Unknown connection result in server info");
         }
         
-        UpdateManager?.StopUpdates();
+        UpdateManager.StopUpdates();
 
         ConnectionStatus = ClientConnectionStatus.NotConnected;
         
@@ -343,7 +343,7 @@ internal class NetClient : INetClient {
             throw new InvalidOperationException("Addon has not requested network access through property");
         }
 
-        ClientAddonNetworkReceiver<TPacketId> networkReceiver = null;
+        ClientAddonNetworkReceiver<TPacketId>? networkReceiver = null;
 
         // Check whether an existing network receiver exists
         if (addon.NetworkReceiver == null) {
@@ -356,6 +356,6 @@ internal class NetClient : INetClient {
 
         networkReceiver?.AssignAddonPacketInfo(packetInstantiator);
 
-        return addon.NetworkReceiver as IClientAddonNetworkReceiver<TPacketId>;
+        return (addon.NetworkReceiver as IClientAddonNetworkReceiver<TPacketId>)!;
     }
 }

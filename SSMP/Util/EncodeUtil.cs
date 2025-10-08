@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Linq;
 using SSMP.Collection;
 using SSMP.Game.Client.Save;
 using SSMP.Game.Server.Save;
-using SSMP.Logging;
 using SSMP.Math;
 using SSMP.Serialization;
 using Logger = SSMP.Logging.Logger;
@@ -31,7 +32,11 @@ public static class EncodeUtil {
     static EncodeUtil() {
         StringIndices = new BiLookup<string?, ushort>();
         
-        List<string?> strings = FileUtil.LoadObjectFromEmbeddedJson<List<string>>(StringDataFilePath);
+        var strings = FileUtil.LoadObjectFromEmbeddedJson<List<string?>>(StringDataFilePath);
+        if (strings == null) {
+            throw new InvalidDataException("Could not deserialize strings from embedded JSON");
+        }
+        
         ushort index = 0;
         foreach (var str in strings) {
             StringIndices.Add(str, index++);
@@ -84,7 +89,7 @@ public static class EncodeUtil {
     /// <param name="index">The string.</param>
     /// <param name="sceneName">The string or default if the string index could not be found.</param>
     /// <returns>true if there is a corresponding string for the given index, false otherwise.</returns>
-    public static bool TryGetStringName(ushort index, out string? sceneName) {
+    public static bool TryGetStringName(ushort index, [MaybeNullWhen(false)] out string sceneName) {
         return StringIndices.TryGetValue(index, out sceneName);
     }
     
@@ -200,6 +205,10 @@ public static class EncodeUtil {
             return byteArray;
         }
 
+        if (value == null) {
+            throw new ArgumentException($"No encoding implementation for value null");
+        }
+
         throw new ArgumentException($"No encoding implementation for type: {value.GetType()}");
 
         // To preserve network bandwidth, we encode known strings into indices, since there is a limited number of
@@ -233,6 +242,10 @@ public static class EncodeUtil {
     /// the value that should be decoded from it.</exception>
     /// <exception cref="ArgumentException">Thrown when the value can not be decoded for another reason.</exception>
     public static object? DecodeSaveDataValue(string? name, byte[] encodedValue) {
+        if (name == null) {
+            return null;
+        }
+        
         if (!SaveDataMapping.Instance.PlayerDataVarProperties.TryGetValue(name, out var varProps)) {
             throw new InvalidOperationException($"Could not decode save data value with name: \"{name}\", missing variable properties");
         }
@@ -369,7 +382,7 @@ public static class EncodeUtil {
         throw new ArgumentException($"Could not decode type: {type}");
         
         // Decode a string from the given byte array and start index in that array
-        string? DecodeString(byte[] encoded, int startIndex) {
+        string DecodeString(byte[] encoded, int startIndex) {
             var sceneIndex = BitConverter.ToUInt16(encoded, startIndex);
 
             if (!TryGetStringName(sceneIndex, out var value)) {
@@ -433,7 +446,12 @@ public static class EncodeUtil {
             try {
                 encodedValue = EncodeSaveDataValue(decodedObject);
             } catch (Exception e) {
-                Logger.Warn($"Could not encode save data value of type: {decodedObject.GetType()}, exception:\n{e}");
+                if (decodedObject == null) {
+                    Logger.Warn($"Could not encode null save data value, exception:\n{e}");
+                } else {
+                    Logger.Warn($"Could not encode save data value of type: {decodedObject.GetType()}, exception:\n{e}");
+                }
+
                 return;
             }
 

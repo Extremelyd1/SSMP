@@ -26,7 +26,7 @@ internal class SliceAckData : IPacketData {
     /// the number of slices. For reading packets, the length of the array will equal the maximum possible number
     /// of slices per chunk.
     /// </summary>
-    public bool[] Acked { get; set; }
+    public bool[] Acked { get; set; } = null!;
 
     /// <inheritdoc />
     public void WriteData(IPacket packet) {

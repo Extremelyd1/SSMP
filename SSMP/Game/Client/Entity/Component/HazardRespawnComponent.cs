@@ -4,6 +4,9 @@ using SSMP.Networking.Packet.Data;
 using SSMP.Util;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
+// ReSharper disable UnusedMember.Local
+#pragma warning disable CS8601 // Possible null reference assignment.
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
 
 namespace SSMP.Game.Client.Entity.Component;
 
@@ -88,10 +91,10 @@ internal class HazardRespawnComponent : EntityComponent {
         // On.HazardRespawnTrigger.OnTriggerEnter2D += HazardRespawnTriggerOnTriggerEnter2D;
     }
 
-    /// <summary>
-    /// Hook for the "OnTriggerEnter2D" method of HazardRespawnTrigger to network that a certain hazard respawn trigger
-    /// has been reached.
-    /// </summary>
+    // /// <summary>
+    // /// Hook for the "OnTriggerEnter2D" method of HazardRespawnTrigger to network that a certain hazard respawn trigger
+    // /// has been reached.
+    // /// </summary>
     // private void HazardRespawnTriggerOnTriggerEnter2D(
     //     On.HazardRespawnTrigger.orig_OnTriggerEnter2D orig, 
     //     HazardRespawnTrigger self, 

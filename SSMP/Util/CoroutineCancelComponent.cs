@@ -10,11 +10,7 @@ internal class CoroutineCancelComponent : MonoBehaviour {
     /// <summary>
     /// Dictionary mapping string IDs to coroutines.
     /// </summary>
-    private Dictionary<string, Coroutine> _activeCoroutines;
-
-    public void Awake() {
-        _activeCoroutines = new Dictionary<string, Coroutine>();
-    }
+    private readonly Dictionary<string, Coroutine> _activeCoroutines = new();
 
     /// <summary>
     /// Add a coroutine with the given ID.
@@ -34,11 +30,11 @@ internal class CoroutineCancelComponent : MonoBehaviour {
     /// </summary>
     /// <param name="id">The ID of the coroutine to cancel.</param>
     public void CancelCoroutine(string id) {
-        if (!_activeCoroutines.ContainsKey(id)) {
+        if (!_activeCoroutines.TryGetValue(id, out var coroutine)) {
             return;
         }
 
-        StopCoroutine(_activeCoroutines[id]);
+        StopCoroutine(coroutine);
         _activeCoroutines.Remove(id);
     }
 }

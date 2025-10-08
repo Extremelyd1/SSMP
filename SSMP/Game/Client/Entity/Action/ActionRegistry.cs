@@ -1,10 +1,12 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using HutongGames.PlayMaker;
 using Newtonsoft.Json;
-using SSMP.Logging;
 using SSMP.Util;
 using Logger = SSMP.Logging.Logger;
+// ReSharper disable ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
 
 namespace SSMP.Game.Client.Entity.Action; 
 
@@ -23,10 +25,9 @@ internal static class ActionRegistry {
     private static List<ActionRegistryEntry> Entries { get; }
 
     static ActionRegistry() {
-        Entries = FileUtil.LoadObjectFromEmbeddedJson<List<ActionRegistryEntry>>(ActionRegistryFilePath);
-        if (Entries == null) {
-            Logger.Warn("Could not load action registry");
-        }
+        var loadedEntries = FileUtil.LoadObjectFromEmbeddedJson<List<ActionRegistryEntry>>(ActionRegistryFilePath);
+
+        Entries = loadedEntries ?? throw new InvalidDataException("Could not deserialize entries from embedded JSON");
     }
 
     /// <summary>

@@ -33,7 +33,8 @@ internal class LoginResponse : IPacketData {
     /// Construct the login response data.
     /// </summary>
     public LoginResponse() {
-        AddonData = new List<AddonData>();
+        AddonData = [];
+        AddonOrder = [];
     }
 
     /// <inheritdoc />

@@ -2,6 +2,7 @@ using SSMP.Networking.Client;
 using SSMP.Networking.Packet.Data;
 using SSMP.Util;
 using UnityEngine;
+#pragma warning disable CS0618 // Type or member is obsolete
 
 namespace SSMP.Game.Client.Entity.Component;
 

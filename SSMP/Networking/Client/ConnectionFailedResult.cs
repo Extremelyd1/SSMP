@@ -20,7 +20,7 @@ internal class ConnectionInvalidAddonsResult : ConnectionFailedResult {
     /// <summary>
     /// The list of addon data that the server uses to compare against for clients.
     /// </summary>
-    public List<AddonData> AddonData { get; init; }
+    public required List<AddonData> AddonData { get; init; }
 }
 
 /// <summary>
@@ -30,7 +30,7 @@ internal class ConnectionFailedMessageResult : ConnectionFailedResult {
     /// <summary>
     /// The string message that describes the reason the connection failed.
     /// </summary>
-    public string Message { get; init; }
+    public required string Message { get; init; }
 }
 
 /// <summary>

@@ -4,6 +4,10 @@ using SSMP.Networking.Client;
 using SSMP.Networking.Packet.Data;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
+// ReSharper disable UnusedVariable
+#pragma warning disable CS8604 // Possible null reference argument.
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
 
 namespace SSMP.Game.Client.Entity.Component;
 

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
@@ -32,7 +33,9 @@ internal class SaveDataMapping {
     public static SaveDataMapping Instance {
         get {
             if (_instance == null) {
-                _instance = FileUtil.LoadObjectFromEmbeddedJson<SaveDataMapping>(SaveDataFilePath);
+                var loadedInstance = FileUtil.LoadObjectFromEmbeddedJson<SaveDataMapping>(SaveDataFilePath);
+
+                _instance = loadedInstance ?? throw new InvalidDataException("Could not load save data mapping from embedded JSON");
                 _instance.Initialize();
             }
 

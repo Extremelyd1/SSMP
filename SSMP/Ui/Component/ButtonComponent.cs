@@ -37,7 +37,7 @@ internal class ButtonComponent : Component, IButtonComponent {
     /// <summary>
     /// The action that is executed when the button is pressed.
     /// </summary>
-    private Action _onPress;
+    private Action? _onPress;
 
     /// <summary>
     /// Whether the button is interactable (i.e. can be pressed).
@@ -124,27 +124,27 @@ internal class ButtonComponent : Component, IButtonComponent {
         _isMouseDown = false;
         _isHover = false;
 
-        AddEventTrigger(eventTrigger, EventTriggerType.PointerEnter, data => {
+        AddEventTrigger(eventTrigger, EventTriggerType.PointerEnter, _ => {
             _isHover = true;
 
             if (_interactable) {
                 _image.sprite = bgSprite.Hover;
             }
         });
-        AddEventTrigger(eventTrigger, EventTriggerType.PointerExit, data => {
+        AddEventTrigger(eventTrigger, EventTriggerType.PointerExit, _ => {
             _isHover = false;
             if (_interactable && !_isMouseDown) {
                 _image.sprite = bgSprite.Neutral;
             }
         });
-        AddEventTrigger(eventTrigger, EventTriggerType.PointerDown, data => {
+        AddEventTrigger(eventTrigger, EventTriggerType.PointerDown, _ => {
             _isMouseDown = true;
 
             if (_interactable) {
                 _image.sprite = bgSprite.Active;
             }
         });
-        AddEventTrigger(eventTrigger, EventTriggerType.PointerUp, data => {
+        AddEventTrigger(eventTrigger, EventTriggerType.PointerUp, _ => {
             _isMouseDown = false;
 
             if (_interactable) {

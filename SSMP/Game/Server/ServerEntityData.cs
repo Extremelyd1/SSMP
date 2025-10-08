@@ -55,7 +55,7 @@ internal class ServerEntityData {
 
     public ServerEntityData() {
         Scale = new EntityUpdate.ScaleData();
-        GenericData = new List<EntityNetworkData>();
+        GenericData = [];
         HostFsmData = new Dictionary<byte, EntityHostFsmData>();
     }
 }

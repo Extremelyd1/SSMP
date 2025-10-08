@@ -17,24 +17,24 @@ internal class ClientInfo : IPacketData {
     /// <summary>
     /// The username of the client.
     /// </summary>
-    public string Username { get; set; }
+    public string Username { get; set; } = null!;
 
     /// <summary>
     /// The authentication key of the client.
     /// </summary>
-    public string AuthKey { get; set; }
+    public string AuthKey { get; set; } = null!;
 
     /// <summary>
     /// A list of addon data of the client.
     /// </summary>
-    public List<AddonData> AddonData { get; set; }
+    public List<AddonData>? AddonData { get; set; }
 
     /// <inheritdoc />
     public void WriteData(IPacket packet) {
         packet.Write(Username);
         packet.Write(AuthKey);
 
-        AddonData ??= new List<AddonData>();
+        AddonData ??= [];
 
         var addonDataLength = (byte) System.Math.Min(byte.MaxValue, AddonData.Count);
 
@@ -101,7 +101,7 @@ internal class AddonData : IEquatable<AddonData> {
     }
 
     /// <inheritdoc/>
-    public override bool Equals(object obj) {
+    public override bool Equals(object? obj) {
         if (ReferenceEquals(null, obj)) {
             return false;
         }
@@ -120,8 +120,7 @@ internal class AddonData : IEquatable<AddonData> {
     /// <inheritdoc/>
     public override int GetHashCode() {
         unchecked {
-            return ((Identifier != null ? Identifier.GetHashCode() : 0) * 397) ^
-                   (Version != null ? Version.GetHashCode() : 0);
+            return Identifier.GetHashCode() * 397 ^ Version.GetHashCode();
         }
     }
 }

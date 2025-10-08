@@ -71,7 +71,7 @@ internal class ClientTlsClient(TlsCrypto crypto) : AbstractTlsClient(crypto) {
         /// <inheritdoc />
         /// <param name="serverCertificate">The server certificate instance.</param>
         public void NotifyServerCertificate(TlsServerCertificate serverCertificate) {
-            if (serverCertificate?.Certificate == null || serverCertificate.Certificate.IsEmpty) {
+            if (serverCertificate.Certificate == null || serverCertificate.Certificate.IsEmpty) {
                 throw new TlsFatalAlert(AlertDescription.bad_certificate);
             }
             
@@ -89,7 +89,7 @@ internal class ClientTlsClient(TlsCrypto crypto) : AbstractTlsClient(crypto) {
         /// provide client-side credentials, so we return null.
         /// </summary>
         /// <inheritdoc />
-        public TlsCredentials GetClientCredentials(CertificateRequest certificateRequest) {
+        public TlsCredentials? GetClientCredentials(CertificateRequest certificateRequest) {
             // TODO: provide means for a client to have certificate and return it in this method
             return null;
         }

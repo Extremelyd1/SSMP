@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using SSMP.Api.Eventing.ServerEvents;
 using SSMP.Game.Settings;
 using SSMP.Networking.Packet.Data;
@@ -25,7 +26,7 @@ public interface IServerManager {
     /// </summary>
     /// <param name="id">The ID of the player.</param>
     /// <returns>The player with the given ID, or null if no such player exists.</returns>
-    IServerPlayer GetPlayer(ushort id);
+    IServerPlayer? GetPlayer(ushort id);
 
     /// <summary>
     /// Try to get a specific player by their ID.
@@ -33,7 +34,7 @@ public interface IServerManager {
     /// <param name="id">The ID of the player.</param>
     /// <param name="player">The parameter that will contain the player if it exists.</param>
     /// <returns>True if the player was found, false otherwise.</returns>
-    bool TryGetPlayer(ushort id, out IServerPlayer player);
+    bool TryGetPlayer(ushort id, [MaybeNullWhen(false)] out IServerPlayer player);
 
     /// <summary>
     /// Send a message to the player with the given ID.

@@ -114,15 +114,15 @@ internal abstract class UdpDatagramTransport : DatagramTransport {
     /// Cleanup login for when this transport channel should be closed.
     /// </summary>
     public void Close() {
-        _cancellationTokenSource?.Cancel();
+        _cancellationTokenSource.Cancel();
     }
     
     /// <summary>
     /// Dispose of the underlying unmanaged resources.
     /// </summary>
     public void Dispose() {
-        _cancellationTokenSource?.Dispose();
-        ReceivedDataCollection?.Dispose();
+        _cancellationTokenSource.Dispose();
+        ReceivedDataCollection.Dispose();
     }
     
     /// <summary>
@@ -133,10 +133,10 @@ internal abstract class UdpDatagramTransport : DatagramTransport {
         /// <summary>
         /// Byte array containing the data.
         /// </summary>
-        public byte[] Buffer { get; set; }
+        public required byte[] Buffer { get; set; }
         /// <summary>
         /// The number of bytes in the buffer.
         /// </summary>
-        public int Length { get; set; }
+        public required int Length { get; set; }
     }
 }
