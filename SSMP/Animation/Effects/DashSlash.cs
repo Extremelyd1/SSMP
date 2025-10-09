@@ -26,8 +26,6 @@ internal class DashSlash : SlashBase {
         var sprintFsm = HeroController.instance.sprintFSM;
 
         if (crestType == CrestType.Hunter) {
-            Logger.Info("DashSlash animation effect crest type Hunter, 1");
-            
             var configGroup = HeroController.instance.configs[0];
             var dashStabNailAttackPrefab = configGroup.DashStab.GetComponent<DashStabNailAttack>();
             
@@ -39,7 +37,6 @@ internal class DashSlash : SlashBase {
 
             var slashParent = new GameObject("Dash Slash Parent");
             slashParent.transform.SetParent(playerAttacks.transform);
-            slashParent.SetActive(false);
             slashParent.transform.localPosition = Vector3.zero;
             slashParent.transform.localScale = Vector3.one;
 
@@ -51,11 +48,6 @@ internal class DashSlash : SlashBase {
             var anim = slashObj.GetComponent<tk2dSpriteAnimator>();
             var scale = dashStab.scale;
             
-            Logger.Info("DashSlash animation effect crest type Hunter, 2");
-
-            // When equipping the Hunter crest the tk2dAnimationClip is set in the sprite animator for the dash slash
-            // object in the crest
-
             // Play frame 0 of animator
             anim.PlayFromFrame(0);
 
@@ -70,8 +62,6 @@ internal class DashSlash : SlashBase {
 
             // TODO: Nail imbuement (see OnPlaySlash in NailAttackBase.cs)
             
-            Logger.Info("DashSlash animation effect crest type Hunter, 3");
-            
             // Activate game object in ActivateGameObject action in "Witch?" state
 
             MonoBehaviourUtil.Instance.StartCoroutine(DestroyAfterTime(slashParent, 0.2f));
@@ -81,10 +71,7 @@ internal class DashSlash : SlashBase {
             
             // TODO: Add charged dash stab/slash, see alternative states in Sprint FSM for Architect/Toolmaster
             var playAudioEvent = sprintFsm.GetFirstAction<PlayAudioEvent>("Drill Attack Unch");
-            if (playAudioEvent == null) {
-                return;
-            }
-            
+
             AudioUtil.PlayAudioEventAtPlayerObject(playAudioEvent, playerObject);
         }
     }
@@ -117,7 +104,5 @@ internal class DashSlash : SlashBase {
         yield return new WaitForSeconds(time);
 
         Object.Destroy(obj);
-        
-        Logger.Info("DashSlash animation effect crest type Hunter, 4");
     }
 }

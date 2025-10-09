@@ -70,6 +70,8 @@ internal class AnimationManager {
         { "Idle To Run", AnimationClip.IdleToRun },
         { "Turn", AnimationClip.Turn },
         { "Dash", AnimationClip.Dash },
+        { "Dash Down", AnimationClip.DashDown },
+        { "Dash Down Land", AnimationClip.DashDownLand },
         { "Sprint Lv2", AnimationClip.SprintLv2 },
         { "Mantle Cling", AnimationClip.MantleCling },
         { "Mantle Land", AnimationClip.MantleLand },
@@ -297,7 +299,6 @@ internal class AnimationManager {
         { AnimationClip.WandererDashAttack, new Slash(SlashBase.SlashType.Dash) },
         { AnimationClip.WandererDashAttackAlt, new Slash(SlashBase.SlashType.DashAlt) },
         { AnimationClip.DashAttackCharge, DashSlashAntic },
-        
     };
     // TODO: implement all animation effects for sprint slashes (dash slashes/stabs). See Sprint FSM in shared templates
 
@@ -814,33 +815,37 @@ internal class AnimationManager {
         if (!localPlayer) {
             return;
         }
-    
+
         var spriteAnimator = localPlayer.GetComponent<tk2dSpriteAnimator>();
         if (self != spriteAnimator) {
             return;
         }
-    
+
         if (start == last) {
             return;
         }
-    
+
         var num = last + direction;
         var frames = self.CurrentClip.frames;
-    
-        var ignoreClipNames = new[] { "v3 Down Slash", "DownSpike", "DownSlash" };
-    
+
+        var allowedClipNames = new[] { "" };
+
         for (var i = start + direction; i != num; i += direction) {
             if (i >= frames.Length || i < 0) {
                 Logger.Warn("tk2dSpriteAnimator ProcessEvents index out of bounds!");
                 continue;
             }
 
-            if (i != 0 && !frames[i].triggerEvent || ignoreClipNames.Contains(self.CurrentClip.name)) {
+            if (i != 0 && !frames[i].triggerEvent) {
                 continue;
             }
-    
+
+            // if (!allowedClipNames.Contains(self.CurrentClip.name)) {
+            //     continue;
+            // }
+        
             if (_debugLogAnimations) Logger.Info($"OnAnimationEvent from tk2dSpriteAnimatorOnProcessEvents: {self.CurrentClip.name}, conditions: {i}, {frames[i].triggerEvent}");
-            OnAnimationEvent(self.CurrentClip);
+            // OnAnimationEvent(self.CurrentClip);
         }
     }
 

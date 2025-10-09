@@ -140,16 +140,30 @@ internal abstract class SlashBase : ParryableEffect {
         // and use the attack gameObject as transform reference
         var slashObj = Object.Instantiate(nailAttackBase.gameObject, slashParent.transform);
 
-        var slash = slashObj.GetComponent<NailSlash>();
+        var nailSlash = slashObj.GetComponent<NailSlash>();
+        var downSpike = slashObj.GetComponent<Downspike>();
         var heroDownAttack = slashObj.GetComponent<HeroDownAttack>();
         var audio = slashObj.GetComponent<AudioSource>();
         var poly = slashObj.GetComponent<PolygonCollider2D>();
         var mesh = slashObj.GetComponent<MeshRenderer>();
         var anim = slashObj.GetComponent<tk2dSpriteAnimator>();
-        var animName = slash.animName;
-        var scale = slash.scale;
 
-        Object.DestroyImmediate(slash);
+        string animName;
+        Vector3 scale;
+        if (nailSlash != null) {
+            animName = nailSlash.animName;
+            scale = nailSlash.scale;
+
+            Object.DestroyImmediate(nailSlash);
+        } else if (downSpike != null) {
+            animName = downSpike.animName;
+            scale = downSpike.scale;
+
+            Object.DestroyImmediate(downSpike);
+        } else {
+            throw new InvalidOperationException("Both NailSlash and Downspike are null components on slash object");
+        }
+
         // For some attacks in crests, down slashes and down spikes, this component exists which will interfere
         // So we destroy it immediately
         if (heroDownAttack) {
@@ -190,6 +204,10 @@ internal abstract class SlashBase : ParryableEffect {
         } else {
             // This method is in the else for the Shaman crest check, because Shaman crest handles Longclaw differently
             ApplyLongclawMultiplier(longclaw, type, slashObj, scale);
+        }
+
+        if (ServerSettings.IsPvpEnabled && ShouldDoDamage) {
+            AddDamageHeroComponent(slashObj);
         }
         
         // TODO: nail imbued from NailAttackBase
@@ -257,6 +275,13 @@ internal abstract class SlashBase : ParryableEffect {
             case SlashType.DownSpike:
                 return GetPropertyFromConfigGroup(configGroup, overrideGroup, group => group.Downspike);
             case SlashType.Dash:
+                if (crestType == CrestType.Reaper) {
+                    return GetNailSlashInCrestObjectFromName(
+                        configGroup,
+                        "DashUpper Slash"
+                    );
+                }
+
                 return GetPropertyFromConfigGroup<NailAttackBase>(
                     configGroup, 
                     overrideGroup, 

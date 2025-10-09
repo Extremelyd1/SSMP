@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Events;
 
 namespace SSMP.Animation;
 
@@ -23,5 +24,17 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
     /// <param name="shouldDoDamage">The new boolean value.</param>
     public void SetShouldDoDamage(bool shouldDoDamage) {
         ShouldDoDamage = shouldDoDamage;
+    }
+
+    /// <summary>
+    /// Adds a <see cref="DamageHero"/> component to the given game object that deals the given damage when the player
+    /// collides with it.
+    /// </summary>
+    /// <param name="target">The target game object to attach the component to.</param>
+    /// <param name="damage">The number of mask of damage it should deal.</param>
+    protected static void AddDamageHeroComponent(GameObject target, int damage = 1) {
+        var damageHero = target.AddComponent<DamageHero>();
+        damageHero.damageDealt = damage;
+        damageHero.OnDamagedHero = new UnityEvent();
     }
 }
