@@ -21,6 +21,8 @@ internal enum AnimationClip {
     IdleToRun,
     Turn,
     Dash,
+    DashDown,
+    DashDownLand,
     SprintLv2,
     MantleCling,
     MantleLand,
