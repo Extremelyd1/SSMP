@@ -12,6 +12,19 @@ namespace SSMP.Animation.Effects;
 /// Witch, or Architect crest equipped.
 /// </summary>
 internal class DashSlash : SlashBase {
+    /// <summary>
+    /// The dash slash type for the dash slash animation effect.
+    /// </summary>
+    private readonly DashSlashType _dashSlashType;
+
+    /// <summary>
+    /// Construct the dash slash animation effect for the given dash slash type.
+    /// </summary>
+    /// <param name="dashSlashType">The dash slash type.</param>
+    public DashSlash(DashSlashType dashSlashType) {
+        _dashSlashType = dashSlashType;
+    }
+
     /// <inheritdoc/>
     public override void Play(GameObject playerObject, byte[]? effectInfo) {
         if (effectInfo == null || effectInfo.Length < 1) {
@@ -25,10 +38,39 @@ internal class DashSlash : SlashBase {
 
         var sprintFsm = HeroController.instance.sprintFSM;
 
-        if (crestType == CrestType.Hunter) {
-            var configGroup = HeroController.instance.configs[0];
-            var dashStabNailAttackPrefab = configGroup.DashStab.GetComponent<DashStabNailAttack>();
-            
+        if (crestType is CrestType.Hunter or CrestType.Witch) {
+            DashStabNailAttack? dashStabNailAttackPrefab;
+
+            if (crestType is CrestType.Hunter) {
+                var configGroup = HeroController.instance.configs[0];
+                dashStabNailAttackPrefab = configGroup.DashStab.GetComponent<DashStabNailAttack>();
+            } else {
+                var configGroup = HeroController.instance.configs[6];
+                var dashStabParent = configGroup.DashStab;
+                if (dashStabParent == null) {
+                    Logger.Warn("Dash Stab Parent is null for DashSlash animation effect for Witch crest");
+                    return;
+                }
+                
+                if (_dashSlashType == DashSlashType.Witch1) {
+                    dashStabNailAttackPrefab = dashStabParent
+                        .FindGameObjectInChildren("Dash Stab 1")?
+                        .GetComponent<DashStabNailAttack>();
+                } else if (_dashSlashType == DashSlashType.Witch2) {
+                    dashStabNailAttackPrefab = dashStabParent
+                        .FindGameObjectInChildren("Dash Stab 2")?
+                        .GetComponent<DashStabNailAttack>();
+                } else {
+                    Logger.Warn("DashSlashType for DashSlash animation effect is incompatible for Witch crest");
+                    return;
+                }
+            }
+
+            if (dashStabNailAttackPrefab == null) {
+                Logger.Warn("Prefab for DashStabNailAttack is null for DashSlash animation effect");
+                return;
+            }
+
             var playerAttacks = playerObject.FindGameObjectInChildren("Attacks");
             if (playerAttacks == null) {
                 Logger.Warn("Player object does not have player attacks child, cannot play dash slash");
@@ -104,5 +146,17 @@ internal class DashSlash : SlashBase {
         yield return new WaitForSeconds(time);
 
         Object.Destroy(obj);
+    }
+
+    /// <summary>
+    /// Enumeration of dash slash types.
+    /// </summary>
+    public enum DashSlashType {
+        /// <summary>
+        /// Shared type used for both Hunter and Architect crests.
+        /// </summary>
+        Shared,
+        Witch1,
+        Witch2
     }
 }

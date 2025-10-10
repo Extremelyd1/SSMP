@@ -282,6 +282,20 @@ internal abstract class SlashBase : ParryableEffect {
                     );
                 }
 
+                if (crestType == CrestType.Beast) {
+                    return GetNailSlashInCrestObjectFromName(
+                        configGroup,
+                        isInBeastRageMode ? "DashSlash Rage" : "DashSlash"
+                    );
+                }
+
+                if (crestType == CrestType.Shaman) {
+                    return GetNailSlashInCrestObjectFromName(
+                        configGroup,
+                        "DashSlash"
+                    );
+                }
+
                 return GetPropertyFromConfigGroup<NailAttackBase>(
                     configGroup, 
                     overrideGroup, 
@@ -549,7 +563,7 @@ internal abstract class SlashBase : ParryableEffect {
     }
 
     /// <summary>
-    /// Enumeration of nail slash types.
+    /// Enumeration of slash types.
     /// </summary>
     public enum SlashType {
         Normal,

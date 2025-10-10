@@ -273,11 +273,11 @@ internal enum AnimationClip {
     /// </summary>
     QuickCraftAir,
     /// <summary>
-    /// Slash while sprinting/dashing with Shaman crest
+    /// Slash while sprinting/dashing with Beast or Shaman crest
     /// </summary>
     DashAttackLeap,
     /// <summary>
-    /// Slash while sprinting/dashing with Shaman crest
+    /// Slash while sprinting/dashing with Beast or Shaman crest
     /// </summary>
     DashAttackSlash,
     /// <summary>

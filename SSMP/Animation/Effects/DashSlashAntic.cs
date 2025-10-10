@@ -10,6 +10,19 @@ namespace SSMP.Animation.Effects;
 /// Animation effect class for the start of a generic dash slash. Used with Hunter, Reaper, Beast, and Shaman crests.
 /// </summary>
 internal class DashSlashAntic : DamageAnimationEffect {
+    /// <summary>
+    /// Static instance for access by multiple animation clips in <see cref="AnimationManager"/>.
+    /// </summary>
+    private static DashSlashAntic? _instance;
+    /// <inheritdoc cref="_instance" />
+    public static DashSlashAntic Instance => _instance ??= new DashSlashAntic();
+
+    /// <summary>
+    /// Private constructor to ensure only the above static members can construct this class.
+    /// </summary>
+    private DashSlashAntic() {
+    }
+
     /// <inheritdoc/>
     public override void Play(GameObject playerObject, byte[]? effectInfo) {
         if (effectInfo == null || effectInfo.Length < 1) {
@@ -23,6 +36,7 @@ internal class DashSlashAntic : DamageAnimationEffect {
         PlayAudioEvent playAudioAction;
         switch (crestType) {
             case CrestType.Hunter:
+            case CrestType.Witch:
                 playAudioAction = sprintFsm.GetFirstAction<PlayAudioEvent>("Attack Antic");
                 AudioUtil.PlayAudioEventAtPlayerObject(playAudioAction, playerObject);
                 break;

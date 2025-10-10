@@ -46,11 +46,6 @@ internal class AnimationManager {
     ];
 
     /// <summary>
-    /// Animation effect for various dash slashes, which is used for multiple animation clips.
-    /// </summary>
-    private static readonly AnimationEffect DashSlashAntic = new DashSlashAntic();
-
-    /// <summary>
     /// Bi-directional lookup table for linking animation clip names with their respective animation clip enum
     /// values.
     /// </summary>
@@ -292,13 +287,18 @@ internal class AnimationManager {
         { AnimationClip.DownSlash, new Slash(SlashBase.SlashType.Down) },
         { AnimationClip.DownSlashAlt, new Slash(SlashBase.SlashType.DownAlt) },
         { AnimationClip.SpinBall, new Slash(SlashBase.SlashType.Down) },
-        { AnimationClip.DashAttackAntic, DashSlashAntic },
-        { AnimationClip.DashAttack, new DashSlash() },
-        { AnimationClip.DashUpperAntic, DashSlashAntic },
+        { AnimationClip.DashAttackAntic, DashSlashAntic.Instance },
+        { AnimationClip.DashAttackAntic1, DashSlashAntic.Instance },
+        { AnimationClip.DashAttackAntic2, DashSlashAntic.Instance },
+        { AnimationClip.DashAttack, new DashSlash(DashSlash.DashSlashType.Shared) },
+        { AnimationClip.DashAttack1, new DashSlash(DashSlash.DashSlashType.Witch1) },
+        { AnimationClip.DashAttack2, new DashSlash(DashSlash.DashSlashType.Witch2) },
+        { AnimationClip.DashUpperAntic, DashSlashAntic.Instance },
         { AnimationClip.DashUpper, new DashSlashReaper() },
         { AnimationClip.WandererDashAttack, new Slash(SlashBase.SlashType.Dash) },
         { AnimationClip.WandererDashAttackAlt, new Slash(SlashBase.SlashType.DashAlt) },
-        { AnimationClip.DashAttackCharge, DashSlashAntic },
+        { AnimationClip.DashAttackCharge, DashSlashAntic.Instance },
+        { AnimationClip.DashAttackSlash, new Slash(SlashBase.SlashType.Dash) },
     };
     // TODO: implement all animation effects for sprint slashes (dash slashes/stabs). See Sprint FSM in shared templates
 
