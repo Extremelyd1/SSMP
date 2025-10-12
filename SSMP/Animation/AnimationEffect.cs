@@ -1,4 +1,5 @@
 using SSMP.Game.Settings;
+using SSMP.Internals;
 using UnityEngine;
 
 namespace SSMP.Animation;
@@ -13,7 +14,7 @@ internal abstract class AnimationEffect : IAnimationEffect {
     protected ServerSettings ServerSettings = null!;
 
     /// <inheritdoc/>
-    public abstract void Play(GameObject playerObject, byte[]? effectInfo);
+    public abstract void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo);
 
     /// <inheritdoc/>
     public abstract byte[]? GetEffectInfo();

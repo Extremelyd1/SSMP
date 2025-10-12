@@ -1,4 +1,5 @@
 using SSMP.Game;
+using SSMP.Internals;
 using SSMP.Math;
 
 namespace SSMP.Api.Server;
@@ -71,4 +72,9 @@ public interface IServerPlayer {
     /// The ID of the skin of the player.
     /// </summary>
     byte SkinId { get; }
+    
+    /// <summary>
+    /// The type of crest the player is using.
+    /// </summary>
+    CrestType CrestType { get; }
 }

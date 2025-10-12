@@ -16,10 +16,18 @@ namespace SSMP.Animation.Effects;
 /// </summary>
 internal abstract class SlashBase : ParryableEffect {
     /// <inheritdoc/>
-    public abstract override void Play(GameObject playerObject, byte[]? effectInfo);
+    public abstract override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo);
 
     /// <inheritdoc/>
     public override byte[] GetEffectInfo() {
+        return GetSlashEffectInfo();
+    }
+
+    /// <summary>
+    /// Get animation effect info for slashes. Also used by <see cref="NeedleStrike"/>.
+    /// </summary>
+    /// <returns>A byte array containing effect info.</returns>
+    public static byte[] GetSlashEffectInfo() {
         var crestType = CrestTypeExt.FromInternal(PlayerData.instance.CurrentCrestID);
         var slashEffects = new HashSet<SlashEffect>();
         if (crestType == CrestType.Beast && HeroController.instance.warriorState.IsInRageMode) {
@@ -38,7 +46,6 @@ internal abstract class SlashBase : ParryableEffect {
         }
 
         var packet = new Packet();
-        packet.Write((byte) crestType);
         packet.WriteBitFlag(slashEffects);
 
         return packet.ToArray();
@@ -48,16 +55,16 @@ internal abstract class SlashBase : ParryableEffect {
     /// Plays the slash animation for the given player.
     /// </summary>
     /// <param name="playerObject">The GameObject representing the player.</param>
+    /// <param name="crestType">The type of crest the player is using.</param>
     /// <param name="effectInfo">A byte array containing effect info.</param>
     /// <param name="type">The type of nail slash.</param>
-    protected void Play(GameObject playerObject, byte[]? effectInfo, SlashType type) {
+    protected void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo, SlashType type) {
         if (effectInfo == null || effectInfo.Length < 1) {
             Logger.Error("Could not get null or empty effect info for SlashBase");
             return;
         }
         
         var packet = new Packet(effectInfo);
-        var crestType = (CrestType) packet.ReadByte();
         var slashEffects = packet.ReadBitFlag<SlashEffect>();
 
         Play(playerObject, type, crestType, slashEffects);
@@ -72,22 +79,14 @@ internal abstract class SlashBase : ParryableEffect {
     /// <param name="slashEffects">Effects for the slash, such as the fire effect from Flintslate or being in bind
     /// mode from the Beast crest.</param>
     protected void Play(GameObject playerObject, SlashType type, CrestType crestType, ISet<SlashEffect> slashEffects) {
-        var toolCrest = ToolItemManager.GetCrestByName(crestType.ToInternal());
-        if (toolCrest == null) {
-            Logger.Error($"Could not find unknown ToolCrest with type: {crestType}, {crestType.ToInternal()}");
-            return;
-        }
-
         var isInBeastRageMode = slashEffects.Contains(SlashEffect.BeastRageMode);
 
-        if (!GetConfigs(
+        if (!AnimationUtil.GetConfigsFromCrestType(
                 crestType, 
-                toolCrest, 
-                isInBeastRageMode, 
-                out var configGroup, 
-                out var overrideGroup
-            ) || configGroup == null
-        ) {
+                out var configGroup,
+                out var overrideGroup,
+                isInBeastRageMode
+        ) || configGroup == null) {
             return;
         }
 
@@ -102,25 +101,6 @@ internal abstract class SlashBase : ParryableEffect {
         if (nailAttackBase == null) {
             Logger.Error("Cannot play animation with null NailSlash");
             return;
-        }
-        
-        // TODO: below fix is hacky, but only in this animation effect do we know that the user has the Witch crest
-        if (crestType == CrestType.Witch && type == SlashType.Down) {
-            // Witch down slash animation uses animation clip from override animation library in config group
-            // So we get the library from the already obtained config, get the clip by name and play it using the
-            // player's sprite animator
-            var overrideLib = configGroup.Config.heroAnimOverrideLib;
-            if (overrideLib == null) {
-                Logger.Warn("Witch crest down slash has null override animation lib");
-            } else {
-                var clip = overrideLib.GetClipByName("DownSpike");
-                if (clip == null) {
-                    Logger.Warn("Witch crest down slash override animation lib has no clip named 'DownSpike'");
-                } else {
-                    var spriteAnimator = playerObject.GetComponent<tk2dSpriteAnimator>();
-                    spriteAnimator.Play(clip);                    
-                }
-            }
         }
 
         // Get the attacks gameObject from the player object
@@ -200,7 +180,7 @@ internal abstract class SlashBase : ParryableEffect {
                 }
             }
             
-            MonoBehaviourUtil.Instance.StartCoroutine(PlayNailSlashTravel(slashObj, slashParent, longclaw));
+            PlayNailSlashTravel(slashObj, longclaw, slashParent);
         } else {
             // This method is in the else for the Shaman crest check, because Shaman crest handles Longclaw differently
             ApplyLongclawMultiplier(longclaw, type, slashObj, scale);
@@ -213,6 +193,13 @@ internal abstract class SlashBase : ParryableEffect {
         // TODO: nail imbued from NailAttackBase
     }
 
+    /// <summary>
+    /// Apply the Longclaw multiplier to the given slash object.
+    /// </summary>
+    /// <param name="longclaw">Whether Longclaw is equipped for this slash.</param>
+    /// <param name="type">The type of the slash.</param>
+    /// <param name="slashObj">The game object corresponding to the slash.</param>
+    /// <param name="scale">The normal scale of the slash.</param>
     protected void ApplyLongclawMultiplier(bool longclaw, SlashType type, GameObject slashObj, Vector3 scale) {
         if (longclaw) {
             var multiplier = Gameplay.LongNeedleMultiplier;
@@ -378,108 +365,64 @@ internal abstract class SlashBase : ParryableEffect {
     /// leaves out recoil and other player impacting behaviour.
     /// </summary>
     /// <param name="slashObj">The base slash object that should have the NailSlashTravel component.</param>
-    /// <param name="slashParent">The slash parent, so we can destroy it later.</param>
     /// <param name="longclaw">Whether Longclaw is equipped and thus the Nail Slash should travel further.</param>
-    private IEnumerator PlayNailSlashTravel(GameObject slashObj, GameObject slashParent, bool longclaw) {
-        var travelComp = slashObj.GetComponent<NailSlashTravel>();
+    /// <param name="slashParent">The slash parent, so we can destroy it later. Or null, if we should destroy the
+    /// <paramref name="slashObj"/> instead.</param>
+    public static void PlayNailSlashTravel(GameObject slashObj, bool longclaw, GameObject? slashParent = null) {
+        MonoBehaviourUtil.Instance.StartCoroutine(Play());
+        return;
 
-        travelComp.hasStarted = true;
+        IEnumerator Play() {
+            var travelComp = slashObj.GetComponent<NailSlashTravel>();
 
-        if (travelComp.particles) {
-            travelComp.particles.Play(true);
-        }
+            travelComp.hasStarted = true;
 
-        yield return null;
-
-        var transform = travelComp.transform;
-        var worldPos = (Vector2) transform.position;
-
-        if (travelComp.distanceFiller) {
-            travelComp.distanceFiller.gameObject.SetActive(true);
-        }
-
-        travelComp.SetThunkerActive(true);
-        
-        for (var elapsed = 0f; elapsed < travelComp.travelDuration; elapsed += Time.deltaTime) {
-            travelComp.elapsedT = elapsed / travelComp.travelDuration;
-
-            // setPosition action in NailSlashTravel.cs
-            var self = travelComp.travelDistance.MultiplyElements(
-                new Vector2(Mathf.Sign(transform.lossyScale.x), 1f)
-            );
-            if (longclaw) {
-                self = self.MultiplyElements(Gameplay.LongNeedleMultiplier);
-            }
-
-            var num = travelComp.travelCurve.Evaluate(travelComp.elapsedT);
-
-            transform.SetPosition2D(worldPos + self * num);
-
-            if (travelComp.distanceFiller) {
-                var newXScale = Mathf.Abs(self.x) * num;
-                travelComp.distanceFiller.SetScaleX(newXScale);
-                travelComp.distanceFiller.SetLocalPositionX(newXScale * 0.5f);
+            if (travelComp.particles) {
+                travelComp.particles.Play(true);
             }
 
             yield return null;
-        }
 
-        // TODO: this is a bit of a hack, but we only want to destroy the slash parent once the particles are done
-        while (travelComp.particles && travelComp.particles.isPlaying) {
-            yield return new WaitForSeconds(0.5f);
-        }
-        
-        Object.Destroy(slashParent);
-    }
+            var transform = travelComp.transform;
+            var worldPos = (Vector2) transform.position;
 
-    /// <summary>
-    /// Get the hero controller config for the given parameters.
-    /// </summary>
-    /// <param name="crestType">The type of the crest used.</param>
-    /// <param name="toolCrest">The ToolCrest instance for the used crest.</param>
-    /// <param name="isInBeastRageMode">Whether the player is in rage mode with the Beast crest.</param>
-    /// <param name="configGroup">If this method returns true, the config group for the given parameters. Otherwise,
-    /// undefined or null.</param>
-    /// <param name="overrideGroup">If this method returns true, the override config group if it exists. Otherwise,
-    /// null.</param>
-    /// <returns>True if the config could be found, otherwise false.</returns>
-    protected bool GetConfigs(
-        CrestType crestType, 
-        ToolCrest toolCrest,
-        bool isInBeastRageMode,
-        out HeroController.ConfigGroup? configGroup,
-        out HeroController.ConfigGroup? overrideGroup
-    ) {
-        configGroup = null;
-        overrideGroup = null;
-        
-        foreach (var config in HeroController.instance.configs) {
-            if (config.Config == toolCrest.HeroConfig) {
-                configGroup = config;
-                break;
+            if (travelComp.distanceFiller) {
+                travelComp.distanceFiller.gameObject.SetActive(true);
             }
-        }
 
-        if (configGroup == null) {
-            // TODO: maybe remove this warning if we simply default to the first config
-            Logger.Warn($"Could not find ConfigGroup for ToolCrest with type: {crestType}, {crestType.ToInternal()}, falling back to default");
+            travelComp.SetThunkerActive(true);
 
-            configGroup = HeroController.instance.configs[0];
-            if (configGroup == null) {
-                Logger.Error("HeroController ConfigGroup array has null at position '0'!");
-                return false;
+            for (var elapsed = 0f; elapsed < travelComp.travelDuration; elapsed += Time.deltaTime) {
+                travelComp.elapsedT = elapsed / travelComp.travelDuration;
+
+                // setPosition action in NailSlashTravel.cs
+                var self = travelComp.travelDistance.MultiplyElements(
+                    new Vector2(Mathf.Sign(transform.lossyScale.x), 1f)
+                );
+                if (longclaw) {
+                    self = self.MultiplyElements(Gameplay.LongNeedleMultiplier);
+                }
+
+                var num = travelComp.travelCurve.Evaluate(travelComp.elapsedT);
+
+                transform.SetPosition2D(worldPos + self * num);
+
+                if (travelComp.distanceFiller) {
+                    var newXScale = Mathf.Abs(self.x) * num;
+                    travelComp.distanceFiller.SetScaleX(newXScale);
+                    travelComp.distanceFiller.SetLocalPositionX(newXScale * 0.5f);
+                }
+
+                yield return null;
             }
-        }
 
-        foreach (var specialConfig in HeroController.instance.specialConfigs) {
-            if (specialConfig.Config == toolCrest.HeroConfig && 
-                (specialConfig.Config != Gameplay.WarriorCrest.HeroConfig || isInBeastRageMode)) {
-                overrideGroup = specialConfig;
-                break;
+            // TODO: this is a bit of a hack, but we only want to destroy the slash parent once the particles are done
+            while (travelComp.particles && travelComp.particles.isPlaying) {
+                yield return new WaitForSeconds(0.5f);
             }
-        }
 
-        return true;
+            Object.Destroy(slashParent == null ? slashObj : slashParent);
+        }
     }
 
     /// <summary>
@@ -580,7 +523,7 @@ internal abstract class SlashBase : ParryableEffect {
     /// <summary>
     /// Enumeration of slash effects.
     /// </summary>
-    protected enum SlashEffect {
+    public enum SlashEffect {
         BeastRageMode,
         Longclaw,
         Flintslate,

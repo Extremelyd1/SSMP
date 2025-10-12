@@ -41,6 +41,8 @@ public static class EventHooks {
     private static Hook? _gameMapPositionCompassAndCorpseHook;
     private static Hook? _gameMapCloseQuickMapHook;
 
+    private static Hook? _toolItemManagerSetEquippedCrestHook;
+
     public static event Action<UIManager, UIState>? UIManagerSetStatePostFix;
     public static event Action? UIManagerUIGoToMainMenu;
     public static event Action? UIManagerReturnToMainMenu;
@@ -59,6 +61,8 @@ public static class EventHooks {
 
     public static event Action<GameMap>? GameMapPositionCompassAndCorpse;
     public static event Action<GameMap>? GameMapCloseQuickMap;
+
+    public static event Action<Action<string>, string>? ToolItemManagerSetEquippedCrest;
 
     public static void Initialize() {
         _uiManagerAwakeHook = new Hook(
@@ -122,6 +126,11 @@ public static class EventHooks {
         _gameMapCloseQuickMapHook = new Hook(
             typeof(GameMap).GetMethod(nameof(GameMap.CloseQuickMap)),
             OnGameMapCloseQuickMap
+        );
+
+        _toolItemManagerSetEquippedCrestHook = new Hook(
+            typeof(ToolItemManager).GetMethod(nameof(ToolItemManager.SetEquippedCrest)),
+            OnToolItemManagerSetEquippedCrest
         );
     }
 
@@ -238,5 +247,9 @@ public static class EventHooks {
         orig(self);
 
         GameMapCloseQuickMap?.Invoke(self);
+    }
+
+    private static void OnToolItemManagerSetEquippedCrest(Action<string> orig, string crestId) {
+        ToolItemManagerSetEquippedCrest?.Invoke(orig, crestId);
     }
 }

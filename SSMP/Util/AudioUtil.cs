@@ -44,7 +44,7 @@ internal static class AudioUtil {
             Volume = playAudioEvent.volume.value
         };
 
-        var position = playerObject.transform.localPosition;
+        var position = playerObject.transform.position;
 
         if (playAudioEvent.audioPlayerPrefab.IsNone) {
             audioEvent.SpawnAndPlayOneShot(position);
@@ -71,7 +71,7 @@ internal static class AudioUtil {
             return;
         }
 
-        var position = playerObject.transform.localPosition;
+        var position = playerObject.transform.position;
 
         if (playAudioClip.AudioPlayerPrefab.Value) {
             audioClipTable.SpawnAndPlayOneShot(

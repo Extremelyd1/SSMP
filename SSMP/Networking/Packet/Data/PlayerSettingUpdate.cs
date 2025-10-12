@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using SSMP.Game;
+using SSMP.Internals;
 
 namespace SSMP.Networking.Packet.Data;
 
@@ -28,6 +29,11 @@ internal class ClientPlayerSettingUpdate : GenericClientData {
     /// </summary>
     public byte SkinId { get; set; }
 
+    /// <summary>
+    /// The type of crest the player is using.
+    /// </summary>
+    public CrestType CrestType { get; set; }
+
     public ClientPlayerSettingUpdate() {
         UpdateTypes = new HashSet<PlayerSettingUpdateType>();
     }
@@ -49,6 +55,10 @@ internal class ClientPlayerSettingUpdate : GenericClientData {
         if (UpdateTypes.Contains(PlayerSettingUpdateType.Skin)) {
             packet.Write(SkinId);
         }
+
+        if (UpdateTypes.Contains(PlayerSettingUpdateType.Crest)) {
+            packet.Write((byte) CrestType);
+        }
     }
 
     /// <inheritdoc />
@@ -67,6 +77,10 @@ internal class ClientPlayerSettingUpdate : GenericClientData {
 
         if (UpdateTypes.Contains(PlayerSettingUpdateType.Skin)) {
             SkinId = packet.ReadByte();
+        }
+
+        if (UpdateTypes.Contains(PlayerSettingUpdateType.Crest)) {
+            CrestType = (CrestType) packet.ReadByte();
         }
     }
 }
@@ -97,6 +111,11 @@ internal class ServerPlayerSettingUpdate : IPacketData {
     /// </summary>
     public byte SkinId { get; set; }
 
+    /// <summary>
+    /// The type of crest the player is using.
+    /// </summary>
+    public CrestType CrestType { get; set; }
+
     public ServerPlayerSettingUpdate() {
         UpdateTypes = new HashSet<PlayerSettingUpdateType>();
     }
@@ -112,6 +131,10 @@ internal class ServerPlayerSettingUpdate : IPacketData {
         if (UpdateTypes.Contains(PlayerSettingUpdateType.Skin)) {
             packet.Write(SkinId);
         }
+        
+        if (UpdateTypes.Contains(PlayerSettingUpdateType.Crest)) {
+            packet.Write((byte) CrestType);
+        }
     }
 
     /// <inheritdoc />
@@ -125,6 +148,10 @@ internal class ServerPlayerSettingUpdate : IPacketData {
         if (UpdateTypes.Contains(PlayerSettingUpdateType.Skin)) {
             SkinId = packet.ReadByte();
         }
+        
+        if (UpdateTypes.Contains(PlayerSettingUpdateType.Crest)) {
+            CrestType = (CrestType) packet.ReadByte();
+        }
     }
 }
 
@@ -133,5 +160,6 @@ internal class ServerPlayerSettingUpdate : IPacketData {
 /// </summary>
 internal enum PlayerSettingUpdateType {
     Team = 0,
-    Skin = 1
+    Skin = 1,
+    Crest = 2
 }

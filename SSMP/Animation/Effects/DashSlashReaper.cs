@@ -1,4 +1,5 @@
-﻿using SSMP.Util;
+﻿using SSMP.Internals;
+using SSMP.Util;
 using UnityEngine;
 
 namespace SSMP.Animation.Effects;
@@ -8,9 +9,9 @@ namespace SSMP.Animation.Effects;
 /// </summary>
 internal class DashSlashReaper : SlashBase {
     /// <inheritdoc/>
-    public override void Play(GameObject playerObject, byte[]? effectInfo) {
+    public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
         // Call the base function with the correct parameters
-        Play(playerObject, effectInfo, SlashType.Dash);
+        Play(playerObject, crestType, effectInfo, SlashType.Dash);
         
         // Also play an additional sound from the Sprint FSM
         var sprintFsm = HeroController.instance.sprintFSM;

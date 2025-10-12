@@ -11,6 +11,7 @@ using SSMP.Game.Command.Client;
 using SSMP.Game.Server;
 using SSMP.Game.Settings;
 using SSMP.Hooks;
+using SSMP.Internals;
 using SSMP.Networking.Client;
 using SSMP.Networking.Packet;
 using SSMP.Networking.Packet.Data;
@@ -315,6 +316,8 @@ internal class ClientManager : IClientManager {
         EventHooks.HeroControllerUpdate += OnHeroControllerUpdate;
         
         CustomHooks.AfterEnterSceneHeroTransformed += OnEnterScene;
+
+        EventHooks.ToolItemManagerSetEquippedCrest += OnSetEquippedCrest;
     }
 
     /// <summary>
@@ -338,9 +341,11 @@ internal class ClientManager : IClientManager {
         SceneManager.activeSceneChanged -= OnSceneChange;
         CustomHooks.HeroControllerStartAction -= OnHeroControllerStart;
 
-        // On.HeroController.Update -= OnPlayerUpdate;
+        EventHooks.HeroControllerUpdate -= OnHeroControllerUpdate;
         
         CustomHooks.AfterEnterSceneHeroTransformed -= OnEnterScene;
+        
+        EventHooks.ToolItemManagerSetEquippedCrest -= OnSetEquippedCrest;
         
         // Deregister application quit handler
         // ModHooks.ApplicationQuitHook -= OnApplicationQuit;
@@ -636,12 +641,19 @@ internal class ClientManager : IClientManager {
                     // save selection screen, we need to disconnect from the server again, because we are not entering
                     // the world
                     if (saveSelected) {
+                        _netClient.UpdateManager.AddPlayerSettingUpdate(
+                            crestType: CrestTypeExt.FromInternal(PlayerData.instance.CurrentCrestID)
+                        );
                         return;
                     }
 
                     Disconnect();
                 });
             }
+        } else {
+            _netClient.UpdateManager.AddPlayerSettingUpdate(
+                crestType: CrestTypeExt.FromInternal(PlayerData.instance.CurrentCrestID)
+            );
         }
 
         // Fill the player data dictionary with the info from the packet
@@ -825,7 +837,7 @@ internal class ClientManager : IClientManager {
             enterSceneData.Team,
             enterSceneData.SkinId
         );
-        _animationManager.UpdatePlayerAnimation(id, enterSceneData.AnimationClipId, 0);
+        _animationManager.UpdatePlayerAnimation(id, enterSceneData.AnimationClipId, 0, playerData.CrestType);
 
         try {
             PlayerEnterSceneEvent?.Invoke(playerData);
@@ -1226,6 +1238,15 @@ internal class ClientManager : IClientManager {
                 _playerManager.OnPlayerSkinUpdate(false, settingUpdate.SkinId, settingUpdate.Id);
             }
         }
+
+        if (settingUpdate.UpdateTypes.Contains(PlayerSettingUpdateType.Crest)) {
+            if (!_playerData.TryGetValue(settingUpdate.Id, out var playerData)) {
+                Logger.Warn($"Received crest update, but player with ID: {settingUpdate.Id} is not in local mapping");
+            } else {
+                Logger.Info($"Received crest update for player: {settingUpdate.Id}, {settingUpdate.CrestType}");
+                playerData.CrestType = settingUpdate.CrestType;
+            }
+        }
     }
     
     /// <summary>
@@ -1263,6 +1284,34 @@ internal class ClientManager : IClientManager {
         UiManager.InternalChatBox.AddMessage("You are disconnected from the server (server timed out)");
 
         Disconnect();
+    }
+
+    /// <summary>
+    /// Callback method for when the equipped crest is changed. Used to network the new crest to the server.
+    /// </summary>
+    /// <param name="orig">The original method as an action.</param>
+    /// <param name="crestId">The new crest ID as a string.</param>
+    private void OnSetEquippedCrest(Action<string> orig, string crestId) {
+        if (!_netClient.IsConnected) {
+            orig(crestId);
+            return;
+        }
+
+        // Store the currently used crest ID before the original method is executed
+        var currentCrestId = PlayerData.instance.CurrentCrestID;
+
+        // Execute original method
+        orig(crestId);
+
+        // If the crest ID is the same as the one we had equipped, we don't need to network anything to the server
+        if (currentCrestId == crestId) {
+            return;
+        }
+
+        Logger.Info($"Player's Crest has changed from '{currentCrestId}' to '{crestId}', networking to server");
+
+        var crestType = CrestTypeExt.FromInternal(crestId);
+        _netClient.UpdateManager.AddPlayerSettingUpdate(crestType: crestType);
     }
 
     #endregion

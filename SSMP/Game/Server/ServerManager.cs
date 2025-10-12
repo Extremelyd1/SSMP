@@ -1563,6 +1563,27 @@ internal abstract class ServerManager : IServerManager {
                 SendMessage(id, reason);
             }
         }
+
+        if (playerSettingUpdate.UpdateTypes.Contains(PlayerSettingUpdateType.Crest)) {
+            if (!_playerData.TryGetValue(id, out var playerData)) {
+                Logger.Warn($"Received crest update, but player with ID {id} is not in mapping");
+                return;
+            }
+
+            var crestType = playerSettingUpdate.CrestType;
+
+            Logger.Info($"Received crest update for player: ({id}, {playerData.Username}), from '{playerData.CrestType}' to '{crestType}'");
+
+            playerData.CrestType = crestType;
+            
+            foreach (var otherId in _playerData.Keys) {
+                if (otherId == id) {
+                    continue;
+                }
+
+                _netServer.GetUpdateManagerForClient(otherId)?.AddOtherPlayerSettingUpdateData(id, crestType: crestType);
+            }
+        }
     }
 
     /// <summary>

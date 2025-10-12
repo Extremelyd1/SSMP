@@ -1,4 +1,5 @@
 using SSMP.Api.Client;
+using SSMP.Internals;
 using UnityEngine;
 
 namespace SSMP.Game.Client;
@@ -25,6 +26,9 @@ internal class ClientPlayerData : IClientPlayer {
 
     /// <inheritdoc />
     public byte SkinId { get; set; }
+
+    /// <inheritdoc />
+    public CrestType CrestType { get; set; }
 
     public ClientPlayerData(
         ushort id,

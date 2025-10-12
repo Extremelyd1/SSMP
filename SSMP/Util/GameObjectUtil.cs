@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -60,5 +61,49 @@ internal static class GameObjectUtil {
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Destroy given object after given time (in seconds).
+    /// </summary>
+    /// <param name="obj">The game object to destroy.</param>
+    /// <param name="time">The time in seconds as a float.</param>
+    /// <param name="coroutineOrigin">The <see cref="MonoBehaviour"/> to use for starting the coroutine.</param>
+    public static void DestroyAfterTime(this GameObject obj, float time, MonoBehaviour? coroutineOrigin = null) {
+        if (coroutineOrigin == null) {
+            MonoBehaviourUtil.Instance.StartCoroutine(WaitDestroy());
+        } else {
+            coroutineOrigin.StartCoroutine(WaitDestroy());
+        }
+
+        return;
+
+        IEnumerator WaitDestroy() {
+            yield return new WaitForSeconds(time);
+
+            Object.Destroy(obj);
+        }
+    }
+    
+    /// <summary>
+    /// Activate given object after given time (in seconds).
+    /// </summary>
+    /// <param name="obj">The game object to activate.</param>
+    /// <param name="time">The time in seconds as a float.</param>
+    /// <param name="coroutineOrigin">The <see cref="MonoBehaviour"/> to use for starting the coroutine.</param>
+    public static void ActivateAfterTime(this GameObject obj, float time, MonoBehaviour? coroutineOrigin = null) {
+        if (coroutineOrigin == null) {
+            MonoBehaviourUtil.Instance.StartCoroutine(WaitActivate());
+        } else {
+            coroutineOrigin.StartCoroutine(WaitActivate());
+        }
+
+        return;
+
+        IEnumerator WaitActivate() {
+            yield return new WaitForSeconds(time);
+
+            obj.SetActive(true);
+        }
     }
 }

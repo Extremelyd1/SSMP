@@ -1,3 +1,4 @@
+using SSMP.Internals;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -13,7 +14,7 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
     protected bool ShouldDoDamage;
 
     /// <inheritdoc/>
-    public abstract override void Play(GameObject playerObject, byte[]? effectInfo);
+    public abstract override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo);
 
     /// <inheritdoc/>
     public abstract override byte[]? GetEffectInfo();

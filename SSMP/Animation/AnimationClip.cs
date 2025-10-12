@@ -56,6 +56,10 @@ internal enum AnimationClip {
     UpSlash,
     SlashLand,
     SlashCharged,
+    /// <summary>
+    /// The Needle Strike with Witch crest when repressing the button up to 2 times.
+    /// </summary>
+    SlashChargedLoop,
     UmbrellaInflateAntic,
     WallJump,
     WallSlide,

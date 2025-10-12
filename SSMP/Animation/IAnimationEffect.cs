@@ -1,4 +1,5 @@
 ﻿using SSMP.Game.Settings;
+using SSMP.Internals;
 using UnityEngine;
 
 namespace SSMP.Animation;
@@ -11,8 +12,9 @@ internal interface IAnimationEffect {
     /// Plays the animation effect for the given player object and with additional byte data array.
     /// </summary>
     /// <param name="playerObject">The GameObject representing the player.</param>
+    /// <param name="crestType">The type of crest the player is using.</param>
     /// <param name="effectInfo">A byte array containing effect info.</param>
-    void Play(GameObject playerObject, byte[]? effectInfo);
+    void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo);
 
     /// <summary>
     /// Get the effect info corresponding to this effect.

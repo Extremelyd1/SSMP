@@ -4,6 +4,7 @@ using SSMP.Fsm;
 using SSMP.Game.Client.Skin;
 using SSMP.Game.Settings;
 using SSMP.Hooks;
+using SSMP.Internals;
 using SSMP.Util;
 using TMProOld;
 using UnityEngine;
@@ -603,6 +604,19 @@ internal class PlayerManager {
         }
 
         return playerData.Team;
+    }
+
+    /// <summary>
+    /// Get the type of crest of a player.
+    /// </summary>
+    /// <param name="id">The ID of the player.</param>
+    /// <returns>The crest type of the player.</returns>
+    public CrestType GetPlayerCrestType(ushort id) {
+        if (!_playerData.TryGetValue(id, out var playerData)) {
+            return CrestType.Hunter;
+        }
+
+        return playerData.CrestType;
     }
 
     /// <summary>

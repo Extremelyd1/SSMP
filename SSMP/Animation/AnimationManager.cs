@@ -7,6 +7,7 @@ using SSMP.Game;
 using SSMP.Game.Client;
 using SSMP.Game.Settings;
 using SSMP.Hooks;
+using SSMP.Internals;
 using SSMP.Networking.Client;
 using SSMP.Networking.Packet.Data;
 using SSMP.Util;
@@ -100,6 +101,7 @@ internal class AnimationManager {
         { "UpSlash", AnimationClip.UpSlash },
         { "Slash Land", AnimationClip.SlashLand },
         { "Slash_Charged", AnimationClip.SlashCharged },
+        { "Slash_Charged_Loop", AnimationClip.SlashChargedLoop },
         { "Umbrella Inflate Antic", AnimationClip.UmbrellaInflateAntic },
         { "Walljump", AnimationClip.WallJump },
         { "Wall Slide", AnimationClip.WallSlide },
@@ -299,6 +301,9 @@ internal class AnimationManager {
         { AnimationClip.WandererDashAttackAlt, new Slash(SlashBase.SlashType.DashAlt) },
         { AnimationClip.DashAttackCharge, DashSlashAntic.Instance },
         { AnimationClip.DashAttackSlash, new Slash(SlashBase.SlashType.Dash) },
+        { AnimationClip.SlashCharged, new NeedleStrike(false) },
+        { AnimationClip.SlashChargedLoop, new NeedleStrike(true) },
+        { AnimationClip.NeedleArtDash, new NeedleStrike(false) }
     };
     // TODO: implement all animation effects for sprint slashes (dash slashes/stabs). See Sprint FSM in shared templates
 
@@ -449,7 +454,9 @@ internal class AnimationManager {
     /// <param name="frame">The frame that the animation should play from.</param>
     /// <param name="effectInfo">A byte array containing effect info for the animation.</param>
     public void OnPlayerAnimationUpdate(ushort id, int clipId, int frame, byte[]? effectInfo) {
-        UpdatePlayerAnimation(id, clipId, frame);
+        var crestType = _playerManager.GetPlayerCrestType(id);
+        
+        UpdatePlayerAnimation(id, clipId, frame, crestType);
 
         var animationClip = (AnimationClip) clipId;
 
@@ -475,6 +482,7 @@ internal class AnimationManager {
 
             animationEffect.Play(
                 playerObject,
+                crestType,
                 effectInfo
             );
         }
@@ -486,7 +494,8 @@ internal class AnimationManager {
     /// <param name="id">The ID of the player.</param>
     /// <param name="clipId">The ID of the animation clip.</param>
     /// <param name="frame">The frame that the animation should play from.</param>
-    public void UpdatePlayerAnimation(ushort id, int clipId, int frame) {
+    /// <param name="crestType">The type of crest the player is using.</param>
+    public void UpdatePlayerAnimation(ushort id, int clipId, int frame, CrestType crestType) {
         var playerObject = _playerManager.GetPlayerObject(id);
         if (!playerObject) {
             // Logger.Get().Warn(this, $"Tried to update animation, but there was not matching player object for ID {id}");
@@ -507,6 +516,10 @@ internal class AnimationManager {
         }
 
         var clipName = ClipEnumNames[animationClip];
+        if (clipName == null) {
+            Logger.Warn($"Clip name was null after lookup in {nameof(ClipEnumNames)}");
+            return;
+        }
 
         if (_debugLogAnimations) Logger.Info($"  clipName: {clipName}");
 
@@ -514,25 +527,40 @@ internal class AnimationManager {
         var spriteAnimator = playerObject.GetComponent<tk2dSpriteAnimator>();
 
         var clip = spriteAnimator.GetClipByName(clipName);
-        if (clip == null) {
-            // Clip does not exist in the default library, so we look for override libraries from the configs
-            foreach (var config in HeroController.instance.configs) {
-                var overrideLib = config.Config.heroAnimOverrideLib;
-                if (overrideLib == null) {
-                    continue;
-                }
-                
-                var configOverriddenClip = overrideLib.GetClipByName(clipName);
-                if (configOverriddenClip != null) {
-                    clip = configOverriddenClip;
-                    break;
-                }
-            }
 
-            if (clip == null) {
-                Logger.Info("Could not find clip in override libraries of hero controller configs");
-                return;
+        // Get the config groups for the used crest type, so we can find animation clips that should override the
+        // normal animation library
+        if (!AnimationUtil.GetConfigsFromCrestType(
+            crestType,
+            out var configGroup,
+            out var overrideGroup
+        )) {
+            Logger.Warn($"Could not get configs from crest type: {crestType}");
+            return;
+        }
+
+        var clipInOverrideGroupLib = false;
+
+        if (overrideGroup != null) {
+            if (AnimationUtil.TryFindClipInOverrideGroup(overrideGroup, clipName, out var overrideGroupClip)) {
+                clip = overrideGroupClip;
+                clipInOverrideGroupLib = true;
+                
+                Logger.Info("Found clip in override group's override animation library");
             }
+        }
+
+        if (configGroup != null && !clipInOverrideGroupLib) {
+            if (AnimationUtil.TryFindClipInOverrideGroup(configGroup, clipName, out var configGroupClip)) {
+                clip = configGroupClip;
+                
+                Logger.Info("Found clip in config group's override animation library");
+            }
+        }
+
+        if (clip == null) {
+            Logger.Warn("Could not find clip in normal library, config group's override library, or override group's override library");
+            return;
         }
 
         if (_debugLogAnimations) Logger.Info($"  playing clip: {clipName}");

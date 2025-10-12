@@ -23,4 +23,18 @@ internal class DebugCommand : IClientCommand {
             Logger.Info($"{i}: {stateName}");
         }
     }
+
+    private void Test() {
+        tk2dSpriteAnimationClip clip = null!;
+
+        Logger.Info($"Animation clip: {clip.name}, fps: {clip.fps}, frames length: {clip.frames.Length}");
+        for (var i = 0; i < clip.frames.Length; i++) {
+            var frame = clip.frames[i];
+            if (frame.triggerEvent) {
+                var secondsUntilFrame = (i + 1) / clip.fps;
+                
+                Logger.Info($"Frame {i} has triggerEvent, seconds until frame: {secondsUntilFrame}");
+            }
+        }
+    }
 }

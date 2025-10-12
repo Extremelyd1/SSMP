@@ -2,7 +2,6 @@
 using SSMP.Internals;
 using SSMP.Util;
 using UnityEngine;
-using Logger = SSMP.Logging.Logger;
 
 namespace SSMP.Animation.Effects;
 
@@ -24,14 +23,7 @@ internal class DashSlashAntic : DamageAnimationEffect {
     }
 
     /// <inheritdoc/>
-    public override void Play(GameObject playerObject, byte[]? effectInfo) {
-        if (effectInfo == null || effectInfo.Length < 1) {
-            Logger.Error("Could not get null or empty effect info for DashAttackAntic");
-            return;
-        }
-
-        var crestType = (CrestType) effectInfo[0];
-
+    public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
         var sprintFsm = HeroController.instance.sprintFSM;
         PlayAudioEvent playAudioAction;
         switch (crestType) {
@@ -62,7 +54,7 @@ internal class DashSlashAntic : DamageAnimationEffect {
     }
 
     /// <inheritdoc/>
-    public override byte[] GetEffectInfo() {
-        return [(byte) CrestTypeExt.FromInternal(PlayerData.instance.CurrentCrestID)];
+    public override byte[]? GetEffectInfo() {
+        return null;
     }
 }

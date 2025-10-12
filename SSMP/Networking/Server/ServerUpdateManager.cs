@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using SSMP.Game;
 using SSMP.Game.Client.Entity;
 using SSMP.Game.Settings;
+using SSMP.Internals;
 using SSMP.Math;
 using SSMP.Networking.Packet;
 using SSMP.Networking.Packet.Data;
@@ -529,7 +530,17 @@ internal class ServerUpdateManager : UdpUpdateManager<ClientUpdatePacket, Client
     /// </param>
     /// <param name="skinId">An optional byte for the ID of the skin, if the player's skin changed, or null if no such
     /// ID was supplied.</param>
-    public void AddOtherPlayerSettingUpdateData(ushort id, Team? team = null, byte? skinId = null) {
+    /// <param name="crestType">The type of crest that the player has switched to.</param>
+    public void AddOtherPlayerSettingUpdateData(
+        ushort id, 
+        Team? team = null, 
+        byte? skinId = null, 
+        CrestType? crestType = null
+    ) {
+        if (!team.HasValue && !skinId.HasValue && !crestType.HasValue) {
+            return;
+        }
+        
         lock (Lock) {
             var playerSettingUpdate = FindOrCreatePacketData(
                 ClientUpdatePacketId.PlayerSetting,
@@ -547,6 +558,11 @@ internal class ServerUpdateManager : UdpUpdateManager<ClientUpdatePacket, Client
             if (skinId.HasValue) {
                 playerSettingUpdate.UpdateTypes.Add(PlayerSettingUpdateType.Skin);
                 playerSettingUpdate.SkinId = skinId.Value;
+            }
+            
+            if (crestType.HasValue) {
+                playerSettingUpdate.UpdateTypes.Add(PlayerSettingUpdateType.Crest);
+                playerSettingUpdate.CrestType = crestType.Value;
             }
         }
     }

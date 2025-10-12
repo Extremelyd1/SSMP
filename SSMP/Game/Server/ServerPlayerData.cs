@@ -1,5 +1,6 @@
 using SSMP.Api.Server;
 using SSMP.Game.Server.Auth;
+using SSMP.Internals;
 using SSMP.Math;
 
 namespace SSMP.Game.Server;
@@ -44,6 +45,9 @@ internal class ServerPlayerData : IServerPlayer {
 
     /// <inheritdoc />
     public byte SkinId { get; set; }
+
+    /// <inheritdoc />
+    public CrestType CrestType { get; set; } = CrestType.Hunter;
     
     /// <summary>
     /// Whether this player is the host of their current scene.

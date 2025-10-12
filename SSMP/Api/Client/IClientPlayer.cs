@@ -1,4 +1,5 @@
 using SSMP.Game;
+using SSMP.Internals;
 using UnityEngine;
 
 namespace SSMP.Api.Client;
@@ -42,4 +43,9 @@ public interface IClientPlayer {
     /// The ID of the current skin of the player.
     /// </summary>
     byte SkinId { get; }
+
+    /// <summary>
+    /// The type of crest the player is using.
+    /// </summary>
+    CrestType CrestType { get; }
 }

@@ -1,5 +1,4 @@
-﻿using System.Collections;
-using SSMP.Internals;
+﻿using SSMP.Internals;
 using SSMP.Networking.Packet;
 using SSMP.Util;
 using UnityEngine;
@@ -26,14 +25,13 @@ internal class DashSlash : SlashBase {
     }
 
     /// <inheritdoc/>
-    public override void Play(GameObject playerObject, byte[]? effectInfo) {
+    public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
         if (effectInfo == null || effectInfo.Length < 1) {
             Logger.Error("Could not get null or empty effect info for DashAttack");
             return;
         }
         
         var packet = new Packet(effectInfo);
-        var crestType = (CrestType) packet.ReadByte();
         var slashEffects = packet.ReadBitFlag<SlashEffect>();
 
         var sprintFsm = HeroController.instance.sprintFSM;
@@ -106,7 +104,7 @@ internal class DashSlash : SlashBase {
             
             // Activate game object in ActivateGameObject action in "Witch?" state
 
-            MonoBehaviourUtil.Instance.StartCoroutine(DestroyAfterTime(slashParent, 0.2f));
+            slashParent.DestroyAfterTime(0.2f);
         } else if (crestType == CrestType.Architect) {
             // Play the animation from SlashBase, given that the Sprint FSM calls StartSlash for the Architect crest
             Play(playerObject, SlashType.Dash, crestType, slashEffects);
@@ -135,17 +133,6 @@ internal class DashSlash : SlashBase {
             // TODO: Add charged dash stab/slash, see alternative states in Sprint FSM for Architect/Toolmaster
         }
         return base.GetNailAttackBase(type, crestType, isInBeastRageMode, configGroup, overrideGroup);
-    }
-
-    /// <summary>
-    /// Destroy given object after given time (in seconds).
-    /// </summary>
-    /// <param name="obj">The game object to destroy.</param>
-    /// <param name="time">The time in seconds as a float.</param>
-    private IEnumerator DestroyAfterTime(GameObject obj, float time) {
-        yield return new WaitForSeconds(time);
-
-        Object.Destroy(obj);
     }
 
     /// <summary>
