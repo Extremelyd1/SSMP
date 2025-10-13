@@ -209,6 +209,8 @@ internal class UiManager : IUiManager {
             RequestServerStopHostEvent?.Invoke();
         };
 
+        MonoBehaviourUtil.Instance.OnUpdateEvent += CheckKeyBinds;
+
         SetupUi();
 
         // Hook to make sure that after game completion cutscenes we do not head to the main menu, but stay hosting/
@@ -448,6 +450,8 @@ internal class UiManager : IUiManager {
         FixMultiplayerButtonNavigation(startMultiBtn);
         
         UM.StartCoroutine(WaitForInput());
+        return;
+
         IEnumerator WaitForInput() {
             yield return new WaitUntil(() => IH.acceptingInput);
             
@@ -571,7 +575,23 @@ internal class UiManager : IUiManager {
         entry2.callback.AddListener(_ => action.Invoke());
         eventTrigger.triggers.Add(entry2);
     }
-    
+
+    /// <summary>
+    /// Check whether key binds for going back from the multiplayer menu is pressed.
+    /// </summary>
+    private void CheckKeyBinds() {
+        if (!_connectGroup.IsActive()) {
+            return;
+        }
+
+        if (InputHandler.Instance.inputActions.Pause.IsPressed) {
+            UM.StartCoroutine(UM.HideCurrentMenu());
+            UM.UIGoToMainMenu();
+
+            _connectGroup.SetActive(false);
+        }
+    }
+
     #region Internal UI manager methods
 
     /// <summary>
