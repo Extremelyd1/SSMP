@@ -40,85 +40,85 @@ public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
     [ModMenuSetting("Skins", "Whether players can have skins")]
     public bool AllowSkins { get; set; } = true;
 
-    /// <inheritdoc />
-    [SettingAlias("parries")]
-    [ModMenuSetting("Parries", "Whether parrying certain player attacks is possible")]
-    public bool AllowParries { get; set; } = true;
-
-    /// <inheritdoc />
-    [SettingAlias("naildmg")]
-    [ModMenuSetting("Nail Damage", "The number of masks of damage that a player's nail swing deals")]
-    public byte NailDamage { get; set; } = 1;
-
-    /// <inheritdoc />
-    [SettingAlias("elegydmg")]
-    [ModMenuSetting("Grubberfly's Elegy Damage", "The number of masks of damage that Grubberfly's Elegy deals")]
-    public byte GrubberflyElegyDamage { get; set; } = 1;
-
-    /// <inheritdoc />
-    [SettingAlias("vsdmg", "fireballdamage", "fireballdmg")]
-    [ModMenuSetting("Vengeful Spirit Damage", "The number of masks of damage that Vengeful Spirit deals")]
-    public byte VengefulSpiritDamage { get; set; } = 1;
-
-    /// <inheritdoc />
-    [SettingAlias("shadesouldmg")]
-    [ModMenuSetting("Shade Soul Damage", "The number of masks of damage that Shade Soul deals")]
-    public byte ShadeSoulDamage { get; set; } = 2;
-
-    /// <inheritdoc />
-    [SettingAlias("desolatedivedmg", "ddivedmg")]
-    [ModMenuSetting("Desolate Dive Damage", "The number of masks of damage that Desolate Dive deals")]
-    public byte DesolateDiveDamage { get; set; } = 1;
-
-    /// <inheritdoc />
-    [SettingAlias("descendingdarkdmg", "ddarkdmg")]
-    [ModMenuSetting("Descending Dark Damage", "The number of masks of damage that Descending Dark deals")]
-    public byte DescendingDarkDamage { get; set; } = 2;
-
-    /// <inheritdoc />
-    [SettingAlias("howlingwraithsdamage", "howlingwraithsdmg", "wraithsdmg")]
-    [ModMenuSetting("Howling Wraiths Damage", "The number of masks of damage that Howling Wraiths deals")]
-    public byte HowlingWraithDamage { get; set; } = 1;
-
-    /// <inheritdoc />
-    [SettingAlias("abyssshriekdmg", "shriekdmg")]
-    [ModMenuSetting("Abyss Shriek Damage", "The number of masks of damage that Abyss Shriek deals")]
-    public byte AbyssShriekDamage { get; set; } = 2;
-
-    /// <inheritdoc />
-    [SettingAlias("greatslashdmg")]
-    [ModMenuSetting("Great Slash Damage", "The number of masks of damage that Great Slash deals")]
-    public byte GreatSlashDamage { get; set; } = 2;
-
-    /// <inheritdoc />
-    [SettingAlias("dashslashdmg")]
-    [ModMenuSetting("Dash Slash Damage", "The number of masks of damage that Dash Slash deals")]
-    public byte DashSlashDamage { get; set; } = 2;
-
-    /// <inheritdoc />
-    [SettingAlias("cycloneslashdmg", "cyclonedmg")]
-    [ModMenuSetting("Cyclone Slash Damage", "The number of masks of damage that Cyclone Slash deals")]
-    public byte CycloneSlashDamage { get; set; } = 1;
-
-    /// <inheritdoc />
-    [SettingAlias("sporeshroomdmg")]
-    [ModMenuSetting("Spore Shroom Damage", "The number of masks of damage that a Spore Shroom cloud deals")]
-    public byte SporeShroomDamage { get; set; } = 1;
-
-    /// <inheritdoc />
-    [SettingAlias("sporedungshroomdmg", "dungshroomdmg")]
-    [ModMenuSetting("Spore-Dung Shroom Damage", "The number of masks of damage that a Spore Shroom cloud with Defender's Crest deals")]
-    public byte SporeDungShroomDamage { get; set; } = 1;
-
-    /// <inheritdoc />
-    [SettingAlias("thornsofagonydamage", "thornsofagonydmg", "thornsdamage", "thornsdmg")]
-    [ModMenuSetting("Thorns of Agongy Damage", "The number of masks of damage that the Thorns of Agony lash deals")]
-    public byte ThornOfAgonyDamage { get; set; } = 1;
-
-    /// <inheritdoc />
-    [SettingAlias("sharpshadowdmg")]
-    [ModMenuSetting("Sharp Shadow Damage", "The number of masks of damage that a Sharp Shadow dash deals")]
-    public byte SharpShadowDamage { get; set; } = 1;
+    // /// <inheritdoc />
+    // [SettingAlias("parries")]
+    // [ModMenuSetting("Parries", "Whether parrying certain player attacks is possible")]
+    // public bool AllowParries { get; set; } = true;
+    //
+    // /// <inheritdoc />
+    // [SettingAlias("naildmg")]
+    // [ModMenuSetting("Nail Damage", "The number of masks of damage that a player's nail swing deals")]
+    // public byte NailDamage { get; set; } = 1;
+    //
+    // /// <inheritdoc />
+    // [SettingAlias("elegydmg")]
+    // [ModMenuSetting("Grubberfly's Elegy Damage", "The number of masks of damage that Grubberfly's Elegy deals")]
+    // public byte GrubberflyElegyDamage { get; set; } = 1;
+    //
+    // /// <inheritdoc />
+    // [SettingAlias("vsdmg", "fireballdamage", "fireballdmg")]
+    // [ModMenuSetting("Vengeful Spirit Damage", "The number of masks of damage that Vengeful Spirit deals")]
+    // public byte VengefulSpiritDamage { get; set; } = 1;
+    //
+    // /// <inheritdoc />
+    // [SettingAlias("shadesouldmg")]
+    // [ModMenuSetting("Shade Soul Damage", "The number of masks of damage that Shade Soul deals")]
+    // public byte ShadeSoulDamage { get; set; } = 2;
+    //
+    // /// <inheritdoc />
+    // [SettingAlias("desolatedivedmg", "ddivedmg")]
+    // [ModMenuSetting("Desolate Dive Damage", "The number of masks of damage that Desolate Dive deals")]
+    // public byte DesolateDiveDamage { get; set; } = 1;
+    //
+    // /// <inheritdoc />
+    // [SettingAlias("descendingdarkdmg", "ddarkdmg")]
+    // [ModMenuSetting("Descending Dark Damage", "The number of masks of damage that Descending Dark deals")]
+    // public byte DescendingDarkDamage { get; set; } = 2;
+    //
+    // /// <inheritdoc />
+    // [SettingAlias("howlingwraithsdamage", "howlingwraithsdmg", "wraithsdmg")]
+    // [ModMenuSetting("Howling Wraiths Damage", "The number of masks of damage that Howling Wraiths deals")]
+    // public byte HowlingWraithDamage { get; set; } = 1;
+    //
+    // /// <inheritdoc />
+    // [SettingAlias("abyssshriekdmg", "shriekdmg")]
+    // [ModMenuSetting("Abyss Shriek Damage", "The number of masks of damage that Abyss Shriek deals")]
+    // public byte AbyssShriekDamage { get; set; } = 2;
+    //
+    // /// <inheritdoc />
+    // [SettingAlias("greatslashdmg")]
+    // [ModMenuSetting("Great Slash Damage", "The number of masks of damage that Great Slash deals")]
+    // public byte GreatSlashDamage { get; set; } = 2;
+    //
+    // /// <inheritdoc />
+    // [SettingAlias("dashslashdmg")]
+    // [ModMenuSetting("Dash Slash Damage", "The number of masks of damage that Dash Slash deals")]
+    // public byte DashSlashDamage { get; set; } = 2;
+    //
+    // /// <inheritdoc />
+    // [SettingAlias("cycloneslashdmg", "cyclonedmg")]
+    // [ModMenuSetting("Cyclone Slash Damage", "The number of masks of damage that Cyclone Slash deals")]
+    // public byte CycloneSlashDamage { get; set; } = 1;
+    //
+    // /// <inheritdoc />
+    // [SettingAlias("sporeshroomdmg")]
+    // [ModMenuSetting("Spore Shroom Damage", "The number of masks of damage that a Spore Shroom cloud deals")]
+    // public byte SporeShroomDamage { get; set; } = 1;
+    //
+    // /// <inheritdoc />
+    // [SettingAlias("sporedungshroomdmg", "dungshroomdmg")]
+    // [ModMenuSetting("Spore-Dung Shroom Damage", "The number of masks of damage that a Spore Shroom cloud with Defender's Crest deals")]
+    // public byte SporeDungShroomDamage { get; set; } = 1;
+    //
+    // /// <inheritdoc />
+    // [SettingAlias("thornsofagonydamage", "thornsofagonydmg", "thornsdamage", "thornsdmg")]
+    // [ModMenuSetting("Thorns of Agongy Damage", "The number of masks of damage that the Thorns of Agony lash deals")]
+    // public byte ThornOfAgonyDamage { get; set; } = 1;
+    //
+    // /// <inheritdoc />
+    // [SettingAlias("sharpshadowdmg")]
+    // [ModMenuSetting("Sharp Shadow Damage", "The number of masks of damage that a Sharp Shadow dash deals")]
+    // public byte SharpShadowDamage { get; set; } = 1;
 
     /// <summary>
     /// Set all properties in this <see cref="ServerSettings"/> instance to the values from the given
