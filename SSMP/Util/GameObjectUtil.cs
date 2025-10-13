@@ -22,11 +22,17 @@ internal static class GameObjectUtil {
             return null;
         }
 
-        foreach (var componentsInChild in gameObject.GetComponentsInChildren<Transform>(true)) {
-            if (componentsInChild.name == name) {
-                return componentsInChild.gameObject;
+        for (var i = 0; i < gameObject.transform.childCount; i++) {
+            var child = gameObject.transform.GetChild(i);
+            if (child != null && child.name == name) {
+                return child.gameObject;
             }
         }
+        // foreach (var componentsInChild in gameObject.GetComponentsInChildren<Transform>(true)) {
+        //     if (componentsInChild.name == name) {
+        //         return componentsInChild.gameObject;
+        //     }
+        // }
 
         return null;
     }
