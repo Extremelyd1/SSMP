@@ -15,6 +15,8 @@
         </RestoreAdditionalProjectSources>
         <!--Allow access of private members at runtime.-->
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <!--Shortens and anonymizes paths in debug symbols relative to the project directory. Breakpoints will not work, however.-->
+        <PathMap Condition="'$(Configuration)' == 'Release'">$(MSBuildProjectDirectory)=source</PathMap>
         <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
         <LangVersion>latest</LangVersion>
     </PropertyGroup>
