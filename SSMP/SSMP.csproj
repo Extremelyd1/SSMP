@@ -13,6 +13,7 @@
         <RestoreAdditionalProjectSources>
             https://nuget.bepinex.dev/v3/index.json
         </RestoreAdditionalProjectSources>
+        <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
         <!--Allow access of private members at runtime.-->
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <!--Shortens and anonymizes paths in debug symbols relative to the project directory. Breakpoints will not work, however.-->
@@ -24,7 +25,7 @@
     <PropertyGroup>
         <!--These properties will control the generated PluginInfo. Version is also used by various parts of the build system.-->
         <AssemblyTitle>SSMP</AssemblyTitle>
-        <Version>0.1.1</Version>
+        <Version>0.0.1.0</Version>
     </PropertyGroup>
 
     <ItemGroup>
@@ -55,10 +56,10 @@
             <IncludeAssets>compile</IncludeAssets>
         </PackageReference>
         <!--If you're unable resolve this dependency, check that you're using the nuget v3 package feed instead of v2.-->
-        <PackageReference Include="Silksong.GameLibs" Version="1.1.0-silksong1.0.28650">
+        <PackageReference Include="Silksong.GameLibs" Version="*-*">
             <IncludeAssets>compile</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="BouncyCastle.Cryptography" Version="2.5.1"/>
+        <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2"/>
     </ItemGroup>
 
     <Target Name="CopyMod" AfterTargets="PostBuildEvent" Condition="'$(SilksongFolder)' != ''">
