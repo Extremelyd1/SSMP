@@ -4,7 +4,6 @@ using SSMP.Networking.Packet;
 using SSMP.Networking.Server;
 using SSMPServer.Command;
 using SSMPServer.Logging;
-using Version = SSMP.Version;
 
 namespace SSMPServer;
 
@@ -74,7 +73,7 @@ public class Launcher {
         ConsoleInputManager consoleInputManager,
         ConsoleLogger consoleLogger
     ) {
-        Logger.Info($"Starting server v{Version.String}");
+        Logger.Info($"Starting server vUNKNOWN");
 
         var packetManager = new PacketManager();
 

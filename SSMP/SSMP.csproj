@@ -25,7 +25,7 @@
     <PropertyGroup>
         <!--These properties will control the generated PluginInfo. Version is also used by various parts of the build system.-->
         <AssemblyTitle>SSMP</AssemblyTitle>
-        <Version>0.0.1.0</Version>
+        <Version>0.0.2.0</Version>
     </PropertyGroup>
 
     <ItemGroup>

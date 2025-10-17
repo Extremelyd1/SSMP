@@ -82,13 +82,13 @@ public static class CustomHooks {
             HeroControllerOnEnterSceneDreamGate
         );
         
-        var type = typeof(HeroController).GetNestedType("<EnterScene>d__961", BindingFlags);
+        var type = typeof(HeroController).GetNestedType("<EnterScene>d__963", BindingFlags);
         new ILHook(type.GetMethod("MoveNext", BindingFlags), HeroControllerOnEnterScene);
 
-        type = typeof(HeroController).GetNestedType("<EnterHeroSubHorizontal>d__962", BindingFlags);
+        type = typeof(HeroController).GetNestedType("<EnterHeroSubHorizontal>d__964", BindingFlags);
         new ILHook(type.GetMethod("MoveNext", BindingFlags), HeroControllerOnEnterHeroSubHorizontal);
 
-        type = typeof(HeroController).GetNestedType("<Respawn>d__969", BindingFlags);
+        type = typeof(HeroController).GetNestedType("<Respawn>d__972", BindingFlags);
         new ILHook(type.GetMethod("MoveNext", BindingFlags), HeroControllerOnRespawn);
 
         // IL.HutongGames.PlayMaker.Actions.ApplyMusicCue.OnEnter += ApplyMusicCueOnEnter;

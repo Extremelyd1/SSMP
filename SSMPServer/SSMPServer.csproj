@@ -2,14 +2,19 @@
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
-        <TargetFramework>netstandard2.1</TargetFramework>
+        <TargetFramework>net9.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <LangVersion>latest</LangVersion>
     </PropertyGroup>
 
+    <PropertyGroup>
+        <AssemblyTitle>SSMPServer</AssemblyTitle>
+        <Version>0.0.1.0</Version>
+    </PropertyGroup>
+
     <ItemGroup>
-      <ProjectReference Include="..\SSMP\SSMP.csproj" />
+        <ProjectReference Include="..\SSMP\SSMP.csproj" />
     </ItemGroup>
 
 </Project>
