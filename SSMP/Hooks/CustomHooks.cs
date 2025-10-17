@@ -6,6 +6,7 @@ using HutongGames.PlayMaker.Actions;
 using Mono.Cecil.Cil;
 using MonoMod.Cil;
 using MonoMod.RuntimeDetour;
+using MonoMod.Utils;
 using SSMP.Logging;
 using UnityEngine.Audio;
 
@@ -81,15 +82,21 @@ public static class CustomHooks {
             typeof(HeroController).GetMethod(nameof(HeroController.EnterSceneDreamGate), BindingFlags),
             HeroControllerOnEnterSceneDreamGate
         );
-        
-        var type = typeof(HeroController).GetNestedType("<EnterScene>d__963", BindingFlags);
-        new ILHook(type.GetMethod("MoveNext", BindingFlags), HeroControllerOnEnterScene);
 
-        type = typeof(HeroController).GetNestedType("<EnterHeroSubHorizontal>d__964", BindingFlags);
-        new ILHook(type.GetMethod("MoveNext", BindingFlags), HeroControllerOnEnterHeroSubHorizontal);
+        new ILHook(
+            typeof(HeroController).GetMethod(nameof(HeroController.EnterScene)).GetStateMachineTarget(), 
+            HeroControllerOnEnterScene
+        );
 
-        type = typeof(HeroController).GetNestedType("<Respawn>d__972", BindingFlags);
-        new ILHook(type.GetMethod("MoveNext", BindingFlags), HeroControllerOnRespawn);
+        new ILHook(
+            typeof(HeroController).GetMethod(nameof(HeroController.EnterHeroSubHorizontal), BindingFlags).GetStateMachineTarget(),
+            HeroControllerOnEnterHeroSubHorizontal
+        );
+
+        new ILHook(
+            typeof(HeroController).GetMethod(nameof(HeroController.Respawn)).GetStateMachineTarget(), 
+            HeroControllerOnRespawn
+        );
 
         // IL.HutongGames.PlayMaker.Actions.ApplyMusicCue.OnEnter += ApplyMusicCueOnEnter;
         // IL.HutongGames.PlayMaker.Actions.TransitionToAudioSnapshot.OnEnter += TransitionToAudioSnapshotOnEnter;
