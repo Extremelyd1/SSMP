@@ -479,6 +479,8 @@ internal class AnimationManager {
                     || localPlayerTeam.Equals(Team.None)
                 );
             }
+            
+            if (_debugLogAnimations) Logger.Info($"Playing animation effect for animation clip: {animationClip}, {animationEffect.GetType()}");
 
             animationEffect.Play(
                 playerObject,
@@ -546,7 +548,7 @@ internal class AnimationManager {
                 clip = overrideGroupClip;
                 clipInOverrideGroupLib = true;
                 
-                Logger.Info("Found clip in override group's override animation library");
+                if (_debugLogAnimations) Logger.Info("Found clip in override group's override animation library");
             }
         }
 
@@ -554,7 +556,7 @@ internal class AnimationManager {
             if (AnimationUtil.TryFindClipInOverrideGroup(configGroup, clipName, out var configGroupClip)) {
                 clip = configGroupClip;
                 
-                Logger.Info("Found clip in config group's override animation library");
+                if (_debugLogAnimations) Logger.Info("Found clip in config group's override animation library");
             }
         }
 

@@ -36,11 +36,12 @@ internal class DashSlash : SlashBase {
 
         var sprintFsm = HeroController.instance.sprintFSM;
 
-        if (crestType is CrestType.Hunter or CrestType.Witch) {
+        if (crestType.IsHunter() || crestType is CrestType.Witch or CrestType.Cloakless) {
             DashStabNailAttack? dashStabNailAttackPrefab;
 
-            if (crestType is CrestType.Hunter) {
-                var configGroup = HeroController.instance.configs[0];
+            if (crestType.IsHunter() || crestType is CrestType.Cloakless) {
+                // Index 0 in the configs is for Hunter, 1 is for Cloakless
+                var configGroup = HeroController.instance.configs[crestType.IsHunter() ? 0 : 1];
                 dashStabNailAttackPrefab = configGroup.DashStab.GetComponent<DashStabNailAttack>();
             } else {
                 var configGroup = HeroController.instance.configs[6];
@@ -99,6 +100,10 @@ internal class DashSlash : SlashBase {
             // OnSlashStarting
             var longclaw = slashEffects.Contains(SlashEffect.Longclaw);
             ApplyLongclawMultiplier(longclaw, SlashType.Dash, slashObj, scale);
+            
+            if (ServerSettings.IsPvpEnabled && ShouldDoDamage) {
+                AddDamageHeroComponent(slashObj);
+            }
 
             // TODO: Nail imbuement (see OnPlaySlash in NailAttackBase.cs)
             
