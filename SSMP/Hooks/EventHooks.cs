@@ -250,6 +250,11 @@ public static class EventHooks {
     }
 
     private static void OnToolItemManagerSetEquippedCrest(Action<string> orig, string crestId) {
-        ToolItemManagerSetEquippedCrest?.Invoke(orig, crestId);
+        if (ToolItemManagerSetEquippedCrest == null) {
+            orig(crestId);
+            return;
+        }
+
+        ToolItemManagerSetEquippedCrest.Invoke(orig, crestId);
     }
 }
