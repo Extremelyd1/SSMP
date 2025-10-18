@@ -19,6 +19,9 @@ internal enum AnimationClip {
     RunToIdle,
     Idle,
     IdleToRun,
+    WalkToIdle,
+    RunToWalk,
+    LandToWalk,
     Turn,
     Dash,
     DashDown,
@@ -392,6 +395,24 @@ internal enum AnimationClip {
     UpdraftAnticDJ,
     UpdraftRise,
     UpdraftRiseTurn,
+
+    ProstrateRiseNoNeedle,
+    BindFirst,
+    BindBurstFirst,
+    ThwipToIdle,
+    
+    WeakenedStun,
+    WeakRiseToIdle,
+    WeakWalk,
+    WeakTryJumpAntic,
+    WeakTryAttack,
+    WeakenedStunEnd,
+    
+    TauntCollapse1,
+    TauntCollapse2,
+    TauntCollapseHit,
+    ProstrateRise,
+    TalkingStandard,
 
     // Custom clip names
     DashEnd,

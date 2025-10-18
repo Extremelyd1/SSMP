@@ -64,6 +64,9 @@ internal class AnimationManager {
         { "Run To Idle", AnimationClip.RunToIdle },
         { "Idle", AnimationClip.Idle },
         { "Idle To Run", AnimationClip.IdleToRun },
+        { "Walk To Idle", AnimationClip.WalkToIdle },
+        { "Run To Walk", AnimationClip.RunToWalk },
+        { "Land To Walk", AnimationClip.LandToWalk },
         { "Turn", AnimationClip.Turn },
         { "Dash", AnimationClip.Dash },
         { "Dash Down", AnimationClip.DashDown },
@@ -274,6 +277,24 @@ internal class AnimationManager {
         { "Updraft Antic DJ", AnimationClip.UpdraftAnticDJ },
         { "Updraft Rise", AnimationClip.UpdraftRise },
         { "Updraft Rise Turn", AnimationClip.UpdraftRiseTurn },
+        
+        { "Prostrate Rise NoNeedle", AnimationClip.ProstrateRiseNoNeedle },
+        { "Bind First", AnimationClip.BindFirst },
+        { "BindBurst First", AnimationClip.BindBurstFirst },
+        { "Thwip To Idle", AnimationClip.ThwipToIdle },
+        
+        { "Weakened Stun", AnimationClip.WeakenedStun },
+        { "Weak Rise To Idle", AnimationClip.WeakRiseToIdle },
+        { "Weak Walk", AnimationClip.WeakWalk },
+        { "Weak TryJumpAntic", AnimationClip.WeakTryJumpAntic },
+        { "Weak TryAttack", AnimationClip.WeakTryAttack },
+        { "Weakened StunEnd", AnimationClip.WeakenedStunEnd },
+        
+        { "Taunt Collapse1", AnimationClip.TauntCollapse1 },
+        { "Taunt Collapse2", AnimationClip.TauntCollapse2 },
+        { "Taunt CollapseHit", AnimationClip.TauntCollapseHit },
+        { "Prostrate Rise", AnimationClip.ProstrateRise },
+        { "Talking Standard", AnimationClip.TalkingStandard },
     };
 
     /// <summary>
