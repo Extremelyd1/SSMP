@@ -1,6 +1,4 @@
-using SSMP.Game.Client.Save;
 using SSMP.Game.Command.Server;
-using SSMP.Game.Server.Save;
 using SSMP.Game.Settings;
 using SSMP.Networking.Packet;
 using SSMP.Networking.Server;
@@ -28,11 +26,11 @@ internal class ModServerManager : ServerManager {
     /// </summary>
     private readonly SettingsCommand _settingsCommand;
     
-    /// <summary>
-    /// Save data that was loaded from selecting a save file. Will be retroactively applied to a server, if one was
-    /// requested to be started after selecting a save file.
-    /// </summary>
-    private ServerSaveData? _loadedLocalSaveData;
+    // /// <summary>
+    // /// Save data that was loaded from selecting a save file. Will be retroactively applied to a server, if one was
+    // /// requested to be started after selecting a save file.
+    // /// </summary>
+    // private ServerSaveData? _loadedLocalSaveData;
     
     public ModServerManager(
         NetServer netServer,
@@ -67,21 +65,21 @@ internal class ModServerManager : ServerManager {
     /// <param name="port">The port to start the server on.</param>
     /// <param name="fullSynchronisation">Whether full synchronisation is enabled.</param>
     private void OnRequestServerStartHost(int port, bool fullSynchronisation) {
-        if (fullSynchronisation) {
-            // Get the global save data from the save manager, which obtains the global save data from the loaded
-            // save file that the user selected
-            ServerSaveData.GlobalSaveData = SaveManager.GetCurrentSaveData(true);
-
-            // Then we import the player save data from the (potentially) loaded modded save file from the user selected
-            // save file
-            if (_loadedLocalSaveData != null) {
-                ServerSaveData.PlayerSaveData = _loadedLocalSaveData.PlayerSaveData;
-            }
-
-            // Lastly, we get the player save data from the save manager, which obtains the player save data from the
-            // loaded save file that the user selected. We add this data to the server save as the local player
-            ServerSaveData.PlayerSaveData[_modSettings.AuthKey!] = SaveManager.GetCurrentSaveData(false);
-        }
+        // if (fullSynchronisation) {
+        //     // Get the global save data from the save manager, which obtains the global save data from the loaded
+        //     // save file that the user selected
+        //     ServerSaveData.GlobalSaveData = SaveManager.GetCurrentSaveData(true);
+        //
+        //     // Then we import the player save data from the (potentially) loaded modded save file from the user selected
+        //     // save file
+        //     if (_loadedLocalSaveData != null) {
+        //         ServerSaveData.PlayerSaveData = _loadedLocalSaveData.PlayerSaveData;
+        //     }
+        //
+        //     // Lastly, we get the player save data from the save manager, which obtains the player save data from the
+        //     // loaded save file that the user selected. We add this data to the server save as the local player
+        //     ServerSaveData.PlayerSaveData[_modSettings.AuthKey!] = SaveManager.GetCurrentSaveData(false);
+        // }
 
         Start(port, fullSynchronisation);
     }
@@ -98,21 +96,5 @@ internal class ModServerManager : ServerManager {
         base.DeregisterCommands();
         
         CommandManager.DeregisterCommand(_settingsCommand);
-    }
-
-    /// <summary>
-    /// Callback for when a local save is loaded.
-    /// </summary>
-    /// <param name="modSaveFile">The deserialized ModSaveFile instance.</param>
-    public void OnLoadLocal(ModSaveFile modSaveFile) {
-        _loadedLocalSaveData = modSaveFile.ToServerSaveData();
-    }
-
-    /// <summary>
-    /// Callback for when a local save is saved.
-    /// </summary>
-    /// <returns>The ModSaveFile instance to serialize to file.</returns>
-    public ModSaveFile OnSaveLocal() {
-        return ModSaveFile.FromServerSaveData(ServerSaveData);
     }
 }

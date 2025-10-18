@@ -10,10 +10,8 @@ using SSMP.Api.Server;
 using SSMP.Eventing;
 using SSMP.Eventing.ServerEvents;
 using SSMP.Game.Client.Entity.Component;
-using SSMP.Game.Client.Save;
 using SSMP.Game.Command.Server;
 using SSMP.Game.Server.Auth;
-using SSMP.Game.Server.Save;
 using SSMP.Game.Settings;
 using SSMP.Logging;
 using SSMP.Math;
@@ -22,7 +20,6 @@ using SSMP.Networking.Packet;
 using SSMP.Networking.Packet.Data;
 using SSMP.Networking.Packet.Update;
 using SSMP.Networking.Server;
-using SSMP.Util;
 
 namespace SSMP.Game.Server;
 
@@ -95,11 +92,11 @@ internal abstract class ServerManager : IServerManager {
     /// </summary>
     protected bool FullSynchronisation;
 
-    /// <summary>
-    /// The save data for the server. The instance will be created in the constructor and is passed around to other
-    /// objects. Therefore, it should not change instances.
-    /// </summary>
-    protected ServerSaveData ServerSaveData;
+    // /// <summary>
+    // /// The save data for the server. The instance will be created in the constructor and is passed around to other
+    // /// objects. Therefore, it should not change instances.
+    // /// </summary>
+    // protected ServerSaveData ServerSaveData;
 
     #endregion
     
@@ -137,10 +134,10 @@ internal abstract class ServerManager : IServerManager {
     /// The skin command.
     /// </summary>
     private readonly IServerCommand _skinCommand;
-    /// <summary>
-    /// The copy save command.
-    /// </summary>
-    private readonly IServerCommand _copySaveCommand;
+    // /// <summary>
+    // /// The copy save command.
+    // /// </summary>
+    // private readonly IServerCommand _copySaveCommand;
     
     #endregion
 
@@ -192,7 +189,7 @@ internal abstract class ServerManager : IServerManager {
         var serverApi = new ServerApi(this, CommandManager, _netServer, eventAggregator);
         AddonManager = new ServerAddonManager(serverApi);
 
-        ServerSaveData = new ServerSaveData();
+        // ServerSaveData = new ServerSaveData();
 
         // Load the lists
         _whiteList = WhiteList.LoadFromFile();
@@ -207,7 +204,7 @@ internal abstract class ServerManager : IServerManager {
         _kickCommand = new KickCommand(this);
         _teamCommand = new TeamCommand(this);
         _skinCommand = new SkinCommand(this);
-        _copySaveCommand = new CopySaveCommand(this, ServerSaveData);
+        // _copySaveCommand = new CopySaveCommand(this, ServerSaveData);
     }
 
     #region Internal server manager methods
@@ -239,9 +236,9 @@ internal abstract class ServerManager : IServerManager {
         CommandManager.RegisterCommand(_teamCommand);
         CommandManager.RegisterCommand(_skinCommand);
 
-        if (FullSynchronisation) {
-            CommandManager.RegisterCommand(_copySaveCommand);
-        }
+        // if (FullSynchronisation) {
+        //     CommandManager.RegisterCommand(_copySaveCommand);
+        // }
     }
 
     /// <summary>
@@ -257,9 +254,9 @@ internal abstract class ServerManager : IServerManager {
         CommandManager.DeregisterCommand(_teamCommand);
         CommandManager.DeregisterCommand(_skinCommand);
 
-        if (FullSynchronisation) {
-            CommandManager.DeregisterCommand(_copySaveCommand);
-        }
+        // if (FullSynchronisation) {
+        //     CommandManager.DeregisterCommand(_copySaveCommand);
+        // }
     }
 
     /// <summary>
@@ -1119,12 +1116,12 @@ internal abstract class ServerManager : IServerManager {
 
         Logger.Info($"Received PlayerDeath data from ({id}, {playerData.Username})");
 
-        if (ServerSaveData.IsSteelSoul()) {
-            // We are running a Steel Soul save file, so we wipe the player-specific data for the player
-            ServerSaveData.PlayerSaveData.Remove(playerData.AuthKey);
-            
-            Logger.Info("  Wiped player save data (Steel Soul)");
-        }
+        // if (ServerSaveData.IsSteelSoul()) {
+        //     // We are running a Steel Soul save file, so we wipe the player-specific data for the player
+        //     ServerSaveData.PlayerSaveData.Remove(playerData.AuthKey);
+        //     
+        //     Logger.Info("  Wiped player save data (Steel Soul)");
+        // }
 
         SendDataInSameScene(
             id,
@@ -1398,8 +1395,10 @@ internal abstract class ServerManager : IServerManager {
 
         serverInfo.PlayerInfo = playerInfo;
 
-        // Obtain the save data for the connecting client and add it to the server info
-        serverInfo.CurrentSave = ServerSaveData.GetCurrentSaveData(clientInfo.AuthKey);
+        // if (FullSynchronisation) {
+        //     // Obtain the save data for the connecting client and add it to the server info
+        //     serverInfo.CurrentSave = ServerSaveData.GetCurrentSaveData(clientInfo.AuthKey);
+        // }
 
         // Create new player data and store it
         var playerData = new ServerPlayerData(
@@ -1592,144 +1591,144 @@ internal abstract class ServerManager : IServerManager {
     /// <param name="id">The ID of the player.</param>
     /// <param name="packet">The SaveUpdate packet data.</param>
     protected virtual void OnSaveUpdate(ushort id, SaveUpdate packet) {
-        if (!FullSynchronisation) {
-            return;
-        }
-
-        if (!_playerData.TryGetValue(id, out var playerData)) {
-            Logger.Debug($"Could not process save update from unknown player ID: {id}");
-            return;
-        }
-
-        Logger.Info($"Save update from ({id}, {playerData.Username}), index: {packet.SaveDataIndex}");
-
-        // Find the properties for syncing this save update, based on whether it is a geo rock, player data or 
-        // persistent bool/int item
-        SaveDataMapping.VarProperties varProps;
-        string? pdVarName = null;
-        if (SaveDataMapping.Instance.GeoRockIndices.TryGetValue(packet.SaveDataIndex, out var persistentItemData)) {
-            Logger.Debug($"  Found GeoRockData: {persistentItemData.Id}, {persistentItemData.SceneName}");
-            
-            if (!SaveDataMapping.Instance.GeoRockBools.TryGetValue(persistentItemData, out _)) {
-                return;
-            }
-
-            varProps = new SaveDataMapping.VarProperties {
-                Sync = true,
-                SyncType = SaveDataMapping.SyncType.Server,
-                IgnoreSceneHost = false
-            };
-        } else if (SaveDataMapping.Instance.PlayerDataIndices.TryGetValue(packet.SaveDataIndex, out pdVarName)) {
-            Logger.Debug($"  Found PlayerData: {pdVarName}");
-            
-            if (!SaveDataMapping.Instance.PlayerDataVarProperties.TryGetValue(pdVarName, out varProps)) {
-                return;
-            }
-        } else if (SaveDataMapping.Instance.PersistentBoolIndices.TryGetValue(
-            packet.SaveDataIndex, 
-            out persistentItemData)
-        ) {
-            Logger.Debug($"  Found PersistentBoolData: {persistentItemData.Id}, {persistentItemData.SceneName}");
-            
-            if (!SaveDataMapping.Instance.PersistentBoolVarProperties.TryGetValue(persistentItemData, out varProps)) {
-                return;
-            }
-        } else if (SaveDataMapping.Instance.PersistentIntIndices.TryGetValue(
-            packet.SaveDataIndex, 
-            out persistentItemData)
-        ) {
-            Logger.Debug($"  Found PersistentIntData: {persistentItemData.Id}, {persistentItemData.SceneName}");
-            
-            if (!SaveDataMapping.Instance.PersistentIntVarProperties.TryGetValue(persistentItemData, out varProps)) {
-                return;
-            }
-        } else {
-            Logger.Debug("  Could not find sync props for save update");
-            return;
-        }
-
-        // Check whether this save update requires the player to be scene host and do the check for it
-        if (!varProps.IgnoreSceneHost && !playerData.IsSceneHost) {
-            Logger.Debug("  Player is not scene host, but should be for update, not broadcasting");
-            return;
-        }
-
-        if (varProps.SyncType == SaveDataMapping.SyncType.Player) {
-            Logger.Debug("  SyncType is Player");
-            
-            if (!ServerSaveData.PlayerSaveData.TryGetValue(playerData.AuthKey, out var playerSaveData)) {
-                Logger.Debug("  No PlayerSaveData for player yet, creating one");
-                playerSaveData = new Dictionary<ushort, byte[]>();
-                ServerSaveData.PlayerSaveData[playerData.AuthKey] = playerSaveData;
-            }
-            
-            Logger.Debug("  Storing player data");
-
-            playerSaveData[packet.SaveDataIndex] = packet.Value;
-        } else if (varProps.SyncType == SaveDataMapping.SyncType.Server) {
-            if (varProps.Additive) {
-                if (pdVarName == null) {
-                    Logger.Debug("  Cannot decode value, name for variable is null");
-                    return;
-                }
-
-                object? decodedCurrentValue = null;
-                var decodedDeltaValue = EncodeUtil.DecodeSaveDataValue(pdVarName, packet.Value);
-
-                if (!ServerSaveData.GlobalSaveData.TryGetValue(packet.SaveDataIndex, out var currentValue)) {
-                    Logger.Debug($"No current value is stored in the global save data for: {pdVarName}");
-
-                    if (varProps.InitialValue != null) {
-                        Logger.Debug($"  Taking initial value: {varProps.InitialValue}");
-                        decodedCurrentValue = varProps.InitialValue;
-                    } else {
-                        Logger.Debug("  No initial value defined, using delta as absolute");
-                        packet.Value = EncodeUtil.EncodeSaveDataValue(decodedDeltaValue);
-                    }
-                } else {
-                    decodedCurrentValue = EncodeUtil.DecodeSaveDataValue(pdVarName, currentValue);
-                }
-
-                if (decodedCurrentValue != null) {
-                    object? decodedNewValue;
-
-                    if (decodedCurrentValue is int decodedCurrentInt && decodedDeltaValue is int decodedDeltaInt) {
-                        decodedNewValue = decodedCurrentInt + decodedDeltaInt;
-                    } else if (decodedCurrentValue is List<string> decodedCurrentStringList &&
-                               decodedDeltaValue is List<string> decodedDeltaStringList) {
-
-                        // Loop over the delta list and add only non-duplicates
-                        foreach (var str in decodedDeltaStringList) {
-                            if (!decodedCurrentStringList.Contains(str)) {
-                                decodedCurrentStringList.Add(str);
-                            }
-                        }
-
-                        decodedNewValue = decodedCurrentStringList;
-                    } else {
-                        Logger.Debug($"  Type of decoded values did not match: {decodedCurrentValue.GetType()}");
-                        return;
-                    }
-
-                    packet.Value = EncodeUtil.EncodeSaveDataValue(decodedNewValue);
-                }
-            }
-            
-            Logger.Debug("  SyncType is Server, broadcasting save update");
-            
-            ServerSaveData.GlobalSaveData[packet.SaveDataIndex] = packet.Value;
-            
-            foreach (var idPlayerDataPair in _playerData) {
-                var otherId = idPlayerDataPair.Key;
-                // For additive properties, it might happen (due to race conditions) that the resulting value needs to
-                // be sent to the sender of this packet as well
-                if (id == otherId && !varProps.Additive) {
-                    continue;
-                }
-
-                _netServer.GetUpdateManagerForClient(otherId)?.SetSaveUpdate(packet.SaveDataIndex, packet.Value);
-            }
-        }
+        // if (!FullSynchronisation) {
+        //     return;
+        // }
+        //
+        // if (!_playerData.TryGetValue(id, out var playerData)) {
+        //     Logger.Debug($"Could not process save update from unknown player ID: {id}");
+        //     return;
+        // }
+        //
+        // Logger.Info($"Save update from ({id}, {playerData.Username}), index: {packet.SaveDataIndex}");
+        //
+        // // Find the properties for syncing this save update, based on whether it is a geo rock, player data or 
+        // // persistent bool/int item
+        // SaveDataMapping.VarProperties varProps;
+        // string? pdVarName = null;
+        // if (SaveDataMapping.Instance.GeoRockIndices.TryGetValue(packet.SaveDataIndex, out var persistentItemData)) {
+        //     Logger.Debug($"  Found GeoRockData: {persistentItemData.Id}, {persistentItemData.SceneName}");
+        //     
+        //     if (!SaveDataMapping.Instance.GeoRockBools.TryGetValue(persistentItemData, out _)) {
+        //         return;
+        //     }
+        //
+        //     varProps = new SaveDataMapping.VarProperties {
+        //         Sync = true,
+        //         SyncType = SaveDataMapping.SyncType.Server,
+        //         IgnoreSceneHost = false
+        //     };
+        // } else if (SaveDataMapping.Instance.PlayerDataIndices.TryGetValue(packet.SaveDataIndex, out pdVarName)) {
+        //     Logger.Debug($"  Found PlayerData: {pdVarName}");
+        //     
+        //     if (!SaveDataMapping.Instance.PlayerDataVarProperties.TryGetValue(pdVarName, out varProps)) {
+        //         return;
+        //     }
+        // } else if (SaveDataMapping.Instance.PersistentBoolIndices.TryGetValue(
+        //     packet.SaveDataIndex, 
+        //     out persistentItemData)
+        // ) {
+        //     Logger.Debug($"  Found PersistentBoolData: {persistentItemData.Id}, {persistentItemData.SceneName}");
+        //     
+        //     if (!SaveDataMapping.Instance.PersistentBoolVarProperties.TryGetValue(persistentItemData, out varProps)) {
+        //         return;
+        //     }
+        // } else if (SaveDataMapping.Instance.PersistentIntIndices.TryGetValue(
+        //     packet.SaveDataIndex, 
+        //     out persistentItemData)
+        // ) {
+        //     Logger.Debug($"  Found PersistentIntData: {persistentItemData.Id}, {persistentItemData.SceneName}");
+        //     
+        //     if (!SaveDataMapping.Instance.PersistentIntVarProperties.TryGetValue(persistentItemData, out varProps)) {
+        //         return;
+        //     }
+        // } else {
+        //     Logger.Debug("  Could not find sync props for save update");
+        //     return;
+        // }
+        //
+        // // Check whether this save update requires the player to be scene host and do the check for it
+        // if (!varProps.IgnoreSceneHost && !playerData.IsSceneHost) {
+        //     Logger.Debug("  Player is not scene host, but should be for update, not broadcasting");
+        //     return;
+        // }
+        //
+        // if (varProps.SyncType == SaveDataMapping.SyncType.Player) {
+        //     Logger.Debug("  SyncType is Player");
+        //     
+        //     if (!ServerSaveData.PlayerSaveData.TryGetValue(playerData.AuthKey, out var playerSaveData)) {
+        //         Logger.Debug("  No PlayerSaveData for player yet, creating one");
+        //         playerSaveData = new Dictionary<ushort, byte[]>();
+        //         ServerSaveData.PlayerSaveData[playerData.AuthKey] = playerSaveData;
+        //     }
+        //     
+        //     Logger.Debug("  Storing player data");
+        //
+        //     playerSaveData[packet.SaveDataIndex] = packet.Value;
+        // } else if (varProps.SyncType == SaveDataMapping.SyncType.Server) {
+        //     if (varProps.Additive) {
+        //         if (pdVarName == null) {
+        //             Logger.Debug("  Cannot decode value, name for variable is null");
+        //             return;
+        //         }
+        //
+        //         object? decodedCurrentValue = null;
+        //         var decodedDeltaValue = EncodeUtil.DecodeSaveDataValue(pdVarName, packet.Value);
+        //
+        //         if (!ServerSaveData.GlobalSaveData.TryGetValue(packet.SaveDataIndex, out var currentValue)) {
+        //             Logger.Debug($"No current value is stored in the global save data for: {pdVarName}");
+        //
+        //             if (varProps.InitialValue != null) {
+        //                 Logger.Debug($"  Taking initial value: {varProps.InitialValue}");
+        //                 decodedCurrentValue = varProps.InitialValue;
+        //             } else {
+        //                 Logger.Debug("  No initial value defined, using delta as absolute");
+        //                 packet.Value = EncodeUtil.EncodeSaveDataValue(decodedDeltaValue);
+        //             }
+        //         } else {
+        //             decodedCurrentValue = EncodeUtil.DecodeSaveDataValue(pdVarName, currentValue);
+        //         }
+        //
+        //         if (decodedCurrentValue != null) {
+        //             object? decodedNewValue;
+        //
+        //             if (decodedCurrentValue is int decodedCurrentInt && decodedDeltaValue is int decodedDeltaInt) {
+        //                 decodedNewValue = decodedCurrentInt + decodedDeltaInt;
+        //             } else if (decodedCurrentValue is List<string> decodedCurrentStringList &&
+        //                        decodedDeltaValue is List<string> decodedDeltaStringList) {
+        //
+        //                 // Loop over the delta list and add only non-duplicates
+        //                 foreach (var str in decodedDeltaStringList) {
+        //                     if (!decodedCurrentStringList.Contains(str)) {
+        //                         decodedCurrentStringList.Add(str);
+        //                     }
+        //                 }
+        //
+        //                 decodedNewValue = decodedCurrentStringList;
+        //             } else {
+        //                 Logger.Debug($"  Type of decoded values did not match: {decodedCurrentValue.GetType()}");
+        //                 return;
+        //             }
+        //
+        //             packet.Value = EncodeUtil.EncodeSaveDataValue(decodedNewValue);
+        //         }
+        //     }
+        //     
+        //     Logger.Debug("  SyncType is Server, broadcasting save update");
+        //     
+        //     ServerSaveData.GlobalSaveData[packet.SaveDataIndex] = packet.Value;
+        //     
+        //     foreach (var idPlayerDataPair in _playerData) {
+        //         var otherId = idPlayerDataPair.Key;
+        //         // For additive properties, it might happen (due to race conditions) that the resulting value needs to
+        //         // be sent to the sender of this packet as well
+        //         if (id == otherId && !varProps.Additive) {
+        //             continue;
+        //         }
+        //
+        //         _netServer.GetUpdateManagerForClient(otherId)?.SetSaveUpdate(packet.SaveDataIndex, packet.Value);
+        //     }
+        // }
     }
     
     #endregion
