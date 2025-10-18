@@ -36,7 +36,7 @@ internal class DashSlash : SlashBase {
 
         var sprintFsm = HeroController.instance.sprintFSM;
 
-        if (crestType.IsHunter() || crestType is CrestType.Witch or CrestType.Cloakless) {
+        if (crestType.IsHunter() || crestType is CrestType.Witch or CrestType.Cursed or CrestType.Cloakless) {
             DashStabNailAttack? dashStabNailAttackPrefab;
 
             if (crestType.IsHunter() || crestType is CrestType.Cloakless) {
@@ -88,7 +88,14 @@ internal class DashSlash : SlashBase {
             var mesh = slashObj.GetComponent<MeshRenderer>();
             var anim = slashObj.GetComponent<tk2dSpriteAnimator>();
             var scale = dashStab.scale;
-            
+
+            // Remove the event subscribers of DamageEnemies components, because it will call a method relating to
+            // the local HeroController, which does not exist for this artificial slash
+            foreach (var damageEnemies in slashObj.GetComponents<DamageEnemies>()) {
+                damageEnemies.EndedDamage -= dashStab.OnEndedDamage;
+            }
+            Object.DestroyImmediate(dashStab);
+
             // Play frame 0 of animator
             anim.PlayFromFrame(0);
 

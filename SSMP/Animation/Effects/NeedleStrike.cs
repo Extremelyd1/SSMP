@@ -260,7 +260,7 @@ internal class NeedleStrike : DamageAnimationEffect {
             return;
         }
 
-        if (crestType is CrestType.Witch) {
+        if (crestType is CrestType.Witch or CrestType.Cursed) {
             if (_witchLoop) {
                 var existingStrikeObj = playerAttacks.FindGameObjectInChildren("Needle Strike");
                 if (existingStrikeObj == null) {
