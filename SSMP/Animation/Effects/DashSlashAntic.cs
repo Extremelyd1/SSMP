@@ -34,7 +34,7 @@ internal class DashSlashAntic : DamageAnimationEffect {
                 break;
             case CrestType.Reaper:
                 var playRandomAudioClipAction = sprintFsm.GetFirstAction<PlayRandomAudioClipTableV2>("Reaper Antic");
-                AudioUtil.PlayRandomAudioClipAtPlayObject(playRandomAudioClipAction, playerObject);
+                AudioUtil.PlayRandomAudioClipAtPlayerObject(playRandomAudioClipAction, playerObject);
                 break;
             case CrestType.Beast:
                 playAudioAction = sprintFsm.GetFirstAction<PlayAudioEvent>("Warrior Antic");

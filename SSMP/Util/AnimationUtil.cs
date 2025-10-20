@@ -58,9 +58,6 @@ public static class AnimationUtil {
         }
 
         if (configGroup == null) {
-            // TODO: maybe remove this warning if we simply default to the first config
-            Logger.Warn($"Could not find ConfigGroup for ToolCrest with type: {crestType}, {crestType.ToInternal()}, falling back to default");
-
             configGroup = HeroController.instance.configs[0];
             if (configGroup == null) {
                 Logger.Error("HeroController ConfigGroup array has null at position '0'!");

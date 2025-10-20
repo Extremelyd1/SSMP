@@ -25,6 +25,29 @@ internal static class AudioUtil {
     }
 
     /// <summary>
+    /// Play the given audio event positionally at the given player object's position with a random clip from the
+    /// random audio clip action. And destroy it after it is done playing.
+    /// </summary>
+    /// <param name="playAudioEvent">The PlayAudioEvent instance from an FSM.</param>
+    /// <param name="getRandomAudioClipFromTable">The action to get a random audio clip from.</param>
+    /// <param name="playerObject">The player object to play the audio at.</param>
+    public static void PlayAudioEventWithRandomAudioClipFromTableAtPlayerObject(
+        PlayAudioEvent playAudioEvent,
+        GetRandomAudioClipFromTable getRandomAudioClipFromTable,
+        GameObject playerObject
+    ) {
+        var randomAudioClipTable = getRandomAudioClipFromTable.Table.value as RandomAudioClipTable;
+        if (randomAudioClipTable == null) {
+            Logger.Warn("Random audio clip table is null");
+            return;
+        }
+
+        var audioClip = randomAudioClipTable.SelectClip(getRandomAudioClipFromTable.ForcePlay.value);
+        
+        PlayAudioEventWithClipAtPlayerObject(playAudioEvent, audioClip, playerObject);
+    }
+
+    /// <summary>
     /// Play the given audio event positionally at the given player object's position. And destroy it after it is done
     /// playing.
     /// </summary>
@@ -37,6 +60,21 @@ internal static class AudioUtil {
             return;
         }
         
+        PlayAudioEventWithClipAtPlayerObject(playAudioEvent, audioClip, playerObject);
+    }
+
+    /// <summary>
+    /// Play the given audio event positionally at the given player object's position with the given audio clip.
+    /// And destroy it after it is done playing.
+    /// </summary>
+    /// <param name="playAudioEvent">The PlayAudioEvent instance from an FSM.</param>
+    /// <param name="audioClip">The audio clip to play.</param>
+    /// <param name="playerObject">The player object to play the audio at.</param>
+    private static void PlayAudioEventWithClipAtPlayerObject(
+        PlayAudioEvent playAudioEvent,
+        AudioClip audioClip, 
+        GameObject playerObject
+    ) {
         var audioEvent = new AudioEvent {
             Clip = audioClip,
             PitchMin = playAudioEvent.pitchMin.value,
@@ -61,7 +99,7 @@ internal static class AudioUtil {
     /// </summary>
     /// <param name="playAudioClip">The action instance from an FSM.</param>
     /// <param name="playerObject">The player object to play the audio at.</param>
-    public static void PlayRandomAudioClipAtPlayObject(
+    public static void PlayRandomAudioClipAtPlayerObject(
         PlayRandomAudioClipTableV2 playAudioClip,
         GameObject playerObject
     ) {
@@ -82,5 +120,27 @@ internal static class AudioUtil {
         } else {
             audioClipTable.SpawnAndPlayOneShot(position, playAudioClip.ForcePlay.value);
         }
+    }
+
+    /// <summary>
+    /// Play the audio from a <see cref="AudioPlayerOneShotSingle"/> action relative to the given player object.
+    /// </summary>
+    /// <param name="action">The audio player action.</param>
+    /// <param name="playerObject">The game object for the player.</param>
+    public static void PlayAudioOneShotSingleAtPlayerObject(
+        AudioPlayerOneShotSingle action,
+        GameObject playerObject
+    ) {
+        var clip = action.audioClip.value as AudioClip;
+        if (clip == null) {
+            return;
+        }
+
+        var audioSource = GetAudioSourceObject(playerObject);
+
+        audioSource.pitch = UnityEngine.Random.Range(action.pitchMin.value, action.pitchMax.value);
+        audioSource.volume = action.volume.value;
+        
+        audioSource.PlayOneShot(clip);
     }
 }
