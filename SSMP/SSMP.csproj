@@ -49,8 +49,7 @@
         <PackageReference Include="BepInEx.Core" Version="5.4.21">
             <IncludeAssets>compile</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="Hamunii.BepInEx.AutoPlugin" Version="2.0.1" PrivateAssets="all">
-        </PackageReference>
+        <PackageReference Include="Hamunii.BepInEx.AutoPlugin" Version="2.0.1" PrivateAssets="all"/>
         <PackageReference Include="UnityEngine.Modules" Version="6000.0.50" IncludeAssets="compile">
             <IncludeAssets>compile</IncludeAssets>
         </PackageReference>
@@ -58,7 +57,7 @@
         <PackageReference Include="Silksong.GameLibs" Version="*-*">
             <IncludeAssets>compile</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2"/>
+        <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2" PrivateAssets="all"/>
     </ItemGroup>
 
     <Target Name="CopyMod" AfterTargets="PostBuildEvent" Condition="'$(SilksongFolder)' != ''">
