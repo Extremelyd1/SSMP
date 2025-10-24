@@ -353,9 +353,8 @@ internal class UiManager : IUiManager {
     /// <summary>
     /// Return to the main menu from in-game. Used whenever the player disconnects from the current server.
     /// </summary>
-    public void ReturnToMainMenuFromGame() {
-        // TODO: ensure that if full sync is off, the game will still save
-        GameManager.instance.ReturnToMainMenuNoSave();
+    public void ReturnToMainMenuFromGame(bool save = true) {
+        GameManager.instance.StartCoroutine(GameManager.instance.ReturnToMainMenu(save));
     }
 
     /// <summary>
