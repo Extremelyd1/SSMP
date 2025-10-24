@@ -10,7 +10,7 @@
 
     <PropertyGroup>
         <AssemblyTitle>SSMPServer</AssemblyTitle>
-        <Version>0.0.1.0</Version>
+        <Version>0.0.4.0</Version>
     </PropertyGroup>
 
     <ItemGroup>

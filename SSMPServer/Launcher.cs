@@ -73,7 +73,11 @@ public class Launcher {
         ConsoleInputManager consoleInputManager,
         ConsoleLogger consoleLogger
     ) {
-        Logger.Info($"Starting server vUNKNOWN");
+        var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+        var fvi = System.Diagnostics.FileVersionInfo.GetVersionInfo(assembly.Location);
+        var version = fvi.FileVersion;
+        
+        Logger.Info($"Starting server v{version}");
 
         var packetManager = new PacketManager();
 
