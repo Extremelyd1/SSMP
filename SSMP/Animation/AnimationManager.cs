@@ -324,9 +324,9 @@ internal class AnimationManager {
         { AnimationClip.DashAttackSlash, new Slash(SlashBase.SlashType.Dash) },
         { AnimationClip.SlashCharged, new NeedleStrike(false) },
         { AnimationClip.SlashChargedLoop, new NeedleStrike(true) },
-        { AnimationClip.NeedleArtDash, new NeedleStrike(false) }
+        { AnimationClip.NeedleArtDash, new NeedleStrike(false) },
+        { AnimationClip.BindChargeGround, new Bind() }
     };
-    // TODO: implement all animation effects for sprint slashes (dash slashes/stabs). See Sprint FSM in shared templates
 
     /// <summary>
     /// The net client for sending animation updates.
