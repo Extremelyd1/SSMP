@@ -259,7 +259,7 @@ internal class NetClient : INetClient {
                 Message = serverInfo.ConnectionRejectedMessage
             };
         } else {
-            throw new NotImplementedException("Unknown connection result in server info");
+            throw new InvalidOperationException("Unknown connection result in server info");
         }
         
         UpdateManager.StopUpdates();
