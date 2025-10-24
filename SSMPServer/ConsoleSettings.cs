@@ -13,5 +13,5 @@ internal class ConsoleSettings {
     /// <summary>
     /// Whether full synchronisation of bosses, enemies, worlds, and saves is enabled.
     /// </summary>
-    public bool FullSynchronisation { get; set; } = true;
+    public bool FullSynchronisation { get; set; }
 }
