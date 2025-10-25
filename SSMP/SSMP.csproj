@@ -68,14 +68,5 @@
         </ItemGroup>
 
         <Copy SourceFiles="@(Binaries)" DestinationFolder="$(SilksongFolder)/BepInEx/plugins/$(TargetName)"/>
-
-        <PropertyGroup>
-            <ExportFolder>bin/Publish</ExportFolder>
-        </PropertyGroup>
-
-        <RemoveDir Directories="$(IntermediateOutputPath)/archive"/>
-        <MakeDir Directories="$(ExportFolder)"/>
-        <Copy SourceFiles="@(Binaries)" DestinationFolder="$(IntermediateOutputPath)/archive"/>
-        <ZipDirectory SourceDirectory="$(IntermediateOutputPath)/archive" DestinationFile="$(ExportFolder)/$(TargetName).zip" Overwrite="True"/>
     </Target>
 </Project>
