@@ -1,0 +1,53 @@
+name: Build
+
+on:
+  push:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 9.x
+
+      - name: Build
+        run: dotnet build -c Release --verbosity normal
+        
+      # Upload SSMP artifact only for the Linux runner, since it is platform independent
+      - name: Upload SSMP artifact
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SSMP
+          path: ${{ github.workspace }}/SSMP/bin/Release/netstandard2.1/
+          
+      # Upload the SSMPServer artifact for all three platforms, since it is platform dependent
+      - name: Upload SSMPServer (Linux) artifact
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SSMPServer-linux
+          path: ${{ github.workspace }}/SSMPServer/bin/Release/net9.0/
+          
+      - name: Upload SSMPServer (Windows) artifact
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SSMPServer-windows
+          path: ${{ github.workspace }}/SSMPServer/bin/Release/net9.0/
+
+      - name: Upload SSMPServer (Mac) artifact
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SSMPServer-macos
+          path: ${{ github.workspace }}/SSMPServer/bin/Release/net9.0/

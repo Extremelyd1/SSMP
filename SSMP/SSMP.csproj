@@ -14,6 +14,8 @@
             https://nuget.bepinex.dev/v3/index.json
         </RestoreAdditionalProjectSources>
         <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+        <!-- CI environment variable is automatically set by GitHub actions -->
+        <RestoreLockedMode Condition="'$(CI)' == 'true'">True</RestoreLockedMode>
         <!--Allow access of private members at runtime.-->
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <!--Shortens and anonymizes paths in debug symbols relative to the project directory. Breakpoints will not work, however.-->
@@ -43,20 +45,12 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="BepInEx.Analyzers" Version="1.0.8" PrivateAssets="all">
-            <IncludeAssets>compile</IncludeAssets>
-        </PackageReference>
-        <PackageReference Include="BepInEx.Core" Version="5.4.21">
-            <IncludeAssets>compile</IncludeAssets>
-        </PackageReference>
+        <PackageReference Include="BepInEx.Analyzers" Version="1.0.8" PrivateAssets="all"/>
+        <PackageReference Include="BepInEx.Core" Version="5.4.21" IncludeAssets="compile" PrivateAssets="all"/>
         <PackageReference Include="Hamunii.BepInEx.AutoPlugin" Version="2.0.1" PrivateAssets="all"/>
-        <PackageReference Include="UnityEngine.Modules" Version="6000.0.50" IncludeAssets="compile">
-            <IncludeAssets>compile</IncludeAssets>
-        </PackageReference>
+        <PackageReference Include="UnityEngine.Modules" Version="6000.0.50" IncludeAssets="compile" PrivateAssets="all"/>
         <!--If you're unable resolve this dependency, check that you're using the nuget v3 package feed instead of v2.-->
-        <PackageReference Include="Silksong.GameLibs" Version="*-*">
-            <IncludeAssets>compile</IncludeAssets>
-        </PackageReference>
+        <PackageReference Include="Silksong.GameLibs" Version="*-*" PrivateAssets="all"/>
         <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2" PrivateAssets="all"/>
     </ItemGroup>
 
@@ -68,14 +62,5 @@
         </ItemGroup>
 
         <Copy SourceFiles="@(Binaries)" DestinationFolder="$(SilksongFolder)/BepInEx/plugins/$(TargetName)"/>
-
-        <PropertyGroup>
-            <ExportFolder>bin/Publish</ExportFolder>
-        </PropertyGroup>
-
-        <RemoveDir Directories="$(IntermediateOutputPath)/archive"/>
-        <MakeDir Directories="$(ExportFolder)"/>
-        <Copy SourceFiles="@(Binaries)" DestinationFolder="$(IntermediateOutputPath)/archive"/>
-        <ZipDirectory SourceDirectory="$(IntermediateOutputPath)/archive" DestinationFile="$(ExportFolder)/$(TargetName).zip" Overwrite="True"/>
     </Target>
 </Project>
