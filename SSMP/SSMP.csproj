@@ -14,6 +14,8 @@
             https://nuget.bepinex.dev/v3/index.json
         </RestoreAdditionalProjectSources>
         <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+        <!-- CI environment variable is automatically set by GitHub actions -->
+        <RestoreLockedMode Condition="'$(CI)' == 'true'">True</RestoreLockedMode>
         <!--Allow access of private members at runtime.-->
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <!--Shortens and anonymizes paths in debug symbols relative to the project directory. Breakpoints will not work, however.-->
