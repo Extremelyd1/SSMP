@@ -37,8 +37,9 @@ public class Launcher {
         var loadedServerSettings = ConfigManager.LoadServerSettings(out var serverSettings);
         serverSettings ??= new ServerSettings();
 
-        if (loadedServerSettings) {
-            
+        if (!loadedServerSettings) {
+            Logger.Info("Server settings did not exist yet, creating new server settings file");
+
             ConfigManager.SaveServerSettings(serverSettings);
         }
 
@@ -54,6 +55,8 @@ public class Launcher {
 
         // If the settings did not yet exist, we now save the settings possibly with the argument provided port
         if (!consoleSettingsExisted) {
+            Logger.Info("Console settings did not exist yet, creating new console settings file");
+
             ConfigManager.SaveConsoleSettings(consoleSettings);
         }
 
