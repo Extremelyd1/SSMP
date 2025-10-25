@@ -5,7 +5,7 @@ on:
   pull_request:
 
 jobs:
-  build-ssmp-linux:
+  build:
     runs-on: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
