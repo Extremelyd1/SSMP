@@ -91,6 +91,12 @@ internal class ClientAddonManager {
                 continue;
             }
 
+            // This check will change when the API changes and when breaking changes are introduced to it
+            if (addon.ApiVersion != Addon.Addon.CurrentApiVersion) {
+                Logger.Warn($"Could not initialize addon {addonName}, because API target version ({addon.ApiVersion}) is unsupported (current: {Addon.Addon.CurrentApiVersion})");
+                continue;
+            }
+
             Logger.Info($"Initializing client addon: {addonName} {addon.GetVersion()}");
 
             try {

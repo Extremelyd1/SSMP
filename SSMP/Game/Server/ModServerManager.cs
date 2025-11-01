@@ -48,8 +48,9 @@ internal class ModServerManager : ServerManager {
     public override void Initialize() {
         base.Initialize();
         
-        // Start addon loading once all mods have finished loading
-        // ModHooks.FinishedLoadingModsHook += AddonManager.LoadAddons;
+        // Start addon loading, since all addons that are also mods should be registered during the Awake phase of
+        // their MonoBehaviour
+        AddonManager.LoadAddons();
 
         // Register handlers for UI events
         _uiManager.RequestServerStartHostEvent += port => OnRequestServerStartHost(port, _modSettings.FullSynchronisation);

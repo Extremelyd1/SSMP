@@ -94,14 +94,14 @@ internal abstract class AddonLoader {
 
                 object addonObject;
                 try {
-                    addonObject = constructor.Invoke(Array.Empty<object>());
+                    addonObject = constructor.Invoke([]);
                 } catch (Exception e) {
                     Logger.Warn(
                         $"  Could not invoke constructor for addon, exception:\n{e}");
                     continue;
                 }
 
-                if (!(addonObject is TAddon addon)) {
+                if (addonObject is not TAddon addon) {
                     Logger.Warn($"  Addon is not of type {typeof(TAddon).Name}");
                     continue;
                 }
