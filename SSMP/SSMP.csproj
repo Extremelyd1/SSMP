@@ -22,12 +22,15 @@
         <PathMap Condition="'$(Configuration)' == 'Release'">$(MSBuildProjectDirectory)=source</PathMap>
         <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
+        <PackageLicenseExpression>LGPL-2.1-or-later</PackageLicenseExpression>
     </PropertyGroup>
 
     <PropertyGroup>
         <!--These properties will control the generated PluginInfo. Version is also used by various parts of the build system.-->
         <AssemblyTitle>SSMP</AssemblyTitle>
         <Version>0.0.5.0</Version>
+        <PackageId>Silksong.SSMP</PackageId>
     </PropertyGroup>
 
     <ItemGroup>
