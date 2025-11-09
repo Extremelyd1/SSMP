@@ -167,7 +167,7 @@ internal class UiManager : IUiManager {
     /// </summary>
     public void Initialize() {
         // Register callbacks to make sure the UI is hidden and shown at correct times
-        EventHooks.UIManagerSetStatePostFix += (_, state) => {
+        EventHooks.UIManagerSetState += (_, state) => {
             if (state == UIState.PAUSED) {
                 _inGameGroup?.SetActive(false);
             } else {

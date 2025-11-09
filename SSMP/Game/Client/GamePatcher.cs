@@ -2,6 +2,7 @@ using System;
 using GlobalEnums;
 using Mono.Cecil.Cil;
 using MonoMod.Cil;
+using SSMP.Hooks;
 using SSMP.Networking.Client;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
@@ -48,6 +49,14 @@ internal class GamePatcher {
         // On.IgnoreHeroCollision.Ignore += IgnoreHeroCollisionOnIgnore;
         
         // On.SceneAdditiveLoadConditional.OnEnable += SceneAdditiveLoadConditionalOnEnable;
+        
+        EventHooks.InteractableBaseAddInsideIL += ILInteractableBaseAddInside;
+        EventHooks.InteractableBaseLocalAddInsideIL += ILInteractableBaseAddInside;
+        
+        EventHooks.TransitionPointOnTriggerEnter2DIL += ILTransitionPointOnTrigger2D;
+        EventHooks.TransitionPointOnTriggerStay2DIL += ILTransitionPointOnTrigger2D;
+        
+        EventHooks.CameraLockAreaAwake += OnCameraLockAreaAwake;
     }
 
     /// <summary>
@@ -67,6 +76,91 @@ internal class GamePatcher {
         // IL.CameraLockArea.IsInApplicableGameState -= CameraLockAreaOnIsInApplicableGameState;
         
         // On.IgnoreHeroCollision.Ignore -= IgnoreHeroCollisionOnIgnore;
+
+        EventHooks.InteractableBaseAddInsideIL -= ILInteractableBaseAddInside;
+        EventHooks.InteractableBaseLocalAddInsideIL -= ILInteractableBaseAddInside;
+        
+        EventHooks.TransitionPointOnTriggerEnter2DIL -= ILTransitionPointOnTrigger2D;
+        EventHooks.TransitionPointOnTriggerStay2DIL -= ILTransitionPointOnTrigger2D;
+    }
+
+    /// <summary>
+    /// IL hook to change the behaviour of the <see cref="InteractableBase"/> to add a check for whether it is dealing
+    /// with the local player.
+    /// </summary>
+    private void ILInteractableBaseAddInside(ILContext il) {
+        try {
+            // Create a cursor for this context
+            var c = new ILCursor(il);
+            
+            var beforeFirstReturnLabel = c.DefineLabel();
+
+            c.GotoNext(
+                MoveType.Before,
+                i => i.MatchLdarg(1),
+                i => i.MatchCallvirt(typeof(Component), "get_gameObject"),
+                i => i.MatchCallvirt(typeof(GameObject), "get_layer"),
+                i => i.MatchLdcI4(9),
+                i => i.MatchBeq(out _)
+            );
+            
+            c.Emit(OpCodes.Ldarg_1);
+            // Emit a delegate that pops the collider argument off the stack and pushes a boolean onto the stack
+            // that indicates whether the collider's game object has the tag "Player"
+            c.EmitDelegate<Func<Collider2D, bool>>(col => col.gameObject.tag == "Player");
+            
+            // Branch if the tag is not "Player" to the pre-defined label, which is before the return
+            // In other words, we return if it is not the local player
+            c.Emit(OpCodes.Brfalse, beforeFirstReturnLabel);
+
+            // Goto before the next return to mark our label there, so we can branch to it
+            c.GotoNext(
+                MoveType.Before,
+                i => i.MatchRet()
+            );
+
+            c.MarkLabel(beforeFirstReturnLabel);
+        } catch (Exception e) {
+            Logger.Error($"Could not change InteractableBase#AddInside IL:\n{e}");
+        }
+    }
+    
+    /// <summary>
+    /// IL hook to change the behaviour of the <see cref="TransitionPoint"/> to add a check for whether it is dealing
+    /// with the local player.
+    /// </summary>
+    private void ILTransitionPointOnTrigger2D(ILContext il) {
+        try {
+            // Create a cursor for this context
+            var c = new ILCursor(il);
+
+            ILLabel? returnLabel = null;
+            
+            c.GotoNext(
+                MoveType.After,
+                i => i.MatchLdarg(1),
+                i => i.MatchCallvirt(typeof(Component), "get_gameObject"),
+                i => i.MatchCallvirt(typeof(GameObject), "get_layer"),
+                i => i.MatchLdcI4(9),
+                i => i.MatchBneUn(out returnLabel)
+            );
+
+            if (returnLabel == null) {
+                Logger.Error($"Could not change TransitionPoint#OnTrigger{{Enter,Stay}}2D IL:\nCould not find label");
+                return;
+            }
+            
+            c.Emit(OpCodes.Ldarg_1);
+            // Emit a delegate that pops the collider argument off the stack and pushes a boolean onto the stack
+            // that indicates whether the collider's game object has the tag "Player"
+            c.EmitDelegate<Func<Collider2D, bool>>(movingObj => movingObj.gameObject.tag == "Player");
+            
+            // Branch if the tag is not "Player" to the pre-defined label, which is before the return
+            // In other words, we return if it is not the local player
+            c.Emit(OpCodes.Brfalse, returnLabel);
+        } catch (Exception e) {
+            Logger.Error($"Could not change TransitionPoint#OnTrigger{{Enter,Stay}}2D IL:\n{e}");
+        }
     }
     
     /// <summary>
@@ -449,44 +543,12 @@ internal class GamePatcher {
         }
     }
     
-    // TODO: this is a temporary solution and requires further investigation on why this happens
-
-    // /// <summary>
-    // /// Hook for the 'Ignore' method in the 'IgnoreHeroCollision' MonoBehaviour. This is simply a hook that doesn't do
-    // /// anything, but prevents NRE's happening in the method do to it now being redirected by MonoMod.
-    // /// </summary>
-    // private void IgnoreHeroCollisionOnIgnore(On.IgnoreHeroCollision.orig_Ignore orig, IgnoreHeroCollision self) {
-    //     if (!self) {
-    //         Logger.Error("IgnoreHeroCollision's object is null, cannot do collision check");
-    //         return;
-    //     }
-    //
-    //     try {
-    //         self.GetComponent<Collider2D>();
-    //     } catch (NullReferenceException) {
-    //         Logger.Error("IgnoreHeroCollision gave NRE on getting component");
-    //         return;
-    //     }
-    //     
-    //     orig(self);
-    // }
-    
-    // /// <summary>
-    // /// Hook for the 'OnEnable' method in the 'SceneAdditiveLoadConditional' MonoBehaviour. This is to change certain
-    // /// conditions about additional scene loads where they should happen regardless of the condition in multiplayer.
-    // /// </summary>
-    // private void SceneAdditiveLoadConditionalOnEnable(
-    //     On.SceneAdditiveLoadConditional.orig_OnEnable orig, 
-    //     SceneAdditiveLoadConditional self
-    // ) {
-    //     if (self.gameObject.scene.name == "Fungus3_23") {
-    //         // Remove the extra boolean test for 'hasShadowDash', which is not needed given that there is a 
-    //         // Shade Gate at the beginning of the room
-    //         self.extraBoolTests = [];
-    //         orig(self);
-    //         return;
-    //     }
-    //
-    //     orig(self);
-    // }
+    /// <summary>
+    /// Hook to add a tag include to the <see cref="TrackTriggerObjects"/> of <see cref="CameraLockArea"/> to ensure
+    /// that it only triggers on the local player.
+    /// </summary>
+    private void OnCameraLockAreaAwake(CameraLockArea cameraLockArea) {
+        cameraLockArea.tagIncludeList ??= [];
+        cameraLockArea.tagIncludeList.Add("Player");
+    }
 }
