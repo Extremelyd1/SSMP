@@ -11,13 +11,13 @@ public partial class SSMPPlugin : BaseUnityPlugin {
     /// Plugin constructor that initializes the static classes with hooks.
     /// </summary>
     public SSMPPlugin() {
+        Logging.Logger.AddLogger(new BepInExLogger());
+        
         EventHooks.Initialize();
         CustomHooks.Initialize();
     }
     
     private void Awake() {
-        Logging.Logger.AddLogger(new BepInExLogger());
-
         Logging.Logger.Info($"Plugin {Name} ({Id}) has loaded!");
 
         // Register the event to initialize SSMP once we enter the main menu.
