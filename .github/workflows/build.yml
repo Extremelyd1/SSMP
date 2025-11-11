@@ -25,7 +25,7 @@ jobs:
       # Upload SSMP artifact only for the Linux runner, since it is platform independent
       - name: Upload SSMP artifact
         if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: SSMP
           path: ${{ github.workspace }}/SSMP/bin/Release/netstandard2.1/
@@ -33,21 +33,21 @@ jobs:
       # Upload the SSMPServer artifact for all three platforms, since it is platform dependent
       - name: Upload SSMPServer (Linux) artifact
         if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: SSMPServer-linux
           path: ${{ github.workspace }}/SSMPServer/bin/Release/net9.0/
           
       - name: Upload SSMPServer (Windows) artifact
         if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: SSMPServer-windows
           path: ${{ github.workspace }}/SSMPServer/bin/Release/net9.0/
 
       - name: Upload SSMPServer (Mac) artifact
         if: runner.os == 'macOS'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: SSMPServer-macos
           path: ${{ github.workspace }}/SSMPServer/bin/Release/net9.0/
