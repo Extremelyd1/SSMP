@@ -78,8 +78,6 @@ internal class DtlsClient {
             // Best-effort; ignore if not supported on this platform
         }
 
-        // No receive timeout needed; we handle cancellation via token and socket close
-
         try {
             _socket.Connect(address, port);
         } catch (SocketException e) {
