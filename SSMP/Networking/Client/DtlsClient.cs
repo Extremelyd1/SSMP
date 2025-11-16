@@ -70,6 +70,14 @@ internal class DtlsClient {
         
         _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 
+        // Prevent UDP WSAECONNRESET (10054) from surfacing as exceptions on Windows when the remote endpoint closes
+        try {
+            const int SIO_UDP_CONNRESET = -1744830452; // 0x9800000C
+            _socket.IOControl((IOControlCode) SIO_UDP_CONNRESET, new byte[] { 0, 0, 0, 0 }, null);
+        } catch (Exception) {
+            // Best-effort; ignore if not supported on this platform
+        }
+
         try {
             _socket.Connect(address, port);
         } catch (SocketException e) {
@@ -115,16 +123,16 @@ internal class DtlsClient {
         _receiveTaskTokenSource?.Cancel();
         _receiveTaskTokenSource?.Dispose();
         _receiveTaskTokenSource = null;
-        
+
         DtlsTransport?.Close();
         DtlsTransport = null;
-        
+
         _clientDatagramTransport?.Dispose();
         _clientDatagramTransport = null;
-        
+
         _tlsClient?.Cancel();
         _tlsClient = null;
-        
+
         _socket?.Close();
         _socket = null;
     }
@@ -139,9 +147,9 @@ internal class DtlsClient {
                 Logger.Error("Socket was null during receive call");
                 break;
             }
-            
+
             EndPoint endPoint = new IPEndPoint(IPAddress.Any, 0);
-            
+
             var numReceived = 0;
             var buffer = new byte[MaxPacketSize];
 
@@ -156,8 +164,6 @@ internal class DtlsClient {
                 // We close the socket when the client disconnects, thus this exception is expected, so we simply break
                 Logger.Debug("SocketException with error code interrupted");
                 break;
-            } catch (SocketException e) {
-                Logger.Error($"UDP Socket exception, ErrorCode: {e.ErrorCode}, Socket ErrorCode: {e.SocketErrorCode}, Exception:\n{e}");
             }
 
             if (cancellationToken.IsCancellationRequested) {
@@ -180,14 +186,13 @@ internal class DtlsClient {
                 break;
             }
         }
-        
+
         Logger.Debug("Receive loop cancelled");
     }
 
     /// <summary>
     /// Continuously tries to receive data from the DTLS transport until cancellation is requested.
     /// </summary>
-    /// <param name="cancellationToken">The cancellation token to cancel the loop.</param>
     private void DtlsReceiveLoop(CancellationToken cancellationToken) {
         while (!cancellationToken.IsCancellationRequested && DtlsTransport != null) {
             var buffer = new byte[MaxPacketSize];

@@ -164,6 +164,9 @@ internal abstract class ServerManager : IServerManager {
     /// <inheritdoc />
     public event Action<IPlayerChatEvent>? PlayerChatEvent;
 
+    /// <inheritdoc />
+    public event Action? ServerShutdownEvent;
+
     #endregion
 
     /// <summary>
@@ -1236,6 +1239,12 @@ internal abstract class ServerManager : IServerManager {
     private void OnServerShutdown() {
         // Clear all existing player data
         _playerData.Clear();
+        
+        try {
+            ServerShutdownEvent?.Invoke();
+        } catch (Exception e) {
+            Logger.Error($"Exception thrown while invoking ServerShut event:\n{e}");
+        }
     }
 
     /// <summary>
