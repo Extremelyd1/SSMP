@@ -24,6 +24,8 @@
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
         <PackageLicenseExpression>LGPL-2.1-or-later</PackageLicenseExpression>
+        <!-- Place build output under parent folder bin instead of nested SSMP/SSMP/bin -->
+        <BaseOutputPath>..\bin\</BaseOutputPath>
     </PropertyGroup>
 
     <PropertyGroup>

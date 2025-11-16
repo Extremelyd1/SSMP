@@ -101,4 +101,9 @@ public interface IServerManager {
     /// Event that is called when a player sends a chat message.
     /// </summary>
     event Action<IPlayerChatEvent> PlayerChatEvent;
+
+    /// <summary>
+    /// Event that is called when the server shuts down.
+    /// </summary>
+    event Action ServerShutdownEvent;
 }

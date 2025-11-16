@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
@@ -8,6 +8,8 @@
         <LangVersion>latest</LangVersion>
         <!--Shortens and anonymizes paths in debug symbols relative to the project directory. Breakpoints will not work, however.-->
         <PathMap Condition="'$(Configuration)' == 'Release'">$(MSBuildProjectDirectory)=source</PathMap>
+        <!-- Place build output under parent folder bin instead of nested SSMPServer/SSMPServer/bin -->
+        <BaseOutputPath>..\bin\</BaseOutputPath>
     </PropertyGroup>
 
     <PropertyGroup>
