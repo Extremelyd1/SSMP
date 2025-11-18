@@ -1243,7 +1243,7 @@ internal abstract class ServerManager : IServerManager {
         try {
             ServerShutdownEvent?.Invoke();
         } catch (Exception e) {
-            Logger.Error($"Exception thrown while invoking ServerShut event:\n{e}");
+            Logger.Error($"Exception thrown while invoking ServerShutdown event:\n{e}");
         }
     }
 

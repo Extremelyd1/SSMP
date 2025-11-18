@@ -89,7 +89,7 @@ public class Launcher {
         var serverManager = new ConsoleServerManager(netServer, packetManager, serverSettings, consoleLogger);
         serverManager.Initialize();
         serverManager.Start(consoleSettings.Port, consoleSettings.FullSynchronisation);
-        
+
         // Stop reading console input when the server shuts down
         serverManager.ServerShutdownEvent += () => {
             Logger.Info("Server shutdown detected. Stopping console input manager.");
