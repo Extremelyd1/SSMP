@@ -22,6 +22,11 @@ internal class DtlsClient {
     /// The maximum time the DTLS handshake can take in milliseconds before timing out.
     /// </summary>
     public const int DtlsHandshakeTimeoutMillis = 5000;
+    
+    /// <summary>
+    /// IO Control Code for Connection Reset on socket.
+    /// </summary>
+    private const int SioUDPConnReset = -1744830452; // 0x9800000C
 
     /// <summary>
     /// The socket instance for the underlying networking.
@@ -72,8 +77,7 @@ internal class DtlsClient {
 
         // Prevent UDP WSAECONNRESET (10054) from surfacing as exceptions on Windows when the remote endpoint closes
         try {
-            const int SIO_UDP_CONNRESET = -1744830452; // 0x9800000C
-            _socket.IOControl((IOControlCode) SIO_UDP_CONNRESET, new byte[] { 0, 0, 0, 0 }, null);
+            _socket.IOControl((IOControlCode) SioUDPConnReset, [0, 0, 0, 0], null);
         } catch (Exception) {
             // Best-effort; ignore if not supported on this platform
         }
@@ -150,7 +154,7 @@ internal class DtlsClient {
 
             EndPoint endPoint = new IPEndPoint(IPAddress.Any, 0);
 
-            var numReceived = 0;
+            int numReceived;
             var buffer = new byte[MaxPacketSize];
 
             try {

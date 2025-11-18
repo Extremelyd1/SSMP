@@ -146,7 +146,7 @@ internal class DtlsServer {
             
             EndPoint endPoint = new IPEndPoint(IPAddress.Any, 0);
 
-            var numReceived = 0;
+            int numReceived;
             var buffer = new byte[MaxPacketSize];
 
             try {
@@ -156,8 +156,7 @@ internal class DtlsServer {
                     ref endPoint
                 );
             } catch (SocketException e) when (
-                e.SocketErrorCode == SocketError.Interrupted ||
-                e.SocketErrorCode == SocketError.ConnectionReset
+                e.SocketErrorCode is SocketError.Interrupted or SocketError.ConnectionReset
             ) {
                 // Interrupted: socket closed during receive (expected on stop)
                 // ConnectionReset: common on UDP when peer endpoint is gone; avoid spamming logs
