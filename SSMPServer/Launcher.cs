@@ -46,7 +46,7 @@ public class Launcher {
         // Load the console settings and note whether they existed or not
         var consoleSettingsExisted = ConfigManager.LoadConsoleSettings(out var consoleSettings);
         consoleSettings ??= new ConsoleSettings();
-        
+
         // If the user supplied a port on the arguments to the program, we override the loaded settings with
         // the port
         if (hasPortArg) {
@@ -79,7 +79,7 @@ public class Launcher {
         var assembly = System.Reflection.Assembly.GetExecutingAssembly();
         var fvi = System.Diagnostics.FileVersionInfo.GetVersionInfo(assembly.Location);
         var version = fvi.FileVersion;
-        
+
         Logger.Info($"Starting server v{version}");
 
         var packetManager = new PacketManager();
@@ -90,7 +90,12 @@ public class Launcher {
         serverManager.Initialize();
         serverManager.Start(consoleSettings.Port, consoleSettings.FullSynchronisation);
 
-        // TODO: make an event in ServerManager that we can register for so we know when the server shuts down
+        // Stop reading console input when the server shuts down
+        serverManager.ServerShutdownEvent += () => {
+            Logger.Info("Server shutdown detected. Stopping console input manager.");
+            consoleInputManager.Stop();
+        };
+        // Console input -> server commands
         consoleInputManager.ConsoleInputEvent += input => {
             Logger.Info(input);
             if (!serverManager.TryProcessCommand(new ConsoleCommandSender(), "/" + input)) {

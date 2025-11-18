@@ -22,6 +22,11 @@ internal class DtlsClient {
     /// The maximum time the DTLS handshake can take in milliseconds before timing out.
     /// </summary>
     public const int DtlsHandshakeTimeoutMillis = 5000;
+    
+    /// <summary>
+    /// IO Control Code for Connection Reset on socket.
+    /// </summary>
+    private const int SioUDPConnReset = -1744830452; // 0x9800000C
 
     /// <summary>
     /// The socket instance for the underlying networking.
@@ -70,6 +75,13 @@ internal class DtlsClient {
         
         _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 
+        // Prevent UDP WSAECONNRESET (10054) from surfacing as exceptions on Windows when the remote endpoint closes
+        try {
+            _socket.IOControl((IOControlCode) SioUDPConnReset, [0, 0, 0, 0], null);
+        } catch (Exception) {
+            // Best-effort; ignore if not supported on this platform
+        }
+
         try {
             _socket.Connect(address, port);
         } catch (SocketException e) {
@@ -115,16 +127,16 @@ internal class DtlsClient {
         _receiveTaskTokenSource?.Cancel();
         _receiveTaskTokenSource?.Dispose();
         _receiveTaskTokenSource = null;
-        
+
         DtlsTransport?.Close();
         DtlsTransport = null;
-        
+
         _clientDatagramTransport?.Dispose();
         _clientDatagramTransport = null;
-        
+
         _tlsClient?.Cancel();
         _tlsClient = null;
-        
+
         _socket?.Close();
         _socket = null;
     }
@@ -139,10 +151,10 @@ internal class DtlsClient {
                 Logger.Error("Socket was null during receive call");
                 break;
             }
-            
+
             EndPoint endPoint = new IPEndPoint(IPAddress.Any, 0);
-            
-            var numReceived = 0;
+
+            int numReceived;
             var buffer = new byte[MaxPacketSize];
 
             try {
@@ -156,8 +168,6 @@ internal class DtlsClient {
                 // We close the socket when the client disconnects, thus this exception is expected, so we simply break
                 Logger.Debug("SocketException with error code interrupted");
                 break;
-            } catch (SocketException e) {
-                Logger.Error($"UDP Socket exception, ErrorCode: {e.ErrorCode}, Socket ErrorCode: {e.SocketErrorCode}, Exception:\n{e}");
             }
 
             if (cancellationToken.IsCancellationRequested) {
@@ -180,14 +190,13 @@ internal class DtlsClient {
                 break;
             }
         }
-        
+
         Logger.Debug("Receive loop cancelled");
     }
 
     /// <summary>
     /// Continuously tries to receive data from the DTLS transport until cancellation is requested.
     /// </summary>
-    /// <param name="cancellationToken">The cancellation token to cancel the loop.</param>
     private void DtlsReceiveLoop(CancellationToken cancellationToken) {
         while (!cancellationToken.IsCancellationRequested && DtlsTransport != null) {
             var buffer = new byte[MaxPacketSize];
