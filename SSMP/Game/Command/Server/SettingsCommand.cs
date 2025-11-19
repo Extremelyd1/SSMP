@@ -3,14 +3,13 @@ using System.Reflection;
 using SSMP.Api.Command.Server;
 using SSMP.Game.Server;
 using SSMP.Game.Settings;
-using SSMP.Api.Command;
 
 namespace SSMP.Game.Command.Server;
 
 /// <summary>
 /// Command for managing server settings.
 /// </summary>
-internal class SettingsCommand : IServerCommand, ICommandWithDescription {
+internal class SettingsCommand : IServerCommand {
     /// <inheritdoc />
     public string Trigger => "/set";
 

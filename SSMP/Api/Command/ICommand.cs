@@ -13,4 +13,9 @@ public interface ICommand {
     /// Aliases for this command, can include command prefix (such as "/").
     /// </summary>
     string[] Aliases { get; }
+
+    /// <summary>
+    /// The description of this command.
+    /// </summary>
+    string Description => "";
 }

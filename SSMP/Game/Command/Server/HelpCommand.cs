@@ -1,5 +1,4 @@
 using System.Linq;
-using SSMP.Api.Command;
 using SSMP.Api.Command.Server;
 using SSMP.Game.Server;
 
@@ -8,7 +7,7 @@ namespace SSMP.Game.Command.Server;
 /// <summary>
 /// Command that lists the currently registered server commands available to the sender.
 /// </summary>
-internal class HelpCommand : IServerCommand, ICommandWithDescription {
+internal class HelpCommand : IServerCommand {
     /// <inheritdoc />
     public string Trigger => "/help";
 
@@ -42,13 +41,15 @@ internal class HelpCommand : IServerCommand, ICommandWithDescription {
 
         var lines = cmds
             .Select(c => {
-                var descText = (c as ICommandWithDescription)?.Description ?? string.Empty;
+                var descText = c.Description;
                 var desc = string.IsNullOrWhiteSpace(descText)
                     ? string.Empty
                     : $" &7: &6{descText}";
                 return $" &7- &a{c.Trigger}{desc}";
             })
-            .Prepend($"&eAvailable commands &7(&f{cmds.Count()}&7):");
-        commandSender.SendMessage(string.Join("\n", lines));
+            .Prepend($"&eAvailable commands &7(&f{cmds.Count}&7):");
+        foreach (var line in lines) {
+            commandSender.SendMessage(line);
+        }
     }
 }
