@@ -430,7 +430,3 @@ SilksongPath.props
 .github/FUNDING.yml
 .github/Funding.yml
 
-# Fallback generic names (if placed outside .github/)
-build.yml
-dependabot.yml
-Funding.yml
