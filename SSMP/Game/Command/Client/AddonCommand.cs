@@ -1,4 +1,5 @@
 using System.Linq;
+using SSMP.Api.Command;
 using SSMP.Api.Client;
 using SSMP.Api.Command.Client;
 using SSMP.Networking.Client;
@@ -9,7 +10,7 @@ namespace SSMP.Game.Command.Client;
 /// <summary>
 /// Command for managing client-side addons, such as enabling and disabling them.
 /// </summary>
-internal class AddonCommand : IClientCommand {
+internal class AddonCommand : IClientCommand, ICommandWithDescription {
     /// <inheritdoc />
     public string Trigger => "/addon";
 
@@ -76,7 +77,7 @@ internal class AddonCommand : IClientCommand {
             UiManager.InternalChatBox.AddMessage("Cannot toggle addons while connecting or connected to a server.");
             return;
         }
-        
+
         if (action == "enable") {
             for (var i = 2; i < arguments.Length; i++) {
                 var addonName = arguments[i];

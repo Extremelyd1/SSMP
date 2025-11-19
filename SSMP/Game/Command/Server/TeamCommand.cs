@@ -1,13 +1,14 @@
 using System;
 using SSMP.Api.Command.Server;
 using SSMP.Game.Server;
+using SSMP.Api.Command;
 
 namespace SSMP.Game.Command.Server;
 
 /// <summary>
 /// Command for changing the team of the player.
 /// </summary>
-internal class TeamCommand : IServerCommand {
+internal class TeamCommand : IServerCommand, ICommandWithDescription {
     /// <inheritdoc />
     public string Trigger => "/team";
 

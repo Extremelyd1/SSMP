@@ -4,6 +4,7 @@ using SSMP.Game.Server;
 using SSMP.Game.Server.Save;
 using SSMP.Networking.Packet.Data;
 using SSMP.Util;
+using SSMP.Api.Command;
 
 namespace SSMP.Game.Command.Server;
 
@@ -11,7 +12,7 @@ namespace SSMP.Game.Command.Server;
 /// Command for allowing players to copy player-specific save data from another player. This is used to catch up
 /// to another player's progression by transferring the save data.
 /// </summary>
-internal class CopySaveCommand : IServerCommand {
+internal class CopySaveCommand : IServerCommand, ICommandWithDescription {
     /// <inheritdoc />
     public string Trigger => "/copysave";
 
@@ -63,7 +64,7 @@ internal class CopySaveCommand : IServerCommand {
         _serverSaveData.PlayerSaveData[toPlayer.AuthKey] = toCopyData;
 
         _serverManager.DisconnectPlayer(toPlayer.Id, DisconnectReason.Kicked);
-        
+
         commandSender.SendMessage($"Copied player save file from '{fromUsername}' to '{toUsername}'");
     }
 }
