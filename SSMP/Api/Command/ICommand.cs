@@ -16,6 +16,7 @@ public interface ICommand {
     
     /// <summary>
     /// The description of this command.
+    /// Optional; defaults to empty string if not overridden.
     /// </summary>
-    string Description { get; }
+    string Description => string.Empty;
 }

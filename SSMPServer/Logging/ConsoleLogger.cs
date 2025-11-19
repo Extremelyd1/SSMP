@@ -17,6 +17,11 @@ internal class ConsoleLogger : BaseLogger {
     /// </summary>
     public readonly HashSet<Level> LoggableLevels;
 
+    /// <summary>
+    /// Whether to enable color/formatting code parsing for console output.
+    /// </summary>
+    private bool _enableColorParsing = true;
+
     public ConsoleLogger(ConsoleInputManager consoleInputManager) {
         _consoleInputManager = consoleInputManager;
         LoggableLevels = [
@@ -31,7 +36,19 @@ internal class ConsoleLogger : BaseLogger {
     /// </summary>
     /// <param name="enabled">Whether to enable color parsing.</param>
     public void SetColorParsingEnabled(bool enabled) {
-        EnableColorParsing = enabled;
+        _enableColorParsing = enabled;
+    }
+
+    /// <summary>
+    /// Format a message for console output, applying ANSI color codes if enabled.
+    /// Always appends a reset code when colors are used.
+    /// When disabled, color codes are stripped to avoid raw tokens in output.
+    /// </summary>
+    private string FormatForConsole(string message) {
+        if (_enableColorParsing) {
+            return ColorCodeParser.ParseToAnsi(message) + "\x1b[0m";
+        }
+        return ColorCodeParser.StripColorCodes(message);
     }
 
     /// <inheritdoc />
@@ -41,9 +58,9 @@ internal class ConsoleLogger : BaseLogger {
         }
 
 #if DEBUG
-        _consoleInputManager.WriteLine($"[INFO] [{GetOriginClassName()}] {ProcessMessage(message)}");
+        _consoleInputManager.WriteLine($"[INFO] [{GetOriginClassName()}] {FormatForConsole(message)}");
 #else
-        _consoleInputManager.WriteLine($"[INFO] {ProcessMessage(message)}");
+        _consoleInputManager.WriteLine($"[INFO] {FormatForConsole(message)}");
 #endif
     }
 
@@ -54,9 +71,9 @@ internal class ConsoleLogger : BaseLogger {
         }
 
 #if DEBUG
-        _consoleInputManager.WriteLine($"[MESSAGE] [{GetOriginClassName()}] {ProcessMessage(message)}");
+        _consoleInputManager.WriteLine($"[MESSAGE] [{GetOriginClassName()}] {FormatForConsole(message)}");
 #else
-        _consoleInputManager.WriteLine($"[MESSAGE] {ProcessMessage(message)}");
+        _consoleInputManager.WriteLine($"[MESSAGE] {FormatForConsole(message)}");
 #endif
     }
 
@@ -67,9 +84,9 @@ internal class ConsoleLogger : BaseLogger {
         }
 
 #if DEBUG
-        _consoleInputManager.WriteLine($"[DEBUG] [{GetOriginClassName()}] {ProcessMessage(message)}");
+        _consoleInputManager.WriteLine($"[DEBUG] [{GetOriginClassName()}] {FormatForConsole(message)}");
 #else
-        _consoleInputManager.WriteLine($"[DEBUG] {ProcessMessage(message)}");
+        _consoleInputManager.WriteLine($"[DEBUG] {FormatForConsole(message)}");
 #endif
     }
 
@@ -80,9 +97,9 @@ internal class ConsoleLogger : BaseLogger {
         }
 
 #if DEBUG
-        _consoleInputManager.WriteLine($"[WARN] [{GetOriginClassName()}] {ProcessMessage(message)}");
+        _consoleInputManager.WriteLine($"[WARN] [{GetOriginClassName()}] {FormatForConsole(message)}");
 #else
-        _consoleInputManager.WriteLine($"[WARN] {ProcessMessage(message)}");
+        _consoleInputManager.WriteLine($"[WARN] {FormatForConsole(message)}");
 #endif
     }
 
@@ -93,9 +110,9 @@ internal class ConsoleLogger : BaseLogger {
         }
 
 #if DEBUG
-        _consoleInputManager.WriteLine($"[ERROR] [{GetOriginClassName()}] {ProcessMessage(message)}");
+        _consoleInputManager.WriteLine($"[ERROR] [{GetOriginClassName()}] {FormatForConsole(message)}");
 #else
-        _consoleInputManager.WriteLine($"[ERROR] {ProcessMessage(message)}");
+        _consoleInputManager.WriteLine($"[ERROR] {FormatForConsole(message)}");
 #endif
     }
 
