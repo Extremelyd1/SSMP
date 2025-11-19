@@ -45,10 +45,11 @@ internal class HelpCommand : IServerCommand, ICommandWithDescription {
                 var descText = (c as ICommandWithDescription)?.Description ?? string.Empty;
                 var desc = string.IsNullOrWhiteSpace(descText)
                     ? string.Empty
-                    : $" &7: &6{descText}";
-                return $" &7- &a{c.Trigger}{desc}";
-            })
-            .Prepend($"&eAvailable commands &7(&f{cmds.Count()}&7):");
-        commandSender.SendMessage(string.Join("\n", lines));
+                    : $" : {descText}";
+                return $" - {c.Trigger}{desc}";
+            }).Prepend($"Available commands ({cmds.Count()}):");
+        foreach (var line in lines) {
+            commandSender.SendMessage(line);
+        } 
     }
 }
