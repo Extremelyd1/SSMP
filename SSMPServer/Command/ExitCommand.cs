@@ -1,12 +1,13 @@
 using SSMP.Api.Command.Server;
 using SSMP.Game.Server;
+using SSMP.Api.Command;
 
 namespace SSMPServer.Command;
 
 /// <summary>
 /// Command to exit and shutdown the server.
 /// </summary>
-internal class ExitCommand : IServerCommand {
+internal class ExitCommand : IServerCommand, ICommandWithDescription {
     /// <inheritdoc />
     public string Trigger => "/exit";
 

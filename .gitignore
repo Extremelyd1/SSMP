@@ -414,23 +414,10 @@ crashlytics-build.properties
 InitTestScene*.unity.meta
 InitTestScene*.unity
 
+
 # End of https://www.toptal.com/developers/gitignore/api/csharp,unity
 
 .idea/
 */lib/
 */Lib/
 SilksongPath.props
-
-# Ignore solution files and CI/dependency/funding configs
-*.sln
-
-# GitHub workflow and config files
-.github/workflows/build.yml
-.github/dependabot.yml
-.github/FUNDING.yml
-.github/Funding.yml
-
-# Fallback generic names (if placed outside .github/)
-build.yml
-dependabot.yml
-Funding.yml

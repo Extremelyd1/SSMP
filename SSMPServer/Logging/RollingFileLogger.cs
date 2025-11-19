@@ -68,9 +68,6 @@ internal class RollingFileLogger : BaseLogger {
     private bool _hasWriter;
 
     public RollingFileLogger() {
-        // Disable color parsing for file logging (we want plain text in files)
-        EnableColorParsing = false;
-        
         // We first try to get the entry assembly in case the executing assembly was
         // embedded in the standalone server
         var assembly = Assembly.GetEntryAssembly();
@@ -111,7 +108,7 @@ internal class RollingFileLogger : BaseLogger {
                 }
 
                 // Strip color codes before writing to file
-                var cleanMessage = StripColorCodes(message);
+                var cleanMessage = ColorCodeParser.StripColorCodes(message);
                 _currentWriter!.WriteLine(cleanMessage);
                 _currentWriter.Flush();
 
