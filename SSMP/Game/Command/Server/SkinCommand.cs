@@ -14,6 +14,9 @@ internal class SkinCommand : IServerCommand {
     public string[] Aliases => [];
 
     /// <inheritdoc />
+    public string Description => "Change the currently used skin ID for the player.";
+
+    /// <inheritdoc />
     public bool AuthorizedOnly => false;
 
     /// <summary>

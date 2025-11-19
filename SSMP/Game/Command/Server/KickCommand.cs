@@ -18,6 +18,9 @@ internal class KickCommand : IServerCommand {
     public string[] Aliases => [];
 
     /// <inheritdoc />
+    public string Description => "Kick the player with the given authentication key, username or IP address.";
+
+    /// <inheritdoc />
     public bool AuthorizedOnly => true;
 
     /// <summary>

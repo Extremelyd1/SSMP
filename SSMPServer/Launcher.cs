@@ -97,9 +97,8 @@ public class Launcher {
         };
         // Console input -> server commands
         consoleInputManager.ConsoleInputEvent += input => {
-            Logger.Info(input);
             if (!serverManager.TryProcessCommand(new ConsoleCommandSender(), "/" + input)) {
-                Logger.Info($"Unknown command: {input}");
+                Logger.Info($"&cUnknown command: {input}");
             }
         };
         consoleInputManager.Start();

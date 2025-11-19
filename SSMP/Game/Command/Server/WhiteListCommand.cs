@@ -16,6 +16,9 @@ internal class WhiteListCommand : IServerCommand {
     public string[] Aliases => [];
 
     /// <inheritdoc />
+    public string Description => "Manage the whitelist: on/off, add/remove names or auth keys, list prelisted names, and clear entries.";
+
+    /// <inheritdoc />
     public bool AuthorizedOnly => true;
 
     /// <summary>

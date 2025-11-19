@@ -19,10 +19,12 @@ internal class BanCommand : IServerCommand {
     public string[] Aliases => ["/unban", "/banip", "/unbanip"];
 
     /// <inheritdoc />
+    public string Description => "Ban the player with the given auth key or username, unban auth keys, and manage IP bans. ";
+
+    /// <inheritdoc />
     public bool AuthorizedOnly => true;
 
     /// <summary>
-    /// The ban list instance.
     /// </summary>
     private readonly BanList _banList;
 

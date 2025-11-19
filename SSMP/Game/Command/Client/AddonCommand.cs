@@ -16,6 +16,9 @@ internal class AddonCommand : IClientCommand {
     /// <inheritdoc />
     public string[] Aliases => [];
 
+    /// <inheritdoc />
+    public string Description => "Enable, disable, or list client addons.";
+
     /// <summary>
     /// The client addon manager instance.
     /// </summary>

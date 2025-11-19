@@ -19,6 +19,9 @@ internal class CopySaveCommand : IServerCommand {
     public string[] Aliases => [];
 
     /// <inheritdoc />
+    public string Description => "Copy player-specific save data from one player to another and reconnect.";
+
+    /// <inheritdoc />
     public bool AuthorizedOnly => true;
 
     /// <summary>

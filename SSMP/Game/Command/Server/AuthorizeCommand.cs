@@ -16,6 +16,9 @@ internal class AuthorizeCommand : IServerCommand {
     public string[] Aliases => ["/deauth", "/authorize", "/deauthorize"];
 
     /// <inheritdoc />
+    public string Description => "Authorize or de-authorize the online player with the given username or auth key.";
+
+    /// <inheritdoc />
     public bool AuthorizedOnly => true;
 
     /// <summary>

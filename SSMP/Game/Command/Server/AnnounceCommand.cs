@@ -14,6 +14,9 @@ internal class AnnounceCommand : IServerCommand {
 
     /// <inheritdoc />
     public string[] Aliases => [];
+    
+    /// <inheritdoc />
+    public string Description => "Broadcast a chat message to all connected players.";
 
     /// <inheritdoc />
     public bool AuthorizedOnly => true;

@@ -14,6 +14,9 @@ internal class ExitCommand : IServerCommand {
     public string[] Aliases => [];
 
     /// <inheritdoc />
+    public string Description => "Shut down the server (console only).";
+
+    /// <inheritdoc />
     public bool AuthorizedOnly => true;
 
     /// <summary>

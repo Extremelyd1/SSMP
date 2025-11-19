@@ -15,6 +15,9 @@ internal class ListCommand : IServerCommand {
     public string[] Aliases => [];
 
     /// <inheritdoc />
+    public string Description => "List the names of the currently connected players.";
+
+    /// <inheritdoc />
     public bool AuthorizedOnly => false;
 
     /// <summary>

@@ -15,6 +15,9 @@ internal class TeamCommand : IServerCommand {
     public string[] Aliases => [];
 
     /// <inheritdoc />
+    public string Description => "Change the team that the player is on.";
+
+    /// <inheritdoc />
     public bool AuthorizedOnly => false;
 
     /// <summary>

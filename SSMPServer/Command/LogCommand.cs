@@ -14,6 +14,9 @@ internal class LogCommand : IServerCommand {
     public string[] Aliases => [];
 
     /// <inheritdoc />
+    public string Description => "Configure which log levels are displayed in the console.";
+
+    /// <inheritdoc />
     public bool AuthorizedOnly => true;
 
     /// <summary>
