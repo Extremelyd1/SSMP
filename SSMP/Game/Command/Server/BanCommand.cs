@@ -5,14 +5,13 @@ using SSMP.Game.Server;
 using SSMP.Game.Server.Auth;
 using SSMP.Networking.Packet.Data;
 using SSMP.Util;
-using SSMP.Api.Command;
 
 namespace SSMP.Game.Command.Server;
 
 /// <summary>
 /// Command for banning users.
 /// </summary>
-internal class BanCommand : IServerCommand, ICommandWithDescription {
+internal class BanCommand : IServerCommand {
     /// <inheritdoc />
     public string Trigger => "/ban";
 

@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Linq;
-using SSMP.Api.Command;
 using SSMP.Api.Command.Server;
 using SSMP.Game.Server;
 
@@ -9,7 +8,7 @@ namespace SSMP.Game.Command.Server;
 /// <summary>
 /// Lists available server commands for the sender.
 /// </summary>
-internal class HelpCommand : IServerCommand, ICommandWithDescription {
+internal class HelpCommand : IServerCommand {
     /// <inheritdoc />
     public string Trigger => "/help";
 

@@ -2,14 +2,13 @@ using SSMP.Api.Command.Server;
 using SSMP.Game.Server;
 using SSMP.Game.Server.Auth;
 using SSMP.Util;
-using SSMP.Api.Command;
 
 namespace SSMP.Game.Command.Server;
 
 /// <summary>
 /// Command for managing the white-list.
 /// </summary>
-internal class WhiteListCommand : IServerCommand, ICommandWithDescription {
+internal class WhiteListCommand : IServerCommand {
     /// <inheritdoc />
     public string Trigger => "/whitelist";
 

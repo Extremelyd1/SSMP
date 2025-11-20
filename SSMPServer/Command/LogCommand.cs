@@ -1,14 +1,12 @@
 using SSMP.Api.Command.Server;
 using SSMPServer.Logging;
-using SSMP.Api.Command;
-
 
 namespace SSMPServer.Command;
 
 /// <summary>
 /// Command to exit and shutdown the server.
 /// </summary>
-internal class LogCommand : IServerCommand, ICommandWithDescription {
+internal class LogCommand : IServerCommand {
     /// <inheritdoc />
     public string Trigger => "/log";
 

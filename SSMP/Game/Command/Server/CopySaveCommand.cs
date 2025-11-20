@@ -4,7 +4,6 @@ using SSMP.Game.Server;
 using SSMP.Game.Server.Save;
 using SSMP.Networking.Packet.Data;
 using SSMP.Util;
-using SSMP.Api.Command;
 
 namespace SSMP.Game.Command.Server;
 
@@ -12,7 +11,7 @@ namespace SSMP.Game.Command.Server;
 /// Command for allowing players to copy player-specific save data from another player. This is used to catch up
 /// to another player's progression by transferring the save data.
 /// </summary>
-internal class CopySaveCommand : IServerCommand, ICommandWithDescription {
+internal class CopySaveCommand : IServerCommand {
     /// <inheritdoc />
     public string Trigger => "/copysave";
 

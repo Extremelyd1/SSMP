@@ -1,4 +1,3 @@
-using SSMP.Api.Command;
 using SSMP.Api.Command.Client;
 using SSMP.Logging;
 
@@ -7,7 +6,7 @@ namespace SSMP.Game.Command.Client;
 /// <summary>
 /// Command for executing debug-related things.
 /// </summary>
-internal class DebugCommand : IClientCommand, ICommandWithDescription {
+internal class DebugCommand : IClientCommand {
     /// <inheritdoc />
     public string Trigger => "/debug";
 
