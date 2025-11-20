@@ -32,7 +32,7 @@
       },
       "Silksong.GameLibs": {
         "type": "Direct",
-        "requested": "[1.1.0-silksong1.0.29315, )",
+        "requested": "[*-*, )",
         "resolved": "1.1.0-silksong1.0.29315",
         "contentHash": "HHAt52uzuBXi8cn90/D7WC7YEptcW9yST5fo43lThzRaN6d/TLiXhy7d1Cv3UyACTnryKqINSYPqa2hSbLR+Qg=="
       },
