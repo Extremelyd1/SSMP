@@ -12,6 +12,7 @@ using SSMP.Game.Server;
 using SSMP.Game.Settings;
 using SSMP.Hooks;
 using SSMP.Internals;
+using SSMP.Logging;
 using SSMP.Networking.Client;
 using SSMP.Networking.Packet;
 using SSMP.Networking.Packet.Data;
@@ -1211,7 +1212,8 @@ internal class ClientManager : IClientManager {
     /// </summary>
     /// <param name="chatMessage">The ChatMessage packet data.</param>
     private void OnChatMessage(ChatMessage chatMessage) {
-        UiManager.InternalChatBox.AddMessage(chatMessage.Message);
+        // Convert &-codes to Unity Rich Text so the client renders colors/bold/italic.
+        UiManager.InternalChatBox.AddMessage(ColorCodeParser.ParseToUnityRichText(chatMessage.Message));
     }
 
     /// <summary>
