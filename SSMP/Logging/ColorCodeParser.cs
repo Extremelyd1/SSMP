@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Text;
 
 namespace SSMP.Logging;
@@ -76,8 +76,8 @@ public static class ColorCodeParser {
 
         var sb = new StringBuilder(message.Length);
 
-        for (int i = 0; i < message.Length; i++) {
-            char ch = message[i];
+        for (var i = 0; i < message.Length; i++) {
+            var ch = message[i];
 
             if (ch != '&') {
                 sb.Append(ch);
@@ -90,7 +90,7 @@ public static class ColorCodeParser {
                 continue;
             }
 
-            char next = message[i + 1];
+            var next = message[i + 1];
 
             // Handle escaped ampersand (&&)
             if (next == '&') {
@@ -100,7 +100,7 @@ public static class ColorCodeParser {
             }
 
             // Try to parse as a color/style code
-            char code = char.ToLower(next);
+            var code = char.ToLower(next);
             if (AnsiCodes.TryGetValue(code, out var ansi)) {
                 sb.Append(ansi);
                 i++; // Skip the code character
@@ -146,13 +146,13 @@ public static class ColorCodeParser {
 
         // Track active formatting state
         string? activeColor = null;
-        bool bold = false;
-        bool italic = false;
-        bool underline = false;
-        bool strike = false;
+        var bold = false;
+        var italic = false;
+        var underline = false;
+        var strike = false;
 
-        for (int i = 0; i < message.Length; i++) {
-            char ch = message[i];
+        for (var i = 0; i < message.Length; i++) {
+            var ch = message[i];
 
             if (ch != '&') {
                 // Prevent raw Unity rich-text tags from user input from being interpreted
@@ -171,7 +171,7 @@ public static class ColorCodeParser {
                 continue;
             }
 
-            char next = message[i + 1];
+            var next = message[i + 1];
 
             // Handle escaped ampersand (&&)
             if (next == '&') {
@@ -180,7 +180,7 @@ public static class ColorCodeParser {
                 continue;
             }
 
-            char code = char.ToLower(next);
+            var code = char.ToLower(next);
 
             // Handle color codes (0-9, a-f)
             if ((code >= '0' && code <= '9') || (code >= 'a' && code <= 'f')) {
@@ -298,8 +298,8 @@ public static class ColorCodeParser {
 
         var sb = new StringBuilder(message.Length);
 
-        for (int i = 0; i < message.Length; i++) {
-            char ch = message[i];
+        for (var i = 0; i < message.Length; i++) {
+            var ch = message[i];
 
             if (ch != '&') {
                 sb.Append(ch);
@@ -312,7 +312,7 @@ public static class ColorCodeParser {
                 continue;
             }
 
-            char next = message[i + 1];
+            var next = message[i + 1];
 
             // Handle escaped ampersand (&&)
             if (next == '&') {
@@ -322,7 +322,7 @@ public static class ColorCodeParser {
             }
 
             // Check if this is a recognized code
-            char code = char.ToLower(next);
+            var code = char.ToLower(next);
             if (AnsiCodes.ContainsKey(code)) {
                 // Recognized code: skip both '&' and the code character
                 i++;

@@ -1,4 +1,3 @@
-using SSMP.Ui.Resources;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -10,11 +9,6 @@ internal class TextComponent : Component, ITextComponent {
     /// The Unity Text component.
     /// </summary>
     private readonly Text _textObject;
-
-    /// <summary>
-    /// Initial text value; current text is stored on the underlying Text component.
-    /// </summary>
-    private readonly string _text;
 
     public TextComponent(
         ComponentGroup componentGroup,
@@ -37,20 +31,25 @@ internal class TextComponent : Component, ITextComponent {
         FontStyle fontStyle = FontStyle.Normal,
         TextAnchor alignment = TextAnchor.MiddleCenter
     ) : base(componentGroup, position, size) {
-        _text = text;
         _textObject = CreateTextObject(text, fontSize, fontStyle, alignment, pivot);
         AddSizeFitter();
         AddOutline();
     }
 
+    /// <inheritdoc />
     public void SetText(string text) {
         _textObject.text = text;
     }
 
+    /// <inheritdoc />
     public void SetColor(Color color) {
         _textObject.color = color;
     }
 
+    /// <summary>
+    /// Get the current color of the text.
+    /// </summary>
+    /// <returns>The color of the text.</returns>
     public Color GetColor() {
         return _textObject.color;
     }
@@ -76,13 +75,16 @@ internal class TextComponent : Component, ITextComponent {
     /// </list>
     /// </para>
     /// </remarks>
-    public float GetPreferredWidth()
-    {
+    public float GetPreferredWidth() {
         var textGen = new TextGenerator();
         var settings = _textObject.GetGenerationSettings(_textObject.rectTransform.rect.size);
         return textGen.GetPreferredWidth(_textObject.text, settings);
     }
 
+    /// <summary>
+    /// Create the Unity Text object with all the parameters.
+    /// </summary>
+    /// <returns>The Unity <see cref="Text"/> object.</returns>
     private Text CreateTextObject(string text, int fontSize, FontStyle fontStyle, TextAnchor alignment, Vector2 pivot) {
         var textObj = GameObject.AddComponent<Text>();
         
@@ -100,12 +102,18 @@ internal class TextComponent : Component, ITextComponent {
         return textObj;
     }
 
+    /// <summary>
+    /// Add a size fitter to the game object for this text.
+    /// </summary>
     private void AddSizeFitter() {
         var sizeFitter = GameObject.AddComponent<ContentSizeFitter>();
         sizeFitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
         sizeFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
     }
 
+    /// <summary>
+    /// Add an outline to the text.
+    /// </summary>
     private void AddOutline() {
         var outline = GameObject.AddComponent<Outline>();
         outline.effectColor = Color.black;
