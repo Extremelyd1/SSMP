@@ -3,18 +3,22 @@ using System.Reflection;
 using SSMP.Api.Command.Server;
 using SSMP.Game.Server;
 using SSMP.Game.Settings;
+using SSMP.Api.Command;
 
 namespace SSMP.Game.Command.Server;
 
 /// <summary>
 /// Command for managing server settings.
 /// </summary>
-internal class SettingsCommand : IServerCommand {
+internal class SettingsCommand : IServerCommand, ICommandWithDescription {
     /// <inheritdoc />
     public string Trigger => "/set";
 
     /// <inheritdoc />
     public string[] Aliases => [];
+
+    /// <inheritdoc />
+    public string Description => "Read or write a setting with the given name and optional value.";
 
     /// <inheritdoc />
     public bool AuthorizedOnly => true;

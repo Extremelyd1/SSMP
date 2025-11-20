@@ -102,6 +102,12 @@ internal abstract class ServerManager : IServerManager {
     
     #region Internal server manager commands
 
+    
+    /// <summary>
+    /// The help command.
+    /// </summary>
+    private readonly IServerCommand _helpCommand;
+
     /// <summary>
     /// The list command.
     /// </summary>
@@ -207,6 +213,7 @@ internal abstract class ServerManager : IServerManager {
         _kickCommand = new KickCommand(this);
         _teamCommand = new TeamCommand(this);
         _skinCommand = new SkinCommand(this);
+        _helpCommand = new HelpCommand(this);
         // _copySaveCommand = new CopySaveCommand(this, ServerSaveData);
     }
 
@@ -238,6 +245,7 @@ internal abstract class ServerManager : IServerManager {
         CommandManager.RegisterCommand(_kickCommand);
         CommandManager.RegisterCommand(_teamCommand);
         CommandManager.RegisterCommand(_skinCommand);
+        CommandManager.RegisterCommand(_helpCommand);
 
         // if (FullSynchronisation) {
         //     CommandManager.RegisterCommand(_copySaveCommand);
@@ -256,6 +264,7 @@ internal abstract class ServerManager : IServerManager {
         CommandManager.DeregisterCommand(_kickCommand);
         CommandManager.DeregisterCommand(_teamCommand);
         CommandManager.DeregisterCommand(_skinCommand);
+        CommandManager.DeregisterCommand(_helpCommand);
 
         // if (FullSynchronisation) {
         //     CommandManager.DeregisterCommand(_copySaveCommand);
@@ -1827,6 +1836,13 @@ internal abstract class ServerManager : IServerManager {
         // Set all properties of the given instance and then call the OnUpdate method to network the changes
         InternalServerSettings.SetAllProperties(serverSettings);
         OnUpdateServerSettings();
+    }
+
+    /// <summary>
+    /// Expose the set of registered server commands (aliases collapsed) for helpers like HelpCommand.
+    /// </summary>
+    public IEnumerable<IServerCommand> GetRegisteredCommands() {
+        return CommandManager.GetRegisteredCommands();
     }
 
     #endregion

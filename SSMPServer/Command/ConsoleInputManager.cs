@@ -76,35 +76,43 @@ internal class ConsoleInputManager {
             }
 
             if (consoleKeyInfo.Key == ConsoleKey.Backspace) {
-                if (CurrentInput.Length > 0) {
-                    for (var i = 0; i < CurrentInput.Length; i++) {
-                        Console.Write(" ");
+                lock (_lock) {
+                    var current = CurrentInput;
+                    if (current.Length > 0) {
+                        // Erase current input inline and redraw shortened input
+                        Console.Write('\r');
+                        Console.Write(new string(' ', current.Length));
+                        Console.Write('\r');
+
+                        current = current.Substring(0, current.Length - 1);
+                        CurrentInput = current;
+
+                        Console.Write(current);
                     }
-
-                    CurrentInput = CurrentInput.Substring(0, CurrentInput.Length - 1);
                 }
-
-                ResetCursor();
-                Console.Write(CurrentInput);
 
                 continue;
             }
 
             if (consoleKeyInfo.Key == ConsoleKey.Enter) {
-                Clear();
+                string input;
+                lock (_lock) {
+                    Clear();
 
-                var input = CurrentInput;
-                CurrentInput = "";
+                    input = CurrentInput;
+                    CurrentInput = "";
+                }
 
                 ConsoleInputEvent?.Invoke(input);
-
                 continue;
             }
 
             CurrentInput += consoleKeyInfo.KeyChar;
 
-            ResetCursor();
-            Console.Write(CurrentInput);
+            lock (_lock) {
+                Console.Write('\r');
+                Console.Write(CurrentInput);
+            }
         }
     }
 
@@ -113,48 +121,36 @@ internal class ConsoleInputManager {
     /// </summary>
     /// <param name="line">The line to write.</param>
     public void WriteLine(string line) {
-        if (CurrentInput != "") {
-            Clear();
+        lock (_lock) {
+            var current = CurrentInput; // snapshot current input
+            var text = (line ?? string.Empty).TrimEnd('\r', '\n');
+
+            // If the line is empty after trimming, skip writing entirely to avoid blank gaps
+            if (text.Length == 0) return;
+
+            if (current.Length > 0) {
+                // Clear the visible input in-place without moving to a new row
+                Console.Write('\r');
+                Console.Write(new string(' ', current.Length));
+                Console.Write('\r');
+            }
+
+            Console.WriteLine(text);
+
+            // Restore the input on the same line
+            if (current.Length > 0) Console.Write(current);
         }
-
-        Console.WriteLine(line);
-
-        Console.Write(CurrentInput);
-    }
-
-    /// <summary>
-    /// Resets the cursor to the left position of the current line.
-    /// </summary>
-    private static void ResetCursor() {
-        // Clamp the value of CursorTop to its possible values
-        var cursorTop = Console.CursorTop;
-        if (cursorTop < 0) {
-            cursorTop = 0;
-        }
-
-        if (cursorTop >= short.MaxValue) {
-            cursorTop = short.MaxValue - 1;
-        }
-
-        if (cursorTop >= Console.BufferHeight) {
-            cursorTop = Console.BufferHeight - 1;
-        }
-
-        // Call SetCursorPosition directly instead of the CursorLeft property
-        Console.SetCursorPosition(0, cursorTop);
     }
 
     /// <summary>
     /// Clears the current input.
     /// </summary>
-    private static void Clear() {
-        var length = Console.CursorLeft;
-        ResetCursor();
-
-        for (var i = 0; i < length; i++) {
-            Console.Write(" ");
-        }
-
-        ResetCursor();
+    private void Clear() {
+        var length = CurrentInput.Length;
+        if (length == 0)
+            return;
+        Console.Write('\r');
+        Console.Write(new string(' ', length));
+        Console.Write('\r');
     }
 }

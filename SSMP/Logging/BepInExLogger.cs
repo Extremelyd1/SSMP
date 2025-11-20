@@ -17,26 +17,41 @@ public class BepInExLogger : BaseLogger {
     
     /// <inheritdoc />
     public override void Info(string message) {
+        if (!ShouldLogMessage(message)) {
+            return;
+        }
         _logSource.LogInfo($"[{GetOriginClassName()}] {message}");
     }
 
     /// <inheritdoc />
     public override void Message(string message) {
+        if (!ShouldLogMessage(message)) {
+            return;
+        }
         _logSource.LogMessage($"[{GetOriginClassName()}] {message}");
     }
 
     /// <inheritdoc />
     public override void Debug(string message) {
+        if (!ShouldLogMessage(message)) {
+            return;
+        }
         _logSource.LogDebug($"[{GetOriginClassName()}] {message}");
     }
 
     /// <inheritdoc />
     public override void Warn(string message) {
+        if (!ShouldLogMessage(message)) {
+            return;
+        }
         _logSource.LogWarning($"[{GetOriginClassName()}] {message}");
     }
 
     /// <inheritdoc />
     public override void Error(string message) {
+        if (!ShouldLogMessage(message)) {
+            return;
+        }
         _logSource.LogError($"[{GetOriginClassName()}] {message}");
     }
 }

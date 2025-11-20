@@ -2,18 +2,22 @@ using SSMP.Api.Command.Server;
 using SSMP.Game.Server;
 using SSMP.Game.Server.Auth;
 using SSMP.Util;
+using SSMP.Api.Command;
 
 namespace SSMP.Game.Command.Server;
 
 /// <summary>
 /// Command for managing authorization of users.
 /// </summary>
-internal class AuthorizeCommand : IServerCommand {
+internal class AuthorizeCommand : IServerCommand, ICommandWithDescription {
     /// <inheritdoc />
     public string Trigger => "/auth";
 
     /// <inheritdoc />
     public string[] Aliases => ["/deauth", "/authorize", "/deauthorize"];
+
+    /// <inheritdoc />
+    public string Description => "Authorize or de-authorize the online player with the given username or auth key.";
 
     /// <inheritdoc />
     public bool AuthorizedOnly => true;

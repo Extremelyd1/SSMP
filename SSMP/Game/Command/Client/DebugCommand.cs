@@ -1,3 +1,4 @@
+using SSMP.Api.Command;
 using SSMP.Api.Command.Client;
 using SSMP.Logging;
 
@@ -6,12 +7,15 @@ namespace SSMP.Game.Command.Client;
 /// <summary>
 /// Command for executing debug-related things.
 /// </summary>
-internal class DebugCommand : IClientCommand {
+internal class DebugCommand : IClientCommand, ICommandWithDescription {
     /// <inheritdoc />
     public string Trigger => "/debug";
 
     /// <inheritdoc />
     public string[] Aliases => ["/dbg"];
+    
+    /// <inheritdoc />
+    public string Description => "Output various debug information to the log.";
 
     /// <inheritdoc />
     public void Execute(string[] arguments) {
@@ -24,7 +28,7 @@ internal class DebugCommand : IClientCommand {
             if (heroFsm.FsmName == "Bind") {
                 for (var i = 0; i < heroFsm.FsmStates.Length; i++) {
                     var state = heroFsm.FsmStates[i];
-                    
+
                     Logger.Info($"{i}: {state.name}");
                 }
 
@@ -63,7 +67,7 @@ internal class DebugCommand : IClientCommand {
             var frame = clip.frames[i];
             if (frame.triggerEvent) {
                 var secondsUntilFrame = (i + 1) / clip.fps;
-                
+
                 Logger.Info($"Frame {i} has triggerEvent, seconds until frame: {secondsUntilFrame}");
             }
         }

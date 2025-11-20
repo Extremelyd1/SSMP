@@ -6,16 +6,16 @@ using UnityEngine;
 namespace SSMP.Ui.Chat;
 
 /// <summary>
-/// Class that manages a single message in chat.
+/// Manages a single message in the chat display with fade animations.
 /// </summary>
 internal class ChatMessage {
     /// <summary>
-    /// The time a message stays after appearing in seconds.
+    /// How long a message stays at full opacity before fading.
     /// </summary>
     private const float MessageStayTime = 7.5f;
 
     /// <summary>
-    /// The time a message takes to fade out in seconds.
+    /// Duration of the fade-out animation.
     /// </summary>
     private const float MessageFadeTime = 1f;
 
@@ -32,7 +32,7 @@ internal class ChatMessage {
     /// <summary>
     /// The current alpha of the message.
     /// </summary>
-    private float _alpha;
+    private float _alpha = 1f;
 
     /// <summary>
     /// Whether this message is already completely faded out.
@@ -45,16 +45,12 @@ internal class ChatMessage {
     private bool _chatOpen;
 
     /// <summary>
-    /// Constructs the chat message in the given group at the given position and with the given text.
+    /// Creates a new chat message at the specified position.
     /// </summary>
-    /// <param name="componentGroup">The component group it should be in.</param>
-    /// <param name="position">The position of the message.</param>
-    /// <param name="text">The string text.</param>
-    public ChatMessage(
-        ComponentGroup componentGroup,
-        Vector2 position,
-        string text
-    ) {
+    /// <param name="componentGroup">The UI component group this message belongs to.</param>
+    /// <param name="position">The screen position of the message.</param>
+    /// <param name="text">The message text content (supports Unity rich text).</param>
+    public ChatMessage(ComponentGroup componentGroup, Vector2 position, string text) {
         _textComponent = new TextComponent(
             componentGroup,
             position,
@@ -64,94 +60,137 @@ internal class ChatMessage {
             alignment: TextAnchor.LowerLeft
         );
         _textComponent.SetActive(false);
-        _alpha = 1f;
     }
 
     /// <summary>
-    /// Displays the chat message and notes whether the chat is open or not.
+    /// Displays the message and starts its fade timer.
     /// </summary>
-    /// <param name="chatOpen">Whether the chat is open or not.</param>
+    /// <param name="chatOpen">Whether the chat is currently open.</param>
     public void Display(bool chatOpen) {
         _chatOpen = chatOpen;
-
         _textComponent.SetActive(true);
-
-        _fadeCoroutine = MonoBehaviourUtil.Instance.StartCoroutine(FadeRoutine());
+        StartFadeRoutine();
     }
 
     /// <summary>
-    /// Hides the chat message because it surpassed the maximum number of shown messages.
+    /// Hides the message and stops its fade animation.
     /// </summary>
     public void Hide() {
         _isFadedOut = true;
         SetAlpha(1f);
-
-        if (!_chatOpen) {
-            _textComponent.SetActive(false);
-        }
-
-        if (_fadeCoroutine != null) {
-            MonoBehaviourUtil.Instance.StopCoroutine(_fadeCoroutine);
-        }
+        _textComponent.SetActive(false);
+        StopFadeRoutine();
     }
 
     /// <summary>
-    /// Indicates that the chat is opened or closed and will show/hide this chat message accordingly.
+    /// Called when the chat is opened or closed.
     /// </summary>
-    /// <param name="chatOpen">Whether the chat is open or closed.</param>
+    /// <param name="chatOpen">Whether the chat is now open.</param>
     public void OnChatToggle(bool chatOpen) {
         _chatOpen = chatOpen;
 
         if (chatOpen) {
-            if (_isFadedOut) {
-                _textComponent.SetActive(true);
-            } else {
-                SetAlpha(1f);
-            }
+            // Show message at full opacity when chat opens and pause fade
+            ShowAtFullOpacity();
         } else {
             if (_isFadedOut) {
+                // Keep hidden if already faded out
                 _textComponent.SetActive(false);
+            } else {
+                // Resume fading when chat closes
+                StartFadeRoutine();
             }
         }
     }
 
     /// <summary>
-    /// Move this chat message by the given position. This will add the given position to the current position
-    /// and set the new position of the chat message as the result.
+    /// Moves the message by the specified offset.
     /// </summary>
-    /// <param name="position">Vector2 of the position it should be moved by.</param>
-    public void Move(Vector2 position) {
-        _textComponent.SetPosition(_textComponent.GetPosition() + position);
+    /// <param name="offset">The amount to move in each direction.</param>
+    public void Move(Vector2 offset) {
+        _textComponent.SetPosition(_textComponent.GetPosition() + offset);
     }
 
     /// <summary>
-    /// Destroy the text component of this chat message.
+    /// Sets the absolute position of the message.
+    /// </summary>
+    /// <param name="position">The new screen position.</param>
+    public void SetPosition(Vector2 position) {
+        _textComponent.SetPosition(position);
+    }
+
+    /// <summary>
+    /// Destroys the message and its underlying UI component.
     /// </summary>
     public void Destroy() {
+        StopFadeRoutine();
         _textComponent.Destroy();
     }
 
     /// <summary>
-    /// Set the alpha of the text component.
+    /// Resets the message to full opacity and stops any fade animation.
     /// </summary>
-    /// <param name="alpha">Float representing the new alpha value. Ranging from 0 to 1.</param>
-    private void SetAlpha(float alpha) {
-        var color = _textComponent.GetColor();
-        _textComponent.SetColor(new Color(color.r, color.g, color.b, alpha));
+    private void ShowAtFullOpacity() {
+        StopFadeRoutine();
+
+        if (_isFadedOut) {
+            _textComponent.SetActive(true);
+            _isFadedOut = false;
+        }
+
+        SetAlpha(1f);
     }
 
     /// <summary>
-    /// Wait for a certain amount of time and then fade out the message by reducing the alpha gradually.
+    /// Starts the fade-out coroutine for this message.
+    /// </summary>
+    private void StartFadeRoutine() {
+        // Ensure only one fade coroutine is running
+        StopFadeRoutine();
+        _fadeCoroutine = MonoBehaviourUtil.Instance.StartCoroutine(FadeRoutine());
+    }
+
+    /// <summary>
+    /// Stops the active fade-out coroutine if running.
+    /// </summary>
+    private void StopFadeRoutine() {
+        if (_fadeCoroutine != null) {
+            MonoBehaviourUtil.Instance.StopCoroutine(_fadeCoroutine);
+            _fadeCoroutine = null;
+        }
+    }
+
+    /// <summary>
+    /// Sets the alpha transparency of the message text.
+    /// </summary>
+    /// <param name="alpha">Alpha value from 0 (transparent) to 1 (opaque).</param>
+    private void SetAlpha(float alpha) {
+        _alpha = Mathf.Clamp01(alpha);
+        var color = _textComponent.GetColor();
+        _textComponent.SetColor(new Color(color.r, color.g, color.b, _alpha));
+    }
+
+    /// <summary>
+    /// Coroutine that waits, then gradually fades out the message.
+    /// Fade is paused when chat is open.
     /// </summary>
     private IEnumerator FadeRoutine() {
-        yield return new WaitForSeconds(MessageStayTime);
-
-        for (var t = 0f; t < MessageFadeTime; t += Time.deltaTime) {
-            var normalizedTime = t / MessageFadeTime;
-            _alpha = 1f - normalizedTime;
-
+        // Wait at full opacity, pausing while chat is open
+        var waitElapsed = 0f;
+        while (waitElapsed < MessageStayTime) {
             if (!_chatOpen) {
-                SetAlpha(_alpha);
+                waitElapsed += Time.deltaTime;
+            }
+
+            yield return null;
+        }
+
+        // Gradually fade out, pausing while chat is open
+        var elapsed = 0f;
+        while (elapsed < MessageFadeTime) {
+            if (!_chatOpen) {
+                elapsed += Time.deltaTime;
+                SetAlpha(1f - (elapsed / MessageFadeTime));
             }
 
             yield return null;

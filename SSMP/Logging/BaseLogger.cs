@@ -36,6 +36,15 @@ public abstract class BaseLogger : ILogger {
         return typeString;
     }
 
+    /// <summary>
+    /// Check if a message should be logged (not null, empty, or whitespace).
+    /// </summary>
+    /// <param name="message">The message to check.</param>
+    /// <returns>True if the message should be logged, false otherwise.</returns>
+    protected static bool ShouldLogMessage(string message) {
+        return !string.IsNullOrWhiteSpace(message);
+    }
+
     /// <inheritdoc />
     public abstract void Info(string message);
 

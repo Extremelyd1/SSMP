@@ -4,18 +4,22 @@ using SSMP.Api.Server;
 using SSMP.Game.Server;
 using SSMP.Networking.Packet.Data;
 using SSMP.Util;
+using SSMP.Api.Command;
 
 namespace SSMP.Game.Command.Server;
 
 /// <summary>
 /// Command for kicking users.
 /// </summary>
-internal class KickCommand : IServerCommand {
+internal class KickCommand : IServerCommand, ICommandWithDescription {
     /// <inheritdoc />
     public string Trigger => "/kick";
 
     /// <inheritdoc />
     public string[] Aliases => [];
+
+    /// <inheritdoc />
+    public string Description => "Kick the player with the given authentication key, username or IP address.";
 
     /// <inheritdoc />
     public bool AuthorizedOnly => true;

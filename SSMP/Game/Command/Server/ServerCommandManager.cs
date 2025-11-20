@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using SSMP.Api.Command.Server;
 
 namespace SSMP.Game.Command.Server;
@@ -32,5 +34,12 @@ internal class ServerCommandManager : CommandManager<IServerCommand>, IServerCom
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Returns the distinct set of registered server commands (one per command, aliases collapsed).
+    /// </summary>
+    public IEnumerable<IServerCommand> GetRegisteredCommands() {
+        return Commands.Values.Distinct();
     }
 }

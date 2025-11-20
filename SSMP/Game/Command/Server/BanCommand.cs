@@ -5,13 +5,14 @@ using SSMP.Game.Server;
 using SSMP.Game.Server.Auth;
 using SSMP.Networking.Packet.Data;
 using SSMP.Util;
+using SSMP.Api.Command;
 
 namespace SSMP.Game.Command.Server;
 
 /// <summary>
 /// Command for banning users.
 /// </summary>
-internal class BanCommand : IServerCommand {
+internal class BanCommand : IServerCommand, ICommandWithDescription {
     /// <inheritdoc />
     public string Trigger => "/ban";
 
@@ -19,10 +20,13 @@ internal class BanCommand : IServerCommand {
     public string[] Aliases => ["/unban", "/banip", "/unbanip"];
 
     /// <inheritdoc />
+    public string Description =>
+        "Ban the player with the given auth key or username, unban auth keys, and manage IP bans. ";
+
+    /// <inheritdoc />
     public bool AuthorizedOnly => true;
 
     /// <summary>
-    /// The ban list instance.
     /// </summary>
     private readonly BanList _banList;
 

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using SSMP.Api.Command;
 using SSMP.Api.Command.Server;
 using SSMP.Game.Server;
 using SSMP.Networking.Server;
@@ -8,12 +9,15 @@ namespace SSMP.Game.Command.Server;
 /// <summary>
 /// Command for announcing messages to all connected players.
 /// </summary>
-internal class AnnounceCommand : IServerCommand {
+internal class AnnounceCommand : IServerCommand, ICommandWithDescription {
     /// <inheritdoc />
     public string Trigger => "/announce";
 
     /// <inheritdoc />
     public string[] Aliases => [];
+    
+    /// <inheritdoc />
+    public string Description => "Broadcast a chat message to all connected players.";
 
     /// <inheritdoc />
     public bool AuthorizedOnly => true;

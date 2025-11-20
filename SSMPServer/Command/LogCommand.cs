@@ -1,17 +1,22 @@
 using SSMP.Api.Command.Server;
 using SSMPServer.Logging;
+using SSMP.Api.Command;
+
 
 namespace SSMPServer.Command;
 
 /// <summary>
 /// Command to exit and shutdown the server.
 /// </summary>
-internal class LogCommand : IServerCommand {
+internal class LogCommand : IServerCommand, ICommandWithDescription {
     /// <inheritdoc />
     public string Trigger => "/log";
 
     /// <inheritdoc />
     public string[] Aliases => [];
+
+    /// <inheritdoc />
+    public string Description => "Configure which log levels are displayed in the console.";
 
     /// <inheritdoc />
     public bool AuthorizedOnly => true;
