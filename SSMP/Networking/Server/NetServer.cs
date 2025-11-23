@@ -314,15 +314,7 @@ internal class NetServer : INetServer {
                 client.ConnectionManager.StopAcceptingConnection();
             });
         } else {
-            Logger.Debug($"Connection request for client ID {clientId} was rejected, finishing connections sends, then throttling connection");
-
-            client.ConnectionManager.FinishConnection(() => {
-                Logger.Debug("Connection has finished sending data, disconnecting client and throttling");
-
-                OnClientDisconnect(clientId);
-
-                _throttledClients[client.EndPoint.Address] = Stopwatch.StartNew();
-            });
+            client.ConnectionManager.StopAcceptingConnection();
         }
     }
 
@@ -336,8 +328,16 @@ internal class NetServer : INetServer {
             Logger.Error($"ClientInfo received from client without known ID: {clientId}");
             return;
         }
-        
-        client.ConnectionManager.ProcessClientInfo(clientInfo);
+
+        var serverInfo = client.ConnectionManager.ProcessClientInfo(clientInfo);
+
+        if (serverInfo.ConnectionResult == ServerConnectionResult.Accepted) {
+            return;
+        }
+        client.ConnectionManager.FinishConnection(() => { 
+            OnClientDisconnect(clientId);
+            _throttledClients[client.EndPoint.Address] = Stopwatch.StartNew();
+        });
     }
 
     /// <summary>

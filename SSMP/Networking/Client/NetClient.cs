@@ -67,6 +67,7 @@ internal class NetClient : INetClient {
     /// Chunk sender instance for sending large amounts of data.
     /// </summary>
     private readonly ClientChunkSender _chunkSender;
+
     /// <summary>
     /// Chunk receiver instance for receiving large amounts of data.
     /// </summary>
@@ -81,6 +82,16 @@ internal class NetClient : INetClient {
     /// Byte array containing received data that was not included in a packet object yet.
     /// </summary>
     private byte[]? _leftoverData;
+
+    /// <summary>
+    /// Lock object for synchronizing connection state changes.
+    /// </summary>
+    private readonly object _connectionLock = new object();
+
+    /// <summary>
+    /// Flag indicating whether a connection attempt is currently in progress.
+    /// </summary>
+    private volatile bool _isConnecting = false;
 
     /// <summary>
     /// Construct the net client with the given packet manager.
@@ -100,7 +111,7 @@ internal class NetClient : INetClient {
         _dtlsClient.DataReceivedEvent += OnReceiveData;
         _connectionManager.ServerInfoReceivedEvent += OnServerInfoReceived;
     }
-    
+
     /// <summary>
     /// Starts establishing a connection with the given host on the given port.
     /// </summary>
@@ -116,68 +127,93 @@ internal class NetClient : INetClient {
         string authKey,
         List<AddonData> addonData
     ) {
-        Logger.Debug($"Trying to connect NetClient to '{address}:{port}'");
-        ConnectionStatus = ClientConnectionStatus.Connecting;
+        // Prevent multiple simultaneous connection attempts
+        lock (_connectionLock) {
+            if (_isConnecting) {
+                Logger.Warn("Connection attempt already in progress, ignoring duplicate request");
+                return;
+            }
+
+            if (ConnectionStatus == ClientConnectionStatus.Connected) {
+                Logger.Warn("Already connected, disconnecting first");
+                InternalDisconnect();
+            }
+
+            _isConnecting = true;
+            ConnectionStatus = ClientConnectionStatus.Connecting;
+        }
 
         // Start a new thread for establishing the connection, otherwise Unity will hang
         new Thread(() => {
             try {
                 _dtlsClient.Connect(address, port);
+
+                UpdateManager.DtlsTransport = _dtlsClient.DtlsTransport;
+                UpdateManager.TimeoutEvent += OnConnectTimedOut;
+                UpdateManager.StartUpdates();
+
+                _chunkSender.Start();
+                _connectionManager.StartConnection(username, authKey, addonData);
+                
             } catch (TlsTimeoutException) {
                 Logger.Info("DTLS connection timed out");
-
-                HandleConnectFailed(new ConnectionFailedResult {
-                    Reason = ConnectionFailedReason.TimedOut
-                });
-                return;
+                HandleConnectFailed(new ConnectionFailedResult { Reason = ConnectionFailedReason.TimedOut });
             } catch (SocketException e) {
                 Logger.Error($"Failed to connect due to SocketException:\n{e}");
-
-                HandleConnectFailed(new ConnectionFailedResult {
-                    Reason = ConnectionFailedReason.SocketException
-                });
-                return;
-            } catch (IOException e) {
+                HandleConnectFailed(new ConnectionFailedResult { Reason = ConnectionFailedReason.SocketException });
+            } catch (Exception e) when (e is IOException) {
                 Logger.Error($"Failed to connect due to IOException:\n{e}");
-
-                HandleConnectFailed(new ConnectionFailedResult {
-                    Reason = ConnectionFailedReason.IOException
-                });
-                return;
+                HandleConnectFailed(new ConnectionFailedResult { Reason = ConnectionFailedReason.IOException });
+            } catch (Exception e) {
+                Logger.Error($"Unexpected error during connection:\n{e}");
+                HandleConnectFailed(new ConnectionFailedResult { Reason = ConnectionFailedReason.IOException });
+            } finally {
+                lock (_connectionLock) {
+                    _isConnecting = false;
+                }
             }
-
-            UpdateManager.DtlsTransport = _dtlsClient.DtlsTransport;
-            // During the connection process we register the connection failed callback if we time out
-            UpdateManager.TimeoutEvent += OnConnectTimedOut;
-
-            UpdateManager.StartUpdates();
-
-            Logger.Debug("Starting connection with connection manager");
-            _chunkSender.Start();
-            _connectionManager.StartConnection(username, authKey, addonData);
-        }).Start();
+        }) { IsBackground = true }.Start();
     }
 
     /// <summary>
     /// Disconnect from the current server.
     /// </summary>
     public void Disconnect() {
-        UpdateManager.StopUpdates();
-        UpdateManager.TimeoutEvent -= OnConnectTimedOut;
-        UpdateManager.TimeoutEvent -= OnUpdateTimedOut;
-        
-        _chunkSender.Stop();
-        _chunkReceiver.Reset();
-        
-        _dtlsClient.Disconnect();
+        lock (_connectionLock) {
+            InternalDisconnect();
+        }
+
+        // Invoke callback if it exists
+        DisconnectEvent?.Invoke();
+    }
+
+    /// <summary>
+    /// Internal disconnect implementation without locking (assumes caller holds lock).
+    /// </summary>
+    private void InternalDisconnect() {
+        if (ConnectionStatus == ClientConnectionStatus.NotConnected && !_isConnecting) {
+            return;
+        }
+
+        try {
+            UpdateManager.StopUpdates();
+            UpdateManager.TimeoutEvent -= OnConnectTimedOut;
+            UpdateManager.TimeoutEvent -= OnUpdateTimedOut;
+            _chunkSender.Stop();
+            _chunkReceiver.Reset();
+            _dtlsClient.Disconnect();
+        } catch (Exception e) {
+            Logger.Error($"Error in NetClient.InternalDisconnect: {e}");
+        }
 
         ConnectionStatus = ClientConnectionStatus.NotConnected;
+        _isConnecting = false;
 
         // Clear all client addon packet handlers, because their IDs become invalid
         _packetManager.ClearClientAddonUpdatePacketHandlers();
 
-        // Invoke callback if it exists
-        DisconnectEvent?.Invoke();
+        // Clear leftover data
+        _leftoverData = null;
     }
 
     /// <summary>
@@ -192,9 +228,9 @@ internal class NetClient : INetClient {
             Logger.Error("Client is not connected to a server, but received data, ignoring");
             return;
         }
-        
+
         var packets = PacketManager.HandleReceivedData(buffer, length, ref _leftoverData);
-        
+
         foreach (var packet in packets) {
             // Create a ClientUpdatePacket from the raw packet instance,
             // and read the values into it
@@ -226,48 +262,42 @@ internal class NetClient : INetClient {
             }
         }
     }
-    
+
     private void OnServerInfoReceived(ServerInfo serverInfo) {
         if (serverInfo.ConnectionResult == ServerConnectionResult.Accepted) {
             Logger.Debug("Connection to server accepted");
-            
+
             // De-register the "connect failed" and register the actual timeout handler if we time out
             UpdateManager.TimeoutEvent -= OnConnectTimedOut;
             UpdateManager.TimeoutEvent += OnUpdateTimedOut;
 
-            // Invoke callback if it exists on the main thread of Unity
-            ThreadUtil.RunActionOnMainThread(() => { ConnectEvent?.Invoke(serverInfo); });
+            lock (_connectionLock) {
+                ConnectionStatus = ClientConnectionStatus.Connected;
+                _isConnecting = false;
+            }
 
-            ConnectionStatus = ClientConnectionStatus.Connected;
+            ThreadUtil.RunActionOnMainThread(() => {
+                try {
+                    ConnectEvent?.Invoke(serverInfo);
+                } catch (Exception e) {
+                    Logger.Error($"Error in ConnectEvent: {e}");
+                }
+            });
             return;
         }
 
-        ConnectionFailedResult result;
-
-        if (serverInfo.ConnectionResult == ServerConnectionResult.InvalidAddons) {
-            Logger.Debug("Connection to server failed due to invalid addons");
-            
-            result = new ConnectionInvalidAddonsResult {
+        // Connection rejected
+        var result = serverInfo.ConnectionResult == ServerConnectionResult.InvalidAddons
+            ? new ConnectionInvalidAddonsResult {
                 Reason = ConnectionFailedReason.InvalidAddons,
                 AddonData = serverInfo.AddonData
-            };
-        } else if (serverInfo.ConnectionResult == ServerConnectionResult.RejectedOther) {
-            Logger.Debug($"Connection to server failed, message: {serverInfo.ConnectionRejectedMessage}");
-
-            result = new ConnectionFailedMessageResult {
+            }
+            : (ConnectionFailedResult)new ConnectionFailedMessageResult {
                 Reason = ConnectionFailedReason.Other,
                 Message = serverInfo.ConnectionRejectedMessage
             };
-        } else {
-            throw new InvalidOperationException("Unknown connection result in server info");
-        }
-        
-        UpdateManager.StopUpdates();
 
-        ConnectionStatus = ClientConnectionStatus.NotConnected;
-        
-        // Invoke callback if it exists on the main thread of Unity
-        ThreadUtil.RunActionOnMainThread(() => { ConnectFailedEvent?.Invoke(result); });
+        HandleConnectFailed(result);
     }
 
     /// <summary>
@@ -287,25 +317,20 @@ internal class NetClient : INetClient {
     /// <summary>
     /// Handles a failed connection with the given result.
     /// </summary>
+    /// <param name="result">The connection failed result containing failure details.</param>
     private void HandleConnectFailed(ConnectionFailedResult result) {
-        Disconnect();
+        lock (_connectionLock) {
+            InternalDisconnect();
+        }
 
-        ConnectFailedEvent?.Invoke(result);
+        ThreadUtil.RunActionOnMainThread(() => { ConnectFailedEvent?.Invoke(result); });
     }
 
     /// <inheritdoc />
     public IClientAddonNetworkSender<TPacketId> GetNetworkSender<TPacketId>(
         ClientAddon addon
     ) where TPacketId : Enum {
-        if (addon == null) {
-            throw new ArgumentException("Parameter 'addon' cannot be null");
-        }
-
-        // Check whether this addon has actually requested network access through their property
-        // We check this otherwise an ID has not been assigned and it can't send network data
-        if (!addon.NeedsNetwork) {
-            throw new InvalidOperationException("Addon has not requested network access through property");
-        }
+        ValidateAddon(addon);
 
         // Check whether there already is a network sender for the given addon
         if (addon.NetworkSender != null) {
@@ -324,23 +349,28 @@ internal class NetClient : INetClient {
         return newAddonNetworkSender;
     }
 
+    /// <summary>
+    /// Validates that an addon is non-null and has requested network access.
+    /// </summary>
+    private static void ValidateAddon(ClientAddon addon) {
+        if (addon == null) {
+            throw new ArgumentException("Parameter 'addon' cannot be null");
+        }
+
+        if (!addon.NeedsNetwork) {
+            throw new InvalidOperationException("Addon has not requested network access through property");
+        }
+    }
+
     /// <inheritdoc />
     public IClientAddonNetworkReceiver<TPacketId> GetNetworkReceiver<TPacketId>(
         ClientAddon addon,
         Func<TPacketId, IPacketData> packetInstantiator
     ) where TPacketId : Enum {
-        if (addon == null) {
-            throw new ArgumentException("Parameter 'addon' cannot be null");
-        }
+        ValidateAddon(addon);
 
         if (packetInstantiator == null) {
             throw new ArgumentException("Parameter 'packetInstantiator' cannot be null");
-        }
-
-        // Check whether this addon has actually requested network access through their property
-        // We check this otherwise an ID has not been assigned and it can't send network data
-        if (!addon.NeedsNetwork) {
-            throw new InvalidOperationException("Addon has not requested network access through property");
         }
 
         ClientAddonNetworkReceiver<TPacketId>? networkReceiver = null;
