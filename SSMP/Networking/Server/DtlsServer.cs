@@ -447,44 +447,45 @@ internal class DtlsServer {
             }
         }
     }
+}
+
+
+/// <summary>
+/// Connection states for tracking client lifecycle.
+/// </summary>
+internal enum ConnectionState {
+    Handshaking,
+    Connected,
+    Disconnecting,
+    Disconnected
+}
+
+/// <summary>
+/// Wrapper for connection state management.
+/// </summary>
+internal class ConnectionInfo {
+    /// <summary>
+    /// The datagram transport for this connection.
+    /// </summary>
+    public ServerDatagramTransport DatagramTransport { get; set; }
 
     /// <summary>
-    /// Connection states for tracking client lifecycle.
+    /// The current state of the connection.
     /// </summary>
-    private enum ConnectionState {
-        Handshaking,
-        Connected,
-        Disconnecting,
-        Disconnected
-    }
+    public ConnectionState State { get; set; }
 
     /// <summary>
-    /// Wrapper for connection state management.
+    /// Increment on each state change for tracking state transitions.
     /// </summary>
-    private class ConnectionInfo {
-        /// <summary>
-        /// The datagram transport for this connection.
-        /// </summary>
-        public ServerDatagramTransport DatagramTransport { get; set; }
+    public long StateVersion { get; set; }
 
-        /// <summary>
-        /// The current state of the connection.
-        /// </summary>
-        public ConnectionState State { get; set; }
+    /// <summary>
+    /// The DTLS server client instance once the connection is established.
+    /// </summary>
+    public DtlsServerClient? Client { get; set; }
 
-        /// <summary>
-        /// Increment on each state change for tracking state transitions.
-        /// </summary>
-        public long StateVersion { get; set; }
-
-        /// <summary>
-        /// The DTLS server client instance once the connection is established.
-        /// </summary>
-        public DtlsServerClient? Client { get; set; }
-
-        /// <summary>
-        /// The client receive loop thread.
-        /// </summary>
-        public Thread? ReceiveThread { get; set; }
-    }
+    /// <summary>
+    /// The client receive loop thread.
+    /// </summary>
+    public Thread? ReceiveThread { get; set; }
 }
