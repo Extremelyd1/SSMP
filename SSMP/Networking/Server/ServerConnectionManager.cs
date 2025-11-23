@@ -91,7 +91,7 @@ internal class ServerConnectionManager : ConnectionManager {
     /// communicate the resulting server info back to the client.
     /// </summary>
     /// <param name="clientInfo"></param>
-    public void ProcessClientInfo(ClientInfo clientInfo) {
+    public ServerInfo ProcessClientInfo(ClientInfo clientInfo) {
         Logger.Debug($"Received client info from client with ID: {_clientId}");
 
         var serverInfo = new ServerInfo();
@@ -102,6 +102,15 @@ internal class ServerConnectionManager : ConnectionManager {
             Logger.Error($"Exception occurred while executing the connection request event:\n{e}");
         }
 
+        SendServerInfo(serverInfo);
+        
+        return serverInfo;
+    }
+
+    /// <summary>
+    /// Sends the ServerInfo packet to the client.
+    /// </summary>
+    public void SendServerInfo(ServerInfo serverInfo) {
         var connectionPacket = new ClientConnectionPacket();
         connectionPacket.SetSendingPacketData(ClientConnectionPacketId.ServerInfo, serverInfo);
 

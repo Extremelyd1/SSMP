@@ -81,6 +81,8 @@ internal class NetServerClient {
 
         UpdateManager.StopUpdates();
         ChunkSender.Stop();
+        // Reset chunk receiver state to prevent stale _chunkId on reconnect
+        ChunkReceiver.Reset();
         ConnectionManager.StopAcceptingConnection();
     }
 

@@ -105,6 +105,8 @@ internal abstract class ChunkSender {
         _sendTaskTokenSource?.Dispose();
         _sendTaskTokenSource = new CancellationTokenSource();
         
+        Reset();
+        
         new Thread(() => StartSends(_sendTaskTokenSource.Token)).Start();
     }
 
@@ -115,6 +117,26 @@ internal abstract class ChunkSender {
         _sendTaskTokenSource?.Cancel();
         _sendTaskTokenSource?.Dispose();
         _sendTaskTokenSource = null;
+    }
+    
+    /// <summary>
+    /// Reset the chunk sender variables to their default values.
+    /// </summary>
+    private void Reset() {
+        _isSending = false;
+        _chunkId = 0;
+        _chunkSize = 0;
+        _numSlices = 0;
+        _numAckedSlices = 0;
+        _currentSliceId = 0;
+
+        for (var i = 0; i < _sliceStopwatches.Length; i++) {
+            _sliceStopwatches[i]?.Stop();
+            _sliceStopwatches[i] = null;
+        }
+        
+        // Clear the blocking collection
+        while (_toSendPackets.TryTake(out _)) { }
     }
 
     /// <summary>
@@ -211,6 +233,7 @@ internal abstract class ChunkSender {
             //Logger.Debug("Successfully taken new packet from blocking collection, starting networking chunk");
 
             Array.Clear(_sliceStopwatches, 0, _sliceStopwatches.Length);
+            Array.Clear(_acked, 0, _acked.Length);
             _numAckedSlices = 0;
 
             var packetBytes = packet.ToArray();
@@ -276,21 +299,6 @@ internal abstract class ChunkSender {
             //Logger.Debug($"Incrementing chunk ID to: {_chunkId + 1}");
             _chunkId += 1;
             _isSending = false;
-        }
-
-        //Logger.Debug("Resetting values of chunk sender");
-        
-        // The loop is over when cancellation is requested, so we reset the variables after it
-        _isSending = false;
-        _chunkId = 0;
-        _chunkSize = 0;
-        _numSlices = 0;
-        _numAckedSlices = 0;
-        _currentSliceId = 0;
-
-        for (var i = 0; i < _sliceStopwatches.Length; i++) {
-            _sliceStopwatches[i]?.Stop();
-            _sliceStopwatches[i] = null;
         }
     }
 

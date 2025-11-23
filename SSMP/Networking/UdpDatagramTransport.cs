@@ -49,6 +49,12 @@ internal abstract class UdpDatagramTransport : DatagramTransport {
             tryTakeSuccess = ReceivedDataCollection.TryTake(out data, waitMillis, _cancellationTokenSource.Token);
         } catch (OperationCanceledException) {
             return -1;
+        } catch (ArgumentNullException) {
+            // Mono bug: BlockingCollection can throw ArgumentNullException instead of ObjectDisposedException
+            // when disposed during TryTake
+            return -1;
+        } catch (ObjectDisposedException) {
+            return -1;
         }
 
         if (!tryTakeSuccess) {
