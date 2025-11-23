@@ -95,6 +95,9 @@ internal class DtlsServer {
     public void Stop() {
         _cancellationTokenSource?.Cancel();
 
+        _socket?.Close();
+        _socket = null;
+
         // Wait for the socket receive thread to exit
         if (_socketReceiveThread != null && _socketReceiveThread.IsAlive) {
             _socketReceiveThread.Join(TimeSpan.FromSeconds(5));
@@ -102,8 +105,6 @@ internal class DtlsServer {
         _socketReceiveThread = null;
 
         _tlsServer?.Cancel();
-        _socket?.Close();
-        _socket = null;
 
         // Disconnect all clients
         foreach (var kvp in _connections) {
@@ -111,9 +112,9 @@ internal class DtlsServer {
             lock (connInfo) {
                 if (connInfo.State == ConnectionState.Connected && connInfo.Client != null) {
                     InternalDisconnectClient(connInfo.Client);
+                } else {
+                    connInfo.DatagramTransport?.Close();
                 }
-
-                connInfo.DatagramTransport?.Close();
                 connInfo.State = ConnectionState.Disconnected;
             }
         }
@@ -184,7 +185,7 @@ internal class DtlsServer {
 
         while (!cancellationToken.IsCancellationRequested) {
             if (_socket == null) {
-                Logger.Error("Socket was null during receive call");
+                Logger.Error("Socket was null during receive call.");
                 break;
             }
 
