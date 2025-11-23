@@ -53,6 +53,11 @@ internal class DtlsClient {
     private readonly object _connectionLock = new object();
 
     /// <summary>
+    /// Thread running the handshake operation.
+    /// </summary>
+    private Thread? _handshakeThread;
+
+    /// <summary>
     /// DTLS transport instance from establishing a connection to a server.
     /// </summary>
     public DtlsTransport? DtlsTransport { get; private set; }
@@ -79,8 +84,19 @@ internal class DtlsClient {
             _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 
             // Prevent UDP WSAECONNRESET (10054) from surfacing as exceptions on Windows when the remote endpoint closes
-            _socket.IOControl((IOControlCode) SioUDPConnReset, [0, 0, 0, 0], null);
-            _socket.Connect(address, port);
+            try {
+                _socket.IOControl((IOControlCode) SioUDPConnReset, [0, 0, 0, 0], null);
+            } catch (SocketException e) {
+                // IOControl may not be supported on all platforms, log but continue
+                Logger.Debug($"IOControl SioUDPConnReset not supported: {e.Message}");
+            }
+
+            try {
+                _socket.Connect(address, port);
+            } catch (SocketException e) {
+                Logger.Error($"Failed to connect socket to {address}:{port}");
+                CleanupAndThrow(e);
+            }
 
             var clientProtocol = new DtlsClientProtocol();
             _tlsClient = new ClientTlsClient(new BcTlsCrypto());
@@ -96,24 +112,35 @@ internal class DtlsClient {
             // Perform handshake with timeout
             DtlsTransport? dtlsTransport = null;
             bool handshakeSucceeded = false;
+            Exception? handshakeException = null;
 
-            var handshakeTask = Task.Run(() => {
-                    return clientProtocol.Connect(_tlsClient, _clientDatagramTransport);
-                }, cancellationToken);
-
-            if (handshakeTask.Wait(DtlsHandshakeTimeoutMillis)) {
-                // Task completed within timeout, but check if it faulted
-                if (handshakeTask.IsFaulted) {
-                    Logger.Error($"DTLS handshake failed with exception");
-                    CleanupAndThrow(handshakeTask.Exception?.InnerException ?? new IOException("DTLS handshake failed"));
+            _handshakeThread = new Thread(() => {
+                try {
+                    dtlsTransport = clientProtocol.Connect(_tlsClient, _clientDatagramTransport);
+                    handshakeSucceeded = dtlsTransport != null;
+                } catch (Exception e) {
+                    handshakeException = e;
                 }
-                
-                dtlsTransport = handshakeTask.Result;
-                handshakeSucceeded = dtlsTransport != null;
-            } else {
-                // Task didn't complete within timeout
+            }) { IsBackground = true };
+
+            _handshakeThread.Start();
+
+            // Wait for handshake to complete or timeout
+            if (!_handshakeThread.Join(DtlsHandshakeTimeoutMillis)) {
+                // Handshake timed out - close socket to force handshake thread to abort
                 Logger.Error($"DTLS handshake timed out after {DtlsHandshakeTimeoutMillis}ms");
+                _socket?.Close();
+                
+                // Give handshake thread a brief moment to exit after socket closure
+                _handshakeThread.Join(500);
+                
                 CleanupAndThrow(new TlsTimeoutException("DTLS handshake timed out"));
+            }
+
+            // Handshake completed - check if it succeeded or threw an exception
+            if (handshakeException != null) {
+                Logger.Error($"DTLS handshake failed with exception");
+                CleanupAndThrow(handshakeException is IOException ? handshakeException : new IOException("DTLS handshake failed", handshakeException));
             }
 
             if (!handshakeSucceeded || dtlsTransport == null) {
@@ -168,6 +195,8 @@ internal class DtlsClient {
 
         _receiveTaskTokenSource?.Dispose();
         _receiveTaskTokenSource = null;
+
+        _handshakeThread = null;
     }
 
     /// <summary>

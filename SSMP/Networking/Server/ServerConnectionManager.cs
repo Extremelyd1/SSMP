@@ -88,9 +88,11 @@ internal class ServerConnectionManager : ConnectionManager {
 
     /// <summary>
     /// Process the given (received) client info. This will invoke the <see cref="ConnectionRequestEvent"/> and
-    /// communicate the resulting server info back to the client.
+    /// send the resulting server info back to the client. The ServerInfo is sent automatically within this method,
+    /// so callers should not send it separately.
     /// </summary>
-    /// <param name="clientInfo"></param>
+    /// <param name="clientInfo">The received client info packet.</param>
+    /// <returns>The ServerInfo that was sent to the client, containing connection acceptance or rejection details.</returns>
     public ServerInfo ProcessClientInfo(ClientInfo clientInfo) {
         Logger.Debug($"Received client info from client with ID: {_clientId}");
 

@@ -184,7 +184,7 @@ internal class DtlsServer {
 
         while (!cancellationToken.IsCancellationRequested) {
             if (_socket == null) {
-                Logger.Error("Socket was null during receive call");
+                Logger.Error("Socket was null during receive call.");
                 break;
             }
 
