@@ -156,7 +156,7 @@ internal class NetServer : INetServer {
     /// </summary>
     /// <param name="token">The cancellation token for checking whether this task is requested to cancel.</param>
     private void StartProcessing(CancellationToken token) {
-        WaitHandle[] waitHandles = new WaitHandle[] { _processingWaitHandle, token.WaitHandle };
+        WaitHandle[] waitHandles = [_processingWaitHandle, token.WaitHandle];
 
         while (!token.IsCancellationRequested) {
             WaitHandle.WaitAny(waitHandles);

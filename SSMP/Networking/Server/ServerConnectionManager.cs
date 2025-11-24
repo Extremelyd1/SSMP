@@ -92,7 +92,8 @@ internal class ServerConnectionManager : ConnectionManager {
     /// so callers should not send it separately.
     /// </summary>
     /// <param name="clientInfo">The received client info packet.</param>
-    /// <returns>The ServerInfo that was sent to the client, containing connection acceptance or rejection details.</returns>
+    /// <returns>The ServerInfo that was sent to the client, containing connection acceptance or rejection details.
+    /// </returns>
     public ServerInfo ProcessClientInfo(ClientInfo clientInfo) {
         Logger.Debug($"Received client info from client with ID: {_clientId}");
 
