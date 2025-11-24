@@ -88,10 +88,7 @@ internal class NetClient : INetClient {
     /// </summary>
     private readonly object _connectionLock = new object();
 
-    /// <summary>
-    /// Flag indicating whether a connection attempt is currently in progress.
-    /// </summary>
-    private volatile bool _isConnecting = false;
+
 
     /// <summary>
     /// Construct the net client with the given packet manager.
@@ -129,17 +126,17 @@ internal class NetClient : INetClient {
     ) {
         // Prevent multiple simultaneous connection attempts
         lock (_connectionLock) {
-            if (_isConnecting) {
+            if (ConnectionStatus == ClientConnectionStatus.Connecting) {
                 Logger.Warn("Connection attempt already in progress, ignoring duplicate request");
                 return;
             }
 
             if (ConnectionStatus == ClientConnectionStatus.Connected) {
                 Logger.Warn("Already connected, disconnecting first");
-                InternalDisconnect();
+                // Don't fire DisconnectEvent when transitioning to a new connection
+                InternalDisconnect(shouldFireEvent: false);
             }
 
-            _isConnecting = true;
             ConnectionStatus = ClientConnectionStatus.Connecting;
         }
 
@@ -167,10 +164,6 @@ internal class NetClient : INetClient {
             } catch (Exception e) {
                 Logger.Error($"Unexpected error during connection:\n{e}");
                 HandleConnectFailed(new ConnectionFailedResult { Reason = ConnectionFailedReason.IOException });
-            } finally {
-                lock (_connectionLock) {
-                    _isConnecting = false;
-                }
             }
         }) { IsBackground = true }.Start();
     }
@@ -182,18 +175,18 @@ internal class NetClient : INetClient {
         lock (_connectionLock) {
             InternalDisconnect();
         }
-
-        // Invoke callback if it exists
-        DisconnectEvent?.Invoke();
     }
 
     /// <summary>
     /// Internal disconnect implementation without locking (assumes caller holds lock).
     /// </summary>
-    private void InternalDisconnect() {
-        if (ConnectionStatus == ClientConnectionStatus.NotConnected && !_isConnecting) {
+    /// <param name="shouldFireEvent">Whether to fire DisconnectEvent. Set to false when cleaning up an old connection before immediately starting a new one.</param>
+    private void InternalDisconnect(bool shouldFireEvent = true) {
+        if (ConnectionStatus == ClientConnectionStatus.NotConnected) {
             return;
         }
+
+        var wasConnectedOrConnecting = ConnectionStatus != ClientConnectionStatus.NotConnected;
 
         try {
             UpdateManager.StopUpdates();
@@ -207,13 +200,24 @@ internal class NetClient : INetClient {
         }
 
         ConnectionStatus = ClientConnectionStatus.NotConnected;
-        _isConnecting = false;
 
         // Clear all client addon packet handlers, because their IDs become invalid
         _packetManager.ClearClientAddonUpdatePacketHandlers();
 
         // Clear leftover data
         _leftoverData = null;
+
+        // Fire DisconnectEvent on main thread for all disconnects (internal or explicit)
+        // This provides a consistent notification for observers to clean up resources
+        if (shouldFireEvent && wasConnectedOrConnecting) {
+            ThreadUtil.RunActionOnMainThread(() => {
+                try {
+                    DisconnectEvent?.Invoke();
+                } catch (Exception e) {
+                    Logger.Error($"Error in DisconnectEvent: {e}");
+                }
+            });
+        }
     }
 
     /// <summary>
@@ -232,33 +236,37 @@ internal class NetClient : INetClient {
         var packets = PacketManager.HandleReceivedData(buffer, length, ref _leftoverData);
 
         foreach (var packet in packets) {
-            // Create a ClientUpdatePacket from the raw packet instance,
-            // and read the values into it
-            var clientUpdatePacket = new ClientUpdatePacket();
-            if (!clientUpdatePacket.ReadPacket(packet)) {
-                // If ReadPacket returns false, we received a malformed packet, which we simply ignore for now
-                continue;
-            }
+            try {
+                // Create a ClientUpdatePacket from the raw packet instance,
+                // and read the values into it
+                var clientUpdatePacket = new ClientUpdatePacket();
+                if (!clientUpdatePacket.ReadPacket(packet)) {
+                    // If ReadPacket returns false, we received a malformed packet, which we simply ignore for now
+                    continue;
+                }
 
-            UpdateManager.OnReceivePacket<ClientUpdatePacket, ClientUpdatePacketId>(clientUpdatePacket);
+                UpdateManager.OnReceivePacket<ClientUpdatePacket, ClientUpdatePacketId>(clientUpdatePacket);
 
-            // First check for slice or slice ack data and handle it separately by passing it onto either the chunk 
-            // sender or chunk receiver
-            var packetData = clientUpdatePacket.GetPacketData();
-            if (packetData.TryGetValue(ClientUpdatePacketId.Slice, out var sliceData)) {
-                packetData.Remove(ClientUpdatePacketId.Slice);
-                _chunkReceiver.ProcessReceivedData((SliceData) sliceData);
-            }
+                // First check for slice or slice ack data and handle it separately by passing it onto either the chunk 
+                // sender or chunk receiver
+                var packetData = clientUpdatePacket.GetPacketData();
+                if (packetData.TryGetValue(ClientUpdatePacketId.Slice, out var sliceData)) {
+                    packetData.Remove(ClientUpdatePacketId.Slice);
+                    _chunkReceiver.ProcessReceivedData((SliceData) sliceData);
+                }
 
-            if (packetData.TryGetValue(ClientUpdatePacketId.SliceAck, out var sliceAckData)) {
-                packetData.Remove(ClientUpdatePacketId.SliceAck);
-                _chunkSender.ProcessReceivedData((SliceAckData) sliceAckData);
-            }
+                if (packetData.TryGetValue(ClientUpdatePacketId.SliceAck, out var sliceAckData)) {
+                    packetData.Remove(ClientUpdatePacketId.SliceAck);
+                    _chunkSender.ProcessReceivedData((SliceAckData) sliceAckData);
+                }
 
-            // Then, if we are already connected to a server, we let the packet manager handle the rest of the packet
-            // data
-            if (ConnectionStatus == ClientConnectionStatus.Connected) {
-                _packetManager.HandleClientUpdatePacket(clientUpdatePacket);
+                // Then, if we are already connected to a server,
+                // we let the packet manager handle the rest of the packet data
+                if (ConnectionStatus == ClientConnectionStatus.Connected) {
+                    _packetManager.HandleClientUpdatePacket(clientUpdatePacket);
+                }
+            } catch (Exception e) {
+                Logger.Error($"Error processing incoming packet: {e}");
             }
         }
     }
@@ -273,7 +281,6 @@ internal class NetClient : INetClient {
 
             lock (_connectionLock) {
                 ConnectionStatus = ClientConnectionStatus.Connected;
-                _isConnecting = false;
             }
 
             ThreadUtil.RunActionOnMainThread(() => {
@@ -354,7 +361,7 @@ internal class NetClient : INetClient {
     /// </summary>
     private static void ValidateAddon(ClientAddon addon) {
         if (addon == null) {
-            throw new ArgumentException("Parameter 'addon' cannot be null");
+            throw new ArgumentNullException(nameof(addon));
         }
 
         if (!addon.NeedsNetwork) {
@@ -370,7 +377,7 @@ internal class NetClient : INetClient {
         ValidateAddon(addon);
 
         if (packetInstantiator == null) {
-            throw new ArgumentException("Parameter 'packetInstantiator' cannot be null");
+            throw new ArgumentNullException(nameof(packetInstantiator));
         }
 
         ClientAddonNetworkReceiver<TPacketId>? networkReceiver = null;

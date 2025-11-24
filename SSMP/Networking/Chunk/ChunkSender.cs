@@ -85,7 +85,7 @@ internal abstract class ChunkSender {
 
     /// <summary>
     /// Construct the chunk sender by initializing the blocking collection and manual reset event, and allocating the
-    /// arrays to their maximally used length.
+    /// arrays to their maximally used length. Individual stopwatch instances are lazily created as needed.
     /// </summary>
     protected ChunkSender() {
         _toSendPackets = new BlockingCollection<Packet.Packet>();
@@ -117,6 +117,9 @@ internal abstract class ChunkSender {
         _sendTaskTokenSource?.Cancel();
         _sendTaskTokenSource?.Dispose();
         _sendTaskTokenSource = null;
+        
+        // Reset state to ensure clean slate on disconnect/stop
+        Reset();
     }
     
     /// <summary>

@@ -95,6 +95,9 @@ internal class DtlsServer {
     public void Stop() {
         _cancellationTokenSource?.Cancel();
 
+        _socket?.Close();
+        _socket = null;
+
         // Wait for the socket receive thread to exit
         if (_socketReceiveThread != null && _socketReceiveThread.IsAlive) {
             _socketReceiveThread.Join(TimeSpan.FromSeconds(5));
@@ -102,8 +105,6 @@ internal class DtlsServer {
         _socketReceiveThread = null;
 
         _tlsServer?.Cancel();
-        _socket?.Close();
-        _socket = null;
 
         // Disconnect all clients
         foreach (var kvp in _connections) {
@@ -111,9 +112,9 @@ internal class DtlsServer {
             lock (connInfo) {
                 if (connInfo.State == ConnectionState.Connected && connInfo.Client != null) {
                     InternalDisconnectClient(connInfo.Client);
+                } else {
+                    connInfo.DatagramTransport?.Close();
                 }
-
-                connInfo.DatagramTransport?.Close();
                 connInfo.State = ConnectionState.Disconnected;
             }
         }
@@ -140,10 +141,10 @@ internal class DtlsServer {
             }
 
             connInfo.State = ConnectionState.Disconnecting;
-            connInfo.StateVersion++;
+
             InternalDisconnectClient(connInfo.Client);
             connInfo.State = ConnectionState.Disconnected;
-            connInfo.StateVersion++;
+
         }
 
         _connections.TryRemove(endPoint, out _);
@@ -184,7 +185,7 @@ internal class DtlsServer {
 
         while (!cancellationToken.IsCancellationRequested) {
             if (_socket == null) {
-                Logger.Error("Socket was null during receive call");
+                Logger.Error("Socket was null during receive call.");
                 break;
             }
 
@@ -276,7 +277,7 @@ internal class DtlsServer {
         var newConnInfo = new ConnectionInfo {
             DatagramTransport = newTransport,
             State = ConnectionState.Handshaking,
-            StateVersion = 0,
+
             Client = null
         };
 
@@ -396,7 +397,7 @@ internal class DtlsServer {
 
             connInfo.Client = dtlsServerClient;
             connInfo.State = ConnectionState.Connected;
-            connInfo.StateVersion++;
+
 
             var receiveThread = new Thread(() => ClientReceiveLoop(dtlsServerClient, dtlsServerClient.ReceiveLoopTokenSource.Token)) {
                 IsBackground = true
@@ -446,44 +447,40 @@ internal class DtlsServer {
             }
         }
     }
+}
+
+
+/// <summary>
+/// Connection states for tracking client lifecycle.
+/// </summary>
+internal enum ConnectionState {
+    Handshaking,
+    Connected,
+    Disconnecting,
+    Disconnected
+}
+
+/// <summary>
+/// Wrapper for connection state management.
+/// </summary>
+internal class ConnectionInfo {
+    /// <summary>
+    /// The datagram transport for this connection.
+    /// </summary>
+    public ServerDatagramTransport DatagramTransport { get; set; }
 
     /// <summary>
-    /// Connection states for tracking client lifecycle.
+    /// The current state of the connection.
     /// </summary>
-    private enum ConnectionState {
-        Handshaking,
-        Connected,
-        Disconnecting,
-        Disconnected
-    }
+    public ConnectionState State { get; set; }
+    
+    /// <summary>
+    /// The DTLS server client instance once the connection is established.
+    /// </summary>
+    public DtlsServerClient? Client { get; set; }
 
     /// <summary>
-    /// Wrapper for connection state management.
+    /// The client receive loop thread.
     /// </summary>
-    private class ConnectionInfo {
-        /// <summary>
-        /// The datagram transport for this connection.
-        /// </summary>
-        public ServerDatagramTransport DatagramTransport { get; set; }
-
-        /// <summary>
-        /// The current state of the connection.
-        /// </summary>
-        public ConnectionState State { get; set; }
-
-        /// <summary>
-        /// Increment on each state change for tracking state transitions.
-        /// </summary>
-        public long StateVersion { get; set; }
-
-        /// <summary>
-        /// The DTLS server client instance once the connection is established.
-        /// </summary>
-        public DtlsServerClient? Client { get; set; }
-
-        /// <summary>
-        /// The client receive loop thread.
-        /// </summary>
-        public Thread? ReceiveThread { get; set; }
-    }
+    public Thread? ReceiveThread { get; set; }
 }

@@ -71,6 +71,11 @@ internal class NetServer : INetServer {
     private CancellationTokenSource? _taskTokenSource;
 
     /// <summary>
+    /// Processing thread for handling received data.
+    /// </summary>
+    private Thread? _processingThread;
+
+    /// <summary>
     /// Event that is called when a client times out.
     /// </summary>
     public event Action<ushort>? ClientTimeoutEvent;
@@ -125,7 +130,8 @@ internal class NetServer : INetServer {
         _taskTokenSource = new CancellationTokenSource();
 
         // Start a thread for handling the processing of received data
-        new Thread(() => StartProcessing(_taskTokenSource.Token)).Start();
+        _processingThread = new Thread(() => StartProcessing(_taskTokenSource.Token)) { IsBackground = true };
+        _processingThread.Start();
 
         _dtlsServer.DataReceivedEvent += OnDataReceived;
     }
@@ -150,7 +156,7 @@ internal class NetServer : INetServer {
     /// </summary>
     /// <param name="token">The cancellation token for checking whether this task is requested to cancel.</param>
     private void StartProcessing(CancellationToken token) {
-        WaitHandle[] waitHandles = [ _processingWaitHandle, token.WaitHandle ];
+        WaitHandle[] waitHandles = new WaitHandle[] { _processingWaitHandle, token.WaitHandle };
 
         while (!token.IsCancellationRequested) {
             WaitHandle.WaitAny(waitHandles);
@@ -314,6 +320,9 @@ internal class NetServer : INetServer {
                 client.ConnectionManager.StopAcceptingConnection();
             });
         } else {
+            // Connection rejected - stop accepting new connection attempts immediately
+            // FinishConnection and throttling will be handled in OnClientInfoReceived after
+            // ServerInfo has been sent
             client.ConnectionManager.StopAcceptingConnection();
         }
     }
@@ -329,22 +338,44 @@ internal class NetServer : INetServer {
             return;
         }
 
+        // ProcessClientInfo will invoke OnConnectionRequest which populates the serverInfo,
+        // and then send the ServerInfo packet to the client
         var serverInfo = client.ConnectionManager.ProcessClientInfo(clientInfo);
 
-        if (serverInfo.ConnectionResult == ServerConnectionResult.Accepted) {
-            return;
+        // If connection was rejected, we need to finish sending the rejection message
+        // and then disconnect + throttle the client
+        if (serverInfo.ConnectionResult != ServerConnectionResult.Accepted) {
+            // The rejection message has now been enqueued (by ProcessClientInfo -> SendServerInfo)
+            // Wait for it to finish sending, then disconnect and throttle
+            client.ConnectionManager.FinishConnection(() => { 
+                OnClientDisconnect(clientId);
+                _throttledClients[client.EndPoint.Address] = Stopwatch.StartNew();
+            });
         }
-        client.ConnectionManager.FinishConnection(() => { 
-            OnClientDisconnect(clientId);
-            _throttledClients[client.EndPoint.Address] = Stopwatch.StartNew();
-        });
     }
 
     /// <summary>
     /// Stops the server and cleans up everything.
     /// </summary>
     public void Stop() {
+        if (!IsStarted) {
+            return;
+        }
+
         Logger.Info("Stopping NetServer");
+
+        IsStarted = false;
+
+        // Request cancellation for the processing thread
+        _taskTokenSource?.Cancel();
+
+        // Wait for processing thread to exit gracefully (with timeout)
+        if (_processingThread != null && _processingThread.IsAlive) {
+            if (!_processingThread.Join(1000)) {
+                Logger.Warn("Processing thread did not exit within timeout");
+            }
+            _processingThread = null;
+        }
         
         // Clean up existing clients
         foreach (var client in _clientsByEndPoint.Values) {
@@ -360,11 +391,8 @@ internal class NetServer : INetServer {
 
         _leftoverData = null;
 
-        IsStarted = false;
-
-        // Request cancellation for the tasks that are still running
-        _taskTokenSource?.Cancel();
         _taskTokenSource?.Dispose();
+        _taskTokenSource = null;
 
         // Invoke the shutdown event to notify all registered parties of the shutdown
         ShutdownEvent?.Invoke();
@@ -417,7 +445,7 @@ internal class NetServer : INetServer {
         ServerAddon addon
     ) where TPacketId : Enum {
         if (addon == null) {
-            throw new ArgumentException("Parameter 'addon' cannot be null");
+            throw new ArgumentNullException(nameof(addon));
         }
 
         // Check whether this addon has actually requested network access through their property
@@ -453,7 +481,7 @@ internal class NetServer : INetServer {
         }
 
         if (packetInstantiator == null) {
-            throw new ArgumentException("Parameter 'packetInstantiator' cannot be null");
+            throw new ArgumentNullException(nameof(packetInstantiator));
         }
 
         // Check whether this addon has actually requested network access through their property
