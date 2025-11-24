@@ -141,10 +141,10 @@ internal class DtlsServer {
             }
 
             connInfo.State = ConnectionState.Disconnecting;
-            connInfo.StateVersion++;
+
             InternalDisconnectClient(connInfo.Client);
             connInfo.State = ConnectionState.Disconnected;
-            connInfo.StateVersion++;
+
         }
 
         _connections.TryRemove(endPoint, out _);
@@ -277,7 +277,7 @@ internal class DtlsServer {
         var newConnInfo = new ConnectionInfo {
             DatagramTransport = newTransport,
             State = ConnectionState.Handshaking,
-            StateVersion = 0,
+
             Client = null
         };
 
@@ -397,7 +397,7 @@ internal class DtlsServer {
 
             connInfo.Client = dtlsServerClient;
             connInfo.State = ConnectionState.Connected;
-            connInfo.StateVersion++;
+
 
             var receiveThread = new Thread(() => ClientReceiveLoop(dtlsServerClient, dtlsServerClient.ReceiveLoopTokenSource.Token)) {
                 IsBackground = true
@@ -473,12 +473,7 @@ internal class ConnectionInfo {
     /// The current state of the connection.
     /// </summary>
     public ConnectionState State { get; set; }
-
-    /// <summary>
-    /// Increment on each state change for tracking state transitions.
-    /// </summary>
-    public long StateVersion { get; set; }
-
+    
     /// <summary>
     /// The DTLS server client instance once the connection is established.
     /// </summary>

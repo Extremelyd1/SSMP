@@ -112,7 +112,7 @@ internal class ServerConnectionManager : ConnectionManager {
     /// <summary>
     /// Sends the ServerInfo packet to the client.
     /// </summary>
-    public void SendServerInfo(ServerInfo serverInfo) {
+    private void SendServerInfo(ServerInfo serverInfo) {
         var connectionPacket = new ClientConnectionPacket();
         connectionPacket.SetSendingPacketData(ClientConnectionPacketId.ServerInfo, serverInfo);
 

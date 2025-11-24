@@ -88,10 +88,7 @@ internal class NetClient : INetClient {
     /// </summary>
     private readonly object _connectionLock = new object();
 
-    /// <summary>
-    /// Flag indicating whether a connection attempt is currently in progress.
-    /// </summary>
-    private volatile bool _isConnecting = false;
+
 
     /// <summary>
     /// Construct the net client with the given packet manager.
@@ -129,7 +126,7 @@ internal class NetClient : INetClient {
     ) {
         // Prevent multiple simultaneous connection attempts
         lock (_connectionLock) {
-            if (_isConnecting) {
+            if (ConnectionStatus == ClientConnectionStatus.Connecting) {
                 Logger.Warn("Connection attempt already in progress, ignoring duplicate request");
                 return;
             }
@@ -140,7 +137,6 @@ internal class NetClient : INetClient {
                 InternalDisconnect(shouldFireEvent: false);
             }
 
-            _isConnecting = true;
             ConnectionStatus = ClientConnectionStatus.Connecting;
         }
 
@@ -168,10 +164,6 @@ internal class NetClient : INetClient {
             } catch (Exception e) {
                 Logger.Error($"Unexpected error during connection:\n{e}");
                 HandleConnectFailed(new ConnectionFailedResult { Reason = ConnectionFailedReason.IOException });
-            } finally {
-                lock (_connectionLock) {
-                    _isConnecting = false;
-                }
             }
         }) { IsBackground = true }.Start();
     }
@@ -190,12 +182,11 @@ internal class NetClient : INetClient {
     /// </summary>
     /// <param name="shouldFireEvent">Whether to fire DisconnectEvent. Set to false when cleaning up an old connection before immediately starting a new one.</param>
     private void InternalDisconnect(bool shouldFireEvent = true) {
-        if (ConnectionStatus == ClientConnectionStatus.NotConnected && !_isConnecting) {
+        if (ConnectionStatus == ClientConnectionStatus.NotConnected) {
             return;
         }
 
-        var wasConnectedOrConnecting = 
-            ConnectionStatus != ClientConnectionStatus.NotConnected || _isConnecting;
+        var wasConnectedOrConnecting = ConnectionStatus != ClientConnectionStatus.NotConnected;
 
         try {
             UpdateManager.StopUpdates();
@@ -209,7 +200,6 @@ internal class NetClient : INetClient {
         }
 
         ConnectionStatus = ClientConnectionStatus.NotConnected;
-        _isConnecting = false;
 
         // Clear all client addon packet handlers, because their IDs become invalid
         _packetManager.ClearClientAddonUpdatePacketHandlers();
@@ -291,7 +281,6 @@ internal class NetClient : INetClient {
 
             lock (_connectionLock) {
                 ConnectionStatus = ClientConnectionStatus.Connected;
-                _isConnecting = false;
             }
 
             ThreadUtil.RunActionOnMainThread(() => {
