@@ -9,7 +9,7 @@ namespace SSMP.Networking.Packet.Data;
 /// </summary>
 internal class ClientInfo : IPacketData {
     /// <inheritdoc />
-    public bool IsReliable => false;
+    public bool IsReliable => true;
 
     /// <inheritdoc />
     public bool DropReliableDataIfNewerExists => false;

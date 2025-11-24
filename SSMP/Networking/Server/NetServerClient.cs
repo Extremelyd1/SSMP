@@ -14,7 +14,7 @@ internal class NetServerClient {
     /// Concurrent dictionary for the set of IDs that are used. We use a dictionary because there is no
     /// standard implementation for a concurrent set.
     /// </summary>
-    private static readonly ConcurrentDictionary<ushort, byte> UsedIds = new ConcurrentDictionary<ushort, byte>();
+    private static readonly ConcurrentDictionary<ushort, byte> UsedIds = new();
 
     /// <summary>
     /// The last ID that was assigned.
@@ -81,6 +81,8 @@ internal class NetServerClient {
 
         UpdateManager.StopUpdates();
         ChunkSender.Stop();
+        // Reset chunk receiver state to prevent stale _chunkId on reconnect
+        ChunkReceiver.Reset();
         ConnectionManager.StopAcceptingConnection();
     }
 
