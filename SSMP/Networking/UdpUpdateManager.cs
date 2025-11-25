@@ -6,6 +6,7 @@ using SSMP.Logging;
 using SSMP.Networking.Packet;
 using SSMP.Networking.Packet.Data;
 using SSMP.Networking.Packet.Update;
+using SSMP.Networking.Transport.Common;
 using Timer = System.Timers.Timer;
 
 namespace SSMP.Networking;
@@ -96,9 +97,43 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     private bool _isUpdating;
     
     /// <summary>
-    /// The Socket instance to use to send packets.
+    /// The encrypted transport instance to use to send packets.
     /// </summary>
-    public DtlsTransport? DtlsTransport { get; set; }
+    public IEncryptedTransport? Transport { get; set; }
+
+    /// <summary>
+    /// Backward compatibility: Sets the transport using a DtlsTransport.
+    /// This will be removed in Branch 4 when server is fully refactored.
+    /// </summary>
+    [Obsolete("Use Transport property instead. This will be removed when server is refactored.")]
+    public DtlsTransport? DtlsTransport {
+        set => Transport = value != null ? new DtlsTransportWrapper(value) : null;
+    }
+
+    /// <summary>
+    /// Temporary wrapper to adapt DtlsTransport to IEncryptedTransport for backward compatibility.
+    /// </summary>
+    private class DtlsTransportWrapper : IEncryptedTransport {
+        private readonly DtlsTransport _dtlsTransport;
+        
+        public DtlsTransportWrapper(DtlsTransport dtlsTransport) {
+            _dtlsTransport = dtlsTransport;
+        }
+        
+        public event Action<byte[], int>? DataReceivedEvent;
+        
+        public void Connect(string address, int port) => throw new NotSupportedException();
+        public void Disconnect() => throw new NotSupportedException();
+        
+        public int Send(byte[] buffer, int offset, int length) {
+            _dtlsTransport.Send(buffer, offset, length);
+            return length;
+        }
+        
+        public int Receive(byte[] buffer, int offset, int length, int waitMillis) {
+            return _dtlsTransport.Receive(buffer, offset, length, waitMillis);
+        }
+    }
 
     /// <summary>
     /// The current send rate in milliseconds between sending packets.
@@ -202,7 +237,7 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     /// Create and send the current update packet.
     /// </summary>
     private void CreateAndSendUpdatePacket() {
-        if (DtlsTransport == null) {
+        if (Transport == null) {
             return;
         }
 
@@ -316,7 +351,7 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     private void SendPacket(Packet.Packet packet) {
         var buffer = packet.ToArray();
         
-        DtlsTransport?.Send(buffer, 0, buffer.Length);
+        Transport?.Send(buffer, 0, buffer.Length);
     }
 
     /// <summary>
