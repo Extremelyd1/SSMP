@@ -10,7 +10,7 @@ namespace SSMP.Networking.Transport.HolePunch;
 /// UDP Hole Punching implementation of IEncryptedTransportServer.
 /// Wraps DtlsServer with Master Server registration and NAT traversal coordination.
 /// </summary>
-internal class HolePunchEncryptedTransportServer : IEncryptedTransportServer {
+internal class HolePunchEncryptedTransportServer : IEncryptedTransportServer<HolePunchEncryptedTransportClient> {
     private readonly string _masterServerAddress;
     private DtlsServer? _dtlsServer;
     private readonly ConcurrentDictionary<IPEndPoint, HolePunchEncryptedTransportClient> _clients;
@@ -47,13 +47,9 @@ internal class HolePunchEncryptedTransportServer : IEncryptedTransportServer {
         _clients.Clear();
     }
 
-    public void DisconnectClient(IEncryptedTransportClient client) {
-        if (client is not HolePunchEncryptedTransportClient hpClient) {
-            throw new ArgumentException("Client is not a hole punch transport client", nameof(client));
-        }
-
-        _dtlsServer?.DisconnectClient(hpClient.EndPoint);
-        _clients.TryRemove(hpClient.EndPoint, out _);
+    public void DisconnectClient(HolePunchEncryptedTransportClient client) {
+        _dtlsServer?.DisconnectClient(client.EndPoint);
+        _clients.TryRemove(client.EndPoint, out _);
     }
 
     private void OnClientDataReceived(DtlsServerClient dtlsClient, byte[] data, int length) {
@@ -65,31 +61,5 @@ internal class HolePunchEncryptedTransportServer : IEncryptedTransportServer {
         });
 
         client.RaiseDataReceived(data, length);
-    }
-}
-
-/// <summary>
-/// UDP Hole Punching implementation of IEncryptedTransportClient.
-/// Wraps DtlsServerClient for hole punched connections.
-/// </summary>
-internal class HolePunchEncryptedTransportClient : IEncryptedTransportClient {
-    private readonly DtlsServerClient _dtlsServerClient;
-
-    public string ClientIdentifier => _dtlsServerClient.EndPoint.ToString();
-    public IPEndPoint EndPoint => _dtlsServerClient.EndPoint;
-    
-    public event Action<byte[], int>? DataReceivedEvent;
-
-    public HolePunchEncryptedTransportClient(DtlsServerClient dtlsServerClient) {
-        _dtlsServerClient = dtlsServerClient;
-    }
-
-    public int Send(byte[] buffer, int offset, int length) {
-        _dtlsServerClient.DtlsTransport.Send(buffer, offset, length);
-        return length;
-    }
-
-    internal void RaiseDataReceived(byte[] data, int length) {
-        DataReceivedEvent?.Invoke(data, length);
     }
 }

@@ -2,23 +2,23 @@ using System;
 
 namespace SSMP.Networking.Transport.Common;
 
-internal interface IEncryptedTransportServer {
+internal interface IEncryptedTransportServer<in TClient> where TClient : IEncryptedTransportClient {
     event Action<IEncryptedTransportClient>? ClientConnectedEvent;
     
     /// <summary>
-    /// Start listening.
-    /// - UDP: Binds to port
-    /// - Steam: Opens channel
-    /// - HolePunch: Registers with Master Server
+    /// Start listening for connections.
     /// </summary>
+    /// <param name="port">Port to listen on (if applicable).</param>
     void Start(int port);
     
+    /// <summary>
+    /// Stop listening and disconnect all clients.
+    /// </summary>
     void Stop();
-    void DisconnectClient(IEncryptedTransportClient client);
-}
 
-internal interface IEncryptedTransportClient {
-    string ClientIdentifier { get; }
-    event Action<byte[], int>? DataReceivedEvent;
-    int Send(byte[] buffer, int offset, int length);
+    /// <summary>
+    /// Disconnect a specific client.
+    /// </summary>
+    /// <param name="client">The client to disconnect.</param>
+    void DisconnectClient(TClient client);
 }

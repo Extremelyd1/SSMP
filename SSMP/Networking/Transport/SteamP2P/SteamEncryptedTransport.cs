@@ -19,7 +19,7 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
         throw new NotImplementedException("Steam P2P transport not yet implemented");
     }
 
-    public int Send(byte[] buffer, int offset, int length) {
+    public void Send(byte[] buffer, int offset, int length) {
         throw new NotImplementedException("Steam P2P transport not yet implemented");
     }
 

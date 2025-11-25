@@ -38,13 +38,12 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
         throw new NotImplementedException("UDP Hole Punching transport not yet implemented");
     }
 
-    public int Send(byte[] buffer, int offset, int length) {
+    public void Send(byte[] buffer, int offset, int length) {
         if (_dtlsClient?.DtlsTransport == null) {
             throw new InvalidOperationException("Not connected");
         }
 
         _dtlsClient.DtlsTransport.Send(buffer, offset, length);
-        return length;
     }
 
     public int Receive(byte[] buffer, int offset, int length, int waitMillis) {

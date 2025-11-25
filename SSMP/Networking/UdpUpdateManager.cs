@@ -125,9 +125,8 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
         public void Connect(string address, int port) => throw new NotSupportedException();
         public void Disconnect() => throw new NotSupportedException();
         
-        public int Send(byte[] buffer, int offset, int length) {
+        public void Send(byte[] buffer, int offset, int length) {
             _dtlsTransport.Send(buffer, offset, length);
-            return length;
         }
         
         public int Receive(byte[] buffer, int offset, int length, int waitMillis) {
