@@ -6,6 +6,7 @@ using SSMP.Logging;
 using SSMP.Networking.Packet;
 using SSMP.Networking.Packet.Data;
 using SSMP.Networking.Packet.Update;
+using SSMP.Networking.Transport.Common;
 using Timer = System.Timers.Timer;
 
 namespace SSMP.Networking;
@@ -96,9 +97,9 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     private bool _isUpdating;
     
     /// <summary>
-    /// The Socket instance to use to send packets.
+    /// The encrypted transport instance to use to send packets.
     /// </summary>
-    public DtlsTransport? DtlsTransport { get; set; }
+    public IEncryptedTransport? Transport { get; set; }
 
     /// <summary>
     /// The current send rate in milliseconds between sending packets.
@@ -202,7 +203,7 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     /// Create and send the current update packet.
     /// </summary>
     private void CreateAndSendUpdatePacket() {
-        if (DtlsTransport == null) {
+        if (Transport == null) {
             return;
         }
 
@@ -316,7 +317,7 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     private void SendPacket(Packet.Packet packet) {
         var buffer = packet.ToArray();
         
-        DtlsTransport?.Send(buffer, 0, buffer.Length);
+        Transport?.Send(buffer, 0, buffer.Length);
     }
 
     /// <summary>

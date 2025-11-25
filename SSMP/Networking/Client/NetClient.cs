@@ -11,6 +11,7 @@ using SSMP.Networking.Chunk;
 using SSMP.Networking.Packet;
 using SSMP.Networking.Packet.Data;
 using SSMP.Networking.Packet.Update;
+using SSMP.Networking.Transport.Common;
 using SSMP.Util;
 
 namespace SSMP.Networking.Client;
@@ -59,9 +60,9 @@ internal class NetClient : INetClient {
     public bool IsConnected => ConnectionStatus == ClientConnectionStatus.Connected;
 
     /// <summary>
-    /// The DTLS client instance for handling DTLS connections.
+    /// The encrypted transport instance for handling encrypted connections.
     /// </summary>
-    private readonly DtlsClient _dtlsClient;
+    private readonly IEncryptedTransport _transport;
 
     /// <summary>
     /// Chunk sender instance for sending large amounts of data.
@@ -91,13 +92,13 @@ internal class NetClient : INetClient {
 
 
     /// <summary>
-    /// Construct the net client with the given packet manager.
+    /// Construct the net client with the given packet manager and encrypted transport.
     /// </summary>
     /// <param name="packetManager">The packet manager instance.</param>
-    public NetClient(PacketManager packetManager) {
+    /// <param name="transport">The encrypted transport implementation to use for connections.</param>
+    public NetClient(PacketManager packetManager, IEncryptedTransport transport) {
         _packetManager = packetManager;
-
-        _dtlsClient = new DtlsClient();
+        _transport = transport;
 
         UpdateManager = new ClientUpdateManager();
 
@@ -105,7 +106,7 @@ internal class NetClient : INetClient {
         _chunkReceiver = new ClientChunkReceiver(UpdateManager);
         _connectionManager = new ClientConnectionManager(_packetManager, _chunkSender, _chunkReceiver);
 
-        _dtlsClient.DataReceivedEvent += OnReceiveData;
+        _transport.DataReceivedEvent += OnReceiveData;
         _connectionManager.ServerInfoReceivedEvent += OnServerInfoReceived;
     }
 
@@ -143,9 +144,9 @@ internal class NetClient : INetClient {
         // Start a new thread for establishing the connection, otherwise Unity will hang
         new Thread(() => {
             try {
-                _dtlsClient.Connect(address, port);
+                _transport.Connect(address, port);
 
-                UpdateManager.DtlsTransport = _dtlsClient.DtlsTransport;
+                UpdateManager.Transport = _transport;
                 UpdateManager.TimeoutEvent += OnConnectTimedOut;
                 UpdateManager.StartUpdates();
 
@@ -194,7 +195,7 @@ internal class NetClient : INetClient {
             UpdateManager.TimeoutEvent -= OnUpdateTimedOut;
             _chunkSender.Stop();
             _chunkReceiver.Reset();
-            _dtlsClient.Disconnect();
+            _transport.Disconnect();
         } catch (Exception e) {
             Logger.Error($"Error in NetClient.InternalDisconnect: {e}");
         }
