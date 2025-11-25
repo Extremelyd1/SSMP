@@ -3,7 +3,6 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
-using System.Threading.Tasks;
 using Org.BouncyCastle.Tls;
 using Org.BouncyCastle.Tls.Crypto.Impl.BC;
 using SSMP.Logging;
@@ -47,10 +46,7 @@ internal class DtlsClient {
     /// </summary>
     private CancellationTokenSource? _receiveTaskTokenSource;
 
-    /// <summary>
-    /// Lock object for synchronizing connection operations.
-    /// </summary>
-    private readonly object _connectionLock = new object();
+
 
     /// <summary>
     /// Thread running the handshake operation.
@@ -75,84 +71,82 @@ internal class DtlsClient {
     /// <exception cref="SocketException">Thrown when the underlying socket fails to connect to the server.</exception>
     /// <exception cref="IOException">Thrown when the DTLS protocol fails to connect to the server.</exception>
     public void Connect(string address, int port) {
-        lock (_connectionLock) {
-            // Clean up any existing connection first
-            if (_receiveTaskTokenSource != null) {
-                InternalDisconnect();
-            }
-
-            _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-
-            // Prevent UDP WSAECONNRESET (10054) from surfacing as exceptions on Windows when the remote endpoint closes
-            try {
-                _socket.IOControl((IOControlCode) SioUDPConnReset, [0, 0, 0, 0], null);
-            } catch (SocketException e) {
-                // IOControl may not be supported on all platforms, log but continue
-                Logger.Debug($"IOControl SioUDPConnReset not supported: {e.Message}");
-            }
-
-            try {
-                _socket.Connect(address, port);
-            } catch (SocketException e) {
-                Logger.Error($"Failed to connect socket to {address}:{port}");
-                CleanupAndThrow(e);
-            }
-
-            var clientProtocol = new DtlsClientProtocol();
-            _tlsClient = new ClientTlsClient(new BcTlsCrypto());
-            _clientDatagramTransport = new ClientDatagramTransport(_socket);
-
-            // Create the token source, because we need the token for the receive loop
-            _receiveTaskTokenSource = new CancellationTokenSource();
-            var cancellationToken = _receiveTaskTokenSource.Token;
-
-            // Start the socket receive loop, since during the DTLS connection, it needs to receive data
-            new Thread(() => SocketReceiveLoop(cancellationToken)) { IsBackground = true }.Start();
-
-            // Perform handshake with timeout
-            DtlsTransport? dtlsTransport = null;
-            bool handshakeSucceeded = false;
-            Exception? handshakeException = null;
-
-            _handshakeThread = new Thread(() => {
-                try {
-                    dtlsTransport = clientProtocol.Connect(_tlsClient, _clientDatagramTransport);
-                    handshakeSucceeded = dtlsTransport != null;
-                } catch (Exception e) {
-                    handshakeException = e;
-                }
-            }) { IsBackground = true };
-
-            _handshakeThread.Start();
-
-            // Wait for handshake to complete or timeout
-            if (!_handshakeThread.Join(DtlsHandshakeTimeoutMillis)) {
-                // Handshake timed out - close socket to force handshake thread to abort
-                Logger.Error($"DTLS handshake timed out after {DtlsHandshakeTimeoutMillis}ms");
-                _socket?.Close();
-                
-                // Give handshake thread a brief moment to exit after socket closure
-                _handshakeThread.Join(500);
-                
-                CleanupAndThrow(new TlsTimeoutException("DTLS handshake timed out"));
-            }
-
-            // Handshake completed - check if it succeeded or threw an exception
-            if (handshakeException != null) {
-                Logger.Error($"DTLS handshake failed with exception");
-                CleanupAndThrow(handshakeException is IOException ? handshakeException : new IOException("DTLS handshake failed", handshakeException));
-            }
-
-            if (!handshakeSucceeded || dtlsTransport == null) {
-                InternalDisconnect();
-                throw new IOException("Failed to establish DTLS connection");
-            }
-
-            DtlsTransport = dtlsTransport;
-
-            // Start DTLS receive loop
-            new Thread(() => DtlsReceiveLoop(cancellationToken)) { IsBackground = true }.Start();
+        // Clean up any existing connection first
+        if (_receiveTaskTokenSource != null) {
+            InternalDisconnect();
         }
+
+        _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+
+        // Prevent UDP WSAECONNRESET (10054) from surfacing as exceptions on Windows when the remote endpoint closes
+        try {
+            _socket.IOControl((IOControlCode) SioUDPConnReset, [0, 0, 0, 0], null);
+        } catch (SocketException e) {
+            // IOControl may not be supported on all platforms, log but continue
+            Logger.Debug($"IOControl SioUDPConnReset not supported: {e.Message}");
+        }
+
+        try {
+            _socket.Connect(address, port);
+        } catch (SocketException e) {
+            Logger.Error($"Failed to connect socket to {address}:{port}");
+            CleanupAndThrow(e);
+        }
+
+        var clientProtocol = new DtlsClientProtocol();
+        _tlsClient = new ClientTlsClient(new BcTlsCrypto());
+        _clientDatagramTransport = new ClientDatagramTransport(_socket);
+
+        // Create the token source, because we need the token for the receive loop
+        _receiveTaskTokenSource = new CancellationTokenSource();
+        var cancellationToken = _receiveTaskTokenSource.Token;
+
+        // Start the socket receive loop, since during the DTLS connection, it needs to receive data
+        new Thread(() => SocketReceiveLoop(cancellationToken)) { IsBackground = true }.Start();
+
+        // Perform handshake with timeout
+        DtlsTransport? dtlsTransport = null;
+        var handshakeSucceeded = false;
+        Exception? handshakeException = null;
+
+        _handshakeThread = new Thread(() => {
+            try {
+                dtlsTransport = clientProtocol.Connect(_tlsClient, _clientDatagramTransport);
+                handshakeSucceeded = dtlsTransport != null;
+            } catch (Exception e) {
+                handshakeException = e;
+            }
+        }) { IsBackground = true };
+
+        _handshakeThread.Start();
+
+        // Wait for handshake to complete or timeout
+        if (!_handshakeThread.Join(DtlsHandshakeTimeoutMillis)) {
+            // Handshake timed out - close socket to force handshake thread to abort
+            Logger.Error($"DTLS handshake timed out after {DtlsHandshakeTimeoutMillis}ms");
+            _socket?.Close();
+            
+            // Give handshake thread a brief moment to exit after socket closure
+            _handshakeThread.Join(500);
+            
+            CleanupAndThrow(new TlsTimeoutException("DTLS handshake timed out"));
+        }
+
+        // Handshake completed - check if it succeeded or threw an exception
+        if (handshakeException != null) {
+            Logger.Error($"DTLS handshake failed with exception");
+            CleanupAndThrow(handshakeException is IOException ? handshakeException : new IOException("DTLS handshake failed", handshakeException));
+        }
+
+        if (!handshakeSucceeded || dtlsTransport == null) {
+            InternalDisconnect();
+            throw new IOException("Failed to establish DTLS connection");
+        }
+
+        DtlsTransport = dtlsTransport;
+
+        // Start DTLS receive loop
+        new Thread(() => DtlsReceiveLoop(cancellationToken)) { IsBackground = true }.Start();
     }
 
     /// <summary>
@@ -169,9 +163,7 @@ internal class DtlsClient {
     /// clean up potential previous connection attempts.
     /// </summary>
     public void Disconnect() {
-        lock (_connectionLock) {
-            InternalDisconnect();
-        }
+        InternalDisconnect();
     }
     
 

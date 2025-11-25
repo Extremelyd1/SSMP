@@ -113,7 +113,7 @@ internal class DtlsServer {
                 if (connInfo.State == ConnectionState.Connected && connInfo.Client != null) {
                     InternalDisconnectClient(connInfo.Client);
                 } else {
-                    connInfo.DatagramTransport?.Close();
+                    connInfo.DatagramTransport.Close();
                 }
                 connInfo.State = ConnectionState.Disconnected;
             }
@@ -156,7 +156,7 @@ internal class DtlsServer {
     /// </summary>
     /// <param name="dtlsServerClient">The DTLS server client to disconnect.</param>
     private void InternalDisconnectClient(DtlsServerClient dtlsServerClient) {
-        dtlsServerClient.ReceiveLoopTokenSource?.Cancel();
+        dtlsServerClient.ReceiveLoopTokenSource.Cancel();
 
         // Wait for the receive loop thread to exit if we can find it
         Thread? receiveThread = null;
@@ -171,15 +171,16 @@ internal class DtlsServer {
             receiveThread.Join(TimeSpan.FromSeconds(2));
         }
 
-        dtlsServerClient.DtlsTransport?.Close();
-        dtlsServerClient.DatagramTransport?.Dispose();
-        dtlsServerClient.ReceiveLoopTokenSource?.Dispose();
+        dtlsServerClient.DtlsTransport.Close();
+        dtlsServerClient.DatagramTransport.Dispose();
+        dtlsServerClient.ReceiveLoopTokenSource.Dispose();
     }
 
     /// <summary>
     /// Start a loop that will continuously receive data on the socket for existing and new clients.
     /// </summary>
-    /// <param name="cancellationToken">The cancellation token for checking whether this task is requested to cancel.</param>
+    /// <param name="cancellationToken">The cancellation token for checking whether this task is requested to cancel.
+    /// </param>
     private void SocketReceiveLoop(CancellationToken cancellationToken) {
         var buffer = new byte[MaxPacketSize];
 
@@ -228,8 +229,14 @@ internal class DtlsServer {
     /// <param name="ipEndPoint">The IP endpoint the packet was received from.</param>
     /// <param name="buffer">The buffer containing the packet data.</param>
     /// <param name="numReceived">The number of bytes received.</param>
-    /// <param name="cancellationToken">The cancellation token for checking whether this task is requested to cancel.</param>
-    private void ProcessReceivedPacket(IPEndPoint ipEndPoint, byte[] buffer, int numReceived, CancellationToken cancellationToken) {
+    /// <param name="cancellationToken">The cancellation token for checking whether this task is requested to cancel.
+    /// </param>
+    private void ProcessReceivedPacket(
+        IPEndPoint ipEndPoint, 
+        byte[] buffer, 
+        int numReceived, 
+        CancellationToken cancellationToken
+    ) {
         // 1. Attempt to route to an existing connection
         if (_connections.TryGetValue(ipEndPoint, out var connInfo)) {
             bool shouldRemove;
@@ -270,7 +277,7 @@ internal class DtlsServer {
         }
 
         // 2. Handle new connection attempt
-        var newTransport = new ServerDatagramTransport(_socket) {
+        var newTransport = new ServerDatagramTransport(_socket!) {
             IPEndPoint = ipEndPoint
         };
 
@@ -346,7 +353,10 @@ internal class DtlsServer {
         bool handshakeSucceeded = false;
 
         try {
-            var handshakeTask = Task.Run(() => _serverProtocol.Accept(_tlsServer, connInfo.DatagramTransport), cancellationToken);
+            var handshakeTask = Task.Run(
+                () => _serverProtocol.Accept(_tlsServer, connInfo.DatagramTransport), 
+                cancellationToken
+            );
 
             try {
                 handshakeTask.Wait(cancellationToken);
@@ -399,7 +409,9 @@ internal class DtlsServer {
             connInfo.State = ConnectionState.Connected;
 
 
-            var receiveThread = new Thread(() => ClientReceiveLoop(dtlsServerClient, dtlsServerClient.ReceiveLoopTokenSource.Token)) {
+            var receiveThread = new Thread(
+                () => ClientReceiveLoop(dtlsServerClient, dtlsServerClient.ReceiveLoopTokenSource.Token)
+            ) {
                 IsBackground = true
             };
             
@@ -414,22 +426,24 @@ internal class DtlsServer {
     /// <param name="endPoint">The IP endpoint of the failed connection.</param>
     private void CleanupFailedHandshake(IPEndPoint endPoint) {
         if (_connections.TryRemove(endPoint, out var connInfo)) {
-            connInfo.DatagramTransport?.Close();
+            connInfo.DatagramTransport.Close();
         }
     }
 
     /// <summary>
     /// Start a loop for the given DTLS server client that will continuously check whether new data is available
-    /// on the DTLS transport for that client. Will evoke the DataReceivedEvent in case data is received for that client.
+    /// on the DTLS transport for that client. Will evoke the DataReceivedEvent in case data is received for that
+    /// client.
     /// </summary>
     /// <param name="dtlsServerClient">The DTLS server client to receive data for.</param>
-    /// <param name="cancellationToken">The cancellation token for checking whether this task is requested to cancel.</param>
+    /// <param name="cancellationToken">The cancellation token for checking whether this task is requested to cancel.
+    /// </param>
     private void ClientReceiveLoop(DtlsServerClient dtlsServerClient, CancellationToken cancellationToken) {
         var dtlsTransport = dtlsServerClient.DtlsTransport;
 
         while (!cancellationToken.IsCancellationRequested) {
             var buffer = new byte[dtlsTransport.GetReceiveLimit()];
-            int numReceived = -1;
+            int numReceived;
 
             try {
                 numReceived = dtlsTransport.Receive(buffer, 0, buffer.Length, 100);
@@ -447,40 +461,39 @@ internal class DtlsServer {
             }
         }
     }
-}
-
-
-/// <summary>
-/// Connection states for tracking client lifecycle.
-/// </summary>
-internal enum ConnectionState {
-    Handshaking,
-    Connected,
-    Disconnecting,
-    Disconnected
-}
-
-/// <summary>
-/// Wrapper for connection state management.
-/// </summary>
-internal class ConnectionInfo {
-    /// <summary>
-    /// The datagram transport for this connection.
-    /// </summary>
-    public ServerDatagramTransport DatagramTransport { get; set; }
-
-    /// <summary>
-    /// The current state of the connection.
-    /// </summary>
-    public ConnectionState State { get; set; }
     
     /// <summary>
-    /// The DTLS server client instance once the connection is established.
+    /// Connection states for tracking client lifecycle.
     /// </summary>
-    public DtlsServerClient? Client { get; set; }
+    private enum ConnectionState {
+        Handshaking,
+        Connected,
+        Disconnecting,
+        Disconnected
+    }
 
     /// <summary>
-    /// The client receive loop thread.
+    /// Wrapper for connection state management.
     /// </summary>
-    public Thread? ReceiveThread { get; set; }
+    private class ConnectionInfo {
+        /// <summary>
+        /// The datagram transport for this connection.
+        /// </summary>
+        public required ServerDatagramTransport DatagramTransport { get; init; }
+
+        /// <summary>
+        /// The current state of the connection.
+        /// </summary>
+        public ConnectionState State { get; set; }
+    
+        /// <summary>
+        /// The DTLS server client instance once the connection is established.
+        /// </summary>
+        public DtlsServerClient? Client { get; set; }
+
+        /// <summary>
+        /// The client receive loop thread.
+        /// </summary>
+        public Thread? ReceiveThread { get; set; }
+    }
 }
