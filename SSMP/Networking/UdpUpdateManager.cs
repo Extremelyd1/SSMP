@@ -102,6 +102,40 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     public IEncryptedTransport? Transport { get; set; }
 
     /// <summary>
+    /// Backward compatibility: Sets the transport using a DtlsTransport.
+    /// This will be removed in Branch 4 when server is fully refactored.
+    /// </summary>
+    [Obsolete("Use Transport property instead. This will be removed when server is refactored.")]
+    public DtlsTransport? DtlsTransport {
+        set => Transport = value != null ? new DtlsTransportWrapper(value) : null;
+    }
+
+    /// <summary>
+    /// Temporary wrapper to adapt DtlsTransport to IEncryptedTransport for backward compatibility.
+    /// </summary>
+    private class DtlsTransportWrapper : IEncryptedTransport {
+        private readonly DtlsTransport _dtlsTransport;
+        
+        public DtlsTransportWrapper(DtlsTransport dtlsTransport) {
+            _dtlsTransport = dtlsTransport;
+        }
+        
+        public event Action<byte[], int>? DataReceivedEvent;
+        
+        public void Connect(string address, int port) => throw new NotSupportedException();
+        public void Disconnect() => throw new NotSupportedException();
+        
+        public int Send(byte[] buffer, int offset, int length) {
+            _dtlsTransport.Send(buffer, offset, length);
+            return length;
+        }
+        
+        public int Receive(byte[] buffer, int offset, int length, int waitMillis) {
+            return _dtlsTransport.Receive(buffer, offset, length, waitMillis);
+        }
+    }
+
+    /// <summary>
     /// The current send rate in milliseconds between sending packets.
     /// </summary>
     public int CurrentSendRate { get; set; } = UdpCongestionManager<TOutgoing, TPacketId>.HighSendRate;
