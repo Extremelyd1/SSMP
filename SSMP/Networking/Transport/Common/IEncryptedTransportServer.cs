@@ -1,3 +1,5 @@
+using System;
+
 namespace SSMP.Networking.Transport.Common;
 
 internal interface IEncryptedTransportServer {
