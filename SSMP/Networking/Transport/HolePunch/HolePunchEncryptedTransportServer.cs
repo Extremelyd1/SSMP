@@ -22,7 +22,7 @@ internal class HolePunchEncryptedTransportServer : IEncryptedTransportServer<Hol
     private readonly ConcurrentDictionary<IPEndPoint, HolePunchEncryptedTransportClient> _clients;
 
     /// <inheritdoc />
-    public event Action<IEncryptedTransportClient>? ClientConnectedEvent;
+    public event Action<HolePunchEncryptedTransportClient>? ClientConnectedEvent;
 
     /// <summary>
     /// Construct a hole punching server with the given master server address.
