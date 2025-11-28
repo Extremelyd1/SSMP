@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using GlobalEnums;
 using SSMP.Animation;
 using SSMP.Api.Client;
@@ -131,6 +132,12 @@ internal class ClientManager : IClientManager {
     private Vector3 _lastPosition;
 
     /// <summary>
+    /// Stopwatch to keep track of the last time that the position of the local player object was updated.
+    /// Used to throttle position updates to 60 Hz maximum to avoid having to update the packet every frame.
+    /// </summary>
+    private readonly Stopwatch _lastPositionStopwatch;
+
+    /// <summary>
     /// Keeps track of the last updated scale of the local player object.
     /// </summary>
     private Vector3 _lastScale;
@@ -242,6 +249,8 @@ internal class ClientManager : IClientManager {
 
         var clientApi = new ClientApi(this, _commandManager, uiManager, netClient, eventAggregator);
         _addonManager = new ClientAddonManager(clientApi, _modSettings);
+
+        _lastPositionStopwatch = new Stopwatch();
     }
 
     #region Internal client-manager methods
@@ -1151,14 +1160,28 @@ internal class ClientManager : IClientManager {
         }
     
         var heroTransform = HeroController.instance.transform;
+
+        // For position updating, we use a stopwatch to check whether the latest update wasn't too soon ago.
+        // Because each update of the player position in a packet needs to acquire the packet lock, which without
+        // this rate-limit might happen every frame
+        if (!_lastPositionStopwatch.IsRunning) {
+            _lastPositionStopwatch.Start();
+        }
+
+        // Update rate of 60 Hz
+        const int updateRate = 1000 / 60;
+        if (_lastPositionStopwatch.ElapsedMilliseconds > updateRate) {
+            var newPosition = heroTransform.position;
+            
+            // If the position changed since last check
+            if (newPosition != _lastPosition) {
+                // Update the last position, since it changed
+                _lastPosition = newPosition;
+                // Restart the stopwatch
+                _lastPositionStopwatch.Restart();
     
-        var newPosition = heroTransform.position;
-        // If the position changed since last check
-        if (newPosition != _lastPosition) {
-            // Update the last position, since it changed
-            _lastPosition = newPosition;
-    
-            _netClient.UpdateManager.UpdatePlayerPosition(new Vector2(newPosition.x, newPosition.y));
+                _netClient.UpdateManager.UpdatePlayerPosition(new Vector2(newPosition.x, newPosition.y));
+            }
         }
     
         var newScale = heroTransform.localScale;
