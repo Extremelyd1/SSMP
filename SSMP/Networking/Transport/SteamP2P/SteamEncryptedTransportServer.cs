@@ -9,7 +9,7 @@ namespace SSMP.Networking.Transport.SteamP2P;
 /// TODO: Implement using Steamworks.NET SteamNetworking API.
 internal class SteamEncryptedTransportServer : IEncryptedTransportServer<SteamEncryptedTransportClient> {
     /// <inheritdoc />
-    public event Action<IEncryptedTransportClient>? ClientConnectedEvent;
+    public event Action<SteamEncryptedTransportClient>? ClientConnectedEvent;
 
     /// <summary>
     /// Start listening for Steam P2P connections.

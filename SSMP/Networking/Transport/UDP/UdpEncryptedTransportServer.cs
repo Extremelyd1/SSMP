@@ -20,7 +20,7 @@ internal class UdpEncryptedTransportServer : IEncryptedTransportServer<UdpEncryp
     private readonly ConcurrentDictionary<IPEndPoint, UdpEncryptedTransportClient> _clients;
 
     /// <inheritdoc />
-    public event Action<IEncryptedTransportClient>? ClientConnectedEvent;
+    public event Action<UdpEncryptedTransportClient>? ClientConnectedEvent;
 
     public UdpEncryptedTransportServer() {
         _dtlsServer = new DtlsServer();
