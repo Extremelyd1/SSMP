@@ -3,7 +3,7 @@ using System;
 namespace SSMP.Networking.Transport.Common;
 
 /// <summary>
-/// Interface for an encrypted transport client connected to the server.
+/// Interface for a server-side encrypted transport client that is connected to the server.
 /// </summary>
 internal interface IEncryptedTransportClient {
     /// <summary>

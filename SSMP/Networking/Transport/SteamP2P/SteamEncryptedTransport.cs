@@ -4,10 +4,11 @@ using SSMP.Networking.Transport.Common;
 namespace SSMP.Networking.Transport.SteamP2P;
 
 /// <summary>
-/// Steam P2P implementation of IEncryptedTransport.
-/// TODO: Implement using Steamworks.NET SteamNetworking API.
+/// Steam P2P implementation of <see cref="IEncryptedTransport"/>.
 /// </summary>
+/// TODO: Implement using Steamworks.NET SteamNetworking API.
 internal class SteamEncryptedTransport : IEncryptedTransport {
+    /// <inheritdoc />
     public event Action<byte[], int>? DataReceivedEvent;
 
     /// <summary>
@@ -19,14 +20,17 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
         throw new NotImplementedException("Steam P2P transport not yet implemented");
     }
 
+    /// <inheritdoc />
     public void Send(byte[] buffer, int offset, int length) {
         throw new NotImplementedException("Steam P2P transport not yet implemented");
     }
 
+    /// <inheritdoc />
     public int Receive(byte[] buffer, int offset, int length, int waitMillis) {
         throw new NotImplementedException("Steam P2P transport not yet implemented");
     }
 
+    /// <inheritdoc />
     public void Disconnect() {
         throw new NotImplementedException("Steam P2P transport not yet implemented");
     }

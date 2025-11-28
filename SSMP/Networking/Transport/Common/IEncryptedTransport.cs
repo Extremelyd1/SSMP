@@ -2,7 +2,13 @@ using System;
 
 namespace SSMP.Networking.Transport.Common;
 
+/// <summary>
+/// Interface for a client-side encrypted transport for connection and data exchange with a server.
+/// </summary>
 internal interface IEncryptedTransport {
+    /// <summary>
+    /// Event raised when data is received from the server.
+    /// </summary>
     event Action<byte[], int>? DataReceivedEvent;
     
     /// <summary>
