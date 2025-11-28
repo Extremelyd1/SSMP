@@ -4,6 +4,7 @@ using SSMP.Game.Settings;
 using SSMP.Networking.Client;
 using SSMP.Networking.Packet;
 using SSMP.Networking.Server;
+using SSMP.Networking.Transport.UDP;
 using SSMP.Ui;
 using SSMP.Ui.Resources;
 using SSMP.Util;
@@ -36,7 +37,8 @@ internal class GameManager {
 
         var packetManager = new PacketManager();
 
-        var netClient = new NetClient(packetManager);
+        var udpTransport = new UdpEncryptedTransport();
+        var netClient = new NetClient(packetManager, udpTransport);
         var netServer = new NetServer(packetManager);
 
         var clientServerSettings = new ServerSettings();
