@@ -13,19 +13,32 @@ internal class UdpEncryptedTransportClient : IEncryptedTransportClient {
     /// The underlying DTLS server client.
     /// </summary>
     private readonly DtlsServerClient _dtlsServerClient;
+    
+    /// <summary>
+    /// The client identifier for this UDP client.
+    /// </summary>
+    private readonly UdpClientIdentifier _clientIdentifier;
 
     /// <inheritdoc />
-    public string ClientIdentifier => _dtlsServerClient.EndPoint.ToString();
+    public IClientIdentifier ClientIdentifier => _clientIdentifier;
+    
     /// <summary>
     /// The IP endpoint of the server client.
+    /// Provides direct access to the underlying endpoint for UDP-specific operations.
     /// </summary>
     public IPEndPoint EndPoint => _dtlsServerClient.EndPoint;
+    
+    /// <summary>
+    /// Internal access to the underlying DTLS server client for backward compatibility.
+    /// </summary>
+    internal DtlsServerClient DtlsServerClient => _dtlsServerClient;
 
     /// <inheritdoc />
     public event Action<byte[], int>? DataReceivedEvent;
 
     public UdpEncryptedTransportClient(DtlsServerClient dtlsServerClient) {
         _dtlsServerClient = dtlsServerClient;
+        _clientIdentifier = new UdpClientIdentifier(dtlsServerClient.EndPoint);
     }
 
     /// <inheritdoc />

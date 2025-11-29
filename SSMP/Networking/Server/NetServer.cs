@@ -11,6 +11,8 @@ using SSMP.Networking.Packet;
 using SSMP.Networking.Packet.Connection;
 using SSMP.Networking.Packet.Data;
 using SSMP.Networking.Packet.Update;
+using SSMP.Networking.Transport.Common;
+using SSMP.Networking.Transport.UDP;
 
 namespace SSMP.Networking.Server;
 
@@ -29,14 +31,14 @@ internal class NetServer : INetServer {
     private readonly PacketManager _packetManager;
     
     /// <summary>
-    /// Underlying DTLS server instance.
+    /// Underlying encrypted transport server instance.
     /// </summary>
-    private readonly DtlsServer _dtlsServer;
+    private readonly IEncryptedTransportServer<UdpEncryptedTransportClient> _transportServer;
 
     /// <summary>
-    /// Dictionary mapping IP end-points to net server clients.
+    /// Dictionary mapping client identifiers to net server clients.
     /// </summary>
-    private readonly ConcurrentDictionary<IPEndPoint, NetServerClient> _clientsByEndPoint;
+    private readonly ConcurrentDictionary<IClientIdentifier, NetServerClient> _clientsByIdentifier;
 
     /// <summary>
     /// Dictionary mapping client IDs to net server clients.
@@ -93,12 +95,15 @@ internal class NetServer : INetServer {
     /// <inheritdoc />
     public bool IsStarted { get; private set; }
 
-    public NetServer(PacketManager packetManager) {
+    public NetServer(
+        PacketManager packetManager,
+        IEncryptedTransportServer<UdpEncryptedTransportClient>? transportServer = null
+    ) {
         _packetManager = packetManager;
 
-        _dtlsServer = new DtlsServer();
+        _transportServer = transportServer ?? new UdpEncryptedTransportServer();
 
-        _clientsByEndPoint = new ConcurrentDictionary<IPEndPoint, NetServerClient>();
+        _clientsByIdentifier = new ConcurrentDictionary<IClientIdentifier, NetServerClient>();
         _clientsById = new ConcurrentDictionary<ushort, NetServerClient>();
         _throttledClients = new ConcurrentDictionary<IPAddress, Stopwatch>();
 
@@ -124,7 +129,7 @@ internal class NetServer : INetServer {
         Logger.Info($"Starting NetServer on port {port}");
         IsStarted = true;
         
-        _dtlsServer.Start(port);
+        _transportServer.Start(port);
 
         // Create a cancellation token source for the tasks that we are creating
         _taskTokenSource = new CancellationTokenSource();
@@ -133,22 +138,22 @@ internal class NetServer : INetServer {
         _processingThread = new Thread(() => StartProcessing(_taskTokenSource.Token)) { IsBackground = true };
         _processingThread.Start();
 
-        _dtlsServer.DataReceivedEvent += OnDataReceived;
+        _transportServer.ClientConnectedEvent += OnClientConnected;
     }
 
     /// <summary>
-    /// Callback method for when data is received from the DTLS server. Will enqueue the data in the queue.
+    /// Callback when a new client connects via any transport.
+    /// Subscribe to the client's data event and enqueue received data.
     /// </summary>
-    /// <param name="dtlsServerClient">The DTLS server client from which the data was received.</param>
-    /// <param name="buffer">Byte array for the buffer of data.</param>
-    /// <param name="length">The number of bytes in the array that can be read.</param>
-    private void OnDataReceived(DtlsServerClient dtlsServerClient, byte[] buffer, int length) {
-        _receivedQueue.Enqueue(new ReceivedData {
-            DtlsServerClient = dtlsServerClient,
-            Buffer = buffer,
-            NumReceived = length
-        });
-        _processingWaitHandle.Set();
+    private void OnClientConnected(UdpEncryptedTransportClient transportClient) {
+        transportClient.DataReceivedEvent += (buffer, length) => {
+            _receivedQueue.Enqueue(new ReceivedData {
+                TransportClient = transportClient,
+                Buffer = buffer,
+                NumReceived = length
+            });
+            _processingWaitHandle.Set();
+        };
     }
 
     /// <summary>
@@ -168,28 +173,35 @@ internal class NetServer : INetServer {
                     ref _leftoverData
                 );
 
-                var dtlsServerClient = receivedData.DtlsServerClient;
-                var endPoint = dtlsServerClient.EndPoint;
+                var transportClient = receivedData.TransportClient;
+                var clientId = transportClient.ClientIdentifier;
 
-                if (!_clientsByEndPoint.TryGetValue(endPoint, out var client)) {
-                    // If the client is throttled, check their stopwatch for how long still
-                    if (_throttledClients.TryGetValue(endPoint.Address, out var clientStopwatch)) {
-                        if (clientStopwatch.ElapsedMilliseconds < ThrottleTime) {
-                            // Reset stopwatch and ignore packets so the client times out
-                            clientStopwatch.Restart();
-                            continue;
+                if (!_clientsByIdentifier.TryGetValue(clientId, out var client)) {
+                    // Extract IP for throttling (UDP transports only)
+                    if (clientId is UdpClientIdentifier udpId) {
+                        var clientAddress = udpId.EndPoint.Address;
+                        
+                        // If the client is throttled, check their stopwatch for how long still
+                        if (_throttledClients.TryGetValue(clientAddress, out var clientStopwatch)) {
+                            if (clientStopwatch.ElapsedMilliseconds < ThrottleTime) {
+                                // Reset stopwatch and ignore packets so the client times out
+                                clientStopwatch.Restart();
+                                continue;
+                            }
+
+                            // Stopwatch exceeds max throttle time so we remove the client from the dict
+                            _throttledClients.TryRemove(clientAddress, out _);
                         }
-
-                        // Stopwatch exceeds max throttle time so we remove the client from the dict
-                        _throttledClients.TryRemove(endPoint.Address, out _);
+                        
+                        Logger.Info(
+                            $"Received packet from unknown client with address: {udpId.EndPoint}, creating new client");
+                    } else {
+                        Logger.Info($"Received packet from unknown client: {clientId.ToDisplayString()}, creating new client");
                     }
 
-                    Logger.Info(
-                        $"Received packet from unknown client with address: {endPoint.Address}:{endPoint.Port}, creating new client");
-
-                    // We didn't find a client with the given address, so we assume it is a new client
+                    // We didn't find a client with the given identifier, so we assume it is a new client
                     // that wants to connect
-                    client = CreateNewClient(dtlsServerClient);
+                    client = CreateNewClient(transportClient);
                 }
 
                 HandleClientPackets(client, packets);
@@ -200,10 +212,10 @@ internal class NetServer : INetServer {
     /// <summary>
     /// Create a new client and start sending UDP updates and registering the timeout event.
     /// </summary>
-    /// <param name="dtlsServerClient">The DTLS server client to create the client from.</param>
+    /// <param name="transportClient">The transport client to create the client from.</param>
     /// <returns>A new net server client instance.</returns>
-    private NetServerClient CreateNewClient(DtlsServerClient dtlsServerClient) {
-        var netServerClient = new NetServerClient(dtlsServerClient.DtlsTransport, _packetManager, dtlsServerClient.EndPoint);
+    private NetServerClient CreateNewClient(IEncryptedTransportClient transportClient) {
+        var netServerClient = new NetServerClient(transportClient, _packetManager);
         
         netServerClient.ChunkSender.Start();
 
@@ -214,7 +226,7 @@ internal class NetServer : INetServer {
         netServerClient.UpdateManager.TimeoutEvent += () => HandleClientTimeout(netServerClient);
         netServerClient.UpdateManager.StartUpdates();
 
-        _clientsByEndPoint.TryAdd(dtlsServerClient.EndPoint, netServerClient);
+        _clientsByIdentifier.TryAdd(transportClient.ClientIdentifier, netServerClient);
         _clientsById.TryAdd(netServerClient.Id, netServerClient);
 
         return netServerClient;
@@ -234,8 +246,8 @@ internal class NetServer : INetServer {
         }
 
         client.Disconnect();
-        _dtlsServer.DisconnectClient(client.EndPoint);
-        _clientsByEndPoint.TryRemove(client.EndPoint, out _);
+        _transportServer.DisconnectClient((UdpEncryptedTransportClient)client.TransportClient);
+        _clientsByIdentifier.TryRemove(client.ClientIdentifier, out _);
         _clientsById.TryRemove(id, out _);
 
         Logger.Info($"Client {id} timed out");
@@ -264,7 +276,8 @@ internal class NetServer : INetServer {
 
                 // We throttle the client, because chances are that they are using an outdated version of the
                 // networking protocol, and keeping connection will potentially never time them out
-                _throttledClients[client.EndPoint.Address] = Stopwatch.StartNew();
+                var udpId = (UdpClientIdentifier)client.ClientIdentifier;
+                _throttledClients[udpId.EndPoint.Address] = Stopwatch.StartNew();
 
                 continue;
             }
@@ -349,7 +362,8 @@ internal class NetServer : INetServer {
             // Wait for it to finish sending, then disconnect and throttle
             client.ConnectionManager.FinishConnection(() => { 
                 OnClientDisconnect(clientId);
-                _throttledClients[client.EndPoint.Address] = Stopwatch.StartNew();
+                var udpId = (UdpClientIdentifier)client.ClientIdentifier;
+                _throttledClients[udpId.EndPoint.Address] = Stopwatch.StartNew();
             });
         }
     }
@@ -378,16 +392,16 @@ internal class NetServer : INetServer {
         }
         
         // Clean up existing clients
-        foreach (var client in _clientsByEndPoint.Values) {
+        foreach (var client in _clientsByIdentifier.Values) {
             client.Disconnect();
         }
 
-        _clientsByEndPoint.Clear();
+        _clientsByIdentifier.Clear();
         _clientsById.Clear();
         _throttledClients.Clear();
         
-        _dtlsServer.Stop();
-        _dtlsServer.DataReceivedEvent -= OnDataReceived;
+        _transportServer.Stop();
+        _transportServer.ClientConnectedEvent -= OnClientConnected;
 
         _leftoverData = null;
 
@@ -409,8 +423,8 @@ internal class NetServer : INetServer {
         }
 
         client.Disconnect();
-        _dtlsServer.DisconnectClient(client.EndPoint);
-        _clientsByEndPoint.TryRemove(client.EndPoint, out _);
+        _transportServer.DisconnectClient((UdpEncryptedTransportClient)client.TransportClient);
+        _clientsByIdentifier.TryRemove(client.ClientIdentifier, out _);
         _clientsById.TryRemove(id, out _);
 
         Logger.Info($"Client {id} disconnected");
@@ -521,9 +535,9 @@ internal class NetServer : INetServer {
 /// </summary>
 internal class ReceivedData {
     /// <summary>
-    /// The DTLS server client that sent this data.
+    /// The transport client that sent this data.
     /// </summary>
-    public required DtlsServerClient DtlsServerClient { get; init; }
+    public required IEncryptedTransportClient TransportClient { get; init; }
     
     /// <summary>
     /// Byte array of the buffer containing received data.

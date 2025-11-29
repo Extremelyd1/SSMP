@@ -1,8 +1,11 @@
+using System;
 using System.Collections.Concurrent;
 using System.Net;
-using Org.BouncyCastle.Tls;
 using SSMP.Networking.Chunk;
 using SSMP.Networking.Packet;
+using SSMP.Networking.Transport.Common;
+using SSMP.Networking.Transport.HolePunch;
+using SSMP.Networking.Transport.UDP;
 
 namespace SSMP.Networking.Server;
 
@@ -51,23 +54,48 @@ internal class NetServerClient {
     public ServerConnectionManager ConnectionManager { get; }
 
     /// <summary>
-    /// The endpoint of the client.
+    /// The transport client for this server client.
     /// </summary>
-    public readonly IPEndPoint EndPoint;
+    public IEncryptedTransportClient TransportClient { get; }
+    
+    /// <summary>
+    /// The client identifier for this client.
+    /// </summary>
+    public IClientIdentifier ClientIdentifier => TransportClient.ClientIdentifier;
 
     /// <summary>
-    /// Construct the client with the given DTLS transport and endpoint.
+    /// The endpoint of the client (for UDP transports only, backward compatibility).
     /// </summary>
-    /// <param name="dtlsTransport">The underlying DTLS transport.</param>
+    public IPEndPoint EndPoint {
+        get {
+            // For UDP-based transports, extract the IPEndPoint
+            return TransportClient.ClientIdentifier switch
+            {
+                UdpClientIdentifier udp      => udp.EndPoint,
+                HolePunchClientIdentifier hp => hp.EndPoint,
+                _ => throw new InvalidOperationException("EndPoint is only available for UDP-based transports")
+            };
+        }
+    }
+
+    /// <summary>
+    /// Construct the client with the given transport client.
+    /// </summary>
+    /// <param name="transportClient">The encrypted transport client.</param>
     /// <param name="packetManager">The packet manager used on the server.</param>
-    /// <param name="endPoint">The endpoint.</param>
-    public NetServerClient(DtlsTransport dtlsTransport, PacketManager packetManager, IPEndPoint endPoint) {
-        EndPoint = endPoint;
+    public NetServerClient(IEncryptedTransportClient transportClient, PacketManager packetManager) {
+        TransportClient = transportClient;
 
         Id = GetId();
-        UpdateManager = new ServerUpdateManager {
-            DtlsTransport = dtlsTransport
+        UpdateManager = new ServerUpdateManager();
+        
+        // For UDP-based transports, set DtlsTransport for backward compatibility
+        UpdateManager.DtlsTransport = transportClient switch {
+            UdpEncryptedTransportClient udp => udp.DtlsServerClient.DtlsTransport,
+            HolePunchEncryptedTransportClient hp => hp.DtlsServerClient.DtlsTransport,
+            _ => null
         };
+        // Steam P2P will use Transport property instead when implemented
         ChunkSender = new ServerChunkSender(UpdateManager);
         ChunkReceiver = new ServerChunkReceiver(UpdateManager);
         ConnectionManager = new ServerConnectionManager(packetManager, ChunkSender, ChunkReceiver, Id);

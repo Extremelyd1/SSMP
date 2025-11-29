@@ -7,9 +7,13 @@ namespace SSMP.Networking.Transport.Common;
 /// </summary>
 internal interface IEncryptedTransportClient {
     /// <summary>
-    /// Unique identifier for the client (e.g. IP address, SteamID).
+    /// Unique identifier for the client.
+    /// Implementation depends on transport type:
+    /// - UDP: <see cref="UDP.UdpClientIdentifier"/> wrapping <see cref="System.Net.IPEndPoint"/>
+    /// - Steam P2P: <see cref="SteamP2P.SteamClientIdentifier"/> wrapping Steam ID (ulong)
+    /// - Hole Punch: <see cref="HolePunch.HolePunchClientIdentifier"/> wrapping <see cref="System.Net.IPEndPoint"/>
     /// </summary>
-    string ClientIdentifier { get; }
+    IClientIdentifier ClientIdentifier { get; }
 
     /// <summary>
     /// Event raised when data is received from this client.
