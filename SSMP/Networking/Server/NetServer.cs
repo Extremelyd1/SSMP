@@ -11,7 +11,6 @@ using SSMP.Networking.Packet;
 using SSMP.Networking.Packet.Connection;
 using SSMP.Networking.Packet.Data;
 using SSMP.Networking.Packet.Update;
-using SSMP.Networking.Transport;
 using SSMP.Networking.Transport.Common;
 using SSMP.Networking.Transport.UDP;
 
