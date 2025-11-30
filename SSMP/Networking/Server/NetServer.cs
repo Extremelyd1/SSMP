@@ -183,18 +183,15 @@ internal class NetServer : INetServer {
                     // Extract throttle key for throttling
                     var throttleKey = clientId.ThrottleKey;
 
-                    if (throttleKey != null) {
-                        // If the client is throttled, check their stopwatch for how long still
-                        if (_throttledClients.TryGetValue(throttleKey, out var clientStopwatch)) {
-                            if (clientStopwatch.ElapsedMilliseconds < ThrottleTime) {
-                                // Reset stopwatch and ignore packets so the client times out
-                                clientStopwatch.Restart();
-                                continue;
-                            }
-
-                            // Stopwatch exceeds max throttle time so we remove the client from the dict
-                            _throttledClients.TryRemove(throttleKey, out _);
+                    if (throttleKey != null && _throttledClients.TryGetValue(throttleKey, out var clientStopwatch)) {
+                        if (clientStopwatch.ElapsedMilliseconds < ThrottleTime) {
+                            // Reset stopwatch and ignore packets so the client times out
+                            clientStopwatch.Restart();
+                            continue;
                         }
+
+                        // Stopwatch exceeds max throttle time so we remove the client from the dict
+                        _throttledClients.TryRemove(throttleKey, out _);
                     }
 
                     Logger.Info($"Received packet from unknown client: {clientId.ToDisplayString()}, creating new client");
@@ -246,7 +243,7 @@ internal class NetServer : INetServer {
         }
 
         client.Disconnect();
-        _transportServer.DisconnectClient(client.TransportClient);
+        _transportServer?.DisconnectClient(client.TransportClient);
         _clientsByIdentifier.TryRemove(client.ClientIdentifier, out _);
         _clientsById.TryRemove(id, out _);
 
@@ -262,6 +259,19 @@ internal class NetServer : INetServer {
         var id = client.Id;
 
         foreach (var packet in packets) {
+            // If the client is not registered, we first try to read it as a connection packet
+            // This is because ClientInfo is sent as a ServerConnectionPacket, not ServerUpdatePacket
+            if (!client.IsRegistered) {
+                var connectionPacket = new ServerConnectionPacket();
+                // We need to clone the packet because ReadPacket consumes it
+                var packetClone = new Packet.Packet(packet.ToArray());
+                
+                if (connectionPacket.ReadPacket(packetClone)) {
+                    _packetManager.HandleServerConnectionPacket(id, connectionPacket);
+                    continue;
+                }
+            }
+
             // Create a server update packet from the raw packet instance
             var serverUpdatePacket = new ServerUpdatePacket();
             if (!serverUpdatePacket.ReadPacket(packet)) {
@@ -396,8 +406,10 @@ internal class NetServer : INetServer {
         }
         
         // Stop transport server first to prevent new connections and unregister from loopback
-        _transportServer.Stop();
-        _transportServer.ClientConnectedEvent -= OnClientConnected;
+        _transportServer?.Stop();
+        if (_transportServer != null) {
+            _transportServer.ClientConnectedEvent -= OnClientConnected;
+        }
         
         // Clean up existing clients (transport is already stopped)
         foreach (var client in _clientsByIdentifier.Values) {

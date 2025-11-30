@@ -14,14 +14,9 @@ namespace SSMP.Networking.Transport.SteamP2P;
 /// </summary>
 internal class SteamEncryptedTransport : IEncryptedTransport {
     /// <summary>
-    /// P2P channel to use for sending packets (Client -> Server).
+    /// P2P channel to use for all communication (bidirectional).
     /// </summary>
-    private const int P2P_CHANNEL_SEND = 0;
-
-    /// <summary>
-    /// P2P channel to use for receiving packets (Server -> Client).
-    /// </summary>
-    private const int P2P_CHANNEL_RECEIVE = 1;
+    private const int P2P_CHANNEL = 0;
 
     /// <summary>
     /// Maximum Steam P2P packet size.
@@ -142,7 +137,7 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
         try {
             // Send packet using appropriate channel based on reliability
             var sendType = reliable ? EP2PSend.k_EP2PSendReliable : EP2PSend.k_EP2PSendUnreliableNoDelay;
-            if (!SteamNetworking.SendP2PPacket(_remoteSteamId, dataToSend, (uint)length, sendType, P2P_CHANNEL_SEND)) {
+            if (!SteamNetworking.SendP2PPacket(_remoteSteamId, dataToSend, (uint)length, sendType, P2P_CHANNEL)) {
                 Logger.Warn($"Steam P2P: Failed to send packet to {_remoteSteamId}");
             }
         } finally {
@@ -157,10 +152,10 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
         if (!_isConnected || !SteamManager.IsInitialized) return 0;
 
         // Check if packet is available
-        if (!SteamNetworking.IsP2PPacketAvailable(out uint packetSize, P2P_CHANNEL_RECEIVE)) return 0;
+        if (!SteamNetworking.IsP2PPacketAvailable(out uint packetSize, P2P_CHANNEL)) return 0;
 
         // Read the packet
-        if (!SteamNetworking.ReadP2PPacket(_receiveBuffer, MAX_PACKET_SIZE, out packetSize, out CSteamID remoteSteamId, P2P_CHANNEL_RECEIVE)) return 0;
+        if (!SteamNetworking.ReadP2PPacket(_receiveBuffer, MAX_PACKET_SIZE, out packetSize, out CSteamID remoteSteamId, P2P_CHANNEL)) return 0;
 
         // Verify it's from the expected peer
         if (remoteSteamId != _remoteSteamId) {
@@ -172,13 +167,11 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
 
         // Fire data received event directly since we are in the loop
         // We create a copy for the event to ensure thread safety/buffer independence
-        var data = ArrayPool<byte>.Shared.Rent(size);
-        try {
-            Buffer.BlockCopy(_receiveBuffer, 0, data, 0, size);
-            DataReceivedEvent?.Invoke(data, size);
-        } finally {
-            ArrayPool<byte>.Shared.Return(data);
-        }
+        // We cannot use ArrayPool here because the consumer (NetClient) queues the buffer
+        // and processes it asynchronously. If we return it to the pool, it gets corrupted.
+        var data = new byte[size];
+        Buffer.BlockCopy(_receiveBuffer, 0, data, 0, size);
+        DataReceivedEvent?.Invoke(data, size);
 
         // If a buffer was provided (legacy/direct call), copy to it
         if (buffer != null && length > 0) {

@@ -205,7 +205,10 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
 
             // Route packet to the appropriate client
             if (_clients.TryGetValue(remoteSteamId, out var client)) {
-                client.RaiseDataReceived(_receiveBuffer, (int)packetSize);
+                // We must copy the buffer because _receiveBuffer is reused and the consumer might queue it
+                var data = new byte[packetSize];
+                Buffer.BlockCopy(_receiveBuffer, 0, data, 0, (int)packetSize);
+                client.RaiseDataReceived(data, (int)packetSize);
             } else {
                 Logger.Warn($"Steam P2P: Received packet from unknown client {remoteSteamId}");
             }

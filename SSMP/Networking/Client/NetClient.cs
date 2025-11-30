@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net.Sockets;
 using System.Threading;
+using System.Threading.Tasks;
 using Org.BouncyCastle.Tls;
 using SSMP.Api.Client;
 using SSMP.Api.Client.Networking;
@@ -120,6 +121,7 @@ internal class NetClient : INetClient {
         IEncryptedTransport transport
     ) {
         // Prevent multiple simultaneous connection attempts
+        // Prevent multiple simultaneous connection attempts
         lock (_connectionLock) {
             if (ConnectionStatus == ClientConnectionStatus.Connecting) {
                 Logger.Warn("Connection attempt already in progress, ignoring duplicate request");
@@ -135,8 +137,8 @@ internal class NetClient : INetClient {
             ConnectionStatus = ClientConnectionStatus.Connecting;
         }
 
-        // Start a new thread for establishing the connection, otherwise Unity will hang
-        new Thread(() => {
+        // Start a new task for establishing the connection, otherwise Unity will hang
+        Task.Run(() => {
             try {
                 _transport = transport;
                 
@@ -171,7 +173,7 @@ internal class NetClient : INetClient {
                 Logger.Error($"Unexpected error during connection:\n{e}");
                 HandleConnectFailed(new ConnectionFailedResult { Reason = ConnectionFailedReason.IOException });
             }
-        }) { IsBackground = true }.Start();
+        });
     }
 
     /// <summary>
