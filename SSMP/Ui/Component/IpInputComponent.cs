@@ -25,9 +25,25 @@ internal class IpInputComponent : HiddenInputComponent {
         Vector2 position,
         string defaultValue,
         string placeholderText
+    ) : this(
+        componentGroup,
+        position,
+        new Vector2(DefaultWidth, DefaultHeight),
+        defaultValue,
+        placeholderText
+    ) {
+    }
+
+    public IpInputComponent(
+        ComponentGroup componentGroup,
+        Vector2 position,
+        Vector2 size,
+        string defaultValue,
+        string placeholderText
     ) : base(
         componentGroup,
         position,
+        size,
         defaultValue,
         placeholderText,
         UiManager.NormalFontSize

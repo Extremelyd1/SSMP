@@ -523,6 +523,7 @@ internal class UiManager : IUiManager {
         // yield return UM.StartCoroutine(UM.ShowMenu(_connectMenu));
 
         _connectGroup.SetActive(true);
+        _connectInterface.SetMenuActive(true);
     }
 
     /// <summary>
@@ -530,6 +531,7 @@ internal class UiManager : IUiManager {
     /// </summary>
     private IEnumerator GoToSaveMenu() {
         _connectGroup.SetActive(false);
+        _connectInterface.SetMenuActive(false);
 
         yield return UM.HideCurrentMenu();
         yield return UM.GoToProfileMenu();
@@ -588,6 +590,7 @@ internal class UiManager : IUiManager {
             UM.UIGoToMainMenu();
 
             _connectGroup.SetActive(false);
+            _connectInterface.SetMenuActive(false);
         }
     }
 
