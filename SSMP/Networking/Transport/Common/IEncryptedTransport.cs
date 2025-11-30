@@ -24,7 +24,7 @@ internal interface IEncryptedTransport : ITransportSender {
     /// <param name="buffer">Buffer containing the data to send.</param>
     /// <param name="offset">Offset in the buffer to start sending from.</param>
     /// <param name="length">Number of bytes to send.</param>
-    void Send(byte[] buffer, int offset, int length);
+    new void Send(byte[] buffer, int offset, int length, bool reliable = false);
 
     /// <summary>
     /// Receive data from the connected peer.
@@ -34,7 +34,7 @@ internal interface IEncryptedTransport : ITransportSender {
     /// <param name="length">Maximum number of bytes to receive.</param>
     /// <param name="waitMillis">Time in milliseconds to wait for data.</param>
     /// <returns>Number of bytes received.</returns>
-    int Receive(byte[] buffer, int offset, int length, int waitMillis);
+    int Receive(byte[]? buffer, int offset, int length, int waitMillis);
 
     /// <summary>
     /// Indicates whether this transport requires application-level congestion management.

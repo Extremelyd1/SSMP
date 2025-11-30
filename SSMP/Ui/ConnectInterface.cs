@@ -633,8 +633,11 @@ internal class ConnectInterface {
             return;
         }
 
-        if (!ConnectInterfaceHelpers.ValidateUsername(_usernameInput, _feedbackText, out var username, _feedbackHideCoroutine, out _feedbackHideCoroutine)) return;
-        
+        if (!ConnectInterfaceHelpers.ValidateUsername(_usernameInput, _feedbackText, out var username, _feedbackHideCoroutine, out var newCoroutine)) {
+            _feedbackHideCoroutine = newCoroutine;
+            return;
+        }
+
         _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.yellow, "Creating Steam lobby...", _feedbackHideCoroutine);
         Logger.Info($"Create lobby requested for user: {username}");
 
@@ -706,7 +709,7 @@ internal class ConnectInterface {
         
         var hostId = SteamManager.GetLobbyOwner(lobbyId);
         
-        if (!ConnectInterfaceHelpers.ValidateUsername(_usernameInput, _feedbackText, out var username, _feedbackHideCoroutine, out _feedbackHideCoroutine)) username = "Player"; // Fallback
+        if (!ConnectInterfaceHelpers.ValidateUsername(_usernameInput, _feedbackText, out var username, _feedbackHideCoroutine, out _feedbackHideCoroutine)) return;
 
         // Connect using Steam ID as address
         ConnectButtonPressed?.Invoke(new ConnectionDetails(hostId.ToString(), 0, username, TransportType.Steam));

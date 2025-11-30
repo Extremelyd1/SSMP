@@ -119,12 +119,12 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
             DisconnectClient(client);
         }
 
+        // Unregister from loopback after all clients are disconnected
+        SteamLoopbackChannel.UnregisterServer();
+
         _clients.Clear();
         _sessionRequestCallback?.Dispose();
         _sessionRequestCallback = null;
-
-        // Unregister from loopback after all clients are disconnected
-        SteamLoopbackChannel.UnregisterServer();
 
         Logger.Info("Steam P2P: Server stopped");
     }

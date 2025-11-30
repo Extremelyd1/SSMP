@@ -103,7 +103,7 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
     }
 
     /// <inheritdoc />
-    public void Send(byte[] buffer, int offset, int length) {
+    public void Send(byte[] buffer, int offset, int length, bool reliable = false) {
         if (!_isConnected) {
             throw new InvalidOperationException("Cannot send: not connected");
         }
@@ -140,8 +140,9 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
         }
 
         try {
-            // Send packet using unreliable channel (reliability handled at application layer)
-            if (!SteamNetworking.SendP2PPacket(_remoteSteamId, dataToSend, (uint)length, EP2PSend.k_EP2PSendUnreliableNoDelay, P2P_CHANNEL_SEND)) {
+            // Send packet using appropriate channel based on reliability
+            var sendType = reliable ? EP2PSend.k_EP2PSendReliable : EP2PSend.k_EP2PSendUnreliableNoDelay;
+            if (!SteamNetworking.SendP2PPacket(_remoteSteamId, dataToSend, (uint)length, sendType, P2P_CHANNEL_SEND)) {
                 Logger.Warn($"Steam P2P: Failed to send packet to {_remoteSteamId}");
             }
         } finally {
@@ -152,7 +153,7 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
     }
 
     /// <inheritdoc />
-    public int Receive(byte[] buffer, int offset, int length, int waitMillis) {
+    public int Receive(byte[]? buffer, int offset, int length, int waitMillis) {
         if (!_isConnected || !SteamManager.IsInitialized) return 0;
 
         // Check if packet is available
@@ -234,8 +235,8 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
                 // The Receive method will do the actual reading
                 Receive(null, 0, 0, 0);
                 
-                // Sleep briefly to avoid burning CPU
-                Thread.Sleep(1);
+                // Sleep briefly to avoid burning CPU (increased to 15ms)
+                Thread.Sleep(15);
             } catch (Exception e) {
                 Logger.Error($"Steam P2P: Error in receive loop: {e}");
             }

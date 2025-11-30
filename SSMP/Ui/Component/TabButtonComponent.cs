@@ -178,8 +178,8 @@ internal class TabButtonComponent : Component, IButtonComponent {
         
         if (active) {
             // Active tab - darker background with persistent glow
-            _image.color = new Color(0.1f, 0.1f, 0.1f, 1f);
-            _text.color = new Color(1.0f, 0.7f, 0.3f, 1f); // Orange
+            if (_image != null) _image.color = new Color(0.1f, 0.1f, 0.1f, 1f);
+            if (_text != null) _text.color = new Color(1.0f, 0.7f, 0.3f, 1f); // Orange
             if (_shineOverlay != null) {
                 var color = _shineOverlay.color;
                 color.a = 0.6f; // Persistent glow
@@ -187,8 +187,8 @@ internal class TabButtonComponent : Component, IButtonComponent {
             }
         } else {
             // Inactive tab
-            _image.color = new Color(0.05f, 0.05f, 0.05f, 1f);
-            _text.color = Color.white;
+            if (_image != null) _image.color = new Color(0.05f, 0.05f, 0.05f, 1f);
+            if (_text != null) _text.color = Color.white;
             if (_shineOverlay != null && !_isHover) {
                 var color = _shineOverlay.color;
                 color.a = 0f;

@@ -291,7 +291,7 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
                 // Copy over the length of bytes starting from index into the new array
                 Array.Copy(byteArray, index, newBytes, 0, length);
 
-                SendPacket(new Packet.Packet(newBytes));
+                SendPacket(new Packet.Packet(newBytes), updatePacket.ContainsReliableData);
 
                 index += length;
             }
@@ -299,7 +299,7 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
             return;
         }
         
-        SendPacket(packet);
+        SendPacket(packet, updatePacket.ContainsReliableData);
     }
 
     /// <summary>
@@ -347,10 +347,11 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     /// Send the given packet over the corresponding medium.
     /// </summary>
     /// <param name="packet">The raw packet instance.</param>
-    private void SendPacket(Packet.Packet packet) {
+    /// <param name="reliable">Whether the packet contains reliable data and should be sent reliably.</param>
+    private void SendPacket(Packet.Packet packet, bool reliable) {
         var buffer = packet.ToArray();
         
-        _transportSender?.Send(buffer, 0, buffer.Length);
+        _transportSender?.Send(buffer, 0, buffer.Length, reliable);
     }
 
     /// <summary>

@@ -120,6 +120,10 @@ internal class NetServer : INetServer {
     /// <param name="port">The networking port.</param>
     /// <param name="transportServer">The transport server to use.</param>
     public void Start(int port, IEncryptedTransportServer transportServer) {
+        if (transportServer == null) {
+            throw new ArgumentNullException(nameof(transportServer));
+        }
+
         if (IsStarted) {
             Stop();
         }

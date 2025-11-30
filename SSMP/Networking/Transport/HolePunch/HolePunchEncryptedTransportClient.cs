@@ -43,7 +43,7 @@ internal class HolePunchEncryptedTransportClient : IEncryptedTransportClient {
     }
 
     /// <inheritdoc />
-    public void Send(byte[] buffer, int offset, int length) {
+    public void Send(byte[] buffer, int offset, int length, bool reliable = false) {
         _dtlsServerClient.DtlsTransport.Send(buffer, offset, length);
     }
 

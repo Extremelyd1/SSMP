@@ -49,7 +49,7 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     }
 
     /// <inheritdoc />
-    public void Send(byte[] buffer, int offset, int length) {
+    public void Send(byte[] buffer, int offset, int length, bool reliable = false) {
         if (_dtlsClient?.DtlsTransport == null) {
             throw new InvalidOperationException("Not connected");
         }
@@ -58,9 +58,13 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     }
 
     /// <inheritdoc />
-    public int Receive(byte[] buffer, int offset, int length, int waitMillis) {
+    public int Receive(byte[]? buffer, int offset, int length, int waitMillis) {
         if (_dtlsClient?.DtlsTransport == null) {
             throw new InvalidOperationException("Not connected");
+        }
+
+        if (buffer == null) {
+            throw new ArgumentNullException(nameof(buffer), "UDP transport requires a buffer for Receive");
         }
 
         return _dtlsClient.DtlsTransport.Receive(buffer, offset, length, waitMillis);

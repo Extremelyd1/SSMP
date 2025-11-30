@@ -26,5 +26,5 @@ internal interface IEncryptedTransportClient : ITransportSender {
     /// <param name="buffer">Buffer containing the data to send.</param>
     /// <param name="offset">Offset in the buffer to start sending from.</param>
     /// <param name="length">Number of bytes to send.</param>
-    void Send(byte[] buffer, int offset, int length);
+    new void Send(byte[] buffer, int offset, int length, bool reliable = false);
 }

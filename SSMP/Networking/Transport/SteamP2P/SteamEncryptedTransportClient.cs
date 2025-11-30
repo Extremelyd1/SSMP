@@ -49,9 +49,26 @@ internal class SteamEncryptedTransportClient : IEncryptedTransportClient {
     }
 
     /// <inheritdoc />
-    public void Send(byte[] buffer, int offset, int length) {
+    public void Send(byte[] buffer, int offset, int length, bool reliable = false) {
         if (!SteamManager.IsInitialized) {
             Logger.Warn($"Steam P2P: Cannot send to client {SteamId}, Steam not initialized");
+            return;
+        }
+
+        // Check for loopback
+        if (_steamIdStruct == SteamUser.GetSteamID()) {
+            // For loopback with offset, we need to create a proper slice
+            if (offset > 0) {
+                var temp = ArrayPool<byte>.Shared.Rent(length);
+                try {
+                    Buffer.BlockCopy(buffer, offset, temp, 0, length);
+                    SteamLoopbackChannel.SendToClient(temp, length);
+                } finally {
+                    ArrayPool<byte>.Shared.Return(temp);
+                }
+            } else {
+                SteamLoopbackChannel.SendToClient(buffer, length);
+            }
             return;
         }
 
@@ -66,8 +83,9 @@ internal class SteamEncryptedTransportClient : IEncryptedTransportClient {
         }
 
         try {
-            // Send packet to this specific client (unreliable - reliability handled at application layer)
-            if (!SteamNetworking.SendP2PPacket(_steamIdStruct, dataToSend, (uint)length, EP2PSend.k_EP2PSendUnreliableNoDelay, P2P_CHANNEL)) {
+            // Send packet to this specific client
+            var sendType = reliable ? EP2PSend.k_EP2PSendReliable : EP2PSend.k_EP2PSendUnreliableNoDelay;
+            if (!SteamNetworking.SendP2PPacket(_steamIdStruct, dataToSend, (uint)length, sendType, P2P_CHANNEL)) {
                 Logger.Warn($"Steam P2P: Failed to send packet to client {SteamId}");
             }
         } finally {

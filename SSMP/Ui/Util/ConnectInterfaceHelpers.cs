@@ -46,17 +46,6 @@ internal static class ConnectInterfaceHelpers {
     private static readonly System.Reflection.FieldInfo? GameObjectField = typeof(ButtonComponent).GetField("GameObject", 
         System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
-    /// <summary>
-    /// Cached reflection field for accessing ComponentGroup components.
-    /// </summary>
-    private static readonly System.Reflection.FieldInfo? ComponentsField = typeof(ComponentGroup).GetField("_components", 
-        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-
-    /// <summary>
-    /// Cached reflection field for accessing ComponentGroup children.
-    /// </summary>
-    private static readonly System.Reflection.FieldInfo? ChildrenField = typeof(ComponentGroup).GetField("_children",
-        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
     /// <summary>
     /// Creates a glowing horizontal notch under the multiplayer header.
@@ -183,33 +172,12 @@ internal static class ConnectInterfaceHelpers {
     }
 
     /// <summary>
-    /// Reparents a ComponentGroup to be a child of the background panel using reflection.
+    /// Reparents a ComponentGroup to be a child of the background panel.
     /// </summary>
     /// <param name="group">The component group to reparent.</param>
     /// <param name="backgroundPanel">The background panel to parent to.</param>
     public static void ReparentComponentGroup(ComponentGroup group, GameObject backgroundPanel) {
-        // Process components
-        if (ComponentsField != null && ComponentsField.GetValue(group) is IEnumerable components) {
-            foreach (var component in components) {
-                if (component == null) continue;
-                
-                var gameObjectField = component.GetType().GetField("GameObject",
-                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                
-                if (gameObjectField?.GetValue(component) is GameObject gameObject) {
-                    gameObject.transform.SetParent(backgroundPanel.transform, true);
-                }
-            }
-        }
-        
-        // Process children recursively
-        if (ChildrenField != null && ChildrenField.GetValue(group) is IEnumerable children) {
-            foreach (var child in children) {
-                if (child is ComponentGroup childGroup) {
-                    ReparentComponentGroup(childGroup, backgroundPanel);
-                }
-            }
-        }
+        group.ReparentComponents(backgroundPanel);
     }
 
     /// <summary>
