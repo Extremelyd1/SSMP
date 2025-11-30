@@ -4,6 +4,7 @@ using SSMP.Game.Settings;
 using SSMP.Networking.Packet;
 using SSMP.Networking.Packet.Data;
 using SSMP.Networking.Server;
+using SSMP.Networking.Transport.Common;
 using SSMPServer.Command;
 using SSMPServer.Logging;
 
@@ -55,7 +56,7 @@ internal class ConsoleServerManager : ServerManager {
     /// <inheritdoc />
     public override void Initialize() {
         base.Initialize();
-        
+
         // Start loading addons
         AddonManager.LoadAddons();
 
@@ -65,24 +66,12 @@ internal class ConsoleServerManager : ServerManager {
                 return;
             }
 
-            Stop();
+            base.RegisterCommands();
+
+            CommandManager.RegisterCommand(_exitCommand);
+            CommandManager.RegisterCommand(_consoleSettingsCommand);
+            CommandManager.RegisterCommand(_logCommand);
         };
-    }
-
-    /// <inheritdoc />
-    public override void Start(int port, bool fullSynchronisation) {
-        base.Start(port, fullSynchronisation);
-        
-        InitializeSaveFile();
-    }
-
-    /// <inheritdoc />
-    protected override void RegisterCommands() {
-        base.RegisterCommands();
-
-        CommandManager.RegisterCommand(_exitCommand);
-        CommandManager.RegisterCommand(_consoleSettingsCommand);
-        CommandManager.RegisterCommand(_logCommand);
     }
 
     /// <inheritdoc />

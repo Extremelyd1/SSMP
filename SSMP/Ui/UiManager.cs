@@ -6,6 +6,8 @@ using SSMP.Api.Client;
 using SSMP.Game.Settings;
 using SSMP.Hooks;
 using SSMP.Networking.Client;
+using SSMP.Networking.Transport.Common;
+using SSMP.Networking;
 using SSMP.Ui.Chat;
 using SSMP.Util;
 using UnityEngine;
@@ -81,7 +83,7 @@ internal class UiManager : IUiManager {
     /// <summary>
     /// Event that is fired when a server is requested to be hosted from the UI.
     /// </summary>
-    public event Action<int>? RequestServerStartHostEvent;
+    public event Action<ConnectionDetails>? RequestServerStartHostEvent;
 
     /// <summary>
     /// Event that is fired when a server is requested to be stopped.
@@ -89,10 +91,9 @@ internal class UiManager : IUiManager {
     public event Action? RequestServerStopHostEvent;
 
     /// <summary>
-    /// Event that is fired when a connection is requested with the given username, IP, port and whether it was a
-    /// connection from hosting.
+    /// Event that is fired when a connection is requested with the given details.
     /// </summary>
-    public event Action<string, int, string, bool>? RequestClientConnectEvent;
+    public event Action<ConnectionDetails, bool>? RequestClientConnectEvent;
 
     /// <summary>
     /// Event that is fired when a disconnect is requested.
@@ -309,19 +310,23 @@ internal class UiManager : IUiManager {
             _netClient
         );
         
-        _connectInterface.StartHostButtonPressed += (username, port) => {
+        _connectInterface.StartHostButtonPressed += (details) => {
             OpenSaveSlotSelection(saveSelected => {
                 if (!saveSelected) {
                     return;
                 }
 
-                RequestServerStartHostEvent?.Invoke(port);
-                RequestClientConnectEvent?.Invoke(LocalhostAddress, port, username, true);
+                RequestServerStartHostEvent?.Invoke(details);
+                
+                // For auto-connect, we use localhost address but keep other details
+                var autoConnectDetails = details;
+                autoConnectDetails.Address = LocalhostAddress;
+                RequestClientConnectEvent?.Invoke(autoConnectDetails, true);
             });
         };
 
-        _connectInterface.ConnectButtonPressed += (address, port, username) => {
-            RequestClientConnectEvent?.Invoke(address, port, username, false);
+        _connectInterface.ConnectButtonPressed += (details) => {
+            RequestClientConnectEvent?.Invoke(details, false);
         };
 
         TryAddMultiplayerScreen();

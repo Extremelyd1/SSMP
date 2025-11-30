@@ -1,7 +1,11 @@
+using System;
 using SSMP.Game.Command.Server;
 using SSMP.Game.Settings;
 using SSMP.Networking.Packet;
 using SSMP.Networking.Server;
+using SSMP.Networking.Transport.Common;
+using SSMP.Networking.Transport.SteamP2P;
+using SSMP.Networking.Transport.UDP;
 using SSMP.Ui;
 
 namespace SSMP.Game.Server;
@@ -53,7 +57,7 @@ internal class ModServerManager : ServerManager {
         AddonManager.LoadAddons();
 
         // Register handlers for UI events
-        _uiManager.RequestServerStartHostEvent += port => OnRequestServerStartHost(port, _modSettings.FullSynchronisation);
+        _uiManager.RequestServerStartHostEvent += (details) => OnRequestServerStartHost(details.Port, _modSettings.FullSynchronisation, details.TransportType);
         _uiManager.RequestServerStopHostEvent += Stop;
 
         // Register application quit handler
@@ -65,7 +69,8 @@ internal class ModServerManager : ServerManager {
     /// </summary>
     /// <param name="port">The port to start the server on.</param>
     /// <param name="fullSynchronisation">Whether full synchronisation is enabled.</param>
-    private void OnRequestServerStartHost(int port, bool fullSynchronisation) {
+    /// <param name="transportType">The type of transport to use.</param>
+    private void OnRequestServerStartHost(int port, bool fullSynchronisation, TransportType transportType) {
         // if (fullSynchronisation) {
         //     // Get the global save data from the save manager, which obtains the global save data from the loaded
         //     // save file that the user selected
@@ -82,7 +87,13 @@ internal class ModServerManager : ServerManager {
         //     ServerSaveData.PlayerSaveData[_modSettings.AuthKey!] = SaveManager.GetCurrentSaveData(false);
         // }
 
-        Start(port, fullSynchronisation);
+        IEncryptedTransportServer transportServer = transportType switch {
+            TransportType.Udp => new UdpEncryptedTransportServer(),
+            TransportType.Steam => new SteamEncryptedTransportServer(),
+            _ => throw new ArgumentOutOfRangeException(nameof(transportType), transportType, null)
+        };
+
+        Start(port, fullSynchronisation, transportServer);
     }
 
     /// <inheritdoc />

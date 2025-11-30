@@ -20,6 +20,7 @@ using SSMP.Networking.Packet;
 using SSMP.Networking.Packet.Data;
 using SSMP.Networking.Packet.Update;
 using SSMP.Networking.Server;
+using SSMP.Networking.Transport.Common;
 
 namespace SSMP.Game.Server;
 
@@ -363,7 +364,8 @@ internal abstract class ServerManager : IServerManager {
     /// </summary>
     /// <param name="port">The port the server should run on.</param>
     /// <param name="fullSynchronisation">Whether full synchronisation should be enabled.</param>
-    public virtual void Start(int port, bool fullSynchronisation) {
+    /// <param name="transportServer">The transport server to use.</param>
+    public virtual void Start(int port, bool fullSynchronisation, IEncryptedTransportServer transportServer) {
         // Stop existing server
         if (_netServer.IsStarted) {
             Logger.Info("Server was running, shutting it down before starting");
@@ -376,7 +378,7 @@ internal abstract class ServerManager : IServerManager {
         RegisterPacketHandlers();
 
         // Start server again with given port
-        _netServer.Start(port);
+        _netServer.Start(port, transportServer);
     }
 
     /// <summary>
@@ -1274,10 +1276,20 @@ internal abstract class ServerManager : IServerManager {
     /// <param name="serverInfo">The server info instance to modify based on whether the client should be accepted
     /// or not.</param>
     private void OnConnectionRequest(NetServerClient netServerClient, ClientInfo clientInfo, ServerInfo serverInfo) {
-        Logger.Info($"Received connection request from IP: {netServerClient.EndPoint}, username: {clientInfo.Username}");
+        var endPoint = netServerClient.EndPoint;
+        var endPointString = endPoint?.ToString() ?? "SteamP2P";
+        Logger.Info($"Received connection request from IP: {endPointString}, username: {clientInfo.Username}");
 
-        if (_banList.IsIpBanned(netServerClient.EndPoint.Address.ToString()) || _banList.Contains(clientInfo.AuthKey)) {
-            Logger.Debug("  Client is banned from the server, rejected connection");
+        if (endPoint != null && _banList.IsIpBanned(endPoint.Address.ToString())) {
+            Logger.Debug("  Client is banned from the server (IP), rejected connection");
+
+            serverInfo.ConnectionResult = ServerConnectionResult.RejectedOther;
+            serverInfo.ConnectionRejectedMessage = "Banned from the server";
+            return;
+        }
+
+        if (_banList.Contains(clientInfo.AuthKey)) {
+            Logger.Debug("  Client is banned from the server (AuthKey), rejected connection");
 
             serverInfo.ConnectionResult = ServerConnectionResult.RejectedOther;
             serverInfo.ConnectionRejectedMessage = "Banned from the server";
@@ -1421,7 +1433,7 @@ internal abstract class ServerManager : IServerManager {
         // Create new player data and store it
         var playerData = new ServerPlayerData(
             netServerClient.Id,
-            netServerClient.EndPoint.ToString(),
+            netServerClient.EndPoint?.ToString() ?? "SteamP2P",
             clientInfo.Username,
             clientInfo.AuthKey,
             _authorizedList

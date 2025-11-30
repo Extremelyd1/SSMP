@@ -10,9 +10,9 @@ using SSMP.Networking.Packet.Update;
 namespace SSMP.Networking.Client;
 
 /// <summary>
-/// Specialization of <see cref="UdpUpdateManager{TOutgoing,TPacketId}"/> for client to server packet sending.
+/// Specialization of <see cref="NetworkUpdateManager{TOutgoing,TPacketId}"/> for client to server packet sending.
 /// </summary>
-internal class ClientUpdateManager : UdpUpdateManager<ServerUpdatePacket, ServerUpdatePacketId> {
+internal class ClientUpdateManager : NetworkUpdateManager<ServerUpdatePacket, ServerUpdatePacketId> {
     /// <inheritdoc />
     public override void ResendReliableData(ServerUpdatePacket lostPacket) {
         lock (Lock) {

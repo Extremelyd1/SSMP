@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using GlobalEnums;
+using Steamworks;
 using SSMP.Animation;
 using SSMP.Api.Client;
 using SSMP.Eventing;
@@ -18,6 +19,10 @@ using SSMP.Networking.Client;
 using SSMP.Networking.Packet;
 using SSMP.Networking.Packet.Data;
 using SSMP.Networking.Packet.Update;
+using SSMP.Networking.Transport.Common;
+using SSMP.Networking.Transport.SteamP2P;
+using SSMP.Networking;
+using SSMP.Networking.Transport.UDP;
 using SSMP.Ui;
 using SSMP.Util;
 using UnityEngine;
@@ -280,9 +285,9 @@ internal class ClientManager : IClientManager {
         serverManager.AuthorizeKey(_modSettings.AuthKey!);
 
         // Register handlers for events from UI
-        _uiManager.RequestClientConnectEvent += (address, port, username, autoConnect) => {
+        _uiManager.RequestClientConnectEvent += (details, autoConnect) => {
             _autoConnect = autoConnect;
-            Connect(address, port, username);
+            Connect(details);
         };
         _uiManager.RequestClientDisconnectEvent += Disconnect;
         _uiManager.RequestServerStartHostEvent += _ => {
@@ -474,13 +479,21 @@ internal class ClientManager : IClientManager {
     }
 
     /// <summary>
-    /// Connect the client to the server with the given address, port and username.
+    /// Connect the client to the server with the given connection details.
     /// </summary>
-    /// <param name="address">The address of the server.</param>
-    /// <param name="port">The port of the server.</param>
-    /// <param name="username">The username of the client.</param>
-    private void Connect(string address, int port, string username) {
-        Logger.Info($"Connecting client to server: {address}:{port} as {username}");
+    /// <param name="details">The connection details.</param>
+    private void Connect(ConnectionDetails details) {
+        // If we are hosting and using Steam, we need to connect to our own Steam ID
+        if (_autoConnect && details.TransportType == TransportType.Steam) {
+            if (SteamManager.IsInitialized) {
+                details.Address = SteamUser.GetSteamID().ToString();
+            } else {
+                Logger.Warn("Attempting to host Steam server but Steam is not initialized. Falling back to UDP.");
+                details.TransportType = TransportType.Udp;
+            }
+        }
+
+        Logger.Info($"Connecting client to server: {details.Address}:{details.Port} as {details.Username}");
 
         // Stop existing client
         if (_netClient.IsConnected) {
@@ -489,15 +502,23 @@ internal class ClientManager : IClientManager {
         }
 
         // Store username, so we know what to send the server if we are connected
-        _username = username;
+        _username = details.Username;
+
+        // Create the appropriate transport
+        var transport = details.TransportType switch {
+            TransportType.Udp => (IEncryptedTransport)new UdpEncryptedTransport(),
+            TransportType.Steam => new SteamEncryptedTransport(),
+            _ => throw new ArgumentOutOfRangeException(nameof(details.TransportType), details.TransportType, "Unsupported transport type")
+        };
 
         // Connect the network client
         _netClient.Connect(
-            address,
-            port,
-            username,
+            details.Address,
+            details.Port,
+            details.Username,
             _modSettings.AuthKey!,
-            _addonManager.GetNetworkedAddonData()
+            _addonManager.GetNetworkedAddonData(),
+            transport
         );
     }
 

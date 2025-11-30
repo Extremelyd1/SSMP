@@ -66,14 +66,14 @@ internal class NetServerClient {
     /// <summary>
     /// The endpoint of the client (for UDP transports only, backward compatibility).
     /// </summary>
-    public IPEndPoint EndPoint {
+    public IPEndPoint? EndPoint {
         get {
             // For UDP-based transports, extract the IPEndPoint
             return TransportClient.ClientIdentifier switch
             {
                 UdpClientIdentifier udp      => udp.EndPoint,
                 HolePunchClientIdentifier hp => hp.EndPoint,
-                _ => throw new InvalidOperationException("EndPoint is only available for UDP-based transports")
+                _ => null
             };
         }
     }
@@ -89,12 +89,8 @@ internal class NetServerClient {
         Id = GetId();
         UpdateManager = new ServerUpdateManager();
         
-        // For UDP-based transports, set DtlsTransport for backward compatibility
-        UpdateManager.DtlsTransport = transportClient switch {
-            UdpEncryptedTransportClient udp => udp.DtlsServerClient.DtlsTransport,
-            HolePunchEncryptedTransportClient hp => hp.DtlsServerClient.DtlsTransport,
-            _ => null
-        };
+        // Wrap the transport client in an adapter for the update manager
+        UpdateManager.Transport = new EncryptedTransportClientAdapter(transportClient);
         // Steam P2P will use Transport property instead when implemented
         ChunkSender = new ServerChunkSender(UpdateManager);
         ChunkReceiver = new ServerChunkReceiver(UpdateManager);
@@ -127,4 +123,30 @@ internal class NetServerClient {
         UsedIds[newId] = 0;
         return newId;
     }
+}
+
+
+/// <summary>
+/// Adapter to adapt IEncryptedTransportClient to IEncryptedTransport for UdpUpdateManager.
+/// </summary>
+internal class EncryptedTransportClientAdapter : IEncryptedTransport {
+    private readonly IEncryptedTransportClient _client;
+
+    public EncryptedTransportClientAdapter(IEncryptedTransportClient client) {
+        _client = client;
+    }
+
+    public event Action<byte[], int>? DataReceivedEvent {
+        add => _client.DataReceivedEvent += value;
+        remove => _client.DataReceivedEvent -= value;
+    }
+
+    public void Connect(string address, int port) => throw new NotSupportedException();
+    public void Disconnect() => throw new NotSupportedException();
+
+    public void Send(byte[] buffer, int offset, int length) {
+        _client.Send(buffer, offset, length);
+    }
+
+    public int Receive(byte[] buffer, int offset, int length, int waitMillis) => throw new NotSupportedException();
 }

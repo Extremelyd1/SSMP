@@ -1,17 +1,31 @@
 using System;
+using System.Buffers;
+using SSMP.Game;
+using SSMP.Logging;
 using SSMP.Networking.Transport.Common;
+using Steamworks;
 
 namespace SSMP.Networking.Transport.SteamP2P;
 
 /// <summary>
 /// Steam P2P implementation of <see cref="IEncryptedTransportClient"/>.
+/// Represents a connected client from the server's perspective.
 /// </summary>
-/// TODO: Implement using Steamworks.NET when Steam P2P support is added.
 internal class SteamEncryptedTransportClient : IEncryptedTransportClient {
+    /// <summary>
+    /// P2P channel for communication.
+    /// </summary>
+    private const int P2P_CHANNEL = 1;
+
     /// <summary>
     /// The client identifier for this Steam client.
     /// </summary>
     private readonly SteamClientIdentifier _clientIdentifier;
+    
+    /// <summary>
+    /// Cached Steam ID struct to avoid repeated allocations.
+    /// </summary>
+    private readonly CSteamID _steamIdStruct;
     
     /// <inheritdoc />
     public IClientIdentifier ClientIdentifier => _clientIdentifier;
@@ -31,15 +45,43 @@ internal class SteamEncryptedTransportClient : IEncryptedTransportClient {
     /// <param name="steamId">The Steam ID of the client.</param>
     public SteamEncryptedTransportClient(ulong steamId) {
         _clientIdentifier = new SteamClientIdentifier(steamId);
+        _steamIdStruct = new CSteamID(steamId);
     }
 
     /// <inheritdoc />
     public void Send(byte[] buffer, int offset, int length) {
-        throw new NotImplementedException("Steam P2P transport not yet implemented");
+        if (!SteamManager.IsInitialized) {
+            Logger.Warn($"Steam P2P: Cannot send to client {SteamId}, Steam not initialized");
+            return;
+        }
+
+        // Copy data to send buffer if offset is used (avoid allocation when offset is 0)
+        byte[] dataToSend;
+        if (offset > 0) {
+            dataToSend = ArrayPool<byte>.Shared.Rent(length);
+            try {
+                Buffer.BlockCopy(buffer, offset, dataToSend, 0, length);
+                
+                // Send packet to this specific client (unreliable - reliability handled at application layer)
+                if (!SteamNetworking.SendP2PPacket(_steamIdStruct, dataToSend, (uint)length, EP2PSend.k_EP2PSendUnreliableNoDelay, P2P_CHANNEL)) {
+                    Logger.Warn($"Steam P2P: Failed to send packet to client {SteamId}");
+                }
+            } finally {
+                ArrayPool<byte>.Shared.Return(dataToSend);
+            }
+        } else {
+            dataToSend = buffer;
+            
+            // Send packet to this specific client (unreliable - reliability handled at application layer)
+            if (!SteamNetworking.SendP2PPacket(_steamIdStruct, dataToSend, (uint)length, EP2PSend.k_EP2PSendUnreliableNoDelay, P2P_CHANNEL)) {
+                Logger.Warn($"Steam P2P: Failed to send packet to client {SteamId}");
+            }
+        }
     }
     
     /// <summary>
     /// Raises the <see cref="DataReceivedEvent"/> with the given data.
+    /// Called by the server when it receives packets from this client.
     /// </summary>
     internal void RaiseDataReceived(byte[] data, int length) {
         DataReceivedEvent?.Invoke(data, length);

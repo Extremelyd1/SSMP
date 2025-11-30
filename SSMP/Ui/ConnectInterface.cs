@@ -1,10 +1,13 @@
 using System;
 using System.Collections;
-using System.Linq;
+using SSMP.Game;
 using SSMP.Game.Settings;
 using SSMP.Networking.Client;
 using SSMP.Ui.Component;
 using SSMP.Util;
+using Steamworks;
+using SSMP.Networking.Transport.Common;
+using SSMP.Networking;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
 
@@ -504,12 +507,12 @@ internal class ConnectInterface {
     /// <summary>
     /// Event that is executed when the connect button is pressed.
     /// </summary>
-    public event Action<string, int, string>? ConnectButtonPressed;
+    public event Action<ConnectionDetails>? ConnectButtonPressed;
 
     /// <summary>
     /// Event that is executed when the start hosting button is pressed.
     /// </summary>
-    public event Action<string, int>? StartHostButtonPressed;
+    public event Action<ConnectionDetails>? StartHostButtonPressed;
 
     #endregion
 
@@ -520,6 +523,12 @@ internal class ConnectInterface {
     /// <param name="connectGroup">The component group for the connect interface.</param>
     public ConnectInterface(ModSettings modSettings, ComponentGroup connectGroup) {
         _modSettings = modSettings;
+        
+        // Subscribe to Steam lobby events
+        SteamManager.LobbyCreatedEvent += OnSteamLobbyCreated;
+        SteamManager.LobbyListReceivedEvent += OnLobbyListReceived;
+        SteamManager.LobbyJoinedEvent += OnLobbyJoined;
+
         var x = InitialX;
         var y = InitialY;
 
@@ -921,38 +930,102 @@ internal class ConnectInterface {
     /// Callback method for when the lobby connect button is pressed.
     /// </summary>
     private void OnLobbyConnectButtonPressed() {
-        var lobbyId = _lobbyIdInput.GetInput();
-        if (lobbyId.Length == 0) {
-            SetFeedbackText(Color.red, ErrorEnterLobbyId);
+        if (!SteamManager.IsInitialized) {
+            SetFeedbackText(Color.red, "Steam is not available.");
             return;
         }
-        if (!ValidateUsername(out var username)) return;
-        SetFeedbackText(Color.yellow, ErrorLobbyNotImplemented);
-        Logger.Info($"Lobby connect requested: {lobbyId}");
+        
+        SetFeedbackText(Color.yellow, "Searching for lobbies...");
+        SteamManager.RequestLobbyList();
     }
 
     /// <summary>
-    /// Callback for Create Lobby button (Steam tab).
+    /// Callback method for when the create lobby button is pressed.
     /// </summary>
     private void OnCreateLobbyButtonPressed() {
-        SetFeedbackText(Color.yellow, ErrorSteamNotImplemented);
-        Logger.Info("Create lobby requested");
+        if (!SteamManager.IsInitialized) {
+            SetFeedbackText(Color.red, "Steam is not available. Please ensure Steam is running.");
+            Logger.Warn("Cannot create Steam lobby: Steam is not initialized");
+            return;
+        }
+
+        if (!ValidateUsername(out var username)) return;
+        
+        SetFeedbackText(Color.yellow, "Creating Steam lobby...");
+        Logger.Info($"Create lobby requested for user: {username}");
+
+        // Create lobby via SteamManager
+        SteamManager.CreateLobby(username);
     }
 
     /// <summary>
-    /// Callback for Browse Lobby button (Steam tab).
+    /// Callback method for when the browse lobby button is pressed.
     /// </summary>
     private void OnBrowseLobbyButtonPressed() {
-        SetFeedbackText(Color.yellow, ErrorSteamNotImplemented);
-        Logger.Info("Browse lobbies requested");
+        if (!SteamManager.IsInitialized) {
+            SetFeedbackText(Color.red, "Steam is not available.");
+            return;
+        }
+        
+        SetFeedbackText(Color.yellow, "Refreshing lobby list...");
+        SteamManager.RequestLobbyList();
+    }
+
+    /// <summary>
+    /// Callback for when a Steam lobby is created.
+    /// </summary>
+    private void OnSteamLobbyCreated(CSteamID lobbyId, string username) {
+        Logger.Info($"Lobby created: {lobbyId}");
+        SetFeedbackText(Color.green, $"Lobby created! Friends can join via Steam overlay.");
+
+        // Fire event to start server hosting
+        // Port is ignored for Steam P2P, but we pass 0 for consistency
+        StartHostButtonPressed?.Invoke(new ConnectionDetails("", 0, username, TransportType.Steam)); 
     }
 
     /// <summary>
     /// Callback for Join Friend button (Steam tab).
     /// </summary>
     private void OnJoinFriendButtonPressed() {
-        SetFeedbackText(Color.yellow, ErrorSteamNotImplemented);
-        Logger.Info("Join friend requested");
+        if (!SteamManager.IsInitialized) {
+            SetFeedbackText(Color.red, "Steam is not available.");
+            return;
+        }
+
+        // Open Steam Friends overlay
+        SteamFriends.ActivateGameOverlay("Friends");
+        SetFeedbackText(Color.yellow, "Opened Steam Friends. Right-click friend to Join Game.");
+    }
+
+    /// <summary>
+    /// Callback for when a list of lobbies is received.
+    /// </summary>
+    private void OnLobbyListReceived(CSteamID[] lobbyIds) {
+        if (lobbyIds.Length == 0) {
+            SetFeedbackText(Color.yellow, "No lobbies found.");
+            return;
+        }
+
+        Logger.Info($"Found {lobbyIds.Length} lobbies. Auto-joining first one for now.");
+        SetFeedbackText(Color.yellow, $"Found {lobbyIds.Length} lobbies. Joining first...");
+        
+        // For now, just join the first one
+        SteamManager.JoinLobby(lobbyIds[0]);
+    }
+
+    /// <summary>
+    /// Callback for when a lobby is joined.
+    /// </summary>
+    private void OnLobbyJoined(CSteamID lobbyId) {
+        Logger.Info($"Joined lobby: {lobbyId}");
+        SetFeedbackText(Color.green, "Joined lobby! Connecting to host...");
+        
+        var hostId = SteamManager.GetLobbyOwner(lobbyId);
+        
+        if (!ValidateUsername(out var username)) username = "Player"; // Fallback
+
+        // Connect using Steam ID as address
+        ConnectButtonPressed?.Invoke(new ConnectionDetails(hostId.ToString(), 0, username, TransportType.Steam));
     }
 
     /// <summary>
@@ -983,7 +1056,7 @@ internal class ConnectInterface {
         _directConnectButton.SetInteractable(false);
         
         Logger.Debug($"Connecting to {address}:{port} as {username}");
-        ConnectButtonPressed?.Invoke(address, port, username);
+        ConnectButtonPressed?.Invoke(new ConnectionDetails(address, port, username, TransportType.Udp));
     }
 
     /// <summary>
@@ -996,7 +1069,7 @@ internal class ConnectInterface {
             return;
         }
         if (!ValidateUsername(out var username)) return;
-        StartHostButtonPressed?.Invoke(username, port);
+        StartHostButtonPressed?.Invoke(new ConnectionDetails("", port, username, TransportType.Udp));
     }
 
     /// <summary>

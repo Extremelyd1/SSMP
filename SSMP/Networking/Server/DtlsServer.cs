@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Org.BouncyCastle.Tls;
 using Org.BouncyCastle.Tls.Crypto.Impl.BC;
 using SSMP.Logging;
+using SSMP.Networking.Transport.UDP;
 
 namespace SSMP.Networking.Server;
 

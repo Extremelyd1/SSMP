@@ -33,7 +33,7 @@ internal class NetServer : INetServer {
     /// <summary>
     /// Underlying encrypted transport server instance.
     /// </summary>
-    private readonly IEncryptedTransportServer<UdpEncryptedTransportClient> _transportServer;
+    private IEncryptedTransportServer? _transportServer;
 
     /// <summary>
     /// Dictionary mapping client identifiers to net server clients.
@@ -96,12 +96,9 @@ internal class NetServer : INetServer {
     public bool IsStarted { get; private set; }
 
     public NetServer(
-        PacketManager packetManager,
-        IEncryptedTransportServer<UdpEncryptedTransportClient>? transportServer = null
+        PacketManager packetManager
     ) {
         _packetManager = packetManager;
-
-        _transportServer = transportServer ?? new UdpEncryptedTransportServer();
 
         _clientsByIdentifier = new ConcurrentDictionary<IClientIdentifier, NetServerClient>();
         _clientsById = new ConcurrentDictionary<ushort, NetServerClient>();
@@ -121,7 +118,8 @@ internal class NetServer : INetServer {
     /// Starts the server on the given port.
     /// </summary>
     /// <param name="port">The networking port.</param>
-    public void Start(int port) {
+    /// <param name="transportServer">The transport server to use.</param>
+    public void Start(int port, IEncryptedTransportServer transportServer) {
         if (IsStarted) {
             Stop();
         }
@@ -129,6 +127,7 @@ internal class NetServer : INetServer {
         Logger.Info($"Starting NetServer on port {port}");
         IsStarted = true;
         
+        _transportServer = transportServer;
         _transportServer.Start(port);
 
         // Create a cancellation token source for the tasks that we are creating
@@ -145,7 +144,7 @@ internal class NetServer : INetServer {
     /// Callback when a new client connects via any transport.
     /// Subscribe to the client's data event and enqueue received data.
     /// </summary>
-    private void OnClientConnected(UdpEncryptedTransportClient transportClient) {
+    private void OnClientConnected(IEncryptedTransportClient transportClient) {
         transportClient.DataReceivedEvent += (buffer, length) => {
             _receivedQueue.Enqueue(new ReceivedData {
                 TransportClient = transportClient,
@@ -246,7 +245,7 @@ internal class NetServer : INetServer {
         }
 
         client.Disconnect();
-        _transportServer.DisconnectClient((UdpEncryptedTransportClient)client.TransportClient);
+        _transportServer?.DisconnectClient(client.TransportClient);
         _clientsByIdentifier.TryRemove(client.ClientIdentifier, out _);
         _clientsById.TryRemove(id, out _);
 
@@ -400,8 +399,10 @@ internal class NetServer : INetServer {
         _clientsById.Clear();
         _throttledClients.Clear();
         
-        _transportServer.Stop();
-        _transportServer.ClientConnectedEvent -= OnClientConnected;
+        if (_transportServer != null) {
+            _transportServer.Stop();
+            _transportServer.ClientConnectedEvent -= OnClientConnected;
+        }
 
         _leftoverData = null;
 
@@ -423,7 +424,7 @@ internal class NetServer : INetServer {
         }
 
         client.Disconnect();
-        _transportServer.DisconnectClient((UdpEncryptedTransportClient)client.TransportClient);
+        _transportServer?.DisconnectClient(client.TransportClient);
         _clientsByIdentifier.TryRemove(client.ClientIdentifier, out _);
         _clientsById.TryRemove(id, out _);
 

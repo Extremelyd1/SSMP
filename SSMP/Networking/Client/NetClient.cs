@@ -62,7 +62,7 @@ internal class NetClient : INetClient {
     /// <summary>
     /// The encrypted transport instance for handling encrypted connections.
     /// </summary>
-    private readonly IEncryptedTransport _transport;
+    private IEncryptedTransport? _transport;
 
     /// <summary>
     /// Chunk sender instance for sending large amounts of data.
@@ -92,13 +92,11 @@ internal class NetClient : INetClient {
 
 
     /// <summary>
-    /// Construct the net client with the given packet manager and encrypted transport.
+    /// Construct the net client with the given packet manager.
     /// </summary>
     /// <param name="packetManager">The packet manager instance.</param>
-    /// <param name="transport">The encrypted transport implementation to use for connections.</param>
-    public NetClient(PacketManager packetManager, IEncryptedTransport transport) {
+    public NetClient(PacketManager packetManager) {
         _packetManager = packetManager;
-        _transport = transport;
 
         UpdateManager = new ClientUpdateManager();
 
@@ -106,7 +104,6 @@ internal class NetClient : INetClient {
         _chunkReceiver = new ClientChunkReceiver(UpdateManager);
         _connectionManager = new ClientConnectionManager(_packetManager, _chunkSender, _chunkReceiver);
 
-        _transport.DataReceivedEvent += OnReceiveData;
         _connectionManager.ServerInfoReceivedEvent += OnServerInfoReceived;
     }
 
@@ -123,7 +120,8 @@ internal class NetClient : INetClient {
         int port,
         string username,
         string authKey,
-        List<AddonData> addonData
+        List<AddonData> addonData,
+        IEncryptedTransport transport
     ) {
         // Prevent multiple simultaneous connection attempts
         lock (_connectionLock) {
@@ -144,6 +142,8 @@ internal class NetClient : INetClient {
         // Start a new thread for establishing the connection, otherwise Unity will hang
         new Thread(() => {
             try {
+                _transport = transport;
+                _transport.DataReceivedEvent += OnReceiveData;
                 _transport.Connect(address, port);
 
                 UpdateManager.Transport = _transport;
@@ -195,7 +195,12 @@ internal class NetClient : INetClient {
             UpdateManager.TimeoutEvent -= OnUpdateTimedOut;
             _chunkSender.Stop();
             _chunkReceiver.Reset();
-            _transport.Disconnect();
+            _chunkReceiver.Reset();
+            
+            if (_transport != null) {
+                _transport.DataReceivedEvent -= OnReceiveData;
+                _transport.Disconnect();
+            }
         } catch (Exception e) {
             Logger.Error($"Error in NetClient.InternalDisconnect: {e}");
         }
