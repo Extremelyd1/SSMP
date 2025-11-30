@@ -232,8 +232,8 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
     /// <summary>
     /// Receives a packet from the loopback channel.
     /// </summary>
-    public void ReceiveLoopbackPacket(byte[] data) {
+    public void ReceiveLoopbackPacket(byte[] data, int length) {
         if (!_isConnected) return;
-        DataReceivedEvent?.Invoke(data, data.Length);
+        DataReceivedEvent?.Invoke(data, length);
     }
 }

@@ -1,14 +1,11 @@
 using System;
-using System.Collections;
 using SSMP.Game;
 using SSMP.Game.Settings;
 using SSMP.Networking.Client;
 using SSMP.Ui.Component;
-using SSMP.Util;
 using Steamworks;
 using SSMP.Networking.Transport.Common;
 using SSMP.Networking;
-using SSMP.Ui.Util;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
 
@@ -24,8 +21,6 @@ internal class ConnectInterface {
     /// The indent of some text elements.
     /// </summary>
     private const float TextIndentWidth = 5f;
-
-
 
     /// <summary>
     /// The standard width for content elements in the interface.

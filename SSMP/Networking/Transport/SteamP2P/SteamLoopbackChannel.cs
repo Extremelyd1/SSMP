@@ -54,7 +54,7 @@ internal static class SteamLoopbackChannel {
         var copy = ArrayPool<byte>.Shared.Rent(length);
         try {
             Buffer.BlockCopy(data, 0, copy, 0, length);
-            srv.ReceiveLoopbackPacket(copy);
+            srv.ReceiveLoopbackPacket(copy, length);
         } catch (Exception e) {
             Logger.Error($"Steam Loopback: Error sending to server: {e}");
         } finally {
@@ -76,7 +76,7 @@ internal static class SteamLoopbackChannel {
         var copy = ArrayPool<byte>.Shared.Rent(length);
         try {
             Buffer.BlockCopy(data, 0, copy, 0, length);
-            cli.ReceiveLoopbackPacket(copy);
+            cli.ReceiveLoopbackPacket(copy, length);
         } catch (Exception e) {
             Logger.Error($"Steam Loopback: Error sending to client: {e}");
         } finally {

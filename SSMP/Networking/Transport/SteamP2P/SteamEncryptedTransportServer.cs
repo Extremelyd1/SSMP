@@ -205,8 +205,8 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
     /// <summary>
     /// Receives a packet from the loopback channel.
     /// </summary>
-    public void ReceiveLoopbackPacket(byte[] data) {
-        if (!_isRunning) return;
+    public void ReceiveLoopbackPacket(byte[] data, int length) {
+        if (!_isRunning || !SteamManager.IsInitialized) return;
 
         // Loopback comes from local user
         var steamId = SteamUser.GetSteamID();
@@ -220,6 +220,6 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
             ClientConnectedEvent?.Invoke(client);
         }
 
-        client.RaiseDataReceived(data, data.Length);
+        client.RaiseDataReceived(data, length);
     }
 }
