@@ -25,10 +25,7 @@ internal class ConnectInterface {
     /// </summary>
     private const float TextIndentWidth = 5f;
 
-    /// <summary>
-    /// The time in seconds to hide the feedback text after it appeared.
-    /// </summary>
-    private const float FeedbackTextHideTime = 10f;
+
 
     /// <summary>
     /// The standard width for content elements in the interface.
@@ -150,39 +147,13 @@ internal class ConnectInterface {
     /// </summary>
     private const float FeedbackTextOffset = 320f;
 
-    /// <summary>
-    /// The width of the background panel.
-    /// </summary>
-    private const float PanelWidth = 450f;
 
-    /// <summary>
-    /// The height of the background panel.
-    /// </summary>
-    private const float PanelHeight = 600f;
-
-    /// <summary>
-    /// The corner radius for the background panel.
-    /// </summary>
-    private const int PanelCornerRadius = 20;
-
-    /// <summary>
-    /// The width of the glowing notch.
-    /// </summary>
-    private const float NotchWidth = 450f;
-
-    /// <summary>
-    /// The height of the glowing notch.
-    /// </summary>
-    private const float NotchHeight = 4f;
 
     #endregion
 
     #region Text Constants
 
-    /// <summary>
-    /// The text of the connection button if not connected.
-    /// </summary>
-    private const string ConnectText = "CONNECT";
+
 
     /// <summary>
     /// The text of the connection button while connecting.
@@ -298,20 +269,7 @@ internal class ConnectInterface {
 
     #region Message Constants
 
-    /// <summary>
-    /// Error message when lobby ID is missing.
-    /// </summary>
-    private const string ErrorEnterLobbyId = "Failed to connect:\nYou must enter a Lobby ID";
 
-    /// <summary>
-    /// Error message for unimplemented lobby connection.
-    /// </summary>
-    private const string ErrorLobbyNotImplemented = "Lobby connection not yet implemented";
-
-    /// <summary>
-    /// Error message for unimplemented Steam integration.
-    /// </summary>
-    private const string ErrorSteamNotImplemented = "Steam integration not yet implemented";
 
     /// <summary>
     /// Error message when address is missing.
@@ -328,15 +286,7 @@ internal class ConnectInterface {
     /// </summary>
     private const string ErrorEnterValidPortHost = "Failed to host:\nYou must enter a valid port";
 
-    /// <summary>
-    /// Error message when username is missing.
-    /// </summary>
-    private const string ErrorEnterUsername = "Failed to connect:\nYou must enter a username";
 
-    /// <summary>
-    /// Error message when username is too long.
-    /// </summary>
-    private const string ErrorUsernameTooLong = "Failed to connect:\nUsername is too long";
 
     /// <summary>
     /// Message displayed upon successful connection.
@@ -487,23 +437,7 @@ internal class ConnectInterface {
     /// </summary>
     private Tab _activeTab = Tab.Matchmaking;
 
-    /// <summary>
-    /// Cached reflection field for accessing ButtonComponent GameObject.
-    /// </summary>
-    private static readonly System.Reflection.FieldInfo? GameObjectField = typeof(ButtonComponent).GetField("GameObject", 
-        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
-    /// <summary>
-    /// Cached reflection field for accessing ComponentGroup components.
-    /// </summary>
-    private static readonly System.Reflection.FieldInfo? ComponentsField = typeof(ComponentGroup).GetField("_components", 
-        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-
-    /// <summary>
-    /// Cached reflection field for accessing ComponentGroup children.
-    /// </summary>
-    private static readonly System.Reflection.FieldInfo? ChildrenField = typeof(ComponentGroup).GetField("_children",
-        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
     /// <summary>
     /// Event that is executed when the connect button is pressed.
@@ -539,11 +473,11 @@ internal class ConnectInterface {
         y -= HeaderToNotchSpacing;
         
         // Create white notch with glow effect under header
-        _glowingNotch = CreateGlowingNotch(x, y);
+        _glowingNotch = ConnectInterfaceHelpers.CreateGlowingNotch(x, y);
         y -= NotchToPanelSpacing;
 
         // Background panel
-        _backgroundPanel = CreateBackgroundPanel(x, y);
+        _backgroundPanel = ConnectInterfaceHelpers.CreateBackgroundPanel(x, y);
         _backgroundGroup = new ComponentGroup(parent: connectGroup);
         y -= PanelPaddingTop;
 
@@ -559,9 +493,9 @@ internal class ConnectInterface {
         // Tab buttons
         var tabY = y;
         var tabWidth = TabButtonWidth;
-        _matchmakingTab = CreateTabButton(_backgroundGroup, x - tabWidth, tabY, tabWidth, MatchmakingTabText, () => SwitchTab(Tab.Matchmaking));
-        _steamTab = CreateTabButton(_backgroundGroup, x, tabY, tabWidth, SteamTabText, () => SwitchTab(Tab.Steam));
-        _directIpTab = CreateTabButton(_backgroundGroup, x + tabWidth, tabY, tabWidth, DirectIpTabText, () => SwitchTab(Tab.DirectIp));
+        _matchmakingTab = ConnectInterfaceHelpers.CreateTabButton(_backgroundGroup, x - tabWidth, tabY, tabWidth, MatchmakingTabText, () => SwitchTab(Tab.Matchmaking));
+        _steamTab = ConnectInterfaceHelpers.CreateTabButton(_backgroundGroup, x, tabY, tabWidth, SteamTabText, () => SwitchTab(Tab.Steam));
+        _directIpTab = ConnectInterfaceHelpers.CreateTabButton(_backgroundGroup, x + tabWidth, tabY, tabWidth, DirectIpTabText, () => SwitchTab(Tab.DirectIp));
         y -= TabSpacing;
 
         var contentY = y;
@@ -641,149 +575,12 @@ internal class ConnectInterface {
             new Vector2(ContentWidth, LabelHeight), new Vector2(0.5f, 1f), "", UiManager.SubTextFontSize, alignment: TextAnchor.UpperCenter);
         _feedbackText.SetActive(false);
 
-        ReparentComponentGroup(_backgroundGroup);
-        PositionTabButtonsFixed();
+        ConnectInterfaceHelpers.ReparentComponentGroup(_backgroundGroup, _backgroundPanel);
+        ConnectInterfaceHelpers.PositionTabButtonsFixed(_backgroundPanel, _matchmakingTab, _steamTab, _directIpTab);
         SwitchTab(Tab.Matchmaking);
     }
 
-    /// <summary>
-    /// Creates a glowing horizontal notch under the multiplayer header.
-    /// </summary>
-    /// <param name="x">The x position.</param>
-    /// <param name="y">The y position.</param>
-    /// <returns>The created notch GameObject.</returns>
-    private GameObject CreateGlowingNotch(float x, float y) {
-        var notchObject = new GameObject("GlowingNotch");
-        var rect = notchObject.AddComponent<RectTransform>();
-        rect.anchorMin = rect.anchorMax = new Vector2(x / 1920f, y / 1080f);
-        rect.sizeDelta = new Vector2(NotchWidth, NotchHeight);
-        rect.pivot = new Vector2(0.5f, 0.5f);
-        
-        var image = notchObject.AddComponent<UnityEngine.UI.Image>();
-        image.sprite = Sprite.Create(
-            UiUtils.CreateHorizontalGradientTexture(256, 1),
-            new Rect(0, 0, 256, 1),
-            new Vector2(0.5f, 0.5f)
-        );
-        image.color = Color.white;
-        
-        notchObject.transform.SetParent(UiManager.UiGameObject!.transform, false);
-        UnityEngine.Object.DontDestroyOnLoad(notchObject);
-        notchObject.SetActive(false);
-        
-        return notchObject;
-    }
 
-    /// <summary>
-    /// Creates the background panel GameObject with rounded corners.
-    /// </summary>
-    /// <param name="x">The x position.</param>
-    /// <param name="y">The y position.</param>
-    /// <returns>The background panel GameObject.</returns>
-    private GameObject CreateBackgroundPanel(float x, float y) {
-        var panel = new GameObject("MenuBackground");
-        var rect = panel.AddComponent<RectTransform>();
-        rect.anchorMin = rect.anchorMax = new Vector2(x / 1920f, y / 1080f);
-        rect.sizeDelta = new Vector2(PanelWidth, PanelHeight);
-        rect.pivot = new Vector2(0.5f, 1f);
-        
-        var image = panel.AddComponent<UnityEngine.UI.Image>();
-        image.color = Color.white;
-        
-        var roundedTexture = UiUtils.CreateRoundedRectTexture((int)PanelWidth, (int)PanelHeight, PanelCornerRadius);
-        image.sprite = Sprite.Create(
-            roundedTexture,
-            new Rect(0, 0, roundedTexture.width, roundedTexture.height),
-            new Vector2(0.5f, 0.5f),
-            100f,
-            0,
-            SpriteMeshType.FullRect,
-            new Vector4(20, 20, 20, 20)
-        );
-        image.type = UnityEngine.UI.Image.Type.Sliced;
-        
-        panel.transform.SetParent(UiManager.UiGameObject!.transform, false);
-        panel.transform.SetAsFirstSibling();
-        UnityEngine.Object.DontDestroyOnLoad(panel);
-        panel.SetActive(false);
-        return panel;
-    }
-
-    /// <summary>
-    /// Creates a tab button component using TabButtonComponent.
-    /// </summary>
-    /// <param name="group">The component group.</param>
-    /// <param name="x">The x position.</param>
-    /// <param name="y">The y position.</param>
-    /// <param name="width">The width of the button.</param>
-    /// <param name="text">The button text.</param>
-    /// <param name="onPress">The press callback.</param>
-    /// <returns>The created button component.</returns>
-    private TabButtonComponent CreateTabButton(ComponentGroup group, float x, float y, float width, string text, Action onPress) {
-        var button = new TabButtonComponent(group, new Vector2(x, y), new Vector2(width, 50f), 
-            text, Resources.TextureManager.ButtonBg, Resources.FontManager.UIFontRegular, 18);
-        button.SetOnPress(onPress);
-        return button;
-    }
-
-    /// <summary>
-    /// Positions the tab buttons to fit within the background panel bounds.
-    /// </summary>
-    private void PositionTabButtonsFixed() {
-        if (GameObjectField == null) return;
-        
-        var bgWidth = _backgroundPanel.GetComponent<RectTransform>().sizeDelta.x;
-        var buttonWidth = bgWidth / 3f;
-        
-        AdjustButtonFixed(GameObjectField.GetValue(_matchmakingTab) as GameObject, -buttonWidth, buttonWidth);
-        AdjustButtonFixed(GameObjectField.GetValue(_steamTab) as GameObject, 0f, buttonWidth);
-        AdjustButtonFixed(GameObjectField.GetValue(_directIpTab) as GameObject, buttonWidth, buttonWidth);
-    }
-
-    /// <summary>
-    /// Adjusts a button's position and width.
-    /// </summary>
-    /// <param name="buttonGameObject">The button GameObject.</param>
-    /// <param name="xPosition">The x position.</param>
-    /// <param name="width">The width.</param>
-    private void AdjustButtonFixed(GameObject? buttonGameObject, float xPosition, float width) {
-        if (buttonGameObject == null) return;
-        var rectTransform = buttonGameObject.GetComponent<RectTransform>();
-        if (rectTransform == null) return;
-        rectTransform.sizeDelta = new Vector2(width, 50f);
-        var position = rectTransform.localPosition;
-        position.x = xPosition;
-        rectTransform.localPosition = position;
-    }
-
-    /// <summary>
-    /// Reparents a ComponentGroup to be a child of the background panel using reflection.
-    /// </summary>
-    /// <param name="group">The component group to reparent.</param>
-    private void ReparentComponentGroup(ComponentGroup group) {
-        // Process components
-        if (ComponentsField != null && ComponentsField.GetValue(group) is IEnumerable components) {
-            foreach (var component in components) {
-                if (component == null) continue;
-                
-                var gameObjectField = component.GetType().GetField("GameObject",
-                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                
-                if (gameObjectField?.GetValue(component) is GameObject gameObject) {
-                    gameObject.transform.SetParent(_backgroundPanel.transform, true);
-                }
-            }
-        }
-        
-        // Process children recursively
-        if (ChildrenField != null && ChildrenField.GetValue(group) is IEnumerable children) {
-            foreach (var child in children) {
-                if (child is ComponentGroup childGroup) {
-                    ReparentComponentGroup(childGroup);
-                }
-            }
-        }
-    }
 
     /// <summary>
     /// Switches to a different tab.
@@ -817,11 +614,11 @@ internal class ConnectInterface {
     /// </summary>
     private void OnLobbyConnectButtonPressed() {
         if (!SteamManager.IsInitialized) {
-            SetFeedbackText(Color.red, "Steam is not available.");
+            _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.red, "Steam is not available.", _feedbackHideCoroutine);
             return;
         }
         
-        SetFeedbackText(Color.yellow, "Searching for lobbies...");
+        _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.yellow, "Searching for lobbies...", _feedbackHideCoroutine);
         SteamManager.RequestLobbyList();
     }
 
@@ -830,14 +627,14 @@ internal class ConnectInterface {
     /// </summary>
     private void OnCreateLobbyButtonPressed() {
         if (!SteamManager.IsInitialized) {
-            SetFeedbackText(Color.red, "Steam is not available. Please ensure Steam is running.");
+            _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.red, "Steam is not available. Please ensure Steam is running.", _feedbackHideCoroutine);
             Logger.Warn("Cannot create Steam lobby: Steam is not initialized");
             return;
         }
 
-        if (!ValidateUsername(out var username)) return;
+        if (!ConnectInterfaceHelpers.ValidateUsername(_usernameInput, _feedbackText, out var username, _feedbackHideCoroutine, out _feedbackHideCoroutine)) return;
         
-        SetFeedbackText(Color.yellow, "Creating Steam lobby...");
+        _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.yellow, "Creating Steam lobby...", _feedbackHideCoroutine);
         Logger.Info($"Create lobby requested for user: {username}");
 
         // Create lobby via SteamManager
@@ -849,11 +646,11 @@ internal class ConnectInterface {
     /// </summary>
     private void OnBrowseLobbyButtonPressed() {
         if (!SteamManager.IsInitialized) {
-            SetFeedbackText(Color.red, "Steam is not available.");
+            _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.red, "Steam is not available.", _feedbackHideCoroutine);
             return;
         }
         
-        SetFeedbackText(Color.yellow, "Refreshing lobby list...");
+        _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.yellow, "Refreshing lobby list...", _feedbackHideCoroutine);
         SteamManager.RequestLobbyList();
     }
 
@@ -862,7 +659,7 @@ internal class ConnectInterface {
     /// </summary>
     private void OnSteamLobbyCreated(CSteamID lobbyId, string username) {
         Logger.Info($"Lobby created: {lobbyId}");
-        SetFeedbackText(Color.green, $"Lobby created! Friends can join via Steam overlay.");
+        _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.green, $"Lobby created! Friends can join via Steam overlay.", _feedbackHideCoroutine);
 
         // Fire event to start server hosting
         // Port is ignored for Steam P2P, but we pass 0 for consistency
@@ -874,13 +671,13 @@ internal class ConnectInterface {
     /// </summary>
     private void OnJoinFriendButtonPressed() {
         if (!SteamManager.IsInitialized) {
-            SetFeedbackText(Color.red, "Steam is not available.");
+            _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.red, "Steam is not available.", _feedbackHideCoroutine);
             return;
         }
 
         // Open Steam Friends overlay
         SteamFriends.ActivateGameOverlay("Friends");
-        SetFeedbackText(Color.yellow, "Opened Steam Friends. Right-click friend to Join Game.");
+        _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.yellow, "Opened Steam Friends. Right-click friend to Join Game.", _feedbackHideCoroutine);
     }
 
     /// <summary>
@@ -888,12 +685,12 @@ internal class ConnectInterface {
     /// </summary>
     private void OnLobbyListReceived(CSteamID[] lobbyIds) {
         if (lobbyIds.Length == 0) {
-            SetFeedbackText(Color.yellow, "No lobbies found.");
+            _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.yellow, "No lobbies found.", _feedbackHideCoroutine);
             return;
         }
 
         Logger.Info($"Found {lobbyIds.Length} lobbies. Auto-joining first one for now.");
-        SetFeedbackText(Color.yellow, $"Found {lobbyIds.Length} lobbies. Joining first...");
+        _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.yellow, $"Found {lobbyIds.Length} lobbies. Joining first...", _feedbackHideCoroutine);
         
         // For now, just join the first one
         SteamManager.JoinLobby(lobbyIds[0]);
@@ -904,11 +701,11 @@ internal class ConnectInterface {
     /// </summary>
     private void OnLobbyJoined(CSteamID lobbyId) {
         Logger.Info($"Joined lobby: {lobbyId}");
-        SetFeedbackText(Color.green, "Joined lobby! Connecting to host...");
+        _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.green, "Joined lobby! Connecting to host...", _feedbackHideCoroutine);
         
         var hostId = SteamManager.GetLobbyOwner(lobbyId);
         
-        if (!ValidateUsername(out var username)) username = "Player"; // Fallback
+        if (!ConnectInterfaceHelpers.ValidateUsername(_usernameInput, _feedbackText, out var username, _feedbackHideCoroutine, out _feedbackHideCoroutine)) username = "Player"; // Fallback
 
         // Connect using Steam ID as address
         ConnectButtonPressed?.Invoke(new ConnectionDetails(hostId.ToString(), 0, username, TransportType.Steam));
@@ -920,17 +717,17 @@ internal class ConnectInterface {
     private void OnDirectConnectButtonPressed() {
         var address = _addressInput.GetInput();
         if (address.Length == 0) {
-            SetFeedbackText(Color.red, ErrorEnterAddress);
+            _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.red, ErrorEnterAddress, _feedbackHideCoroutine);
             return;
         }
         
         var portString = _portInput.GetInput();
         if (!int.TryParse(portString, out var port) || port == 0) {
-            SetFeedbackText(Color.red, ErrorEnterValidPort);
+            _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.red, ErrorEnterValidPort, _feedbackHideCoroutine);
             return;
         }
         
-        if (!ValidateUsername(out var username)) return;
+        if (!ConnectInterfaceHelpers.ValidateUsername(_usernameInput, _feedbackText, out var username, _feedbackHideCoroutine, out _feedbackHideCoroutine)) return;
         
         // Save settings
         _modSettings.ConnectAddress = address;
@@ -951,10 +748,10 @@ internal class ConnectInterface {
     private void OnStartButtonPressed() {
         var portString = _portInput.GetInput();
         if (!int.TryParse(portString, out var port) || port == 0) {
-            SetFeedbackText(Color.red, ErrorEnterValidPortHost);
+            _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.red, ErrorEnterValidPortHost, _feedbackHideCoroutine);
             return;
         }
-        if (!ValidateUsername(out var username)) return;
+        if (!ConnectInterfaceHelpers.ValidateUsername(_usernameInput, _feedbackText, out var username, _feedbackHideCoroutine, out _feedbackHideCoroutine)) return;
         StartHostButtonPressed?.Invoke(new ConnectionDetails("", port, username, TransportType.Udp));
     }
 
@@ -962,15 +759,15 @@ internal class ConnectInterface {
     /// Callback method for when the client disconnects.
     /// </summary>
     public void OnClientDisconnect() {
-        ResetConnectButtons();
+        ConnectInterfaceHelpers.ResetConnectButtons(_directConnectButton, _lobbyConnectButton);
     }
 
     /// <summary>
     /// Callback method for when the client successfully connects.
     /// </summary>
     public void OnSuccessfulConnect() {
-        SetFeedbackText(Color.green, MsgConnected);
-        ResetConnectButtons();
+        _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.green, MsgConnected, _feedbackHideCoroutine);
+        ConnectInterfaceHelpers.ResetConnectButtons(_directConnectButton, _lobbyConnectButton);
     }
 
     /// <summary>
@@ -987,63 +784,9 @@ internal class ConnectInterface {
             _ => ErrorUnknown
         };
         
-        SetFeedbackText(Color.red, message);
-        ResetConnectButtons();
+        _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.red, message, _feedbackHideCoroutine);
+        ConnectInterfaceHelpers.ResetConnectButtons(_directConnectButton, _lobbyConnectButton);
     }
 
-    /// <summary>
-    /// Resets connect buttons to their default state.
-    /// </summary>
-    private void ResetConnectButtons() {
-        _directConnectButton.SetText(ConnectText);
-        _directConnectButton.SetInteractable(true);
-        _lobbyConnectButton.SetText(ConnectText);
-        _lobbyConnectButton.SetInteractable(true);
-    }
 
-    /// <summary>
-    /// Sets the feedback text with the given color and content.
-    /// </summary>
-    /// <param name="color">The color of the text.</param>
-    /// <param name="text">The content of the text.</param>
-    private void SetFeedbackText(Color color, string text) {
-        _feedbackText.SetColor(color);
-        _feedbackText.SetText(text);
-        _feedbackText.SetActive(true);
-        
-        if (_feedbackHideCoroutine != null) {
-            MonoBehaviourUtil.Instance.StopCoroutine(_feedbackHideCoroutine);
-        }
-        _feedbackHideCoroutine = MonoBehaviourUtil.Instance.StartCoroutine(WaitHideFeedbackText());
-    }
-
-    /// <summary>
-    /// Coroutine for hiding the feedback text after a delay.
-    /// </summary>
-    /// <returns>An enumerator for the coroutine.</returns>
-    private IEnumerator WaitHideFeedbackText() {
-        yield return new WaitForSeconds(FeedbackTextHideTime);
-        _feedbackText.SetActive(false);
-    }
-
-    /// <summary>
-    /// Validates the username input.
-    /// </summary>
-    /// <param name="username">The validated username.</param>
-    /// <returns>True if the username is valid, false otherwise.</returns>
-    private bool ValidateUsername(out string username) {
-        username = _usernameInput.GetInput();
-        
-        if (username.Length == 0) {
-            SetFeedbackText(Color.red, ErrorEnterUsername);
-            return false;
-        }
-        
-        if (username.Length > 32) {
-            SetFeedbackText(Color.red, ErrorUsernameTooLong);
-            return false;
-        }
-        
-        return true;
-    }
 }
