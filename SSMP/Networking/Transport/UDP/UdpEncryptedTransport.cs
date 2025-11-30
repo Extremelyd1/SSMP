@@ -45,7 +45,7 @@ internal class UdpEncryptedTransport : IEncryptedTransport {
         }
 
         if (buffer == null) {
-            throw new ArgumentNullException(nameof(buffer), "UDP transport requires a buffer for Receive");
+            return 0;
         }
 
         return _dtlsClient.DtlsTransport.Receive(buffer, offset, length, waitMillis);

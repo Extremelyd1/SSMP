@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using SSMP.Networking.Transport.Common;
 
@@ -30,13 +31,13 @@ public struct ConnectionDetails {
     /// <summary>
     /// The authentication key to use for the connection.
     /// </summary>
-    public string? AuthKey;
+    public string AuthKey;
 
-    public ConnectionDetails(string address, int port, string username, TransportType transportType) {
+    public ConnectionDetails(string address, int port, string username, TransportType transportType, string authKey = "") {
         Address = address;
         Port = port;
         Username = username;
         TransportType = transportType;
-        AuthKey = null;
+        AuthKey = authKey;
     }
 }

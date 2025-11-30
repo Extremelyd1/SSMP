@@ -71,7 +71,6 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
             throw new InvalidOperationException("Cannot connect via Steam P2P: Steam is not initialized");
         }
 
-        // Parse Steam ID from address string
         if (!ulong.TryParse(address, out var steamId64)) {
             throw new ArgumentException($"Invalid Steam ID format: {address}", nameof(address));
         }
@@ -82,16 +81,13 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
 
         Logger.Info($"Steam P2P: Connecting to {_remoteSteamId}");
 
-        // Allow P2P packet relay through Steam servers if direct connection fails
         SteamNetworking.AllowP2PPacketRelay(true);
 
-        // Register for loopback if connecting to self
         if (_remoteSteamId == _localSteamId) {
             Logger.Info("Steam P2P: Connecting to self, using loopback channel");
             SteamLoopbackChannel.RegisterClient(this);
         }
 
-        // Start receive loop
         _receiveTokenSource = new CancellationTokenSource();
         _receiveThread = new Thread(ReceiveLoop) { IsBackground = true };
         _receiveThread.Start();
@@ -107,9 +103,7 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
             throw new InvalidOperationException("Cannot send: Steam is not initialized");
         }
 
-        // Check for loopback first (before any copying)
         if (_remoteSteamId == _localSteamId) {
-            // For loopback with offset, we need to create a proper slice
             if (offset > 0) {
                 var temp = ArrayPool<byte>.Shared.Rent(length);
                 try {
@@ -124,7 +118,6 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
             return;
         }
 
-        // Copy data to send buffer if offset is used (avoid allocation when offset is 0)
         byte[] dataToSend = buffer;
         bool rentedArray = false;
 
@@ -135,7 +128,6 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
         }
 
         try {
-            // Send packet using appropriate channel based on reliability
             var sendType = reliable ? EP2PSend.k_EP2PSendReliable : EP2PSend.k_EP2PSendUnreliableNoDelay;
             if (!SteamNetworking.SendP2PPacket(_remoteSteamId, dataToSend, (uint)length, sendType, P2P_CHANNEL)) {
                 Logger.Warn($"Steam P2P: Failed to send packet to {_remoteSteamId}");
@@ -149,15 +141,16 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
 
     /// <inheritdoc />
     public int Receive(byte[]? buffer, int offset, int length, int waitMillis) {
+        if (buffer == null) {
+            return ReceiveAndFireEvent();
+        }
+
         if (!_isConnected || !SteamManager.IsInitialized) return 0;
 
-        // Check if packet is available
         if (!SteamNetworking.IsP2PPacketAvailable(out uint packetSize, P2P_CHANNEL)) return 0;
 
-        // Read the packet
         if (!SteamNetworking.ReadP2PPacket(_receiveBuffer, MAX_PACKET_SIZE, out packetSize, out CSteamID remoteSteamId, P2P_CHANNEL)) return 0;
 
-        // Verify it's from the expected peer
         if (remoteSteamId != _remoteSteamId) {
             Logger.Warn($"Steam P2P: Received packet from unexpected peer {remoteSteamId}, expected {_remoteSteamId}");
             return 0;
@@ -165,20 +158,36 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
 
         var size = (int)packetSize;
 
-        // Fire data received event directly since we are in the loop
-        // We create a copy for the event to ensure thread safety/buffer independence
-        // We cannot use ArrayPool here because the consumer (NetClient) queues the buffer
-        // and processes it asynchronously. If we return it to the pool, it gets corrupted.
         var data = new byte[size];
         Buffer.BlockCopy(_receiveBuffer, 0, data, 0, size);
         DataReceivedEvent?.Invoke(data, size);
 
-        // If a buffer was provided (legacy/direct call), copy to it
-        if (buffer != null && length > 0) {
-            var bytesToCopy = System.Math.Min(size, length);
-            Buffer.BlockCopy(_receiveBuffer, 0, buffer, offset, bytesToCopy);
-            return bytesToCopy;
+        var bytesToCopy = System.Math.Min(size, length);
+        Buffer.BlockCopy(_receiveBuffer, 0, buffer, offset, bytesToCopy);
+        return bytesToCopy;
+    }
+
+    /// <summary>
+    /// Receives packets and fires events without copying to a buffer.
+    /// Used by the internal receive loop.
+    /// </summary>
+    private int ReceiveAndFireEvent() {
+        if (!_isConnected || !SteamManager.IsInitialized) return 0;
+
+        if (!SteamNetworking.IsP2PPacketAvailable(out uint packetSize, P2P_CHANNEL)) return 0;
+
+        if (!SteamNetworking.ReadP2PPacket(_receiveBuffer, MAX_PACKET_SIZE, out packetSize, out CSteamID remoteSteamId, P2P_CHANNEL)) return 0;
+
+        if (remoteSteamId != _remoteSteamId) {
+            Logger.Warn($"Steam P2P: Received packet from unexpected peer {remoteSteamId}, expected {_remoteSteamId}");
+            return 0;
         }
+
+        var size = (int)packetSize;
+
+        var data = new byte[size];
+        Buffer.BlockCopy(_receiveBuffer, 0, data, 0, size);
+        DataReceivedEvent?.Invoke(data, size);
 
         return size;
     }
@@ -187,53 +196,50 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
     public void Disconnect() {
         if (!_isConnected) return;
 
-        // Unregister from loopback immediately to prevent sending packets after disconnect
         SteamLoopbackChannel.UnregisterClient();
 
         Logger.Info($"Steam P2P: Disconnecting from {_remoteSteamId}");
 
+        _isConnected = false;
+
+        _receiveTokenSource?.Cancel();
+
         if (SteamManager.IsInitialized) {
-            // Close P2P session with the remote user
             SteamNetworking.CloseP2PSessionWithUser(_remoteSteamId);
         }
 
-        _isConnected = false;
         _remoteSteamId = CSteamID.Nil;
 
-        // Stop receive loop
-        _receiveTokenSource?.Cancel();
+        if (_receiveThread != null) {
+            if (!_receiveThread.Join(5000)) {
+                Logger.Warn("Steam P2P: Receive thread did not terminate within 5 seconds");
+            }
+            _receiveThread = null;
+        }
+
         _receiveTokenSource?.Dispose();
         _receiveTokenSource = null;
-        
-        // Wait for receive thread to terminate
-        if (_receiveThread != null && _receiveThread.IsAlive) {
-            try {
-                _receiveThread.Join(1000); // 1 second timeout
-            } catch (ThreadInterruptedException) {
-                // Thread was interrupted, that's fine
-            }
-        }
-        _receiveThread = null;
     }
 
     /// <summary>
     /// Continuously polls for incoming P2P packets.
+    /// Steam API limitation: no blocking receive or callback available, must poll.
     /// </summary>
     private void ReceiveLoop() {
         var token = _receiveTokenSource;
-        while (_isConnected && token != null && !token.IsCancellationRequested) {
+        if (token == null) return;
+
+        while (_isConnected && !token.IsCancellationRequested) {
             try {
-                // Poll for packets
-                // We pass a dummy buffer/offset/length because we handle the buffer internally and fire the event
-                // The Receive method will do the actual reading
                 Receive(null, 0, 0, 0);
                 
-                // Sleep briefly to avoid burning CPU (increased to 15ms)
-                Thread.Sleep(15);
+                Thread.Sleep(1);
             } catch (Exception e) {
                 Logger.Error($"Steam P2P: Error in receive loop: {e}");
             }
         }
+
+        Logger.Info("Steam P2P: Receive loop exited cleanly");
     }
 
     /// <summary>
