@@ -537,6 +537,9 @@ internal class ClientManager : IClientManager {
         _autoConnect = false;
         
         _netClient.Disconnect();
+        
+        // If we are in a Steam lobby, we leave it
+        SteamManager.LeaveLobby();
 
         // Let the player manager know we disconnected
         _playerManager.OnDisconnect();

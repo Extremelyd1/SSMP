@@ -167,23 +167,21 @@ public static class SteamManager {
     /// </summary>
     /// <param name="lobbyId">The ID of the lobby to join.</param>
     /// <returns>True if the join request was sent, false otherwise.</returns>
-    public static bool JoinLobby(CSteamID lobbyId) {
-        if (!IsInitialized) return false;
+    public static void JoinLobby(CSteamID lobbyId) {
+        if (!IsInitialized) return;
 
         Logger.Info($"Joining Steam lobby: {lobbyId}");
         
         var apiCall = SteamMatchmaking.JoinLobby(lobbyId);
         _lobbyEnterCallback = CallResult<LobbyEnter_t>.Create(OnLobbyEnter);
         _lobbyEnterCallback.Set(apiCall);
-        
-        return true;
     }
 
     /// <summary>
     /// Leaves the current lobby if hosting one.
     /// </summary>
     public static void LeaveLobby() {
-        if (!IsHostingLobby || !IsInitialized) return;
+        if (CurrentLobbyId == CSteamID.Nil || !IsInitialized) return;
 
         Logger.Info($"Leaving Steam lobby: {CurrentLobbyId}");
         SteamMatchmaking.LeaveLobby(CurrentLobbyId);
