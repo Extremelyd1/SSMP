@@ -11,7 +11,7 @@ namespace SSMP.Networking;
 /// </summary>
 /// <typeparam name="TOutgoing">The type of the outgoing packet.</typeparam>
 /// <typeparam name="TPacketId">The type of the packet ID.</typeparam>
-internal class NetworkCongestionManager<TOutgoing, TPacketId>
+internal class UdpCongestionManager<TOutgoing, TPacketId>
     where TOutgoing : UpdatePacket<TPacketId>, new()
     where TPacketId : Enum {
     /// <summary>
@@ -56,7 +56,7 @@ internal class NetworkCongestionManager<TOutgoing, TPacketId>
     /// <summary>
     /// The corresponding update manager from which we receive the packets that we calculate the RTT from.
     /// </summary>
-    private readonly NetworkUpdateManager<TOutgoing, TPacketId> _updateManager;
+    private readonly UdpUpdateManager<TOutgoing, TPacketId> _updateManager;
 
     /// <summary>
     /// Dictionary containing for each sequence number the corresponding packet and stopwatch. We use this
@@ -126,7 +126,7 @@ internal class NetworkCongestionManager<TOutgoing, TPacketId>
     /// Construct the congestion manager with the given update manager.
     /// </summary>
     /// <param name="udpUpdateManager">The UDP update manager.</param>
-    public NetworkCongestionManager(NetworkUpdateManager<TOutgoing, TPacketId> updateManager) {
+    public UdpCongestionManager(UdpUpdateManager<TOutgoing, TPacketId> updateManager) {
         _updateManager = updateManager;
 
         _sentQueue = new ConcurrentDictionary<ushort, SentPacket<TOutgoing, TPacketId>>();
@@ -155,7 +155,7 @@ internal class NetworkCongestionManager<TOutgoing, TPacketId>
         CheckCongestion(packet.Ack);
 
         // Check the congestion of all acknowledged packet in the ack field
-        for (ushort i = 0; i < NetworkUpdateManager.AckSize; i++) {
+        for (ushort i = 0; i < UdpUpdateManager.AckSize; i++) {
             if (packet.AckField[i]) {
                 var sequenceToCheck = (ushort) (packet.Ack - i - 1);
 

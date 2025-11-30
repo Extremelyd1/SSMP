@@ -14,7 +14,7 @@ namespace SSMP.Networking;
 /// Class that manages sending the update packet. Has a simple congestion avoidance system to
 /// avoid flooding the channel.
 /// </summary>
-internal abstract class NetworkUpdateManager {
+internal abstract class UdpUpdateManager {
     /// <summary>
     /// The number of ack numbers from previous packets to store in the packet. 
     /// </summary>
@@ -22,7 +22,7 @@ internal abstract class NetworkUpdateManager {
 }
 
 /// <inheritdoc />
-internal abstract class NetworkUpdateManager<TOutgoing, TPacketId> : NetworkUpdateManager
+internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManager
     where TOutgoing : UpdatePacket<TPacketId>, new()
     where TPacketId : Enum {
     /// <summary>
@@ -47,7 +47,7 @@ internal abstract class NetworkUpdateManager<TOutgoing, TPacketId> : NetworkUpda
     /// <summary>
     /// The UDP congestion manager instance.
     /// </summary>
-    private readonly NetworkCongestionManager<TOutgoing, TPacketId> _congestionManager;
+    private readonly UdpCongestionManager<TOutgoing, TPacketId> _congestionManager;
 
     /// <summary>
     /// The last sent sequence number.
@@ -104,7 +104,7 @@ internal abstract class NetworkUpdateManager<TOutgoing, TPacketId> : NetworkUpda
     /// <summary>
     /// The current send rate in milliseconds between sending packets.
     /// </summary>
-    public int CurrentSendRate { get; set; } = NetworkCongestionManager<TOutgoing, TPacketId>.HighSendRate;
+    public int CurrentSendRate { get; set; } = UdpCongestionManager<TOutgoing, TPacketId>.HighSendRate;
 
     /// <summary>
     /// Moving average of round trip time (RTT) between sending and receiving a packet.
@@ -119,8 +119,8 @@ internal abstract class NetworkUpdateManager<TOutgoing, TPacketId> : NetworkUpda
     /// <summary>
     /// Construct the update manager with a UDP socket.
     /// </summary>
-    protected NetworkUpdateManager() {
-        _congestionManager = new NetworkCongestionManager<TOutgoing, TPacketId>(this);
+    protected UdpUpdateManager() {
+        _congestionManager = new UdpCongestionManager<TOutgoing, TPacketId>(this);
 
         _receivedQueue = new ConcurrentFixedSizeQueue<ushort>(ReceiveQueueSize);
 
