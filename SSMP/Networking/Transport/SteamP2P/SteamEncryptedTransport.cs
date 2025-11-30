@@ -172,13 +172,11 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
 
         // Fire data received event directly since we are in the loop
         // We create a copy for the event to ensure thread safety/buffer independence
-        var data = ArrayPool<byte>.Shared.Rent(size);
-        try {
-            Buffer.BlockCopy(_receiveBuffer, 0, data, 0, size);
-            DataReceivedEvent?.Invoke(data, size);
-        } finally {
-            ArrayPool<byte>.Shared.Return(data);
-        }
+        // We cannot use ArrayPool here because the consumer (NetClient) queues the buffer
+        // and processes it asynchronously. If we return it to the pool, it gets corrupted.
+        var data = new byte[size];
+        Buffer.BlockCopy(_receiveBuffer, 0, data, 0, size);
+        DataReceivedEvent?.Invoke(data, size);
 
         // If a buffer was provided (legacy/direct call), copy to it
         if (buffer != null && length > 0) {

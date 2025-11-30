@@ -262,6 +262,19 @@ internal class NetServer : INetServer {
         var id = client.Id;
 
         foreach (var packet in packets) {
+            // If the client is not registered, we first try to read it as a connection packet
+            // This is because ClientInfo is sent as a ServerConnectionPacket, not ServerUpdatePacket
+            if (!client.IsRegistered) {
+                var connectionPacket = new ServerConnectionPacket();
+                // We need to clone the packet because ReadPacket consumes it
+                var packetClone = new Packet.Packet(packet.ToArray());
+                
+                if (connectionPacket.ReadPacket(packetClone)) {
+                    _packetManager.HandleServerConnectionPacket(id, connectionPacket);
+                    continue;
+                }
+            }
+
             // Create a server update packet from the raw packet instance
             var serverUpdatePacket = new ServerUpdatePacket();
             if (!serverUpdatePacket.ReadPacket(packet)) {

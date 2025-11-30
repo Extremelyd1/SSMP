@@ -51,14 +51,13 @@ internal static class SteamLoopbackChannel {
         }
 
         // Create a copy of the data to simulate network isolation
-        var copy = ArrayPool<byte>.Shared.Rent(length);
+        // We cannot use ArrayPool here because the consumer queues the buffer.
+        var copy = new byte[length];
+        Buffer.BlockCopy(data, 0, copy, 0, length);
         try {
-            Buffer.BlockCopy(data, 0, copy, 0, length);
             srv.ReceiveLoopbackPacket(copy, length);
         } catch (Exception e) {
             Logger.Error($"Steam Loopback: Error sending to server: {e}");
-        } finally {
-            ArrayPool<byte>.Shared.Return(copy);
         }
     }
 
@@ -73,14 +72,13 @@ internal static class SteamLoopbackChannel {
         }
 
         // Create a copy of the data to simulate network isolation
-        var copy = ArrayPool<byte>.Shared.Rent(length);
+        // We cannot use ArrayPool here because the consumer queues the buffer.
+        var copy = new byte[length];
+        Buffer.BlockCopy(data, 0, copy, 0, length);
         try {
-            Buffer.BlockCopy(data, 0, copy, 0, length);
             cli.ReceiveLoopbackPacket(copy, length);
         } catch (Exception e) {
             Logger.Error($"Steam Loopback: Error sending to client: {e}");
-        } finally {
-            ArrayPool<byte>.Shared.Return(copy);
         }
     }
 }
