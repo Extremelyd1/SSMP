@@ -27,6 +27,9 @@ internal class UdpClientIdentifier : IClientIdentifier {
 
     /// <inheritdoc />
     public object? ThrottleKey => EndPoint.Address;
+    
+    /// <inheritdoc />
+    public bool NeedsCongestionManagement => true;
 
     /// <inheritdoc />
     public bool Equals(IClientIdentifier? other) {

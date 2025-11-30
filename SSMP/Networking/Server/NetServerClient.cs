@@ -64,14 +64,14 @@ internal class NetServerClient {
     public IClientIdentifier ClientIdentifier => TransportClient.ClientIdentifier;
 
     /// <summary>
-    /// The endpoint of the client (for UDP transports only, backward compatibility).
+    /// Extracts the IPEndPoint for UDP-based transports only.
+    /// Used for IP-based banning functionality. Returns null for non-UDP transports (e.g., Steam P2P).
+    /// For display purposes, use <see cref="ClientIdentifier"/>.ToDisplayString() instead.
     /// </summary>
     public IPEndPoint? EndPoint {
         get {
-            // For UDP-based transports, extract the IPEndPoint
-            return TransportClient.ClientIdentifier switch
-            {
-                UdpClientIdentifier udp      => udp.EndPoint,
+            return TransportClient.ClientIdentifier switch {
+                UdpClientIdentifier udp => udp.EndPoint,
                 HolePunchClientIdentifier hp => hp.EndPoint,
                 _ => null
             };
@@ -88,14 +88,11 @@ internal class NetServerClient {
 
         Id = GetId();
         
-        // Create the transport adapter
-        var transport = new EncryptedTransportClientAdapter(transportClient);
-        
         // Disable congestion management for transports that have built-in congestion handling.
-        var enableCongestionManagement = transport.RequiresCongestionManagement;
+        var enableCongestionManagement = transportClient.ClientIdentifier.NeedsCongestionManagement;
         
         UpdateManager = new ServerUpdateManager(enableCongestionManagement);
-        UpdateManager.Transport = transport;
+        UpdateManager.TransportClient = transportClient;
         ChunkSender = new ServerChunkSender(UpdateManager);
         ChunkReceiver = new ServerChunkReceiver(UpdateManager);
         ConnectionManager = new ServerConnectionManager(packetManager, ChunkSender, ChunkReceiver, Id);
@@ -127,33 +124,4 @@ internal class NetServerClient {
         UsedIds[newId] = 0;
         return newId;
     }
-}
-
-
-/// <summary>
-/// Adapter to adapt IEncryptedTransportClient to IEncryptedTransport for UdpUpdateManager.
-/// </summary>
-internal class EncryptedTransportClientAdapter : IEncryptedTransport {
-    private readonly IEncryptedTransportClient _client;
-
-    public EncryptedTransportClientAdapter(IEncryptedTransportClient client) {
-        _client = client;
-    }
-
-    public event Action<byte[], int>? DataReceivedEvent {
-        add => _client.DataReceivedEvent += value;
-        remove => _client.DataReceivedEvent -= value;
-    }
-
-    /// <inheritdoc />
-    public bool RequiresCongestionManagement => _client.ClientIdentifier.ThrottleKey != null;
-
-    public void Connect(string address, int port) => throw new NotSupportedException();
-    public void Disconnect() => throw new NotSupportedException();
-
-    public void Send(byte[] buffer, int offset, int length) {
-        _client.Send(buffer, offset, length);
-    }
-
-    public int Receive(byte[] buffer, int offset, int length, int waitMillis) => throw new NotSupportedException();
 }

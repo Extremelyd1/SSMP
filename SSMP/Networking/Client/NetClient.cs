@@ -12,7 +12,6 @@ using SSMP.Networking.Packet;
 using SSMP.Networking.Packet.Data;
 using SSMP.Networking.Packet.Update;
 using SSMP.Networking.Transport.Common;
-using SSMP.Networking.Transport.SteamP2P;
 using SSMP.Util;
 
 namespace SSMP.Networking.Client;
@@ -201,7 +200,7 @@ internal class NetClient : INetClient {
             UpdateManager.TimeoutEvent -= OnUpdateTimedOut;
             _chunkSender.Stop();
             _chunkReceiver.Reset();
-            _chunkReceiver.Reset();
+            
             
             if (_transport != null) {
                 _transport.DataReceivedEvent -= OnReceiveData;

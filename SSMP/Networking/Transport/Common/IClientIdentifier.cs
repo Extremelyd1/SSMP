@@ -18,4 +18,11 @@ internal interface IClientIdentifier : IEquatable<IClientIdentifier> {
     /// Returns null if application-level throttling should be skipped for this client.
     /// </summary>
     object? ThrottleKey { get; }
+    
+    /// <summary>
+    /// Indicates whether this transport requires application-level congestion management.
+    /// Returns false for transports with built-in congestion handling (e.g., Steam P2P).
+    /// Returns true for UDP-based transports that need application-level throttling.
+    /// </summary>
+    bool NeedsCongestionManagement { get; }
 }

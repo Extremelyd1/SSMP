@@ -30,6 +30,9 @@ internal class SteamClientIdentifier : IClientIdentifier {
 
     /// <inheritdoc />
     public object? ThrottleKey => null;
+    
+    /// <inheritdoc />
+    public bool NeedsCongestionManagement => false;
 
     /// <inheritdoc />
     public bool Equals(IClientIdentifier? other) {
