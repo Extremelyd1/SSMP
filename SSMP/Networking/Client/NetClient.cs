@@ -141,9 +141,9 @@ internal class NetClient : INetClient {
             try {
                 _transport = transport;
                 
-                // Recreate UpdateManager with congestion management disabled for Steam P2P.
-                // Steam P2P has built-in congestion handling, so we skip application-level congestion management.
-                var enableCongestionManagement = _transport is not SteamEncryptedTransport;
+                // Recreate UpdateManager with congestion management based on transport capability.
+                // Transports with built-in congestion handling (e.g., Steam P2P) return false.
+                var enableCongestionManagement = _transport.RequiresCongestionManagement;
                 UpdateManager = new ClientUpdateManager(enableCongestionManagement);
                 
                 // Recreate ChunkSender to use the new UpdateManager

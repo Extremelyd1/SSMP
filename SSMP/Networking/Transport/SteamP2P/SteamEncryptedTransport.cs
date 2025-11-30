@@ -31,6 +31,9 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
     /// <inheritdoc />
     public event Action<byte[], int>? DataReceivedEvent;
 
+    /// <inheritdoc />
+    public bool RequiresCongestionManagement => false;
+
     /// <summary>
     /// The Steam ID of the remote peer we're connected to.
     /// </summary>

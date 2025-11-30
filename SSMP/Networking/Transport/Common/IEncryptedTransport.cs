@@ -37,6 +37,12 @@ internal interface IEncryptedTransport {
     int Receive(byte[] buffer, int offset, int length, int waitMillis);
 
     /// <summary>
+    /// Indicates whether this transport requires application-level congestion management.
+    /// Returns false for transports with built-in congestion handling (e.g., Steam P2P).
+    /// </summary>
+    bool RequiresCongestionManagement { get; }
+
+    /// <summary>
     /// Disconnect from the remote peer.
     /// </summary>
     void Disconnect();

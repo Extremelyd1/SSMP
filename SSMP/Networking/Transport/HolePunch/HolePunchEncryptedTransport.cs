@@ -21,6 +21,9 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     /// <inheritdoc />
     public event Action<byte[], int>? DataReceivedEvent;
 
+    /// <inheritdoc />
+    public bool RequiresCongestionManagement => true;
+
     /// <summary>
     /// Construct a hole punching transport with the given master server address.
     /// </summary>

@@ -88,15 +88,14 @@ internal class NetServerClient {
 
         Id = GetId();
         
+        // Create the transport adapter
+        var transport = new EncryptedTransportClientAdapter(transportClient);
+        
         // Disable congestion management for transports that have built-in congestion handling.
-        // Steam P2P returns null for ThrottleKey to indicate it should skip application-level
-        // throttling and congestion management.
-        var enableCongestionManagement = transportClient.ClientIdentifier.ThrottleKey != null;
+        var enableCongestionManagement = transport.RequiresCongestionManagement;
         
         UpdateManager = new ServerUpdateManager(enableCongestionManagement);
-        
-        // Wrap the transport client in an adapter for the update manager
-        UpdateManager.Transport = new EncryptedTransportClientAdapter(transportClient);
+        UpdateManager.Transport = transport;
         ChunkSender = new ServerChunkSender(UpdateManager);
         ChunkReceiver = new ServerChunkReceiver(UpdateManager);
         ConnectionManager = new ServerConnectionManager(packetManager, ChunkSender, ChunkReceiver, Id);
@@ -145,6 +144,9 @@ internal class EncryptedTransportClientAdapter : IEncryptedTransport {
         add => _client.DataReceivedEvent += value;
         remove => _client.DataReceivedEvent -= value;
     }
+
+    /// <inheritdoc />
+    public bool RequiresCongestionManagement => _client.ClientIdentifier.ThrottleKey != null;
 
     public void Connect(string address, int port) => throw new NotSupportedException();
     public void Disconnect() => throw new NotSupportedException();

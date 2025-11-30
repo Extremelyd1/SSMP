@@ -16,6 +16,9 @@ internal class UdpEncryptedTransport : IEncryptedTransport {
     /// <inheritdoc />
     public event Action<byte[], int>? DataReceivedEvent;
 
+    /// <inheritdoc />
+    public bool RequiresCongestionManagement => true;
+
     public UdpEncryptedTransport() {
         _dtlsClient = new DtlsClient();
         _dtlsClient.DataReceivedEvent += OnDataReceived;
