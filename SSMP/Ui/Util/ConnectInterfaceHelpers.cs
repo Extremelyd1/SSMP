@@ -143,18 +143,27 @@ internal static class ConnectInterfaceHelpers {
     /// </summary>
     /// <param name="backgroundPanel">The background panel GameObject.</param>
     /// <param name="matchmakingTab">The matchmaking tab button.</param>
-    /// <param name="steamTab">The steam tab button.</param>
+    /// <param name="steamTab">The steam tab button (optional).</param>
     /// <param name="directIpTab">The direct IP tab button.</param>
     public static void PositionTabButtonsFixed(GameObject backgroundPanel, TabButtonComponent matchmakingTab, 
-        TabButtonComponent steamTab, TabButtonComponent directIpTab) {
+        TabButtonComponent? steamTab, TabButtonComponent directIpTab) {
         if (GameObjectField == null) return;
         
         var bgWidth = backgroundPanel.GetComponent<RectTransform>().sizeDelta.x;
-        var buttonWidth = bgWidth / 3f;
-        
-        AdjustButtonFixed(GameObjectField.GetValue(matchmakingTab) as GameObject, -buttonWidth, buttonWidth);
-        AdjustButtonFixed(GameObjectField.GetValue(steamTab) as GameObject, 0f, buttonWidth);
-        AdjustButtonFixed(GameObjectField.GetValue(directIpTab) as GameObject, buttonWidth, buttonWidth);
+
+        if (steamTab != null) {
+            // 3 buttons
+            var buttonWidth = bgWidth / 3f;
+            AdjustButtonFixed(GameObjectField.GetValue(matchmakingTab) as GameObject, -buttonWidth, buttonWidth);
+            AdjustButtonFixed(GameObjectField.GetValue(steamTab) as GameObject, 0f, buttonWidth);
+            AdjustButtonFixed(GameObjectField.GetValue(directIpTab) as GameObject, buttonWidth, buttonWidth);
+        } else {
+            // 2 buttons
+            var buttonWidth = bgWidth / 2f;
+            var offset = buttonWidth / 2f;
+            AdjustButtonFixed(GameObjectField.GetValue(matchmakingTab) as GameObject, -offset, buttonWidth);
+            AdjustButtonFixed(GameObjectField.GetValue(directIpTab) as GameObject, offset, buttonWidth);
+        }
     }
 
     /// <summary>

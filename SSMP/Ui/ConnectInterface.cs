@@ -355,7 +355,7 @@ internal class ConnectInterface {
     /// <summary>
     /// The Steam tab button component.
     /// </summary>
-    private readonly TabButtonComponent _steamTab;
+    private readonly TabButtonComponent? _steamTab;
 
     /// <summary>
     /// The Direct IP tab button component.
@@ -370,7 +370,7 @@ internal class ConnectInterface {
     /// <summary>
     /// The component group containing Steam tab content.
     /// </summary>
-    private readonly ComponentGroup _steamGroup;
+    private readonly ComponentGroup? _steamGroup;
 
     /// <summary>
     /// The component group containing Direct IP tab content.
@@ -489,7 +489,11 @@ internal class ConnectInterface {
         var tabY = y;
         var tabWidth = TabButtonWidth;
         _matchmakingTab = ConnectInterfaceHelpers.CreateTabButton(_backgroundGroup, x - tabWidth, tabY, tabWidth, MatchmakingTabText, () => SwitchTab(Tab.Matchmaking));
-        _steamTab = ConnectInterfaceHelpers.CreateTabButton(_backgroundGroup, x, tabY, tabWidth, SteamTabText, () => SwitchTab(Tab.Steam));
+        
+        if (SteamManager.IsInitialized) {
+            _steamTab = ConnectInterfaceHelpers.CreateTabButton(_backgroundGroup, x, tabY, tabWidth, SteamTabText, () => SwitchTab(Tab.Steam));
+        }
+        
         _directIpTab = ConnectInterfaceHelpers.CreateTabButton(_backgroundGroup, x + tabWidth, tabY, tabWidth, DirectIpTabText, () => SwitchTab(Tab.DirectIp));
         y -= TabSpacing;
 
@@ -514,29 +518,31 @@ internal class ConnectInterface {
         _lobbyConnectButton.SetOnPress(OnLobbyConnectButtonPressed);
 
         // Steam tab
-        _steamGroup = new ComponentGroup(activeSelf: false, parent: _backgroundGroup);
-        var steamY = contentY;
-        
-        new TextComponent(_steamGroup, new Vector2(x, steamY), new Vector2(ContentWidth, LabelHeight), 
-            SteamConnectedText, UiManager.SubTextFontSize, alignment: TextAnchor.MiddleCenter);
-        steamY -= SteamTextSpacing;
-        
-        _createLobbyButton = new ButtonComponent(_steamGroup, new Vector2(x, steamY), 
-            new Vector2(ContentWidth, UniformHeight), CreateLobbyButtonText, 
-            Resources.TextureManager.ButtonBg, Resources.FontManager.UIFontRegular, UiManager.NormalFontSize);
-        _createLobbyButton.SetOnPress(OnCreateLobbyButtonPressed);
-        steamY -= UniformHeight + SteamButtonSpacing;
-        
-        _browseLobbyButton = new ButtonComponent(_steamGroup, new Vector2(x, steamY), 
-            new Vector2(ContentWidth, UniformHeight), BrowseLobbyButtonText, 
-            Resources.TextureManager.ButtonBg, Resources.FontManager.UIFontRegular, UiManager.NormalFontSize);
-        _browseLobbyButton.SetOnPress(OnBrowseLobbyButtonPressed);
-        steamY -= UniformHeight + SteamButtonSpacing;
-        
-        _joinFriendButton = new ButtonComponent(_steamGroup, new Vector2(x, steamY), 
-            new Vector2(ContentWidth, UniformHeight), JoinFriendButtonText, 
-            Resources.TextureManager.ButtonBg, Resources.FontManager.UIFontRegular, UiManager.NormalFontSize);
-        _joinFriendButton.SetOnPress(OnJoinFriendButtonPressed);
+        if (SteamManager.IsInitialized) {
+            _steamGroup = new ComponentGroup(activeSelf: false, parent: _backgroundGroup);
+            var steamY = contentY;
+            
+            new TextComponent(_steamGroup, new Vector2(x, steamY), new Vector2(ContentWidth, LabelHeight), 
+                SteamConnectedText, UiManager.SubTextFontSize, alignment: TextAnchor.MiddleCenter);
+            steamY -= SteamTextSpacing;
+            
+            _createLobbyButton = new ButtonComponent(_steamGroup, new Vector2(x, steamY), 
+                new Vector2(ContentWidth, UniformHeight), CreateLobbyButtonText, 
+                Resources.TextureManager.ButtonBg, Resources.FontManager.UIFontRegular, UiManager.NormalFontSize);
+            _createLobbyButton.SetOnPress(OnCreateLobbyButtonPressed);
+            steamY -= UniformHeight + SteamButtonSpacing;
+            
+            _browseLobbyButton = new ButtonComponent(_steamGroup, new Vector2(x, steamY), 
+                new Vector2(ContentWidth, UniformHeight), BrowseLobbyButtonText, 
+                Resources.TextureManager.ButtonBg, Resources.FontManager.UIFontRegular, UiManager.NormalFontSize);
+            _browseLobbyButton.SetOnPress(OnBrowseLobbyButtonPressed);
+            steamY -= UniformHeight + SteamButtonSpacing;
+            
+            _joinFriendButton = new ButtonComponent(_steamGroup, new Vector2(x, steamY), 
+                new Vector2(ContentWidth, UniformHeight), JoinFriendButtonText, 
+                Resources.TextureManager.ButtonBg, Resources.FontManager.UIFontRegular, UiManager.NormalFontSize);
+            _joinFriendButton.SetOnPress(OnJoinFriendButtonPressed);
+        }
 
         // Direct IP tab
         _directIpGroup = new ComponentGroup(activeSelf: false, parent: _backgroundGroup);
@@ -586,12 +592,12 @@ internal class ConnectInterface {
         
         // Update tab button states
         _matchmakingTab.SetTabActive(tab == Tab.Matchmaking);
-        _steamTab.SetTabActive(tab == Tab.Steam);
+        _steamTab?.SetTabActive(tab == Tab.Steam);
         _directIpTab.SetTabActive(tab == Tab.DirectIp);
         
         // Show/hide content groups
         _matchmakingGroup.SetActive(tab == Tab.Matchmaking);
-        _steamGroup.SetActive(tab == Tab.Steam);
+        _steamGroup?.SetActive(tab == Tab.Steam);
         _directIpGroup.SetActive(tab == Tab.DirectIp);
     }
 

@@ -485,12 +485,7 @@ internal class ClientManager : IClientManager {
     private void Connect(ConnectionDetails details) {
         // If we are hosting and using Steam, we need to connect to our own Steam ID
         if (_autoConnect && details.TransportType == TransportType.Steam) {
-            if (SteamManager.IsInitialized) {
-                details.Address = SteamUser.GetSteamID().ToString();
-            } else {
-                Logger.Warn("Attempting to host Steam server but Steam is not initialized. Falling back to UDP.");
-                details.TransportType = TransportType.Udp;
-            }
+            details.Address = SteamUser.GetSteamID().ToString();
         }
 
         Logger.Info($"Connecting client to server: {details.Address}:{details.Port} as {details.Username}");
