@@ -157,9 +157,7 @@ internal class NetClient : INetClient {
                 UpdateManager.StartUpdates();
 
                 _chunkSender.Start();
-                if (details.AuthKey == null) {
-                    throw new ArgumentNullException(nameof(details.AuthKey), "AuthKey must not be null when starting a connection.");
-                }
+
                 _connectionManager.StartConnection(details.Username, details.AuthKey, addonData);
                 
             } catch (TlsTimeoutException) {

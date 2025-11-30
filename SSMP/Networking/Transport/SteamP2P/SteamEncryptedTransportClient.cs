@@ -48,7 +48,7 @@ internal class SteamEncryptedTransportClient : IEncryptedTransportClient {
         _steamIdStruct = new CSteamID(steamId);
     }
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public void Send(byte[] buffer, int offset, int length, bool reliable = false) {
         if (!SteamManager.IsInitialized) {
             Logger.Warn($"Steam P2P: Cannot send to client {SteamId}, Steam not initialized");

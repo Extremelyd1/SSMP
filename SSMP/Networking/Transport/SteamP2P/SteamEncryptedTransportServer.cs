@@ -171,7 +171,9 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
             try {
                 ProcessIncomingPackets();
                 
-                Thread.Sleep(1);
+                // Steam API does not provide a blocking receive or callback for P2P packets,
+                // so we must poll. Sleep(17.2ms) limits rate to ~58Hz to reduce CPU usage.
+                Thread.Sleep(TimeSpan.FromMilliseconds(17.2));
             } catch (Exception e) {
                 Logger.Error($"Steam P2P: Error in server receive loop: {e}");
             }
