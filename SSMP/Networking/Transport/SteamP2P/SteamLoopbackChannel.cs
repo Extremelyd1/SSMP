@@ -46,7 +46,7 @@ internal static class SteamLoopbackChannel {
     public static void SendToServer(byte[] data, int length) {
         var srv = _server;
         if (srv == null) {
-            Logger.Warn("Steam Loopback: Server not registered, dropping packet");
+            Logger.Debug("Steam Loopback: Server not registered, dropping packet");
             return;
         }
 
@@ -68,7 +68,7 @@ internal static class SteamLoopbackChannel {
     public static void SendToClient(byte[] data, int length) {
         var cli = _client;
         if (cli == null) {
-            Logger.Warn("Steam Loopback: Client not registered, dropping packet");
+            Logger.Debug("Steam Loopback: Client not registered, dropping packet");
             return;
         }
 

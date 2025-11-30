@@ -114,7 +114,7 @@ internal class ButtonComponent : Component, IButtonComponent {
         _image.color = new Color(0.1f, 0.1f, 0.1f, 1f); // Very dark gray (#1a1a1a)
         
         // Add RectMask2D to contain all child elements within button bounds
-        var rectMask = GameObject.AddComponent<RectMask2D>();
+        GameObject.AddComponent<RectMask2D>();
 
         // Create gradient shine overlay at the top - CONTAINED within button
         var shineObject = new GameObject("ShineOverlay");

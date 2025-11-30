@@ -35,7 +35,7 @@ public struct ConnectionDetails {
     /// <summary>
     /// Additional properties for the connection (e.g. Lobby ID).
     /// </summary>
-    public Dictionary<string, object> Properties = new();
+    public Dictionary<string, object> Properties;
 
     public ConnectionDetails(string address, int port, string username, TransportType transportType) {
         Address = address;
@@ -43,5 +43,6 @@ public struct ConnectionDetails {
         Username = username;
         TransportType = transportType;
         AuthKey = null;
+        Properties = new Dictionary<string, object>();
     }
 }

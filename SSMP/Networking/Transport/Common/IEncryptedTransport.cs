@@ -5,7 +5,7 @@ namespace SSMP.Networking.Transport.Common;
 /// <summary>
 /// Interface for a client-side encrypted transport for connection and data exchange with a server.
 /// </summary>
-internal interface IEncryptedTransport {
+internal interface IEncryptedTransport : ITransportSender {
     /// <summary>
     /// Event raised when data is received from the server.
     /// </summary>

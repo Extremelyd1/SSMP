@@ -130,22 +130,23 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
         }
 
         // Copy data to send buffer if offset is used (avoid allocation when offset is 0)
+        byte[] dataToSend = buffer;
+        bool rentedArray = false;
+
         if (offset > 0) {
-            var dataToSend = ArrayPool<byte>.Shared.Rent(length);
-            try {
-                Buffer.BlockCopy(buffer, offset, dataToSend, 0, length);
-                
-                // Send packet using unreliable channel (reliability handled at application layer)
-                if (!SteamNetworking.SendP2PPacket(_remoteSteamId, dataToSend, (uint)length, EP2PSend.k_EP2PSendUnreliableNoDelay, P2P_CHANNEL_SEND)) {
-                    Logger.Warn($"Steam P2P: Failed to send packet to {_remoteSteamId}");
-                }
-            } finally {
-                ArrayPool<byte>.Shared.Return(dataToSend);
-            }
-        } else {
+            dataToSend = ArrayPool<byte>.Shared.Rent(length);
+            rentedArray = true;
+            Buffer.BlockCopy(buffer, offset, dataToSend, 0, length);
+        }
+
+        try {
             // Send packet using unreliable channel (reliability handled at application layer)
-            if (!SteamNetworking.SendP2PPacket(_remoteSteamId, buffer, (uint)length, EP2PSend.k_EP2PSendUnreliableNoDelay, P2P_CHANNEL_SEND)) {
+            if (!SteamNetworking.SendP2PPacket(_remoteSteamId, dataToSend, (uint)length, EP2PSend.k_EP2PSendUnreliableNoDelay, P2P_CHANNEL_SEND)) {
                 Logger.Warn($"Steam P2P: Failed to send packet to {_remoteSteamId}");
+            }
+        } finally {
+            if (rentedArray) {
+                ArrayPool<byte>.Shared.Return(dataToSend);
             }
         }
     }
@@ -192,6 +193,9 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
     public void Disconnect() {
         if (!_isConnected) return;
 
+        // Unregister from loopback immediately to prevent sending packets after disconnect
+        SteamLoopbackChannel.UnregisterClient();
+
         Logger.Info($"Steam P2P: Disconnecting from {_remoteSteamId}");
 
         if (SteamManager.IsInitialized) {
@@ -206,10 +210,16 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
         _receiveTokenSource?.Cancel();
         _receiveTokenSource?.Dispose();
         _receiveTokenSource = null;
+        
+        // Wait for receive thread to terminate
+        if (_receiveThread != null && _receiveThread.IsAlive) {
+            try {
+                _receiveThread.Join(1000); // 1 second timeout
+            } catch (ThreadInterruptedException) {
+                // Thread was interrupted, that's fine
+            }
+        }
         _receiveThread = null;
-
-        // Unregister loopback
-        SteamLoopbackChannel.UnregisterClient();
     }
 
     /// <summary>

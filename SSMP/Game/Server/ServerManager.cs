@@ -1276,10 +1276,11 @@ internal abstract class ServerManager : IServerManager {
     /// <param name="serverInfo">The server info instance to modify based on whether the client should be accepted
     /// or not.</param>
     private void OnConnectionRequest(NetServerClient netServerClient, ClientInfo clientInfo, ServerInfo serverInfo) {
-        var endPoint = netServerClient.EndPoint;
-        var endPointString = endPoint?.ToString() ?? "SteamP2P";
-        Logger.Info($"Received connection request from IP: {endPointString}, username: {clientInfo.Username}");
+        var clientDisplayString = netServerClient.ClientIdentifier.ToDisplayString();
+        Logger.Info($"Received connection request from {clientDisplayString}, username: {clientInfo.Username}");
 
+        // Extract IPEndPoint if this is a UDP-based transport (for IP banning)
+        var endPoint = netServerClient.EndPoint;
         if (endPoint != null && _banList.IsIpBanned(endPoint.Address.ToString())) {
             Logger.Debug("  Client is banned from the server (IP), rejected connection");
 
@@ -1433,7 +1434,7 @@ internal abstract class ServerManager : IServerManager {
         // Create new player data and store it
         var playerData = new ServerPlayerData(
             netServerClient.Id,
-            netServerClient.EndPoint?.ToString() ?? "SteamP2P",
+            netServerClient.ClientIdentifier.ToDisplayString(),
             clientInfo.Username,
             clientInfo.AuthKey,
             _authorizedList

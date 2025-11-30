@@ -102,9 +102,24 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     private bool _isUpdating;
     
     /// <summary>
-    /// The encrypted transport instance to use to send packets.
+    /// The transport sender instance to use to send packets.
+    /// Can be either IEncryptedTransport (client-side) or IEncryptedTransportClient (server-side).
     /// </summary>
-    public IEncryptedTransport? Transport { get; set; }
+    private ITransportSender? _transportSender;
+    
+    /// <summary>
+    /// Sets the transport for client-side communication.
+    /// </summary>
+    public IEncryptedTransport? Transport {
+        set => _transportSender = value;
+    }
+    
+    /// <summary>
+    /// Sets the transport client for server-side communication.
+    /// </summary>
+    public IEncryptedTransportClient? TransportClient {
+        set => _transportSender = value;
+    }
 
 
     /// <summary>
@@ -220,7 +235,7 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     /// Create and send the current update packet.
     /// </summary>
     private void CreateAndSendUpdatePacket() {
-        if (Transport == null) {
+        if (_transportSender == null) {
             return;
         }
 
@@ -335,7 +350,7 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     private void SendPacket(Packet.Packet packet) {
         var buffer = packet.ToArray();
         
-        Transport?.Send(buffer, 0, buffer.Length);
+        _transportSender?.Send(buffer, 0, buffer.Length);
     }
 
     /// <summary>

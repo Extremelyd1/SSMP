@@ -97,7 +97,24 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
 
         Logger.Info("Steam P2P: Stopping server");
 
-        // Disconnect all clients
+        _isRunning = false;
+
+        // Stop receive loop
+        _receiveTokenSource?.Cancel();
+        _receiveTokenSource?.Dispose();
+        _receiveTokenSource = null;
+        
+        // Wait for receive thread to terminate
+        if (_receiveThread != null && _receiveThread.IsAlive) {
+            try {
+                _receiveThread.Join(1000); // 1 second timeout
+            } catch (ThreadInterruptedException) {
+                // Thread was interrupted, that's fine
+            }
+        }
+        _receiveThread = null;
+
+        // Disconnect all clients (server still registered to receive final packets)
         foreach (var client in _clients.Values) {
             DisconnectClient(client);
         }
@@ -105,18 +122,11 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
         _clients.Clear();
         _sessionRequestCallback?.Dispose();
         _sessionRequestCallback = null;
-        _isRunning = false;
+
+        // Unregister from loopback after all clients are disconnected
+        SteamLoopbackChannel.UnregisterServer();
 
         Logger.Info("Steam P2P: Server stopped");
-
-        // Stop receive loop
-        _receiveTokenSource?.Cancel();
-        _receiveTokenSource?.Dispose();
-        _receiveTokenSource = null;
-        _receiveThread = null;
-
-        // Unregister loopback
-        SteamLoopbackChannel.UnregisterServer();
     }
 
     /// <inheritdoc />

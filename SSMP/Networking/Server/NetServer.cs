@@ -268,7 +268,7 @@ internal class NetServer : INetServer {
                 }
 
                 // If the client is not yet registered, we log the malformed packet, and throttle the client
-                Logger.Debug($"Received malformed packet from client with IP: {client.EndPoint}");
+                Logger.Debug($"Received malformed packet from client: {client.ClientIdentifier.ToDisplayString()}");
 
                 // We throttle the client, because chances are that they are using an outdated version of the
                 // networking protocol, and keeping connection will potentially never time them out
@@ -391,7 +391,11 @@ internal class NetServer : INetServer {
             _processingThread = null;
         }
         
-        // Clean up existing clients
+        // Stop transport server first to prevent new connections and unregister from loopback
+        _transportServer.Stop();
+        _transportServer.ClientConnectedEvent -= OnClientConnected;
+        
+        // Clean up existing clients (transport is already stopped)
         foreach (var client in _clientsByIdentifier.Values) {
             client.Disconnect();
         }
@@ -399,9 +403,6 @@ internal class NetServer : INetServer {
         _clientsByIdentifier.Clear();
         _clientsById.Clear();
         _throttledClients.Clear();
-        
-        _transportServer.Stop();
-        _transportServer.ClientConnectedEvent -= OnClientConnected;
         
 
         _leftoverData = null;

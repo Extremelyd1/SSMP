@@ -15,7 +15,7 @@ internal class SteamEncryptedTransportClient : IEncryptedTransportClient {
     /// <summary>
     /// P2P channel for communication.
     /// </summary>
-    private const int P2P_CHANNEL = 1;
+    private const int P2P_CHANNEL = 0;
 
     /// <summary>
     /// The client identifier for this Steam client.
@@ -55,26 +55,24 @@ internal class SteamEncryptedTransportClient : IEncryptedTransportClient {
             return;
         }
 
+        byte[] dataToSend = buffer;
+        bool rentedArray = false;
+
         // Copy data to send buffer if offset is used (avoid allocation when offset is 0)
-        byte[] dataToSend;
         if (offset > 0) {
             dataToSend = ArrayPool<byte>.Shared.Rent(length);
-            try {
-                Buffer.BlockCopy(buffer, offset, dataToSend, 0, length);
-                
-                // Send packet to this specific client (unreliable - reliability handled at application layer)
-                if (!SteamNetworking.SendP2PPacket(_steamIdStruct, dataToSend, (uint)length, EP2PSend.k_EP2PSendUnreliableNoDelay, P2P_CHANNEL)) {
-                    Logger.Warn($"Steam P2P: Failed to send packet to client {SteamId}");
-                }
-            } finally {
-                ArrayPool<byte>.Shared.Return(dataToSend);
-            }
-        } else {
-            dataToSend = buffer;
-            
+            rentedArray = true;
+            Buffer.BlockCopy(buffer, offset, dataToSend, 0, length);
+        }
+
+        try {
             // Send packet to this specific client (unreliable - reliability handled at application layer)
             if (!SteamNetworking.SendP2PPacket(_steamIdStruct, dataToSend, (uint)length, EP2PSend.k_EP2PSendUnreliableNoDelay, P2P_CHANNEL)) {
                 Logger.Warn($"Steam P2P: Failed to send packet to client {SteamId}");
+            }
+        } finally {
+            if (rentedArray) {
+                ArrayPool<byte>.Shared.Return(dataToSend);
             }
         }
     }

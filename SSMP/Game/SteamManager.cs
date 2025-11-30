@@ -121,15 +121,15 @@ public static class SteamManager {
     /// <param name="maxPlayers">Maximum number of players (default 4)</param>
     /// <param name="lobbyType">Type of lobby to create (default friends-only)</param>
     /// <returns>True if lobby creation was initiated, false if Steam is unavailable</returns>
-    public static bool CreateLobby(string username, int maxPlayers = DEFAULT_MAX_PLAYERS, ELobbyType lobbyType = DEFAULT_LOBBY_TYPE) {
+    public static void CreateLobby(string username, int maxPlayers = DEFAULT_MAX_PLAYERS, ELobbyType lobbyType = DEFAULT_LOBBY_TYPE) {
         if (!IsInitialized) {
             Logger.Warn("Cannot create Steam lobby: Steam is not initialized");
-            return false;
+            return;
         }
 
         if (IsHostingLobby) {
-            Logger.Warn("Already hosting a Steam lobby");
-            return false;
+            Logger.Info("Already hosting a Steam lobby, leaving it first");
+            LeaveLobby();
         }
 
         _pendingLobbyUsername = username;
@@ -139,16 +139,14 @@ public static class SteamManager {
         var apiCall = SteamMatchmaking.CreateLobby(lobbyType, maxPlayers);
         _lobbyCreatedCallback = CallResult<LobbyCreated_t>.Create(OnLobbyCreated);
         _lobbyCreatedCallback.Set(apiCall);
-
-        return true;
     }
 
     /// <summary>
     /// Requests a list of lobbies from Steam.
     /// </summary>
     /// <returns>True if the request was sent, false otherwise.</returns>
-    public static bool RequestLobbyList() {
-        if (!IsInitialized) return false;
+    public static void RequestLobbyList() {
+        if (!IsInitialized) return;
 
         Logger.Info("Requesting Steam lobby list...");
         
@@ -158,8 +156,6 @@ public static class SteamManager {
         var apiCall = SteamMatchmaking.RequestLobbyList();
         _lobbyMatchListCallback = CallResult<LobbyMatchList_t>.Create(OnLobbyMatchList);
         _lobbyMatchListCallback.Set(apiCall);
-        
-        return true;
     }
 
     /// <summary>
@@ -309,8 +305,8 @@ public static class SteamManager {
     /// </summary>
     private static void OnGameRichPresenceJoinRequested(GameRichPresenceJoinRequested_t callback) {
         Logger.Info($"Joining friend's game via Rich Presence: {callback.m_rgchConnect}");
-        // Parse connection string if needed, but usually for P2P lobbies we might need to parse the lobby ID from it
-        // Or if it's just a lobby ID string:
+        
+        // Parse lobby ID from connection string
         if (ulong.TryParse(callback.m_rgchConnect, out ulong lobbyIdRaw)) {
             JoinLobby(new CSteamID(lobbyIdRaw));
         } else {
