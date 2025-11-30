@@ -257,13 +257,12 @@ internal class NetServer : INetServer {
     /// <param name="packets">The list of packets to handle.</param>
     private void HandleClientPackets(NetServerClient client, List<Packet.Packet> packets) {
         var id = client.Id;
+        var isSteamTransport = client.TransportClient is Transport.SteamP2P.SteamEncryptedTransportClient;
 
         foreach (var packet in packets) {
-            // If the client is not registered, we first try to read it as a connection packet
-            // This is because ClientInfo is sent as a ServerConnectionPacket, not ServerUpdatePacket
+            // If the client is not registered, try to read as connection packet first
             if (!client.IsRegistered) {
                 var connectionPacket = new ServerConnectionPacket();
-                // We need to clone the packet because ReadPacket consumes it
                 var packetClone = new Packet.Packet(packet.ToArray());
                 
                 if (connectionPacket.ReadPacket(packetClone)) {
@@ -272,20 +271,14 @@ internal class NetServer : INetServer {
                 }
             }
 
-            // Create a server update packet from the raw packet instance
             var serverUpdatePacket = new ServerUpdatePacket();
             if (!serverUpdatePacket.ReadPacket(packet)) {
-                // If ReadPacket returns false, we received a malformed packet
                 if (client.IsRegistered) {
-                    // Since the client is registered already, we simply ignore the packet
                     continue;
                 }
 
-                // If the client is not yet registered, we log the malformed packet, and throttle the client
                 Logger.Debug($"Received malformed packet from client: {client.ClientIdentifier.ToDisplayString()}");
 
-                // We throttle the client, because chances are that they are using an outdated version of the
-                // networking protocol, and keeping connection will potentially never time them out
                 var throttleKey = client.ClientIdentifier.ThrottleKey;
                 if (throttleKey != null) {
                     _throttledClients[throttleKey] = Stopwatch.StartNew();
@@ -294,24 +287,29 @@ internal class NetServer : INetServer {
                 continue;
             }
 
-            client.UpdateManager.OnReceivePacket<ServerUpdatePacket, ServerUpdatePacketId>(serverUpdatePacket);
+            if (isSteamTransport) {
+                // Steam: direct to packet manager, no UpdateManager or chunking
+                if (client.IsRegistered) {
+                    _packetManager.HandleServerUpdatePacket(id, serverUpdatePacket);
+                }
+            } else {
+                // UDP/HolePunch: full processing through UpdateManager and chunking
+                client.UpdateManager.OnReceivePacket<ServerUpdatePacket, ServerUpdatePacketId>(serverUpdatePacket);
 
-            // First process slice or slice ack data if it exists and pass it onto the chunk sender or chunk receiver
-            var packetData = serverUpdatePacket.GetPacketData();
-            if (packetData.TryGetValue(ServerUpdatePacketId.Slice, out var sliceData)) {
-                packetData.Remove(ServerUpdatePacketId.Slice);
-                client.ChunkReceiver.ProcessReceivedData((SliceData) sliceData);
-            }
+                var packetData = serverUpdatePacket.GetPacketData();
+                if (packetData.TryGetValue(ServerUpdatePacketId.Slice, out var sliceData)) {
+                    packetData.Remove(ServerUpdatePacketId.Slice);
+                    client.ChunkReceiver.ProcessReceivedData((SliceData) sliceData);
+                }
 
-            if (packetData.TryGetValue(ServerUpdatePacketId.SliceAck, out var sliceAckData)) {
-                packetData.Remove(ServerUpdatePacketId.SliceAck);
-                client.ChunkSender.ProcessReceivedData((SliceAckData) sliceAckData);
-            }
+                if (packetData.TryGetValue(ServerUpdatePacketId.SliceAck, out var sliceAckData)) {
+                    packetData.Remove(ServerUpdatePacketId.SliceAck);
+                    client.ChunkSender.ProcessReceivedData((SliceAckData) sliceAckData);
+                }
             
-            // Then, if the client is registered, we let the packet manager handle the rest of the data
-            if (client.IsRegistered) {
-                // Let the packet manager handle the received data
-                _packetManager.HandleServerUpdatePacket(id, serverUpdatePacket);
+                if (client.IsRegistered) {
+                    _packetManager.HandleServerUpdatePacket(id, serverUpdatePacket);
+                }
             }
         }
     }

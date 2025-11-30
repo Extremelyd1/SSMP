@@ -43,12 +43,6 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     /// to check against resent data.
     /// </summary>
     private const int ReceiveQueueSize = AckSize;
-
-    /// <summary>
-    /// Whether congestion management is enabled for this update manager.
-    /// Set to false for transports with built-in congestion handling (e.g., Steam P2P).
-    /// </summary>
-    private readonly bool _congestionManagementEnabled;
     
     /// <summary>
     /// The UDP congestion manager instance. Null if congestion management is disabled.
@@ -116,7 +110,8 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
                 throw new InvalidOperationException(
                     $"Transport {value.GetType().Name} does not implement ITransportSender");
             }
-            _transportSender = value as ITransportSender;
+
+            _transportSender = value;
         }
     }
     
@@ -157,13 +152,8 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     /// </summary>
     /// <param name="enableCongestionManagement">Whether to enable congestion management. 
     /// Set to false for transports with built-in congestion handling (e.g., Steam P2P).</param>
-    protected UdpUpdateManager(bool enableCongestionManagement = true) {
-        _congestionManagementEnabled = enableCongestionManagement;
-        
-        if (_congestionManagementEnabled) {
-            _udpCongestionManager = new UdpCongestionManager<TOutgoing, TPacketId>(this);
-        }
-
+    protected UdpUpdateManager() {
+        _udpCongestionManager = new UdpCongestionManager<TOutgoing, TPacketId>(this);
         _receivedQueue = new ConcurrentFixedSizeQueue<ushort>(ReceiveQueueSize);
 
         CurrentUpdatePacket = new TOutgoing();
@@ -284,7 +274,7 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
                 var newBytes = new byte[length];
                 Array.Copy(byteArray, index, newBytes, 0, length);
 
-                SendPacket(new Packet.Packet(newBytes), updatePacket.ContainsReliableData, sender);
+                SendPacket(new Packet.Packet(newBytes) { ContainsReliableData = updatePacket.ContainsReliableData }, sender);
 
                 index += length;
             }
@@ -292,7 +282,7 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
             return;
         }
         
-        SendPacket(packet, updatePacket.ContainsReliableData, sender);
+        SendPacket(packet, sender);
     }
 
     /// <summary>
@@ -339,12 +329,9 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     /// Send the given packet over the corresponding medium.
     /// </summary>
     /// <param name="packet">The raw packet instance.</param>
-    /// <param name="reliable">Whether the packet contains reliable data and should be sent reliably.</param>
     /// <param name="sender">The transport sender to use.</param>
-    private void SendPacket(Packet.Packet packet, bool reliable, ITransportSender sender) {
-        var buffer = packet.ToArray();
-        
-        sender.Send(buffer, 0, buffer.Length, reliable);
+    private void SendPacket(Packet.Packet packet, ITransportSender sender) {
+        sender.Send(packet);
     }
 
     /// <summary>

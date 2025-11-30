@@ -140,11 +140,7 @@ internal class NetClient : INetClient {
         Task.Run(() => {
             try {
                 _transport = transport;
-                
-                // Recreate UpdateManager with congestion management based on transport capability.
-                // Transports with built-in congestion handling (e.g., Steam P2P) return false.
-                var enableCongestionManagement = _transport.RequiresCongestionManagement;
-                UpdateManager = new ClientUpdateManager(enableCongestionManagement);
+                UpdateManager = new ClientUpdateManager();
                 
                 // Recreate ChunkSender to use the new UpdateManager
                 _chunkSender = new ClientChunkSender(UpdateManager);
@@ -152,13 +148,16 @@ internal class NetClient : INetClient {
                 _transport.DataReceivedEvent += OnReceiveData;
                 _transport.Connect(details.Address, details.Port);
 
-                UpdateManager.Transport = _transport;
-                UpdateManager.TimeoutEvent += OnConnectTimedOut;
-                UpdateManager.StartUpdates();
-
-                _chunkSender.Start();
+                // Steam transport bypasses UdpUpdateManager entirely
+                if (_transport is not Transport.SteamP2P.SteamEncryptedTransport) {
+                    UpdateManager.Transport = _transport;
+                    UpdateManager.TimeoutEvent += OnConnectTimedOut;
+                    UpdateManager.StartUpdates();
+                    _chunkSender.Start();
+                }
 
                 _connectionManager.StartConnection(details.Username, details.AuthKey, addonData);
+                
                 
             } catch (TlsTimeoutException) {
                 Logger.Info("DTLS connection timed out");
@@ -246,37 +245,40 @@ internal class NetClient : INetClient {
             return;
         }
 
+        var isSteamTransport = _transport is Transport.SteamP2P.SteamEncryptedTransport;
         var packets = PacketManager.HandleReceivedData(buffer, length, ref _leftoverData);
 
         foreach (var packet in packets) {
             try {
-                // Create a ClientUpdatePacket from the raw packet instance,
-                // and read the values into it
                 var clientUpdatePacket = new ClientUpdatePacket();
                 if (!clientUpdatePacket.ReadPacket(packet)) {
-                    // If ReadPacket returns false, we received a malformed packet, which we simply ignore for now
                     continue;
                 }
 
-                UpdateManager.OnReceivePacket<ClientUpdatePacket, ClientUpdatePacketId>(clientUpdatePacket);
+                if (isSteamTransport) {
+                    // Steam: direct to packet manager, no UpdateManager or chunking
+                    if (ConnectionStatus == ClientConnectionStatus.Connected) {
+                        _packetManager.HandleClientUpdatePacket(clientUpdatePacket);
+                    }
+                } else {
+                    // UDP/HolePunch: full processing through UpdateManager and chunking
+                    UpdateManager.OnReceivePacket<ClientUpdatePacket, ClientUpdatePacketId>(clientUpdatePacket);
 
-                // First check for slice or slice ack data and handle it separately by passing it onto either the chunk 
-                // sender or chunk receiver
-                var packetData = clientUpdatePacket.GetPacketData();
-                if (packetData.TryGetValue(ClientUpdatePacketId.Slice, out var sliceData)) {
-                    packetData.Remove(ClientUpdatePacketId.Slice);
-                    _chunkReceiver.ProcessReceivedData((SliceData) sliceData);
-                }
+                    var packetData = clientUpdatePacket.GetPacketData();
+                
+                    if (packetData.TryGetValue(ClientUpdatePacketId.Slice, out var sliceData)) {
+                        packetData.Remove(ClientUpdatePacketId.Slice);
+                        _chunkReceiver.ProcessReceivedData((SliceData)sliceData);
+                    }
 
-                if (packetData.TryGetValue(ClientUpdatePacketId.SliceAck, out var sliceAckData)) {
-                    packetData.Remove(ClientUpdatePacketId.SliceAck);
-                    _chunkSender.ProcessReceivedData((SliceAckData) sliceAckData);
-                }
+                    if (packetData.TryGetValue(ClientUpdatePacketId.SliceAck, out var sliceAckData)) {
+                        packetData.Remove(ClientUpdatePacketId.SliceAck);
+                        _chunkSender.ProcessReceivedData((SliceAckData)sliceAckData);
+                    }
 
-                // Then, if we are already connected to a server,
-                // we let the packet manager handle the rest of the packet data
-                if (ConnectionStatus == ClientConnectionStatus.Connected) {
-                    _packetManager.HandleClientUpdatePacket(clientUpdatePacket);
+                    if (ConnectionStatus == ClientConnectionStatus.Connected) {
+                        _packetManager.HandleClientUpdatePacket(clientUpdatePacket);
+                    }
                 }
             } catch (Exception e) {
                 Logger.Error($"Error processing incoming packet: {e}");

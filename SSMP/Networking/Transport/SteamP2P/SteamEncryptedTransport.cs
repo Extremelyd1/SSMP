@@ -94,7 +94,10 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
     }
 
     /// <inheritdoc />
-    public void Send(byte[] buffer, int offset, int length, bool reliable = false) {
+    public void Send(Packet.Packet packet) {
+        var buffer = packet.ToArray();
+        var length = buffer.Length;
+        
         if (!_isConnected) {
             throw new InvalidOperationException("Cannot send: not connected");
         }
@@ -104,38 +107,13 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
         }
 
         if (_remoteSteamId == _localSteamId) {
-            if (offset > 0) {
-                var temp = ArrayPool<byte>.Shared.Rent(length);
-                try {
-                    Buffer.BlockCopy(buffer, offset, temp, 0, length);
-                    SteamLoopbackChannel.SendToServer(temp, length);
-                } finally {
-                    ArrayPool<byte>.Shared.Return(temp);
-                }
-            } else {
-                SteamLoopbackChannel.SendToServer(buffer, length);
-            }
+            SteamLoopbackChannel.SendToServer(buffer, length);
             return;
         }
 
-        byte[] dataToSend = buffer;
-        bool rentedArray = false;
-
-        if (offset > 0) {
-            dataToSend = ArrayPool<byte>.Shared.Rent(length);
-            rentedArray = true;
-            Buffer.BlockCopy(buffer, offset, dataToSend, 0, length);
-        }
-
-        try {
-            var sendType = reliable ? EP2PSend.k_EP2PSendReliable : EP2PSend.k_EP2PSendUnreliableNoDelay;
-            if (!SteamNetworking.SendP2PPacket(_remoteSteamId, dataToSend, (uint)length, sendType, P2P_CHANNEL)) {
-                Logger.Warn($"Steam P2P: Failed to send packet to {_remoteSteamId}");
-            }
-        } finally {
-            if (rentedArray) {
-                ArrayPool<byte>.Shared.Return(dataToSend);
-            }
+        var sendType = packet.ContainsReliableData ? EP2PSend.k_EP2PSendReliable : EP2PSend.k_EP2PSendUnreliableNoDelay;
+        if (!SteamNetworking.SendP2PPacket(_remoteSteamId, buffer, (uint)length, sendType, P2P_CHANNEL)) {
+            Logger.Warn($"Steam P2P: Failed to send packet to {_remoteSteamId}");
         }
     }
 

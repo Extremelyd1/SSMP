@@ -21,10 +21,8 @@ internal interface IEncryptedTransportClient : ITransportSender {
     event Action<byte[], int>? DataReceivedEvent;
 
     /// <summary>
-    /// Send data to this client.
+    /// Send a packet to this client.
     /// </summary>
-    /// <param name="buffer">Buffer containing the data to send.</param>
-    /// <param name="offset">Offset in the buffer to start sending from.</param>
-    /// <param name="length">Number of bytes to send.</param>
-    new void Send(byte[] buffer, int offset, int length, bool reliable = false);
+    /// <param name="packet">The packet to send.</param>
+    new void Send(Packet.Packet packet);
 }

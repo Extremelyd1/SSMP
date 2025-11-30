@@ -30,12 +30,13 @@ internal class UdpEncryptedTransport : IEncryptedTransport {
     }
 
     /// <inheritdoc />
-    public void Send(byte[] buffer, int offset, int length, bool reliable = false) {
+    public void Send(Packet.Packet packet) {
         if (_dtlsClient.DtlsTransport == null) {
             throw new InvalidOperationException("Not connected");
         }
 
-        _dtlsClient.DtlsTransport.Send(buffer, offset, length);
+        var buffer = packet.ToArray();
+        _dtlsClient.DtlsTransport.Send(buffer, 0, buffer.Length);
     }
 
     /// <inheritdoc />

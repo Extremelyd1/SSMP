@@ -19,12 +19,10 @@ internal interface IEncryptedTransport : ITransportSender {
     void Connect(string address, int port);
     
     /// <summary>
-    /// Send data to the connected peer.
+    /// Send a packet to the connected peer.
     /// </summary>
-    /// <param name="buffer">Buffer containing the data to send.</param>
-    /// <param name="offset">Offset in the buffer to start sending from.</param>
-    /// <param name="length">Number of bytes to send.</param>
-    new void Send(byte[] buffer, int offset, int length, bool reliable = false);
+    /// <param name="packet">The packet to send.</param>
+    new void Send(Packet.Packet packet);
 
     /// <summary>
     /// Receive data from the connected peer.

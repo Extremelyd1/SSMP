@@ -15,14 +15,6 @@ namespace SSMP.Networking.Server;
 /// Specialization of <see cref="UdpUpdateManager{TOutgoing,TPacketId}"/> for server to client packet sending.
 /// </summary>
 internal class ServerUpdateManager : UdpUpdateManager<ClientUpdatePacket, ClientUpdatePacketId> {
-    /// <summary>
-    /// Constructs a new ServerUpdateManager.
-    /// </summary>
-    /// <param name="enableCongestionManagement">Whether to enable congestion management. 
-    /// Set to false for transports with built-in congestion handling (e.g., Steam P2P).</param>
-    public ServerUpdateManager(bool enableCongestionManagement = true) : base(enableCongestionManagement) {
-    }
-    
     /// <inheritdoc />
     public override void ResendReliableData(ClientUpdatePacket lostPacket) {
         lock (Lock) {

@@ -90,6 +90,9 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
         
         base.CreatePacket(packet);
         
+        // Set the reliability flag on the raw packet
+        packet.ContainsReliableData = ContainsReliableData;
+        
         // Put the length of the resend data as an ushort in the packet
         var resendLength = (ushort) ResendPacketData.Count;
         if (ResendPacketData.Count > ushort.MaxValue) {

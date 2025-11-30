@@ -21,15 +21,15 @@ internal class SteamEncryptedTransportClient : IEncryptedTransportClient {
     /// The client identifier for this Steam client.
     /// </summary>
     private readonly SteamClientIdentifier _clientIdentifier;
-    
+
     /// <summary>
     /// Cached Steam ID struct to avoid repeated allocations.
     /// </summary>
     private readonly CSteamID _steamIdStruct;
-    
+
     /// <inheritdoc />
     public IClientIdentifier ClientIdentifier => _clientIdentifier;
-    
+
     /// <summary>
     /// The Steam ID of the client.
     /// Provides direct access to the underlying Steam ID for Steam-specific operations.
@@ -49,7 +49,10 @@ internal class SteamEncryptedTransportClient : IEncryptedTransportClient {
     }
 
     /// <inheritdoc/>
-    public void Send(byte[] buffer, int offset, int length, bool reliable = false) {
+    public void Send(Packet.Packet packet) {
+        var buffer = packet.ToArray();
+        var length = buffer.Length;
+        
         if (!SteamManager.IsInitialized) {
             Logger.Warn($"Steam P2P: Cannot send to client {SteamId}, Steam not initialized");
             return;
@@ -57,44 +60,16 @@ internal class SteamEncryptedTransportClient : IEncryptedTransportClient {
 
         // Check for loopback
         if (_steamIdStruct == SteamUser.GetSteamID()) {
-            // For loopback with offset, we need to create a proper slice
-            if (offset > 0) {
-                var temp = ArrayPool<byte>.Shared.Rent(length);
-                try {
-                    Buffer.BlockCopy(buffer, offset, temp, 0, length);
-                    SteamLoopbackChannel.SendToClient(temp, length);
-                } finally {
-                    ArrayPool<byte>.Shared.Return(temp);
-                }
-            } else {
-                SteamLoopbackChannel.SendToClient(buffer, length);
-            }
+            SteamLoopbackChannel.SendToClient(buffer, length);
             return;
         }
 
-        byte[] dataToSend = buffer;
-        bool rentedArray = false;
-
-        // Copy data to send buffer if offset is used (avoid allocation when offset is 0)
-        if (offset > 0) {
-            dataToSend = ArrayPool<byte>.Shared.Rent(length);
-            rentedArray = true;
-            Buffer.BlockCopy(buffer, offset, dataToSend, 0, length);
-        }
-
-        try {
-            // Send packet to this specific client
-            var sendType = reliable ? EP2PSend.k_EP2PSendReliable : EP2PSend.k_EP2PSendUnreliableNoDelay;
-            if (!SteamNetworking.SendP2PPacket(_steamIdStruct, dataToSend, (uint)length, sendType, P2P_CHANNEL)) {
-                Logger.Warn($"Steam P2P: Failed to send packet to client {SteamId}");
-            }
-        } finally {
-            if (rentedArray) {
-                ArrayPool<byte>.Shared.Return(dataToSend);
-            }
+        var sendType = packet.ContainsReliableData ? EP2PSend.k_EP2PSendReliable : EP2PSend.k_EP2PSendUnreliableNoDelay;
+        if (!SteamNetworking.SendP2PPacket(_steamIdStruct, buffer, (uint) length, sendType, P2P_CHANNEL)) {
+            Logger.Warn($"Steam P2P: Failed to send packet to client {SteamId}");
         }
     }
-    
+
     /// <summary>
     /// Raises the <see cref="DataReceivedEvent"/> with the given data.
     /// Called by the server when it receives packets from this client.

@@ -27,11 +27,6 @@ internal class UdpEncryptedTransportClient : IEncryptedTransportClient {
     /// Provides direct access to the underlying endpoint for UDP-specific operations.
     /// </summary>
     public IPEndPoint EndPoint => _dtlsServerClient.EndPoint;
-    
-    /// <summary>
-    /// Internal access to the underlying DTLS server client for backward compatibility.
-    /// </summary>
-    internal DtlsServerClient DtlsServerClient => _dtlsServerClient;
 
     /// <inheritdoc />
     public event Action<byte[], int>? DataReceivedEvent;
@@ -42,8 +37,9 @@ internal class UdpEncryptedTransportClient : IEncryptedTransportClient {
     }
 
     /// <inheritdoc />
-    public void Send(byte[] buffer, int offset, int length, bool reliable = false) {
-        _dtlsServerClient.DtlsTransport.Send(buffer, offset, length);
+    public void Send(Packet.Packet packet) {
+        var buffer = packet.ToArray();
+        _dtlsServerClient.DtlsTransport.Send(buffer, 0, buffer.Length);
     }
 
     /// <summary>

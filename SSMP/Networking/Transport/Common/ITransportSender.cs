@@ -6,16 +6,8 @@ namespace SSMP.Networking.Transport.Common;
 /// </summary>
 internal interface ITransportSender {
     /// <summary>
-    /// Send data.
+    /// Send a packet.
     /// </summary>
-    /// <param name="buffer">Buffer containing the data to send.</param>
-    /// <param name="offset">Offset in the buffer to start sending from.</param>
-    /// <param name="length">Number of bytes to send.</param>
-    /// <param name="reliable">Whether the packet should be sent reliably (if supported by transport).</param>
-    /// <exception cref="System.ArgumentNullException">Thrown if <paramref name="buffer"/> is <c>null</c>.</exception>
-    /// <exception cref="System.ArgumentOutOfRangeException">
-    /// Thrown if <paramref name="offset"/> or <paramref name="length"/> is negative,
-    /// or if <paramref name="offset"/> + <paramref name="length"/> exceeds the length of <paramref name="buffer"/>.
-    /// </exception>
-    void Send(byte[] buffer, int offset, int length, bool reliable = false);
+    /// <param name="packet">The packet to send.</param>
+    void Send(Packet.Packet packet);
 }

@@ -88,10 +88,7 @@ internal class NetServerClient {
 
         Id = GetId();
         
-        // Disable congestion management for transports that have built-in congestion handling.
-        var enableCongestionManagement = transportClient.ClientIdentifier.NeedsCongestionManagement;
-        
-        UpdateManager = new ServerUpdateManager(enableCongestionManagement);
+        UpdateManager = new ServerUpdateManager();
         UpdateManager.TransportClient = transportClient;
         ChunkSender = new ServerChunkSender(UpdateManager);
         ChunkReceiver = new ServerChunkReceiver(UpdateManager);
