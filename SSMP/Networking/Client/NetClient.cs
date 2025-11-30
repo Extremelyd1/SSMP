@@ -12,6 +12,7 @@ using SSMP.Networking.Packet;
 using SSMP.Networking.Packet.Data;
 using SSMP.Networking.Packet.Update;
 using SSMP.Networking.Transport.Common;
+using SSMP.Networking.Transport.SteamP2P;
 using SSMP.Util;
 
 namespace SSMP.Networking.Client;
@@ -29,7 +30,7 @@ internal class NetClient : INetClient {
     /// <summary>
     /// The client update manager for this net client.
     /// </summary>
-    public ClientUpdateManager UpdateManager { get; }
+    public ClientUpdateManager UpdateManager { get; private set; }
 
     /// <summary>
     /// Event that is called when the client connects to a server.
@@ -67,7 +68,7 @@ internal class NetClient : INetClient {
     /// <summary>
     /// Chunk sender instance for sending large amounts of data.
     /// </summary>
-    private readonly ClientChunkSender _chunkSender;
+    private ClientChunkSender _chunkSender;
 
     /// <summary>
     /// Chunk receiver instance for receiving large amounts of data.
@@ -98,6 +99,7 @@ internal class NetClient : INetClient {
     public NetClient(PacketManager packetManager) {
         _packetManager = packetManager;
 
+        // Create initial update manager with default settings (will be recreated if needed in Connect)
         UpdateManager = new ClientUpdateManager();
 
         _chunkSender = new ClientChunkSender(UpdateManager);
@@ -138,6 +140,15 @@ internal class NetClient : INetClient {
         new Thread(() => {
             try {
                 _transport = transport;
+                
+                // Recreate UpdateManager with congestion management disabled for Steam P2P.
+                // Steam P2P has built-in congestion handling, so we skip application-level congestion management.
+                var enableCongestionManagement = _transport is not SteamEncryptedTransport;
+                UpdateManager = new ClientUpdateManager(enableCongestionManagement);
+                
+                // Recreate ChunkSender to use the new UpdateManager
+                _chunkSender = new ClientChunkSender(UpdateManager);
+                
                 _transport.DataReceivedEvent += OnReceiveData;
                 _transport.Connect(details.Address, details.Port);
 

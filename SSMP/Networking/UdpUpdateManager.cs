@@ -45,9 +45,15 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     private const int ReceiveQueueSize = AckSize;
 
     /// <summary>
-    /// The UDP congestion manager instance.
+    /// Whether congestion management is enabled for this update manager.
+    /// Set to false for transports with built-in congestion handling (e.g., Steam P2P).
     /// </summary>
-    private readonly UdpCongestionManager<TOutgoing, TPacketId> _udpCongestionManager;
+    private readonly bool _congestionManagementEnabled;
+    
+    /// <summary>
+    /// The UDP congestion manager instance. Null if congestion management is disabled.
+    /// </summary>
+    private readonly UdpCongestionManager<TOutgoing, TPacketId>? _udpCongestionManager;
 
     /// <summary>
     /// The last sent sequence number.
@@ -108,8 +114,11 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
 
     /// <summary>
     /// Moving average of round trip time (RTT) between sending and receiving a packet.
+    /// Returns 0 if congestion management is disabled.
     /// </summary>
-    public int AverageRtt => (int) System.Math.Round(_udpCongestionManager.AverageRtt);
+    public int AverageRtt => _udpCongestionManager != null 
+        ? (int) System.Math.Round(_udpCongestionManager.AverageRtt) 
+        : 0;
 
     /// <summary>
     /// Event that is called when the client times out.
@@ -119,8 +128,15 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     /// <summary>
     /// Construct the update manager with a UDP socket.
     /// </summary>
-    protected UdpUpdateManager() {
-        _udpCongestionManager = new UdpCongestionManager<TOutgoing, TPacketId>(this);
+    /// <param name="enableCongestionManagement">Whether to enable congestion management. 
+    /// Set to false for transports with built-in congestion handling (e.g., Steam P2P).</param>
+    protected UdpUpdateManager(bool enableCongestionManagement = true) {
+        _congestionManagementEnabled = enableCongestionManagement;
+        
+        // Only create congestion manager if enabled
+        if (_congestionManagementEnabled) {
+            _udpCongestionManager = new UdpCongestionManager<TOutgoing, TPacketId>(this);
+        }
 
         _receivedQueue = new ConcurrentFixedSizeQueue<ushort>(ReceiveQueueSize);
 
@@ -180,7 +196,8 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     public void OnReceivePacket<TIncoming, TOtherPacketId>(TIncoming packet)
         where TIncoming : UpdatePacket<TOtherPacketId>
         where TOtherPacketId : Enum {
-        _udpCongestionManager.OnReceivePackets<TIncoming, TOtherPacketId>(packet);
+        // Only track congestion if enabled
+        _udpCongestionManager?.OnReceivePackets<TIncoming, TOtherPacketId>(packet);
 
         // Get the sequence number from the packet and add it to the receive queue
         var sequence = packet.Sequence;
@@ -237,7 +254,8 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
             CurrentUpdatePacket = new TOutgoing();
         }
 
-        _udpCongestionManager.OnSendPacket(_localSequence, updatePacket);
+        // Only track packet if congestion management is enabled
+        _udpCongestionManager?.OnSendPacket(_localSequence, updatePacket);
 
         // Increase (and potentially wrap) the current local sequence number
         _localSequence++;
