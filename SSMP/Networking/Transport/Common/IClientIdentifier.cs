@@ -12,4 +12,10 @@ internal interface IClientIdentifier : IEquatable<IClientIdentifier> {
     /// Returns a human-readable string representation for logging and display.
     /// </summary>
     string ToDisplayString();
+
+    /// <summary>
+    /// Gets a key used for throttling connection attempts (e.g., IP address).
+    /// Returns null if application-level throttling should be skipped for this client.
+    /// </summary>
+    object? ThrottleKey { get; }
 }

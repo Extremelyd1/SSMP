@@ -26,6 +26,9 @@ internal class UdpClientIdentifier : IClientIdentifier {
     public string ToDisplayString() => EndPoint.ToString();
 
     /// <inheritdoc />
+    public object? ThrottleKey => EndPoint.Address;
+
+    /// <inheritdoc />
     public bool Equals(IClientIdentifier? other) {
         return other is UdpClientIdentifier udp && EndPoint.Equals(udp.EndPoint);
     }

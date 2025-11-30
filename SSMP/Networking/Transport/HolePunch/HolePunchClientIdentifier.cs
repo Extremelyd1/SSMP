@@ -27,6 +27,9 @@ internal class HolePunchClientIdentifier : IClientIdentifier {
     public string ToDisplayString() => $"HolePunch:{EndPoint}";
 
     /// <inheritdoc />
+    public object? ThrottleKey => EndPoint.Address;
+
+    /// <inheritdoc />
     public bool Equals(IClientIdentifier? other) {
         return other is HolePunchClientIdentifier holePunch && EndPoint.Equals(holePunch.EndPoint);
     }

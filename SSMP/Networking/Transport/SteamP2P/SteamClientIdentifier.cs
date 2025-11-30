@@ -29,6 +29,9 @@ internal class SteamClientIdentifier : IClientIdentifier {
     public string ToDisplayString() => $"Steam:{SteamId}";
 
     /// <inheritdoc />
+    public object? ThrottleKey => null;
+
+    /// <inheritdoc />
     public bool Equals(IClientIdentifier? other) {
         return other is SteamClientIdentifier steam && SteamId == steam.SteamId;
     }

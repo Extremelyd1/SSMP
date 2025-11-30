@@ -91,7 +91,6 @@ internal class NetServerClient {
         
         // Wrap the transport client in an adapter for the update manager
         UpdateManager.Transport = new EncryptedTransportClientAdapter(transportClient);
-        // Steam P2P will use Transport property instead when implemented
         ChunkSender = new ServerChunkSender(UpdateManager);
         ChunkReceiver = new ServerChunkReceiver(UpdateManager);
         ConnectionManager = new ServerConnectionManager(packetManager, ChunkSender, ChunkReceiver, Id);

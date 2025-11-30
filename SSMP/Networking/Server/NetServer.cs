@@ -46,11 +46,11 @@ internal class NetServer : INetServer {
     private readonly ConcurrentDictionary<ushort, NetServerClient> _clientsById;
 
     /// <summary>
-    /// Dictionary for the IP addresses of clients that have their connection throttled mapped to a stopwatch
+    /// Dictionary for the throttle keys of clients that have their connection throttled mapped to a stopwatch
     /// that keeps track of their last connection attempt. The client may use different local ports to establish
     /// connection so we only register the address and not the port as with established clients.
     /// </summary>
-    private readonly ConcurrentDictionary<IPAddress, Stopwatch> _throttledClients;
+    private readonly ConcurrentDictionary<object, Stopwatch> _throttledClients;
 
     /// <summary>
     /// Concurrent queue that contains received data from a client ready for processing.
@@ -102,7 +102,7 @@ internal class NetServer : INetServer {
 
         _clientsByIdentifier = new ConcurrentDictionary<IClientIdentifier, NetServerClient>();
         _clientsById = new ConcurrentDictionary<ushort, NetServerClient>();
-        _throttledClients = new ConcurrentDictionary<IPAddress, Stopwatch>();
+        _throttledClients = new ConcurrentDictionary<object, Stopwatch>();
 
         _receivedQueue = new ConcurrentQueue<ReceivedData>();
         
@@ -176,12 +176,12 @@ internal class NetServer : INetServer {
                 var clientId = transportClient.ClientIdentifier;
 
                 if (!_clientsByIdentifier.TryGetValue(clientId, out var client)) {
-                    // Extract IP for throttling (UDP transports only)
-                    if (clientId is UdpClientIdentifier udpId) {
-                        var clientAddress = udpId.EndPoint.Address;
-                        
+                    // Extract throttle key for throttling
+                    var throttleKey = clientId.ThrottleKey;
+
+                    if (throttleKey != null) {
                         // If the client is throttled, check their stopwatch for how long still
-                        if (_throttledClients.TryGetValue(clientAddress, out var clientStopwatch)) {
+                        if (_throttledClients.TryGetValue(throttleKey, out var clientStopwatch)) {
                             if (clientStopwatch.ElapsedMilliseconds < ThrottleTime) {
                                 // Reset stopwatch and ignore packets so the client times out
                                 clientStopwatch.Restart();
@@ -189,14 +189,11 @@ internal class NetServer : INetServer {
                             }
 
                             // Stopwatch exceeds max throttle time so we remove the client from the dict
-                            _throttledClients.TryRemove(clientAddress, out _);
+                            _throttledClients.TryRemove(throttleKey, out _);
                         }
-                        
-                        Logger.Info(
-                            $"Received packet from unknown client with address: {udpId.EndPoint}, creating new client");
-                    } else {
-                        Logger.Info($"Received packet from unknown client: {clientId.ToDisplayString()}, creating new client");
                     }
+
+                    Logger.Info($"Received packet from unknown client: {clientId.ToDisplayString()}, creating new client");
 
                     // We didn't find a client with the given identifier, so we assume it is a new client
                     // that wants to connect
@@ -245,7 +242,7 @@ internal class NetServer : INetServer {
         }
 
         client.Disconnect();
-        _transportServer?.DisconnectClient(client.TransportClient);
+        _transportServer.DisconnectClient(client.TransportClient);
         _clientsByIdentifier.TryRemove(client.ClientIdentifier, out _);
         _clientsById.TryRemove(id, out _);
 
@@ -275,8 +272,10 @@ internal class NetServer : INetServer {
 
                 // We throttle the client, because chances are that they are using an outdated version of the
                 // networking protocol, and keeping connection will potentially never time them out
-                var udpId = (UdpClientIdentifier)client.ClientIdentifier;
-                _throttledClients[udpId.EndPoint.Address] = Stopwatch.StartNew();
+                var throttleKey = client.ClientIdentifier.ThrottleKey;
+                if (throttleKey != null) {
+                    _throttledClients[throttleKey] = Stopwatch.StartNew();
+                }
 
                 continue;
             }
@@ -361,8 +360,10 @@ internal class NetServer : INetServer {
             // Wait for it to finish sending, then disconnect and throttle
             client.ConnectionManager.FinishConnection(() => { 
                 OnClientDisconnect(clientId);
-                var udpId = (UdpClientIdentifier)client.ClientIdentifier;
-                _throttledClients[udpId.EndPoint.Address] = Stopwatch.StartNew();
+                var throttleKey = client.ClientIdentifier.ThrottleKey;
+                if (throttleKey != null) {
+                    _throttledClients[throttleKey] = Stopwatch.StartNew();
+                }
             });
         }
     }
@@ -399,10 +400,9 @@ internal class NetServer : INetServer {
         _clientsById.Clear();
         _throttledClients.Clear();
         
-        if (_transportServer != null) {
-            _transportServer.Stop();
-            _transportServer.ClientConnectedEvent -= OnClientConnected;
-        }
+        _transportServer.Stop();
+        _transportServer.ClientConnectedEvent -= OnClientConnected;
+        
 
         _leftoverData = null;
 
@@ -424,7 +424,7 @@ internal class NetServer : INetServer {
         }
 
         client.Disconnect();
-        _transportServer?.DisconnectClient(client.TransportClient);
+        _transportServer.DisconnectClient(client.TransportClient);
         _clientsByIdentifier.TryRemove(client.ClientIdentifier, out _);
         _clientsById.TryRemove(id, out _);
 
