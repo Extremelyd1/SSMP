@@ -80,6 +80,11 @@ public static class SteamManager {
     private static string? _pendingLobbyUsername;
 
     /// <summary>
+    /// Lock object for thread-safe access to lobby state.
+    /// </summary>
+    private static readonly object _lobbyStateLock = new object();
+
+    /// <summary>
     /// Initializes the Steam API if available.
     /// Safe to call multiple times - subsequent calls are no-ops.
     /// </summary>
@@ -132,7 +137,9 @@ public static class SteamManager {
             LeaveLobby();
         }
 
-        _pendingLobbyUsername = username;
+        lock (_lobbyStateLock) {
+            _pendingLobbyUsername = username;
+        }
         Logger.Info($"Creating Steam lobby for {maxPlayers} players...");
 
         // Create lobby and register callback
@@ -177,13 +184,18 @@ public static class SteamManager {
     /// Leaves the current lobby if hosting one.
     /// </summary>
     public static void LeaveLobby() {
-        if (CurrentLobbyId == CSteamID.Nil || !IsInitialized) return;
-
-        Logger.Info($"Leaving Steam lobby: {CurrentLobbyId}");
-        SteamMatchmaking.LeaveLobby(CurrentLobbyId);
+        CSteamID lobbyToLeave;
         
-        IsHostingLobby = false;
-        CurrentLobbyId = CSteamID.Nil;
+        lock (_lobbyStateLock) {
+            if (CurrentLobbyId == CSteamID.Nil || !IsInitialized) return;
+            
+            lobbyToLeave = CurrentLobbyId;
+            IsHostingLobby = false;
+            CurrentLobbyId = CSteamID.Nil;
+        }
+
+        Logger.Info($"Leaving Steam lobby: {lobbyToLeave}");
+        SteamMatchmaking.LeaveLobby(lobbyToLeave);
     }
 
     /// <summary>
@@ -236,8 +248,10 @@ public static class SteamManager {
             return;
         }
 
-        CurrentLobbyId = new CSteamID(callback.m_ulSteamIDLobby);
-        IsHostingLobby = true;
+        lock (_lobbyStateLock) {
+            CurrentLobbyId = new CSteamID(callback.m_ulSteamIDLobby);
+            IsHostingLobby = true;
+        }
 
         Logger.Info($"Steam lobby created successfully: {CurrentLobbyId}");
 
@@ -249,7 +263,10 @@ public static class SteamManager {
 
         // Fire event for listeners
         LobbyCreatedEvent?.Invoke(CurrentLobbyId, _pendingLobbyUsername ?? "Unknown");
-        _pendingLobbyUsername = null;
+        
+        lock (_lobbyStateLock) {
+            _pendingLobbyUsername = null;
+        }
     }
 
     /// <summary>
@@ -285,8 +302,10 @@ public static class SteamManager {
             return;
         }
 
-        CurrentLobbyId = new CSteamID(callback.m_ulSteamIDLobby);
-        IsHostingLobby = false; // We are a client
+        lock (_lobbyStateLock) {
+            CurrentLobbyId = new CSteamID(callback.m_ulSteamIDLobby);
+            IsHostingLobby = false; // We are a client
+        }
         
         Logger.Info($"Joined lobby successfully: {CurrentLobbyId}");
         LobbyJoinedEvent?.Invoke(CurrentLobbyId);

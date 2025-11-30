@@ -709,7 +709,10 @@ internal class ConnectInterface {
         
         var hostId = SteamManager.GetLobbyOwner(lobbyId);
         
-        if (!ConnectInterfaceHelpers.ValidateUsername(_usernameInput, _feedbackText, out var username, _feedbackHideCoroutine, out _feedbackHideCoroutine)) return;
+        if (!ConnectInterfaceHelpers.ValidateUsername(_usernameInput, _feedbackText, out var username, _feedbackHideCoroutine, out var newCoroutine)) {
+            _feedbackHideCoroutine = newCoroutine;
+            return;
+        }
 
         // Connect using Steam ID as address
         ConnectButtonPressed?.Invoke(new ConnectionDetails(hostId.ToString(), 0, username, TransportType.Steam));
@@ -731,7 +734,10 @@ internal class ConnectInterface {
             return;
         }
         
-        if (!ConnectInterfaceHelpers.ValidateUsername(_usernameInput, _feedbackText, out var username, _feedbackHideCoroutine, out _feedbackHideCoroutine)) return;
+        if (!ConnectInterfaceHelpers.ValidateUsername(_usernameInput, _feedbackText, out var username, _feedbackHideCoroutine, out var newCoroutine)) {
+            _feedbackHideCoroutine = newCoroutine;
+            return;
+        }
         
         // Save settings
         _modSettings.ConnectAddress = address;
@@ -755,7 +761,10 @@ internal class ConnectInterface {
             _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.red, ErrorEnterValidPortHost, _feedbackHideCoroutine);
             return;
         }
-        if (!ConnectInterfaceHelpers.ValidateUsername(_usernameInput, _feedbackText, out var username, _feedbackHideCoroutine, out _feedbackHideCoroutine)) return;
+        if (!ConnectInterfaceHelpers.ValidateUsername(_usernameInput, _feedbackText, out var username, _feedbackHideCoroutine, out var newCoroutine)) {
+            _feedbackHideCoroutine = newCoroutine;
+            return;
+        }
         StartHostButtonPressed?.Invoke(new ConnectionDetails("", port, username, TransportType.Udp));
     }
 

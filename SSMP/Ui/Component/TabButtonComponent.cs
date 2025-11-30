@@ -80,9 +80,6 @@ internal class TabButtonComponent : Component, IButtonComponent {
         _image.type = Image.Type.Simple;
         _image.color = new Color(0.05f, 0.05f, 0.05f, 1f); // Darker when inactive
 
-        // Add RectMask2D to contain all child elements within button bounds
-        var rectMask = GameObject.AddComponent<RectMask2D>();
-
         // Create gradient shine overlay at the top - CONTAINED within button
         var shineObject = new GameObject("ShineOverlay");
         var shineRect = shineObject.AddComponent<RectTransform>();
@@ -220,11 +217,7 @@ internal class TabButtonComponent : Component, IButtonComponent {
     public void SetInteractable(bool interactable) {
         _interactable = interactable;
         var color = _text.color;
-        if (interactable) {
-            color.a = 1f;
-        } else {
-            color.a = NotInteractableOpacity;
-        }
+        color.a = interactable ? 1f : NotInteractableOpacity;
         _text.color = color;
     }
 }

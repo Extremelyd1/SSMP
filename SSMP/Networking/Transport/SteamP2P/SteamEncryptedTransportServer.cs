@@ -24,6 +24,12 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
     /// </summary>
     private const int MAX_PACKET_SIZE = 1200;
 
+    /// <summary>
+    /// Polling interval in milliseconds for Steam P2P packet receive loop.
+    /// 17.2ms achieves ~58Hz polling rate to balance responsiveness and CPU usage.
+    /// </summary>
+    private const double POLL_INTERVAL_MS = 17.2;
+
     /// <inheritdoc />
     public event Action<IEncryptedTransportClient>? ClientConnectedEvent;
 
@@ -172,8 +178,8 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
                 ProcessIncomingPackets();
                 
                 // Steam API does not provide a blocking receive or callback for P2P packets,
-                // so we must poll. Sleep(17.2ms) limits rate to ~58Hz to reduce CPU usage.
-                Thread.Sleep(TimeSpan.FromMilliseconds(17.2));
+                // so we must poll. Sleep interval is tuned to achieve ~58Hz polling rate.
+                Thread.Sleep(TimeSpan.FromMilliseconds(POLL_INTERVAL_MS));
             } catch (Exception e) {
                 Logger.Error($"Steam P2P: Error in server receive loop: {e}");
             }

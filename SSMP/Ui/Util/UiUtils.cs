@@ -104,14 +104,11 @@ public static class UiUtils {
                 }
                 
                 // Determine if border or fill
-                bool isBorder = false;
-                if (inCorner) {
-                    isBorder = distSq > borderThresholdSq;
-                } else {
-                    isBorder = x < borderWidth || x >= width - borderWidth || 
-                               y < borderWidth || y >= height - borderWidth;
-                }
-                
+                bool isBorder;
+                isBorder = inCorner
+                    ? distSq > borderThresholdSq
+                    : x < borderWidth || x >= width - borderWidth ||
+                      y < borderWidth || y >= height - borderWidth;
                 pixels[index] = isBorder ? Color.black : fillColor;
             }
         }
