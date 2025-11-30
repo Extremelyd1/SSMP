@@ -506,12 +506,12 @@ internal class ClientManager : IClientManager {
             _ => throw new ArgumentOutOfRangeException(nameof(details.TransportType), details.TransportType, "Unsupported transport type")
         };
 
+        // Populate auth key
+        details.AuthKey = _modSettings.AuthKey!;
+
         // Connect the network client
         _netClient.Connect(
-            details.Address,
-            details.Port,
-            details.Username,
-            _modSettings.AuthKey!,
+            details,
             _addonManager.GetNetworkedAddonData(),
             transport
         );

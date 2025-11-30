@@ -110,16 +110,11 @@ internal class NetClient : INetClient {
     /// <summary>
     /// Starts establishing a connection with the given host on the given port.
     /// </summary>
-    /// <param name="address">The address of the host to connect to.</param>
-    /// <param name="port">The port of the host to connect to.</param>
-    /// <param name="username">The username of the client.</param>
-    /// <param name="authKey">The auth key of the client.</param>
+    /// <param name="details">The connection details.</param>
     /// <param name="addonData">A list of addon data that the client has.</param>
+    /// <param name="transport">The transport to use.</param>
     public void Connect(
-        string address,
-        int port,
-        string username,
-        string authKey,
+        ConnectionDetails details,
         List<AddonData> addonData,
         IEncryptedTransport transport
     ) {
@@ -144,14 +139,14 @@ internal class NetClient : INetClient {
             try {
                 _transport = transport;
                 _transport.DataReceivedEvent += OnReceiveData;
-                _transport.Connect(address, port);
+                _transport.Connect(details.Address, details.Port);
 
                 UpdateManager.Transport = _transport;
                 UpdateManager.TimeoutEvent += OnConnectTimedOut;
                 UpdateManager.StartUpdates();
 
                 _chunkSender.Start();
-                _connectionManager.StartConnection(username, authKey, addonData);
+                _connectionManager.StartConnection(details.Username, details.AuthKey!, addonData);
                 
             } catch (TlsTimeoutException) {
                 Logger.Info("DTLS connection timed out");

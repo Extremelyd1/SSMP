@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using SSMP.Networking.Transport.Common;
 
 namespace SSMP.Networking;
@@ -26,10 +27,21 @@ public struct ConnectionDetails {
     /// </summary>
     public TransportType TransportType;
 
+    /// <summary>
+    /// The authentication key to use for the connection.
+    /// </summary>
+    public string? AuthKey;
+
+    /// <summary>
+    /// Additional properties for the connection (e.g. Lobby ID).
+    /// </summary>
+    public Dictionary<string, object> Properties = new();
+
     public ConnectionDetails(string address, int port, string username, TransportType transportType) {
         Address = address;
         Port = port;
         Username = username;
         TransportType = transportType;
+        AuthKey = null;
     }
 }
