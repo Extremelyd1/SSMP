@@ -121,7 +121,6 @@ internal class NetClient : INetClient {
         IEncryptedTransport transport
     ) {
         // Prevent multiple simultaneous connection attempts
-        // Prevent multiple simultaneous connection attempts
         lock (_connectionLock) {
             if (ConnectionStatus == ClientConnectionStatus.Connecting) {
                 Logger.Warn("Connection attempt already in progress, ignoring duplicate request");
@@ -158,7 +157,10 @@ internal class NetClient : INetClient {
                 UpdateManager.StartUpdates();
 
                 _chunkSender.Start();
-                _connectionManager.StartConnection(details.Username, details.AuthKey!, addonData);
+                if (details.AuthKey == null) {
+                    throw new ArgumentNullException(nameof(details.AuthKey), "AuthKey must not be null when starting a connection.");
+                }
+                _connectionManager.StartConnection(details.Username, details.AuthKey, addonData);
                 
             } catch (TlsTimeoutException) {
                 Logger.Info("DTLS connection timed out");

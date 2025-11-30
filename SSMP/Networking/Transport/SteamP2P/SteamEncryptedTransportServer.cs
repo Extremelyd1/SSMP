@@ -175,9 +175,7 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
     /// Processes incoming P2P packets for all connected clients.
     /// Should be called regularly (e.g., in Update loop).
     /// </summary>
-    /// <summary>
-    /// Processes incoming P2P packets for all connected clients.
-    /// </summary>
+
     private void ReceiveLoop() {
         var token = _receiveTokenSource;
         while (_isRunning && token != null && !token.IsCancellationRequested) {
