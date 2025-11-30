@@ -37,7 +37,7 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
     protected readonly Dictionary<ushort, Dictionary<byte, AddonPacketData>> ResendAddonPacketData;
     
     protected UpdatePacket() {
-        AckField = new bool[UdpUpdateManager.AckSize];
+        AckField = new bool[NetworkUpdateManager.AckSize];
         
         ResendPacketData = new Dictionary<ushort, Dictionary<TPacketId, IPacketData>>();
         ResendAddonPacketData = new Dictionary<ushort, Dictionary<byte, AddonPacketData>>();
@@ -53,7 +53,7 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
 
         ulong ackFieldInt = 0;
         ulong currentFieldValue = 1;
-        for (var i = 0; i < UdpUpdateManager.AckSize; i++) {
+        for (var i = 0; i < NetworkUpdateManager.AckSize; i++) {
             if (AckField[i]) {
                 ackFieldInt |= currentFieldValue;
             }
@@ -73,11 +73,11 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
         Ack = packet.ReadUShort();
 
         // Initialize the AckField array
-        AckField = new bool[UdpUpdateManager.AckSize];
+        AckField = new bool[NetworkUpdateManager.AckSize];
 
         var ackFieldInt = packet.ReadULong();
         ulong currentFieldValue = 1;
-        for (var i = 0; i < UdpUpdateManager.AckSize; i++) {
+        for (var i = 0; i < NetworkUpdateManager.AckSize; i++) {
             AckField[i] = (ackFieldInt & currentFieldValue) != 0;
 
             currentFieldValue *= 2;
