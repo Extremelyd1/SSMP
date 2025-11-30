@@ -1,5 +1,6 @@
 ﻿using System;
 using SSMP.Ui.Resources;
+using SSMP.Ui.Util;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -129,7 +130,7 @@ internal class ButtonComponent : Component, IButtonComponent {
         _shineOverlay = shineObject.AddComponent<Image>();
         
         // Create horizontal gradient texture (bright center, fade to edges)
-        var gradientTexture = CreateHorizontalGradientTexture(256, 1);
+        var gradientTexture = UiUtils.CreateHorizontalGradientTexture(256, 1);
         var gradientSprite = Sprite.Create(
             gradientTexture,
             new Rect(0, 0, 256, 1),
@@ -272,33 +273,5 @@ internal class ButtonComponent : Component, IButtonComponent {
             _isHover = false;
             _isMouseDown = false;
         }
-    }
-
-    /// <summary>
-    /// Create a horizontal gradient texture (bright center, fade to edges).
-    /// </summary>
-    /// <param name="width">Width of the texture.</param>
-    /// <param name="height">Height of the texture.</param>
-    /// <returns>The gradient texture.</returns>
-    private static Texture2D CreateHorizontalGradientTexture(int width, int height) {
-        var texture = new Texture2D(width, height);
-        var pixels = new Color[width * height];
-        
-        for (int x = 0; x < width; x++) {
-            // Calculate alpha based on distance from center
-            float distFromCenter = Mathf.Abs((x / (float)width) - 0.5f) * 2f; // 0 at center, 1 at edges
-            float alpha = 1f - distFromCenter; // 1 at center, 0 at edges
-            alpha = Mathf.Pow(alpha, 2f); // Sharper falloff
-            
-            Color pixelColor = new Color(1f, 1f, 1f, alpha);
-            
-            for (int y = 0; y < height; y++) {
-                pixels[y * width + x] = pixelColor;
-            }
-        }
-        
-        texture.SetPixels(pixels);
-        texture.Apply();
-        return texture;
     }
 }

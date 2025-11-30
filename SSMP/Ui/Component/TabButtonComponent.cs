@@ -1,5 +1,6 @@
 using System;
 using SSMP.Ui.Resources;
+using SSMP.Ui.Util;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -94,7 +95,7 @@ internal class TabButtonComponent : Component, IButtonComponent {
         
         _shineOverlay = shineObject.AddComponent<Image>();
         
-        var gradientTexture = CreateHorizontalGradientTexture(256, 1);
+        var gradientTexture = UiUtils.CreateHorizontalGradientTexture(256, 1);
         var gradientSprite = Sprite.Create(
             gradientTexture,
             new Rect(0, 0, 256, 1),
@@ -225,32 +226,5 @@ internal class TabButtonComponent : Component, IButtonComponent {
             color.a = NotInteractableOpacity;
         }
         _text.color = color;
-    }
-
-    /// <summary>
-    /// Creates a horizontal gradient texture.
-    /// </summary>
-    /// <param name="width">The width of the texture.</param>
-    /// <param name="height">The height of the texture.</param>
-    /// <returns>The generated gradient texture.</returns>
-    private static Texture2D CreateHorizontalGradientTexture(int width, int height) {
-        var texture = new Texture2D(width, height);
-        var pixels = new Color[width * height];
-        
-        for (int x = 0; x < width; x++) {
-            float distFromCenter = Mathf.Abs((x / (float)width) - 0.5f) * 2f;
-            float alpha = 1f - distFromCenter;
-            alpha = Mathf.Pow(alpha, 2f);
-            
-            Color pixelColor = new Color(1f, 1f, 1f, alpha);
-            
-            for (int y = 0; y < height; y++) {
-                pixels[y * width + x] = pixelColor;
-            }
-        }
-        
-        texture.SetPixels(pixels);
-        texture.Apply();
-        return texture;
     }
 }
