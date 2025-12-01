@@ -112,4 +112,20 @@ internal class ComponentGroup {
     public bool IsActive() {
         return _activeSelf && IsHierarchyActive();
     }
+
+    /// <summary>
+    /// Reparents all components in this group (and children groups) to a new GameObject.
+    /// </summary>
+    /// <param name="newParent">The new parent GameObject.</param>
+    public void ReparentComponents(UnityEngine.GameObject newParent) {
+        foreach (var component in _components) {
+            if (component is SSMP.Ui.Component.Component baseComponent && baseComponent.GameObject != null) {
+                baseComponent.GameObject.transform.SetParent(newParent.transform, true);
+            }
+        }
+
+        foreach (var child in _children) {
+            child.ReparentComponents(newParent);
+        }
+    }
 }

@@ -280,12 +280,12 @@ internal class ClientManager : IClientManager {
         serverManager.AuthorizeKey(_modSettings.AuthKey!);
 
         // Register handlers for events from UI
-        _uiManager.RequestClientConnectEvent += (address, port, username, autoConnect) => {
+        _uiManager.RequestClientConnectEvent += (address, port, username, _ ,autoConnect) => {
             _autoConnect = autoConnect;
             Connect(address, port, username);
         };
         _uiManager.RequestClientDisconnectEvent += Disconnect;
-        _uiManager.RequestServerStartHostEvent += _ => {
+        _uiManager.RequestServerStartHostEvent += (_,_,_,_) => {
             _saveManager.IsHostingServer = true;
         };
         _uiManager.RequestServerStopHostEvent += () => {
