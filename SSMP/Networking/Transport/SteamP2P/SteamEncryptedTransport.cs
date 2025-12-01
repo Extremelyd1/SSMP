@@ -164,6 +164,7 @@ internal class SteamEncryptedTransport : IReliableTransport {
     /// Used by the internal receive loop.
     /// </summary>
     private int ReceiveAndFireEvent() {
+        // Exit early if Steam shuts down (e.g., during forceful game closure)
         if (!_isConnected || !SteamManager.IsInitialized) return 0;
 
         if (!SteamNetworking.IsP2PPacketAvailable(out uint packetSize, P2P_CHANNEL)) return 0;
@@ -223,11 +224,21 @@ internal class SteamEncryptedTransport : IReliableTransport {
 
         while (_isConnected && !token.IsCancellationRequested) {
             try {
+                // Exit cleanly if Steam shuts down (e.g., during forceful game closure)
+                if (!SteamManager.IsInitialized) {
+                    Logger.Info("Steam P2P: Steam shut down, exiting receive loop");
+                    break;
+                }
+                
                 Receive(null, 0, 0, 0);
                 
                 // Steam API does not provide a blocking receive or callback for P2P packets,
                 // so we must poll. Sleep interval is tuned to achieve ~58Hz polling rate.
                 Thread.Sleep(TimeSpan.FromMilliseconds(POLL_INTERVAL_MS));
+            } catch (InvalidOperationException ex) when (ex.Message.Contains("Steamworks is not initialized")) {
+                // Steam shut down during operation - exit gracefully
+                Logger.Info("Steam P2P: Steamworks shut down during receive, exiting loop");
+                break;
             } catch (Exception e) {
                 Logger.Error($"Steam P2P: Error in receive loop: {e}");
             }

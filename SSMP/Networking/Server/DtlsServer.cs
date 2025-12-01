@@ -203,6 +203,10 @@ internal class DtlsServer {
                 break;
             } catch (ObjectDisposedException) {
                 break;
+            } catch (ThreadAbortException) {
+                // Thread is being forcefully terminated during shutdown - exit gracefully
+                Logger.Info("SocketReceiveLoop: Thread aborted during shutdown");
+                break;
             } catch (Exception e) {
                 Logger.Error($"Unexpected exception in SocketReceiveLoop:\n{e}");
                 continue;

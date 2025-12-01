@@ -137,8 +137,6 @@ internal abstract class UpdateManager<TOutgoing, TPacketId> : UpdateManager
     /// <summary>
     /// Construct the update manager with a UDP socket.
     /// </summary>
-    /// <param name="enableCongestionManagement">Whether to enable congestion management. 
-    /// Set to false for transports with built-in congestion handling (e.g., Steam P2P).</param>
     protected UpdateManager() {
         _udpCongestionManager = new CongestionManager<TOutgoing, TPacketId>(this);
         _receivedQueue = new ConcurrentFixedSizeQueue<ushort>(ReceiveQueueSize);
@@ -201,15 +199,13 @@ internal abstract class UpdateManager<TOutgoing, TPacketId> : UpdateManager
         _heartBeatTimer.Stop();
         _heartBeatTimer.Start();
 
-        // Steam transports bypass UDP-specific logic (congestion, sequence, heartbeat)
-        // Steam has built-in reliability and connection tracking
-        var transport = _transportSender as IEncryptedTransport;
-        if (transport != null && !transport.RequiresCongestionManagement) {
-            // Steam: skip UDP-specific receive logic
+        // Steam transports have built-in reliability and connection tracking,
+        // so they bypass UDP-specific sequence/ACK/congestion logic
+        if (IsSteamTransport()) {
             return;
         }
-        
-        // UDP/HolePunch only: congestion management, sequence tracking, heartbeat
+
+        // UDP/HolePunch path: Handle congestion, sequence tracking, and deduplication
         _udpCongestionManager?.OnReceivePackets<TIncoming, TOtherPacketId>(packet);
 
         var sequence = packet.Sequence;
@@ -223,42 +219,27 @@ internal abstract class UpdateManager<TOutgoing, TPacketId> : UpdateManager
     }
 
     /// <summary>
-    /// Create and send the current update packet.
+    /// Creates an update packet with current data and sends it through the transport.
+    /// For UDP/HolePunch: handles sequence numbers, ACK fields, and congestion management.
+    /// For Steam: bypasses reliability features and sends packet directly.
+    /// Automatically fragments packets that exceed MTU size.
     /// </summary>
     private void CreateAndSendUpdatePacket() {
-        var sender = _transportSender;
-        if (sender == null) {
-            Logger.Warn("UdpUpdateManager: Cannot send update, transport sender is null");
-            return;
-        }
-
-        // Check if this is a Steam transport
-        var transport = sender as IEncryptedTransport;
-        var isSteamTransport = transport != null && !transport.RequiresCongestionManagement;
-
         var packet = new Packet.Packet();
         TOutgoing updatePacket;
 
         lock (Lock) {
-            if (!isSteamTransport) {
-                // UDP/HolePunch only: Set sequence numbers and ACK fields
+            // UDP/HolePunch path: Configure sequence and ACK data
+            if (!IsSteamTransport()) {
                 CurrentUpdatePacket.Sequence = _localSequence;
                 CurrentUpdatePacket.Ack = _remoteSequence;
-
-                var receivedQueue = _receivedQueue.GetCopy();
-
-                for (ushort i = 0; i < AckSize; i++) {
-                    var pastSequence = (ushort) (_remoteSequence - i - 1);
-
-                    CurrentUpdatePacket.AckField[i] = receivedQueue.Contains(pastSequence);
-                }
+                PopulateAckField();
             }
-            // Steam: Skip sequence/ACK setup, just create packet with current data
 
             try {
                 CurrentUpdatePacket.CreatePacket(packet);
             } catch (Exception e) {
-                Logger.Error($"An error occurred while trying to create packet:\n{e}");
+                Logger.Error($"Failed to create packet: {e}");
                 return;
             }
 
@@ -266,31 +247,69 @@ internal abstract class UpdateManager<TOutgoing, TPacketId> : UpdateManager
             CurrentUpdatePacket = new TOutgoing();
         }
 
-        if (!isSteamTransport) {
-            // UDP/HolePunch only: congestion management
+        // UDP/HolePunch path: Track for congestion management and increment sequence
+        if (!IsSteamTransport()) {
             _udpCongestionManager?.OnSendPacket(_localSequence, updatePacket);
             _localSequence++;
         }
-        // Steam: Skip congestion tracking and sequence increment
 
-        if (packet.Length > PacketMtu) {
-            var byteArray= packet.ToArray();
-            
-            var index = 0;
-            while (index < byteArray.Length) {
-                var length = System.Math.Min(byteArray.Length - index, PacketMtu);
-                var newBytes = new byte[length];
-                Array.Copy(byteArray, index, newBytes, 0, length);
+        SendPacketWithFragmentation(packet);
+    }
 
-                SendPacket(new Packet.Packet(newBytes) { ContainsReliableData = updatePacket.ContainsReliableData }, sender);
+    /// <summary>
+    /// Populates the ACK field with acknowledgment bits for recently received packets.
+    /// Each bit indicates whether a packet with that sequence number was received.
+    /// Only used for UDP/HolePunch transports.
+    /// </summary>
+    private void PopulateAckField() {
+        var receivedQueue = _receivedQueue.GetCopy();
 
-                index += length;
-            }
+        for (ushort i = 0; i < AckSize; i++) {
+            var pastSequence = (ushort) (_remoteSequence - i - 1);
+            CurrentUpdatePacket.AckField[i] = receivedQueue.Contains(pastSequence);
+        }
+    }
 
+    /// <summary>
+    /// Sends a packet, fragmenting it into smaller chunks if it exceeds the MTU size.
+    /// Fragments are sent sequentially to ensure they can be reassembled by the receiver.
+    /// </summary>
+    /// <param name="packet">The packet to send, which may be fragmented if too large.</param>
+    private void SendPacketWithFragmentation(Packet.Packet packet) {
+        if (packet.Length <= PacketMtu) {
+            SendPacket(packet);
             return;
         }
-        
-        SendPacket(packet, sender);
+
+        var byteArray = packet.ToArray();
+        var index = 0;
+
+        while (index < byteArray.Length) {
+            var length = System.Math.Min(byteArray.Length - index, PacketMtu);
+            var fragment = new byte[length];
+            Array.Copy(byteArray, index, fragment, 0, length);
+
+            SendPacket(new Packet.Packet(fragment));
+            index += length;
+        }
+    }
+
+    /// <summary>
+    /// Determines if the current transport is Steam, which has built-in reliability
+    /// and does not require manual congestion management or sequence tracking.
+    /// </summary>
+    /// <returns>True if using Steam transport, false for UDP/HolePunch.</returns>
+    protected bool IsSteamTransport() {
+        if (_transportSender is IEncryptedTransport transport) {
+            return !transport.RequiresCongestionManagement;
+        }
+
+        if (_transportSender is IEncryptedTransportClient transportClient) {
+            // Steam clients have null EndPoint as they don't use IP/Port addressing
+            return transportClient.EndPoint == null;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -337,26 +356,23 @@ internal abstract class UpdateManager<TOutgoing, TPacketId> : UpdateManager
     /// Sends the given packet over the corresponding medium.
     /// </summary>
     /// <param name="packet">The raw packet instance.</param>
-    /// <param name="sender">The transport sender to use.</param>
-    private void SendPacket(Packet.Packet packet, object sender)
-    {
+    private void SendPacket(Packet.Packet packet) {
         var buffer = packet.ToArray();
         var isReliable = packet.ContainsReliableData;
 
-        switch (sender)
-        {
+        switch (_transportSender) {
             case IReliableTransport reliableTransport when isReliable:
                 reliableTransport.SendReliable(buffer, 0, buffer.Length);
                 break;
-                
+
             case IEncryptedTransport transport:
                 transport.Send(buffer, 0, buffer.Length);
                 break;
-                
+
             case IReliableTransportClient reliableTransportClient when isReliable:
                 reliableTransportClient.SendReliable(buffer, 0, buffer.Length);
                 break;
-                
+
             case IEncryptedTransportClient transportClient:
                 transportClient.Send(buffer, 0, buffer.Length);
                 break;

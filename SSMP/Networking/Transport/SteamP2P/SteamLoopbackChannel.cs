@@ -55,6 +55,8 @@ internal static class SteamLoopbackChannel {
         try {
             Buffer.BlockCopy(data, offset, copy, 0, length);
             srv.ReceiveLoopbackPacket(copy, length);
+        } catch (InvalidOperationException ex) when (ex.Message.Contains("Steamworks is not initialized")) {
+            // Steam shut down - ignore silently
         } catch (Exception e) {
             Logger.Error($"Steam Loopback: Error sending to server: {e}");
         }
@@ -75,6 +77,8 @@ internal static class SteamLoopbackChannel {
         try {
             Buffer.BlockCopy(data, offset, copy, 0, length);
             client.ReceiveLoopbackPacket(copy, length);
+        } catch (InvalidOperationException ex) when (ex.Message.Contains("Steamworks is not initialized")) {
+            // Steam shut down - ignore silently
         } catch (Exception e) {
             Logger.Error($"Steam Loopback: Error sending to client: {e}");
         }

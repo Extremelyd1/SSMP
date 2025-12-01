@@ -136,8 +136,8 @@ internal class NetClient : INetClient {
             ConnectionStatus = ClientConnectionStatus.Connecting;
         }
 
-        // Start a new task for establishing the connection, otherwise Unity will hang
-        Task.Run(() => {
+        // Start a new thread for establishing the connection, otherwise Unity will hang
+        new Thread(() => {
             try {
                 _transport = transport;
                 UpdateManager = new ClientUpdateManager();
@@ -147,8 +147,7 @@ internal class NetClient : INetClient {
                 
                 _transport.DataReceivedEvent += OnReceiveData;
                 _transport.Connect(details.Address, details.Port);
-
-                // All transports use UpdateManager for periodic sending and sequence tracking
+                
                 UpdateManager.Transport = _transport;
                 UpdateManager.StartUpdates();
                 _chunkSender.Start();
@@ -175,7 +174,7 @@ internal class NetClient : INetClient {
                 Logger.Error($"Unexpected error during connection:\n{e}");
                 HandleConnectFailed(new ConnectionFailedResult { Reason = ConnectionFailedReason.IOException });
             }
-        });
+        }) { IsBackground = true }.Start();
     }
 
     /// <summary>

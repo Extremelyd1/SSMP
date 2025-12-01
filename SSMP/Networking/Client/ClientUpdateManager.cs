@@ -15,6 +15,11 @@ namespace SSMP.Networking.Client;
 internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpdatePacketId> {
     /// <inheritdoc />
     public override void ResendReliableData(ServerUpdatePacket lostPacket) {
+        // Steam has built-in reliability, no need to resend
+        if (IsSteamTransport()) {
+            return;
+        }
+
         lock (Lock) {
             CurrentUpdatePacket.SetLostReliableData(lostPacket);
         }
