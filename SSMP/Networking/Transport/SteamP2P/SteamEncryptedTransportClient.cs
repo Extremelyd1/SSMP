@@ -1,5 +1,5 @@
 using System;
-using System.Buffers;
+using System.Net;
 using SSMP.Game;
 using SSMP.Logging;
 using SSMP.Networking.Transport.Common;
@@ -11,16 +11,16 @@ namespace SSMP.Networking.Transport.SteamP2P;
 /// Steam P2P implementation of <see cref="IEncryptedTransportClient"/>.
 /// Represents a connected client from the server's perspective.
 /// </summary>
-internal class SteamEncryptedTransportClient : IEncryptedTransportClient {
+internal class SteamEncryptedTransportClient : IReliableTransportClient {
     /// <summary>
     /// P2P channel for communication.
     /// </summary>
     private const int P2P_CHANNEL = 0;
 
     /// <summary>
-    /// The client identifier for this Steam client.
+    /// The Steam ID of the client.
     /// </summary>
-    private readonly SteamClientIdentifier _clientIdentifier;
+    private readonly ulong _steamId;
 
     /// <summary>
     /// Cached Steam ID struct to avoid repeated allocations.
@@ -28,13 +28,19 @@ internal class SteamEncryptedTransportClient : IEncryptedTransportClient {
     private readonly CSteamID _steamIdStruct;
 
     /// <inheritdoc />
-    public IClientIdentifier ClientIdentifier => _clientIdentifier;
+    public string ToDisplayString() => "SteamP2P";
+    
+    /// <inheritdoc />
+    public string GetUniqueIdentifier() => _steamId.ToString();
+    
+    /// <inheritdoc />
+    public IPEndPoint? EndPoint => null; // Steam doesn't need throttling
 
     /// <summary>
     /// The Steam ID of the client.
     /// Provides direct access to the underlying Steam ID for Steam-specific operations.
     /// </summary>
-    public ulong SteamId => _clientIdentifier.SteamId;
+    public ulong SteamId => _steamId;
 
     /// <inheritdoc />
     public event Action<byte[], int>? DataReceivedEvent;
@@ -44,15 +50,24 @@ internal class SteamEncryptedTransportClient : IEncryptedTransportClient {
     /// </summary>
     /// <param name="steamId">The Steam ID of the client.</param>
     public SteamEncryptedTransportClient(ulong steamId) {
-        _clientIdentifier = new SteamClientIdentifier(steamId);
+        _steamId = steamId;
         _steamIdStruct = new CSteamID(steamId);
     }
 
     /// <inheritdoc/>
-    public void Send(Packet.Packet packet) {
-        var buffer = packet.ToArray();
-        var length = buffer.Length;
-        
+    public void Send(byte[] buffer, int offset, int length) {
+        SendInternal(buffer, offset, length, EP2PSend.k_EP2PSendUnreliableNoDelay);
+    }
+
+    /// <inheritdoc/>
+    public void SendReliable(byte[] buffer, int offset, int length) {
+        SendInternal(buffer, offset, length, EP2PSend.k_EP2PSendReliable);
+    }
+
+    /// <summary>
+    /// Internal helper to send data with a specific P2P send type.
+    /// </summary>
+    private void SendInternal(byte[] buffer, int offset, int length, EP2PSend sendType) {
         if (!SteamManager.IsInitialized) {
             Logger.Warn($"Steam P2P: Cannot send to client {SteamId}, Steam not initialized");
             return;
@@ -60,11 +75,10 @@ internal class SteamEncryptedTransportClient : IEncryptedTransportClient {
 
         // Check for loopback
         if (_steamIdStruct == SteamUser.GetSteamID()) {
-            SteamLoopbackChannel.SendToClient(buffer, length);
+            SteamLoopbackChannel.SendToClient(buffer, offset, length);
             return;
         }
 
-        var sendType = packet.ContainsReliableData ? EP2PSend.k_EP2PSendReliable : EP2PSend.k_EP2PSendUnreliableNoDelay;
         if (!SteamNetworking.SendP2PPacket(_steamIdStruct, buffer, (uint) length, sendType, P2P_CHANNEL)) {
             Logger.Warn($"Steam P2P: Failed to send packet to client {SteamId}");
         }

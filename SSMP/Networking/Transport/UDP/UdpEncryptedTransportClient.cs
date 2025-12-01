@@ -14,13 +14,11 @@ internal class UdpEncryptedTransportClient : IEncryptedTransportClient {
     /// </summary>
     private readonly DtlsServerClient _dtlsServerClient;
     
-    /// <summary>
-    /// The client identifier for this UDP client.
-    /// </summary>
-    private readonly UdpClientIdentifier _clientIdentifier;
-
     /// <inheritdoc />
-    public IClientIdentifier ClientIdentifier => _clientIdentifier;
+    public string ToDisplayString() => "UDP Direct";
+    
+    /// <inheritdoc />
+    public string GetUniqueIdentifier() => _dtlsServerClient.EndPoint.ToString();
     
     /// <summary>
     /// The IP endpoint of the server client.
@@ -33,13 +31,11 @@ internal class UdpEncryptedTransportClient : IEncryptedTransportClient {
 
     public UdpEncryptedTransportClient(DtlsServerClient dtlsServerClient) {
         _dtlsServerClient = dtlsServerClient;
-        _clientIdentifier = new UdpClientIdentifier(dtlsServerClient.EndPoint);
     }
 
     /// <inheritdoc />
-    public void Send(Packet.Packet packet) {
-        var buffer = packet.ToArray();
-        _dtlsServerClient.DtlsTransport.Send(buffer, 0, buffer.Length);
+    public void Send(byte[] buffer, int offset, int length) {
+        _dtlsServerClient.DtlsTransport.Send(buffer, offset, length);
     }
 
     /// <summary>

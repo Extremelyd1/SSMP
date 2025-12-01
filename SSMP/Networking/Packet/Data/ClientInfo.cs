@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using SSMP.Api.Addon;
+using SSMP.Logging;
 
 namespace SSMP.Networking.Packet.Data;
 

@@ -216,8 +216,10 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
     public void ReceiveLoopbackPacket(byte[] data, int length) {
         if (!_isRunning || !SteamManager.IsInitialized) return;
 
+        Logger.Debug($"ReceiveLoopbackPacket: length={length}, data.Length={data.Length}, first bytes: {data[0]:X2} {data[1]:X2} {data[2]:X2} {data[3]:X2}");
+
         var steamId = SteamUser.GetSteamID();
-        
+    
         if (!_clients.TryGetValue(steamId, out var client)) {
             client = new SteamEncryptedTransportClient(steamId.m_SteamID);
             _clients[steamId] = client;

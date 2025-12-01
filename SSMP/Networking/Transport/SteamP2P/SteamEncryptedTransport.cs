@@ -12,7 +12,7 @@ namespace SSMP.Networking.Transport.SteamP2P;
 /// Steam P2P implementation of <see cref="IEncryptedTransport"/>.
 /// Used by clients to connect to a server via Steam P2P networking.
 /// </summary>
-internal class SteamEncryptedTransport : IEncryptedTransport {
+internal class SteamEncryptedTransport : IReliableTransport {
     /// <summary>
     /// P2P channel to use for all communication (bidirectional).
     /// </summary>
@@ -100,10 +100,19 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
     }
 
     /// <inheritdoc />
-    public void Send(Packet.Packet packet) {
-        var buffer = packet.ToArray();
-        var length = buffer.Length;
-        
+    public void Send(byte[] buffer, int offset, int length) {
+        SendInternal(buffer, offset, length, EP2PSend.k_EP2PSendUnreliableNoDelay);
+    }
+
+    /// <inheritdoc />
+    public void SendReliable(byte[] buffer, int offset, int length) {
+        SendInternal(buffer, offset, length, EP2PSend.k_EP2PSendReliable);
+    }
+
+    /// <summary>
+    /// Internal helper to send data with a specific P2P send type.
+    /// </summary>
+    private void SendInternal(byte[] buffer, int offset, int length, EP2PSend sendType) {
         if (!_isConnected) {
             throw new InvalidOperationException("Cannot send: not connected");
         }
@@ -113,11 +122,10 @@ internal class SteamEncryptedTransport : IEncryptedTransport {
         }
 
         if (_remoteSteamId == _localSteamId) {
-            SteamLoopbackChannel.SendToServer(buffer, length);
+            SteamLoopbackChannel.SendToServer(buffer, offset, length);
             return;
         }
 
-        var sendType = packet.ContainsReliableData ? EP2PSend.k_EP2PSendReliable : EP2PSend.k_EP2PSendUnreliableNoDelay;
         if (!SteamNetworking.SendP2PPacket(_remoteSteamId, buffer, (uint)length, sendType, P2P_CHANNEL)) {
             Logger.Warn($"Steam P2P: Failed to send packet to {_remoteSteamId}");
         }

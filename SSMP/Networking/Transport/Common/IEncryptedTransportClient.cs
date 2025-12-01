@@ -1,19 +1,27 @@
 using System;
+using System.Net;
 
 namespace SSMP.Networking.Transport.Common;
 
 /// <summary>
 /// Interface for a server-side encrypted transport client that is connected to the server.
 /// </summary>
-internal interface IEncryptedTransportClient : ITransportSender {
+internal interface IEncryptedTransportClient {
     /// <summary>
-    /// Unique identifier for the client.
-    /// Implementation depends on transport type:
-    /// - UDP: <see cref="UDP.UdpClientIdentifier"/> wrapping <see cref="System.Net.IPEndPoint"/>
-    /// - Steam P2P: <see cref="SteamP2P.SteamClientIdentifier"/> wrapping Steam ID (ulong)
-    /// - Hole Punch: <see cref="HolePunch.HolePunchClientIdentifier"/> wrapping <see cref="System.Net.IPEndPoint"/>
+    /// Returns a human-readable string representation for logging and display.
     /// </summary>
-    IClientIdentifier ClientIdentifier { get; }
+    string ToDisplayString();
+
+    /// <summary>
+    /// Returns a unique identifier for this client (e.g., Steam ID or IP address).
+    /// </summary>
+    string GetUniqueIdentifier();
+
+    /// <summary>
+    /// Gets the endpoint used for throttling connection attempts.
+    /// Returns null if application-level throttling should be skipped for this client (e.g., Steam).
+    /// </summary>
+    IPEndPoint? EndPoint { get; }
 
     /// <summary>
     /// Event raised when data is received from this client.
@@ -21,8 +29,10 @@ internal interface IEncryptedTransportClient : ITransportSender {
     event Action<byte[], int>? DataReceivedEvent;
 
     /// <summary>
-    /// Send a packet to this client.
+    /// Send data to this client.
     /// </summary>
-    /// <param name="packet">The packet to send.</param>
-    new void Send(Packet.Packet packet);
+    /// <param name="buffer">The byte array buffer containing the data.</param>
+    /// <param name="offset">The offset in the buffer to start sending from.</param>
+    /// <param name="length">The number of bytes to send from the buffer.</param>
+    void Send(byte[] buffer, int offset, int length);
 }

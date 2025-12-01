@@ -43,52 +43,40 @@ internal static class SteamLoopbackChannel {
     /// <summary>
     /// Sends a packet from the client to the server via loopback.
     /// </summary>
-    public static void SendToServer(byte[] data, int length) {
+    public static void SendToServer(byte[] data, int offset, int length) {
         var srv = _server;
         if (srv == null) {
             Logger.Debug("Steam Loopback: Server not registered, dropping packet");
             return;
         }
 
-        // Use ArrayPool to avoid GC allocations - safe because PacketManager.HandleReceivedData
-        // immediately copies the buffer and doesn't retain it
-        byte[]? copy = null;
+        // Create exact-sized buffer since Packet constructor assumes entire array is valid
+        var copy = new byte[length];
         try {
-            copy = ArrayPool<byte>.Shared.Rent(length);
-            Buffer.BlockCopy(data, 0, copy, 0, length);
+            Buffer.BlockCopy(data, offset, copy, 0, length);
             srv.ReceiveLoopbackPacket(copy, length);
         } catch (Exception e) {
             Logger.Error($"Steam Loopback: Error sending to server: {e}");
-        } finally {
-            if (copy != null) {
-                ArrayPool<byte>.Shared.Return(copy);
-            }
         }
     }
 
     /// <summary>
     /// Sends a packet from the server to the client via loopback.
     /// </summary>
-    public static void SendToClient(byte[] data, int length) {
+    public static void SendToClient(byte[] data, int offset, int length) {
         var client = _client;
         if (client == null) {
             Logger.Debug("Steam Loopback: Client not registered, dropping packet");
             return;
         }
 
-        // Use ArrayPool to avoid GC allocations - safe because PacketManager.HandleReceivedData
-        // immediately copies the buffer and doesn't retain it
-        byte[]? copy = null;
+        // Create exact-sized buffer since Packet constructor assumes entire array is valid
+        var copy = new byte[length];
         try {
-            copy = ArrayPool<byte>.Shared.Rent(length);
-            Buffer.BlockCopy(data, 0, copy, 0, length);
+            Buffer.BlockCopy(data, offset, copy, 0, length);
             client.ReceiveLoopbackPacket(copy, length);
         } catch (Exception e) {
             Logger.Error($"Steam Loopback: Error sending to client: {e}");
-        } finally {
-            if (copy != null) {
-                ArrayPool<byte>.Shared.Return(copy);
-            }
         }
     }
 }

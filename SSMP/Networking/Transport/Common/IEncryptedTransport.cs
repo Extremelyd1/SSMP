@@ -1,11 +1,11 @@
-using System;
+﻿using System;
 
 namespace SSMP.Networking.Transport.Common;
 
 /// <summary>
 /// Interface for a client-side encrypted transport for connection and data exchange with a server.
 /// </summary>
-internal interface IEncryptedTransport : ITransportSender {
+internal interface IEncryptedTransport {
     /// <summary>
     /// Event raised when data is received from the server.
     /// </summary>
@@ -19,20 +19,12 @@ internal interface IEncryptedTransport : ITransportSender {
     void Connect(string address, int port);
     
     /// <summary>
-    /// Send a packet to the connected peer.
+    /// Send data to the server.
     /// </summary>
-    /// <param name="packet">The packet to send.</param>
-    new void Send(Packet.Packet packet);
-
-    /// <summary>
-    /// Receive data from the connected peer.
-    /// </summary>
-    /// <param name="buffer">Buffer to store received data.</param>
-    /// <param name="offset">Offset in the buffer to start storing data.</param>
-    /// <param name="length">Maximum number of bytes to receive.</param>
-    /// <param name="waitMillis">Time in milliseconds to wait for data.</param>
-    /// <returns>Number of bytes received.</returns>
-    int Receive(byte[]? buffer, int offset, int length, int waitMillis);
+    /// <param name="buffer">The byte array buffer containing the data.</param>
+    /// <param name="offset">The offset in the buffer to start sending from.</param>
+    /// <param name="length">The number of bytes to send from the buffer.</param>
+    void Send(byte[] buffer, int offset, int length);
 
     /// <summary>
     /// Indicates whether this transport requires application-level congestion management.

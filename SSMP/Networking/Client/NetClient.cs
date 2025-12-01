@@ -148,15 +148,18 @@ internal class NetClient : INetClient {
                 _transport.DataReceivedEvent += OnReceiveData;
                 _transport.Connect(details.Address, details.Port);
 
-                // Steam transport bypasses UdpUpdateManager entirely
-                if (_transport is not Transport.SteamP2P.SteamEncryptedTransport) {
-                    UpdateManager.Transport = _transport;
+                // All transports use UpdateManager for periodic sending and sequence tracking
+                UpdateManager.Transport = _transport;
+                UpdateManager.StartUpdates();
+                _chunkSender.Start();
+                
+                // Only UDP/HolePunch need timeout management (Steam has built-in connection tracking)
+                if (_transport.RequiresCongestionManagement) {
                     UpdateManager.TimeoutEvent += OnConnectTimedOut;
-                    UpdateManager.StartUpdates();
-                    _chunkSender.Start();
                 }
 
-                _connectionManager.StartConnection(details.Username, details.AuthKey, addonData);
+                
+                _connectionManager.StartConnection(details.Username, details.AuthKey, addonData, _transport);
                 
                 
             } catch (TlsTimeoutException) {
@@ -245,7 +248,6 @@ internal class NetClient : INetClient {
             return;
         }
 
-        var isSteamTransport = _transport is Transport.SteamP2P.SteamEncryptedTransport;
         var packets = PacketManager.HandleReceivedData(buffer, length, ref _leftoverData);
 
         foreach (var packet in packets) {
@@ -255,30 +257,24 @@ internal class NetClient : INetClient {
                     continue;
                 }
 
-                if (isSteamTransport) {
-                    // Steam: direct to packet manager, no UpdateManager or chunking
-                    if (ConnectionStatus == ClientConnectionStatus.Connected) {
-                        _packetManager.HandleClientUpdatePacket(clientUpdatePacket);
-                    }
-                } else {
-                    // UDP/HolePunch: full processing through UpdateManager and chunking
-                    UpdateManager.OnReceivePacket<ClientUpdatePacket, ClientUpdatePacketId>(clientUpdatePacket);
+                // Route all transports through UpdateManager for sequence/ACK tracking
+                // UpdateManager will skip UDP-specific logic for Steam transports
+                UpdateManager.OnReceivePacket<ClientUpdatePacket, ClientUpdatePacketId>(clientUpdatePacket);
 
-                    var packetData = clientUpdatePacket.GetPacketData();
-                
-                    if (packetData.TryGetValue(ClientUpdatePacketId.Slice, out var sliceData)) {
-                        packetData.Remove(ClientUpdatePacketId.Slice);
-                        _chunkReceiver.ProcessReceivedData((SliceData)sliceData);
-                    }
+                var packetData = clientUpdatePacket.GetPacketData();
+            
+                if (packetData.TryGetValue(ClientUpdatePacketId.Slice, out var sliceData)) {
+                    packetData.Remove(ClientUpdatePacketId.Slice);
+                    _chunkReceiver.ProcessReceivedData((SliceData)sliceData);
+                }
 
-                    if (packetData.TryGetValue(ClientUpdatePacketId.SliceAck, out var sliceAckData)) {
-                        packetData.Remove(ClientUpdatePacketId.SliceAck);
-                        _chunkSender.ProcessReceivedData((SliceAckData)sliceAckData);
-                    }
+                if (packetData.TryGetValue(ClientUpdatePacketId.SliceAck, out var sliceAckData)) {
+                    packetData.Remove(ClientUpdatePacketId.SliceAck);
+                    _chunkSender.ProcessReceivedData((SliceAckData)sliceAckData);
+                }
 
-                    if (ConnectionStatus == ClientConnectionStatus.Connected) {
-                        _packetManager.HandleClientUpdatePacket(clientUpdatePacket);
-                    }
+                if (ConnectionStatus == ClientConnectionStatus.Connected) {
+                    _packetManager.HandleClientUpdatePacket(clientUpdatePacket);
                 }
             } catch (Exception e) {
                 Logger.Error($"Error processing incoming packet: {e}");

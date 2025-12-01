@@ -14,7 +14,7 @@ namespace SSMP.Networking;
 /// Class that manages sending the update packet. Has a simple congestion avoidance system to
 /// avoid flooding the channel.
 /// </summary>
-internal abstract class UdpUpdateManager {
+internal abstract class UpdateManager {
     /// <summary>
     /// The number of ack numbers from previous packets to store in the packet. 
     /// </summary>
@@ -22,7 +22,7 @@ internal abstract class UdpUpdateManager {
 }
 
 /// <inheritdoc />
-internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManager
+internal abstract class UpdateManager<TOutgoing, TPacketId> : UpdateManager
     where TOutgoing : UpdatePacket<TPacketId>, new()
     where TPacketId : Enum {
     /// <summary>
@@ -47,7 +47,7 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     /// <summary>
     /// The UDP congestion manager instance. Null if congestion management is disabled.
     /// </summary>
-    private readonly UdpCongestionManager<TOutgoing, TPacketId>? _udpCongestionManager;
+    private readonly CongestionManager<TOutgoing, TPacketId>? _udpCongestionManager;
 
     /// <summary>
     /// The last sent sequence number.
@@ -99,40 +99,27 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     /// The transport sender instance to use to send packets.
     /// Can be either IEncryptedTransport (client-side) or IEncryptedTransportClient (server-side).
     /// </summary>
-    private volatile ITransportSender? _transportSender;
+    private volatile object? _transportSender;
     
     /// <summary>
-    /// Sets the transport for client-side communication.
+    /// Gets or sets the transport for client-side communication.
     /// </summary>
     public IEncryptedTransport? Transport {
-        set {
-            if (value != null && value is not ITransportSender) {
-                throw new InvalidOperationException(
-                    $"Transport {value.GetType().Name} does not implement ITransportSender");
-            }
-
-            _transportSender = value;
-        }
+        get => _transportSender as IEncryptedTransport;
+        set => _transportSender = value;
     }
     
     /// <summary>
     /// Sets the transport client for server-side communication.
     /// </summary>
     public IEncryptedTransportClient? TransportClient {
-        set {
-            if (value != null && value is not ITransportSender) {
-                throw new InvalidOperationException(
-                    $"Transport client {value.GetType().Name} does not implement ITransportSender");
-            }
-            _transportSender = value;
-        }
+        set => _transportSender = value;
     }
-
 
     /// <summary>
     /// The current send rate in milliseconds between sending packets.
     /// </summary>
-    public int CurrentSendRate { get; set; } = UdpCongestionManager<TOutgoing, TPacketId>.HighSendRate;
+    public int CurrentSendRate { get; set; } = CongestionManager<TOutgoing, TPacketId>.HighSendRate;
 
     /// <summary>
     /// Moving average of round trip time (RTT) between sending and receiving a packet.
@@ -152,8 +139,8 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     /// </summary>
     /// <param name="enableCongestionManagement">Whether to enable congestion management. 
     /// Set to false for transports with built-in congestion handling (e.g., Steam P2P).</param>
-    protected UdpUpdateManager() {
-        _udpCongestionManager = new UdpCongestionManager<TOutgoing, TPacketId>(this);
+    protected UpdateManager() {
+        _udpCongestionManager = new CongestionManager<TOutgoing, TPacketId>(this);
         _receivedQueue = new ConcurrentFixedSizeQueue<ushort>(ReceiveQueueSize);
 
         CurrentUpdatePacket = new TOutgoing();
@@ -210,6 +197,19 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     public void OnReceivePacket<TIncoming, TOtherPacketId>(TIncoming packet)
         where TIncoming : UpdatePacket<TOtherPacketId>
         where TOtherPacketId : Enum {
+        
+        _heartBeatTimer.Stop();
+        _heartBeatTimer.Start();
+
+        // Steam transports bypass UDP-specific logic (congestion, sequence, heartbeat)
+        // Steam has built-in reliability and connection tracking
+        var transport = _transportSender as IEncryptedTransport;
+        if (transport != null && !transport.RequiresCongestionManagement) {
+            // Steam: skip UDP-specific receive logic
+            return;
+        }
+        
+        // UDP/HolePunch only: congestion management, sequence tracking, heartbeat
         _udpCongestionManager?.OnReceivePackets<TIncoming, TOtherPacketId>(packet);
 
         var sequence = packet.Sequence;
@@ -220,9 +220,6 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
         if (IsSequenceGreaterThan(sequence, _remoteSequence)) {
             _remoteSequence = sequence;
         }
-
-        _heartBeatTimer.Stop();
-        _heartBeatTimer.Start();
     }
 
     /// <summary>
@@ -235,20 +232,28 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
             return;
         }
 
+        // Check if this is a Steam transport
+        var transport = sender as IEncryptedTransport;
+        var isSteamTransport = transport != null && !transport.RequiresCongestionManagement;
+
         var packet = new Packet.Packet();
         TOutgoing updatePacket;
 
         lock (Lock) {
-            CurrentUpdatePacket.Sequence = _localSequence;
-            CurrentUpdatePacket.Ack = _remoteSequence;
+            if (!isSteamTransport) {
+                // UDP/HolePunch only: Set sequence numbers and ACK fields
+                CurrentUpdatePacket.Sequence = _localSequence;
+                CurrentUpdatePacket.Ack = _remoteSequence;
 
-            var receivedQueue = _receivedQueue.GetCopy();
+                var receivedQueue = _receivedQueue.GetCopy();
 
-            for (ushort i = 0; i < AckSize; i++) {
-                var pastSequence = (ushort) (_remoteSequence - i - 1);
+                for (ushort i = 0; i < AckSize; i++) {
+                    var pastSequence = (ushort) (_remoteSequence - i - 1);
 
-                CurrentUpdatePacket.AckField[i] = receivedQueue.Contains(pastSequence);
+                    CurrentUpdatePacket.AckField[i] = receivedQueue.Contains(pastSequence);
+                }
             }
+            // Steam: Skip sequence/ACK setup, just create packet with current data
 
             try {
                 CurrentUpdatePacket.CreatePacket(packet);
@@ -261,9 +266,12 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
             CurrentUpdatePacket = new TOutgoing();
         }
 
-        _udpCongestionManager?.OnSendPacket(_localSequence, updatePacket);
-
-        _localSequence++;
+        if (!isSteamTransport) {
+            // UDP/HolePunch only: congestion management
+            _udpCongestionManager?.OnSendPacket(_localSequence, updatePacket);
+            _localSequence++;
+        }
+        // Steam: Skip congestion tracking and sequence increment
 
         if (packet.Length > PacketMtu) {
             var byteArray= packet.ToArray();
@@ -326,12 +334,33 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     public abstract void ResendReliableData(TOutgoing lostPacket);
 
     /// <summary>
-    /// Send the given packet over the corresponding medium.
+    /// Sends the given packet over the corresponding medium.
     /// </summary>
     /// <param name="packet">The raw packet instance.</param>
     /// <param name="sender">The transport sender to use.</param>
-    private void SendPacket(Packet.Packet packet, ITransportSender sender) {
-        sender.Send(packet);
+    private void SendPacket(Packet.Packet packet, object sender)
+    {
+        var buffer = packet.ToArray();
+        var isReliable = packet.ContainsReliableData;
+
+        switch (sender)
+        {
+            case IReliableTransport reliableTransport when isReliable:
+                reliableTransport.SendReliable(buffer, 0, buffer.Length);
+                break;
+                
+            case IEncryptedTransport transport:
+                transport.Send(buffer, 0, buffer.Length);
+                break;
+                
+            case IReliableTransportClient reliableTransportClient when isReliable:
+                reliableTransportClient.SendReliable(buffer, 0, buffer.Length);
+                break;
+                
+            case IEncryptedTransportClient transportClient:
+                transportClient.Send(buffer, 0, buffer.Length);
+                break;
+        }
     }
 
     /// <summary>

@@ -16,6 +16,7 @@ internal class ClientConnectionManager : ConnectionManager {
     /// The client-side chunk sender used to handle sending chunks.
     /// </summary>
     private readonly ClientChunkSender _chunkSender;
+
     /// <summary>
     /// The client-side chunk received used to receive chunks.
     /// </summary>
@@ -52,8 +53,17 @@ internal class ClientConnectionManager : ConnectionManager {
     /// <param name="authKey">The authentication key of the player.</param>
     /// <param name="addonData">List of addon data that represents the enabled networked addons that the client uses.
     /// </param>
-    public void StartConnection(string username, string authKey, List<AddonData> addonData) {
+    /// <param name="transport">The transport to use for sending (for Steam direct sending).</param>
+    public void StartConnection(string username, string authKey, List<AddonData> addonData,
+        Transport.Common.IEncryptedTransport transport) {
         Logger.Debug("StartConnection");
+        Logger.Debug($"AddonData count: {addonData?.Count ?? -1}");
+        if (addonData != null) {
+            foreach (var addon in addonData) {
+                Logger.Debug($"  Addon ID: {addon.Identifier}");
+            }
+        }
+     
 
         // Create a connection packet that will be the entire chunk we will be sending
         var connectionPacket = new ServerConnectionPacket();
@@ -69,8 +79,19 @@ internal class ClientConnectionManager : ConnectionManager {
         var packet = new Packet.Packet();
         connectionPacket.CreatePacket(packet);
 
-        // Enqueue the raw packet to be sent using the chunk sender
-        _chunkSender.EnqueuePacket(packet);
+        // For Steam (no congestion management), send directly through transport
+        // For UDP/HolePunch, use ChunkSender for fragmentation
+        if (!transport.RequiresCongestionManagement) {
+            // Steam: Send connection packet directly
+            // We need to write the length first because the server's PacketManager expects a length prefix
+            packet.WriteLength();
+            var buffer = packet.ToArray();
+            Logger.Debug($"StartConnection sending packet: length={buffer.Length}, first bytes: {buffer[0]:X2} {buffer[1]:X2} {buffer[2]:X2} {buffer[3]:X2}");
+            transport.Send(buffer, 0, buffer.Length);
+        } else {
+            // UDP/HolePunch: Enqueue the raw packet to be sent using the chunk sender
+            _chunkSender.EnqueuePacket(packet);
+        }
     }
 
     /// <summary>
@@ -79,7 +100,7 @@ internal class ClientConnectionManager : ConnectionManager {
     /// <param name="serverInfo">The server info instance received from the server.</param>
     private void OnServerInfoReceived(ServerInfo serverInfo) {
         Logger.Debug($"ServerInfo received, connection accepted: {serverInfo.ConnectionResult}");
-        
+
         ServerInfoReceivedEvent?.Invoke(serverInfo);
     }
 

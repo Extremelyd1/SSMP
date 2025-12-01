@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Net;
 using System.Threading;
 using SSMP.Api.Server;
@@ -12,7 +13,6 @@ using SSMP.Networking.Packet.Connection;
 using SSMP.Networking.Packet.Data;
 using SSMP.Networking.Packet.Update;
 using SSMP.Networking.Transport.Common;
-using SSMP.Networking.Transport.UDP;
 
 namespace SSMP.Networking.Server;
 
@@ -38,7 +38,7 @@ internal class NetServer : INetServer {
     /// <summary>
     /// Dictionary mapping client identifiers to net server clients.
     /// </summary>
-    private readonly ConcurrentDictionary<IClientIdentifier, NetServerClient> _clientsByIdentifier;
+
 
     /// <summary>
     /// Dictionary mapping client IDs to net server clients.
@@ -46,11 +46,11 @@ internal class NetServer : INetServer {
     private readonly ConcurrentDictionary<ushort, NetServerClient> _clientsById;
 
     /// <summary>
-    /// Dictionary for the throttle keys of clients that have their connection throttled mapped to a stopwatch
-    /// that keeps track of their last connection attempt. The client may use different local ports to establish
-    /// connection so we only register the address and not the port as with established clients.
+    /// Dictionary for throttling clients by their endpoint.
+    /// Maps endpoint to a stopwatch tracking their last connection attempt.
+    /// Steam clients (which return null ThrottleKey) are not throttled.
     /// </summary>
-    private readonly ConcurrentDictionary<object, Stopwatch> _throttledClients;
+    private readonly ConcurrentDictionary<IPEndPoint, Stopwatch> _throttledClients;
 
     /// <summary>
     /// Concurrent queue that contains received data from a client ready for processing.
@@ -100,9 +100,9 @@ internal class NetServer : INetServer {
     ) {
         _packetManager = packetManager;
 
-        _clientsByIdentifier = new ConcurrentDictionary<IClientIdentifier, NetServerClient>();
+
         _clientsById = new ConcurrentDictionary<ushort, NetServerClient>();
-        _throttledClients = new ConcurrentDictionary<object, Stopwatch>();
+        _throttledClients = new ConcurrentDictionary<IPEndPoint, Stopwatch>();
 
         _receivedQueue = new ConcurrentQueue<ReceivedData>();
         
@@ -177,11 +177,13 @@ internal class NetServer : INetServer {
                 );
 
                 var transportClient = receivedData.TransportClient;
-                var clientId = transportClient.ClientIdentifier;
 
-                if (!_clientsByIdentifier.TryGetValue(clientId, out var client)) {
+                // Try to find existing client by transport client reference
+                var client = _clientsById.Values.FirstOrDefault(c => c.TransportClient == transportClient);
+                
+                if (client == null) {
                     // Extract throttle key for throttling
-                    var throttleKey = clientId.ThrottleKey;
+                    var throttleKey = transportClient.EndPoint;
 
                     if (throttleKey != null && _throttledClients.TryGetValue(throttleKey, out var clientStopwatch)) {
                         if (clientStopwatch.ElapsedMilliseconds < ThrottleTime) {
@@ -194,7 +196,7 @@ internal class NetServer : INetServer {
                         _throttledClients.TryRemove(throttleKey, out _);
                     }
 
-                    Logger.Info($"Received packet from unknown client: {clientId.ToDisplayString()}, creating new client");
+                    Logger.Info($"Received packet from unknown client: {transportClient.ToDisplayString()}, creating new client");
 
                     // We didn't find a client with the given identifier, so we assume it is a new client
                     // that wants to connect
@@ -223,7 +225,7 @@ internal class NetServer : INetServer {
         netServerClient.UpdateManager.TimeoutEvent += () => HandleClientTimeout(netServerClient);
         netServerClient.UpdateManager.StartUpdates();
 
-        _clientsByIdentifier.TryAdd(transportClient.ClientIdentifier, netServerClient);
+        // Only add to _clientsById dictionary
         _clientsById.TryAdd(netServerClient.Id, netServerClient);
 
         return netServerClient;
@@ -244,7 +246,6 @@ internal class NetServer : INetServer {
 
         client.Disconnect();
         _transportServer?.DisconnectClient(client.TransportClient);
-        _clientsByIdentifier.TryRemove(client.ClientIdentifier, out _);
         _clientsById.TryRemove(id, out _);
 
         Logger.Info($"Client {id} timed out");
@@ -257,7 +258,6 @@ internal class NetServer : INetServer {
     /// <param name="packets">The list of packets to handle.</param>
     private void HandleClientPackets(NetServerClient client, List<Packet.Packet> packets) {
         var id = client.Id;
-        var isSteamTransport = client.TransportClient is Transport.SteamP2P.SteamEncryptedTransportClient;
 
         foreach (var packet in packets) {
             // If the client is not registered, try to read as connection packet first
@@ -277,9 +277,9 @@ internal class NetServer : INetServer {
                     continue;
                 }
 
-                Logger.Debug($"Received malformed packet from client: {client.ClientIdentifier.ToDisplayString()}");
+                Logger.Debug($"Received malformed packet from client: {client.TransportClient.ToDisplayString()}");
 
-                var throttleKey = client.ClientIdentifier.ThrottleKey;
+                var throttleKey = client.TransportClient.EndPoint;
                 if (throttleKey != null) {
                     _throttledClients[throttleKey] = Stopwatch.StartNew();
                 }
@@ -287,29 +287,23 @@ internal class NetServer : INetServer {
                 continue;
             }
 
-            if (isSteamTransport) {
-                // Steam: direct to packet manager, no UpdateManager or chunking
-                if (client.IsRegistered) {
-                    _packetManager.HandleServerUpdatePacket(id, serverUpdatePacket);
-                }
-            } else {
-                // UDP/HolePunch: full processing through UpdateManager and chunking
-                client.UpdateManager.OnReceivePacket<ServerUpdatePacket, ServerUpdatePacketId>(serverUpdatePacket);
+            // Route all transports through UpdateManager for sequence/ACK tracking
+            // UpdateManager will skip UDP-specific logic for Steam transports
+            client.UpdateManager.OnReceivePacket<ServerUpdatePacket, ServerUpdatePacketId>(serverUpdatePacket);
 
-                var packetData = serverUpdatePacket.GetPacketData();
-                if (packetData.TryGetValue(ServerUpdatePacketId.Slice, out var sliceData)) {
-                    packetData.Remove(ServerUpdatePacketId.Slice);
-                    client.ChunkReceiver.ProcessReceivedData((SliceData) sliceData);
-                }
+            var packetData = serverUpdatePacket.GetPacketData();
+            if (packetData.TryGetValue(ServerUpdatePacketId.Slice, out var sliceData)) {
+                packetData.Remove(ServerUpdatePacketId.Slice);
+                client.ChunkReceiver.ProcessReceivedData((SliceData) sliceData);
+            }
 
-                if (packetData.TryGetValue(ServerUpdatePacketId.SliceAck, out var sliceAckData)) {
-                    packetData.Remove(ServerUpdatePacketId.SliceAck);
-                    client.ChunkSender.ProcessReceivedData((SliceAckData) sliceAckData);
-                }
-            
-                if (client.IsRegistered) {
-                    _packetManager.HandleServerUpdatePacket(id, serverUpdatePacket);
-                }
+            if (packetData.TryGetValue(ServerUpdatePacketId.SliceAck, out var sliceAckData)) {
+                packetData.Remove(ServerUpdatePacketId.SliceAck);
+                client.ChunkSender.ProcessReceivedData((SliceAckData) sliceAckData);
+            }
+        
+            if (client.IsRegistered) {
+                _packetManager.HandleServerUpdatePacket(id, serverUpdatePacket);
             }
         }
     }
@@ -372,7 +366,7 @@ internal class NetServer : INetServer {
             // Wait for it to finish sending, then disconnect and throttle
             client.ConnectionManager.FinishConnection(() => { 
                 OnClientDisconnect(clientId);
-                var throttleKey = client.ClientIdentifier.ThrottleKey;
+                var throttleKey = client.TransportClient.EndPoint;
                 if (throttleKey != null) {
                     _throttledClients[throttleKey] = Stopwatch.StartNew();
                 }
@@ -400,32 +394,20 @@ internal class NetServer : INetServer {
             if (!_processingThread.Join(1000)) {
                 Logger.Warn("Processing thread did not exit within timeout");
             }
+
             _processingThread = null;
         }
-        
+
         // Stop transport server first to prevent new connections and unregister from loopback
         _transportServer?.Stop();
         if (_transportServer != null) {
             _transportServer.ClientConnectedEvent -= OnClientConnected;
+            _taskTokenSource?.Dispose();
+            _taskTokenSource = null;
+
+            // Invoke the shutdown event to notify all registered parties of the shutdown
+            ShutdownEvent?.Invoke();
         }
-        
-        // Clean up existing clients (transport is already stopped)
-        foreach (var client in _clientsByIdentifier.Values) {
-            client.Disconnect();
-        }
-
-        _clientsByIdentifier.Clear();
-        _clientsById.Clear();
-        _throttledClients.Clear();
-        
-
-        _leftoverData = null;
-
-        _taskTokenSource?.Dispose();
-        _taskTokenSource = null;
-
-        // Invoke the shutdown event to notify all registered parties of the shutdown
-        ShutdownEvent?.Invoke();
     }
 
     /// <summary>
@@ -439,8 +421,7 @@ internal class NetServer : INetServer {
         }
 
         client.Disconnect();
-        _transportServer.DisconnectClient(client.TransportClient);
-        _clientsByIdentifier.TryRemove(client.ClientIdentifier, out _);
+        _transportServer?.DisconnectClient(client.TransportClient);
         _clientsById.TryRemove(id, out _);
 
         Logger.Info($"Client {id} disconnected");

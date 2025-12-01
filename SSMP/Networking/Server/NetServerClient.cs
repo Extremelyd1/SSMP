@@ -59,24 +59,11 @@ internal class NetServerClient {
     public IEncryptedTransportClient TransportClient { get; }
     
     /// <summary>
-    /// The client identifier for this client.
-    /// </summary>
-    public IClientIdentifier ClientIdentifier => TransportClient.ClientIdentifier;
-
-    /// <summary>
     /// Extracts the IPEndPoint for UDP-based transports only.
     /// Used for IP-based banning functionality. Returns null for non-UDP transports (e.g., Steam P2P).
-    /// For display purposes, use <see cref="ClientIdentifier"/>.ToDisplayString() instead.
     /// </summary>
-    public IPEndPoint? EndPoint {
-        get {
-            return TransportClient.ClientIdentifier switch {
-                UdpClientIdentifier udp => udp.EndPoint,
-                HolePunchClientIdentifier hp => hp.EndPoint,
-                _ => null
-            };
-        }
-    }
+    public IPEndPoint? EndPoint => TransportClient.EndPoint;
+    
 
     /// <summary>
     /// Construct the client with the given transport client.

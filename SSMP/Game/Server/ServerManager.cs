@@ -1276,7 +1276,7 @@ internal abstract class ServerManager : IServerManager {
     /// <param name="serverInfo">The server info instance to modify based on whether the client should be accepted
     /// or not.</param>
     private void OnConnectionRequest(NetServerClient netServerClient, ClientInfo clientInfo, ServerInfo serverInfo) {
-        var clientDisplayString = netServerClient.ClientIdentifier.ToDisplayString();
+        var clientDisplayString = netServerClient.TransportClient.ToDisplayString();
         Logger.Info($"Received connection request from {clientDisplayString}, username: {clientInfo.Username}");
 
         // Extract IPEndPoint if this is a UDP-based transport (for IP banning)
@@ -1434,7 +1434,7 @@ internal abstract class ServerManager : IServerManager {
         // Create new player data and store it
         var playerData = new ServerPlayerData(
             netServerClient.Id,
-            netServerClient.ClientIdentifier.ToDisplayString(),
+            netServerClient.TransportClient.GetUniqueIdentifier(),
             clientInfo.Username,
             clientInfo.AuthKey,
             _authorizedList

@@ -129,8 +129,8 @@ internal class BanCommand : IServerCommand, ICommandWithDescription {
                 return;
             }
 
-            _banList.AddIp(playerWithAuthKey!.IpAddressString);
-            commandSender.SendMessage($"IP address '{playerWithAuthKey.IpAddressString}' has been banned");
+            _banList.AddIp(playerWithAuthKey!.UniqueClientIdentifier);
+            commandSender.SendMessage($"IP address '{playerWithAuthKey.UniqueClientIdentifier}' has been banned");
 
             DisconnectPlayer(playerWithAuthKey);
 
@@ -144,7 +144,7 @@ internal class BanCommand : IServerCommand, ICommandWithDescription {
             // Based on whether it is an IP ban or not, add it to the correct ban list and inform the
             // command sender of the behaviour
             if (ipBan) {
-                _banList.AddIp(playerData.IpAddressString);
+                _banList.AddIp(playerData.UniqueClientIdentifier);
                 commandSender.SendMessage($"IP address of player '{playerData.Username}' has been banned");
             } else {
                 _banList.Add(playerData.AuthKey);

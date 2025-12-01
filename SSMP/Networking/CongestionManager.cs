@@ -11,7 +11,7 @@ namespace SSMP.Networking;
 /// </summary>
 /// <typeparam name="TOutgoing">The type of the outgoing packet.</typeparam>
 /// <typeparam name="TPacketId">The type of the packet ID.</typeparam>
-internal class UdpCongestionManager<TOutgoing, TPacketId>
+internal class CongestionManager<TOutgoing, TPacketId>
     where TOutgoing : UpdatePacket<TPacketId>, new()
     where TPacketId : Enum {
     /// <summary>
@@ -56,7 +56,7 @@ internal class UdpCongestionManager<TOutgoing, TPacketId>
     /// <summary>
     /// The corresponding update manager from which we receive the packets that we calculate the RTT from.
     /// </summary>
-    private readonly UdpUpdateManager<TOutgoing, TPacketId> _udpUpdateManager;
+    private readonly UpdateManager<TOutgoing, TPacketId> _updateManager;
 
     /// <summary>
     /// Dictionary containing for each sequence number the corresponding packet and stopwatch. We use this
@@ -125,9 +125,9 @@ internal class UdpCongestionManager<TOutgoing, TPacketId>
     /// <summary>
     /// Construct the congestion manager with the given update manager.
     /// </summary>
-    /// <param name="udpUpdateManager">The UDP update manager.</param>
-    public UdpCongestionManager(UdpUpdateManager<TOutgoing, TPacketId> udpUpdateManager) {
-        _udpUpdateManager = udpUpdateManager;
+    /// <param name="updateManager">The UDP update manager.</param>
+    public CongestionManager(UpdateManager<TOutgoing, TPacketId> updateManager) {
+        _updateManager = updateManager;
 
         _sentQueue = new ConcurrentDictionary<ushort, SentPacket<TOutgoing, TPacketId>>();
 
@@ -155,7 +155,7 @@ internal class UdpCongestionManager<TOutgoing, TPacketId>
         CheckCongestion(packet.Ack);
 
         // Check the congestion of all acknowledged packet in the ack field
-        for (ushort i = 0; i < UdpUpdateManager.AckSize; i++) {
+        for (ushort i = 0; i < UpdateManager.AckSize; i++) {
             if (packet.AckField[i]) {
                 var sequenceToCheck = (ushort) (packet.Ack - i - 1);
 
@@ -215,7 +215,7 @@ internal class UdpCongestionManager<TOutgoing, TPacketId>
 
                 _isChannelCongested = false;
 
-                _udpUpdateManager.CurrentSendRate = HighSendRate;
+                _updateManager.CurrentSendRate = HighSendRate;
 
                 // Reset whether we have spent the threshold in non-congested mode
                 _spentTimeThreshold = false;
@@ -254,7 +254,7 @@ internal class UdpCongestionManager<TOutgoing, TPacketId>
 
                 _isChannelCongested = true;
 
-                _udpUpdateManager.CurrentSendRate = LowSendRate;
+                _updateManager.CurrentSendRate = LowSendRate;
 
                 // If we were a few seconds in the High send rates before switching again, we
                 // double the threshold for switching
@@ -296,7 +296,7 @@ internal class UdpCongestionManager<TOutgoing, TPacketId>
                     // Logger.Debug(
                     //     $"Packet ack of seq: {seqSentPacketPair.Key} with reliable data exceeded maximum RTT, assuming lost, resending data");
 
-                    _udpUpdateManager.ResendReliableData(sentPacket.Packet);
+                    _updateManager.ResendReliableData(sentPacket.Packet);
                 }
             }
         }
