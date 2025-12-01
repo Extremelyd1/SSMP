@@ -112,11 +112,17 @@ internal class NetClient : INetClient {
     /// <summary>
     /// Starts establishing a connection with the given host on the given port.
     /// </summary>
-    /// <param name="details">The connection details.</param>
+    /// <param name="address">The address to connect to.</param>
+    /// <param name="port">The port to connect to.</param>
+    /// <param name="username">The username to connect with.</param>
+    /// <param name="authKey">The authentication key to use.</param>
     /// <param name="addonData">A list of addon data that the client has.</param>
     /// <param name="transport">The transport to use.</param>
     public void Connect(
-        ConnectionDetails details,
+        string address,
+        int port,
+        string username,
+        string authKey,
         List<AddonData> addonData,
         IEncryptedTransport transport
     ) {
@@ -146,7 +152,7 @@ internal class NetClient : INetClient {
                 _chunkSender = new ClientChunkSender(UpdateManager);
                 
                 _transport.DataReceivedEvent += OnReceiveData;
-                _transport.Connect(details.Address, details.Port);
+                _transport.Connect(address, port);
                 
                 UpdateManager.Transport = _transport;
                 UpdateManager.StartUpdates();
@@ -158,7 +164,7 @@ internal class NetClient : INetClient {
                 }
 
                 
-                _connectionManager.StartConnection(details.Username, details.AuthKey, addonData, _transport);
+                _connectionManager.StartConnection(username, authKey, addonData, _transport);
                 
                 
             } catch (TlsTimeoutException) {
@@ -176,6 +182,7 @@ internal class NetClient : INetClient {
             }
         }) { IsBackground = true }.Start();
     }
+
 
     /// <summary>
     /// Disconnect from the current server.

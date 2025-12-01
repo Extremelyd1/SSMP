@@ -285,12 +285,12 @@ internal class ClientManager : IClientManager {
         serverManager.AuthorizeKey(_modSettings.AuthKey!);
 
         // Register handlers for events from UI
-        _uiManager.RequestClientConnectEvent += (details, autoConnect) => {
+        _uiManager.RequestClientConnectEvent += (address, port, username, transportType, autoConnect) => {
             _autoConnect = autoConnect;
-            Connect(details);
+            Connect(address, port, username, transportType);
         };
         _uiManager.RequestClientDisconnectEvent += Disconnect;
-        _uiManager.RequestServerStartHostEvent += _ => {
+        _uiManager.RequestServerStartHostEvent += (_, _, _, _) => {
             _saveManager.IsHostingServer = true;
         };
         _uiManager.RequestServerStopHostEvent += () => {
@@ -481,14 +481,17 @@ internal class ClientManager : IClientManager {
     /// <summary>
     /// Connect the client to the server with the given connection details.
     /// </summary>
-    /// <param name="details">The connection details.</param>
-    private void Connect(ConnectionDetails details) {
+    /// <param name="address">The address to connect to.</param>
+    /// <param name="port">The port to connect to.</param>
+    /// <param name="username">The username to connect with.</param>
+    /// <param name="transportType">The transport type to use.</param>
+    private void Connect(string address, int port, string username, TransportType transportType) {
         // If we are hosting and using Steam, we need to connect to our own Steam ID
-        if (_autoConnect && details.TransportType == TransportType.Steam) {
-            details.Address = SteamUser.GetSteamID().ToString();
+        if (_autoConnect && transportType == TransportType.Steam) {
+            address = SteamUser.GetSteamID().ToString();
         }
 
-        Logger.Info($"Connecting client to server: {details.Address}:{details.Port} as {details.Username}");
+        Logger.Info($"Connecting client to server: {address}:{port} as {username}");
 
         // Stop existing client
         if (_netClient.IsConnected) {
@@ -497,21 +500,21 @@ internal class ClientManager : IClientManager {
         }
 
         // Store username, so we know what to send the server if we are connected
-        _username = details.Username;
+        _username = username;
 
         // Create the appropriate transport
-        var transport = details.TransportType switch {
+        var transport = transportType switch {
             TransportType.Udp => (IEncryptedTransport)new UdpEncryptedTransport(),
             TransportType.Steam => new SteamEncryptedTransport(),
-            _ => throw new ArgumentOutOfRangeException(nameof(details.TransportType), details.TransportType, "Unsupported transport type")
+            _ => throw new ArgumentOutOfRangeException(nameof(transportType), transportType, "Unsupported transport type")
         };
-
-        // Populate auth key
-        details.AuthKey = _modSettings.AuthKey!;
 
         // Connect the network client
         _netClient.Connect(
-            details,
+            address,
+            port,
+            username,
+            _modSettings.AuthKey!,
             _addonManager.GetNetworkedAddonData(),
             transport
         );

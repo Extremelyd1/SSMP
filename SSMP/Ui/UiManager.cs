@@ -83,7 +83,7 @@ internal class UiManager : IUiManager {
     /// <summary>
     /// Event that is fired when a server is requested to be hosted from the UI.
     /// </summary>
-    public event Action<ConnectionDetails>? RequestServerStartHostEvent;
+    public event Action<string, int, string, TransportType>? RequestServerStartHostEvent;
 
     /// <summary>
     /// Event that is fired when a server is requested to be stopped.
@@ -93,7 +93,7 @@ internal class UiManager : IUiManager {
     /// <summary>
     /// Event that is fired when a connection is requested with the given details.
     /// </summary>
-    public event Action<ConnectionDetails, bool>? RequestClientConnectEvent;
+    public event Action<string, int, string, TransportType, bool>? RequestClientConnectEvent;
 
     /// <summary>
     /// Event that is fired when a disconnect is requested.
@@ -310,23 +310,21 @@ internal class UiManager : IUiManager {
             _netClient
         );
         
-        _connectInterface.StartHostButtonPressed += (details) => {
+        _connectInterface.StartHostButtonPressed += (address, port, username, transportType) => {
             OpenSaveSlotSelection(saveSelected => {
                 if (!saveSelected) {
                     return;
                 }
 
-                RequestServerStartHostEvent?.Invoke(details);
+                RequestServerStartHostEvent?.Invoke(address, port, username, transportType);
                 
                 // For auto-connect, we use localhost address but keep other details
-                var autoConnectDetails = details;
-                autoConnectDetails.Address = LocalhostAddress;
-                RequestClientConnectEvent?.Invoke(autoConnectDetails, true);
+                RequestClientConnectEvent?.Invoke(LocalhostAddress, port, username, transportType, true);
             });
         };
 
-        _connectInterface.ConnectButtonPressed += (details) => {
-            RequestClientConnectEvent?.Invoke(details, false);
+        _connectInterface.ConnectButtonPressed += (address, port, username, transportType) => {
+            RequestClientConnectEvent?.Invoke(address, port, username, transportType, false);
         };
 
         TryAddMultiplayerScreen();

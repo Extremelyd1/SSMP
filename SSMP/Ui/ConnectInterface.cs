@@ -437,12 +437,12 @@ internal class ConnectInterface {
     /// <summary>
     /// Event that is executed when the connect button is pressed.
     /// </summary>
-    public event Action<ConnectionDetails>? ConnectButtonPressed;
+    public event Action<string, int, string, TransportType>? ConnectButtonPressed;
 
     /// <summary>
     /// Event that is executed when the start hosting button is pressed.
     /// </summary>
-    public event Action<ConnectionDetails>? StartHostButtonPressed;
+    public event Action<string, int, string, TransportType>? StartHostButtonPressed;
 
     #endregion
 
@@ -667,7 +667,7 @@ internal class ConnectInterface {
 
         // Fire event to start server hosting
         // Port is ignored for Steam P2P, but we pass 0 for consistency
-        StartHostButtonPressed?.Invoke(new ConnectionDetails("", 0, username, TransportType.Steam)); 
+        StartHostButtonPressed?.Invoke("", 0, username, TransportType.Steam); 
     }
 
     /// <summary>
@@ -715,7 +715,7 @@ internal class ConnectInterface {
         }
 
         // Connect using Steam ID as address
-        ConnectButtonPressed?.Invoke(new ConnectionDetails(hostId.ToString(), 0, username, TransportType.Steam));
+        ConnectButtonPressed?.Invoke(hostId.ToString(), 0, username, TransportType.Steam);
     }
 
     /// <summary>
@@ -749,7 +749,7 @@ internal class ConnectInterface {
         _directConnectButton.SetInteractable(false);
         
         Logger.Debug($"Connecting to {address}:{port} as {username}");
-        ConnectButtonPressed?.Invoke(new ConnectionDetails(address, port, username, TransportType.Udp));
+        ConnectButtonPressed?.Invoke(address, port, username, TransportType.Udp);
     }
 
     /// <summary>
@@ -765,7 +765,7 @@ internal class ConnectInterface {
             _feedbackHideCoroutine = newCoroutine;
             return;
         }
-        StartHostButtonPressed?.Invoke(new ConnectionDetails("", port, username, TransportType.Udp));
+        StartHostButtonPressed?.Invoke("", port, username, TransportType.Udp);
     }
 
     /// <summary>

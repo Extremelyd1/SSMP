@@ -57,7 +57,7 @@ internal class ModServerManager : ServerManager {
         AddonManager.LoadAddons();
 
         // Register handlers for UI events
-        _uiManager.RequestServerStartHostEvent += (details) => OnRequestServerStartHost(details.Port, _modSettings.FullSynchronisation, details.TransportType);
+        _uiManager.RequestServerStartHostEvent += (address, port, username, transportType) => OnRequestServerStartHost(port, _modSettings.FullSynchronisation, transportType);
         _uiManager.RequestServerStopHostEvent += Stop;
 
         // Register application quit handler
