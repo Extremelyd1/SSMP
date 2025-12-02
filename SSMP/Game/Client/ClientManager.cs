@@ -285,7 +285,7 @@ internal class ClientManager : IClientManager {
             Connect(address, port, username);
         };
         _uiManager.RequestClientDisconnectEvent += Disconnect;
-        _uiManager.RequestServerStartHostEvent += (_,_,_,_) => {
+        _uiManager.RequestServerStartHostEvent += (_, _, _, _) => {
             _saveManager.IsHostingServer = true;
         };
         _uiManager.RequestServerStopHostEvent += () => {

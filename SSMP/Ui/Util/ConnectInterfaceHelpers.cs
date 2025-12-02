@@ -1,10 +1,12 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
+using SSMP.Game.Server;
 using SSMP.Ui.Component;
-using SSMP.Ui.Util;
 using SSMP.Util;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
-namespace SSMP.Ui;
+namespace SSMP.Ui.Util;
 
 /// <summary>
 /// Helper methods for creating and managing UI components in the ConnectInterface.
@@ -36,16 +38,14 @@ internal static class ConnectInterfaceHelpers {
     private const float PanelHeight = 600f;
 
     /// <summary>
+    /// The width of the border of the background panel.
+    /// </summary>
+    private const int PanelBorderWidth = 6;
+
+    /// <summary>
     /// The corner radius for the background panel.
     /// </summary>
     private const int PanelCornerRadius = 20;
-
-    /// <summary>
-    /// Cached reflection field for accessing ButtonComponent GameObject.
-    /// </summary>
-    private static readonly System.Reflection.FieldInfo? GameObjectField = typeof(ButtonComponent).GetField("GameObject", 
-        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-
 
     /// <summary>
     /// Creates a glowing horizontal notch under the multiplayer header.
@@ -91,7 +91,12 @@ internal static class ConnectInterfaceHelpers {
         var image = panel.AddComponent<UnityEngine.UI.Image>();
         image.color = Color.white;
         
-        var roundedTexture = UiUtils.CreateRoundedRectTexture((int)PanelWidth, (int)PanelHeight, PanelCornerRadius);
+        var roundedTexture = UiUtils.CreateRoundedRectTexture(
+            (int) PanelWidth, 
+            (int) PanelHeight,
+            PanelBorderWidth,
+            PanelCornerRadius
+        );
         image.sprite = Sprite.Create(
             roundedTexture,
             new Rect(0, 0, roundedTexture.width, roundedTexture.height),
@@ -99,13 +104,13 @@ internal static class ConnectInterfaceHelpers {
             100f,
             0,
             SpriteMeshType.FullRect,
-            new Vector4(20, 20, 20, 20)
+            new Vector4(PanelBorderWidth, PanelBorderWidth, PanelBorderWidth, PanelBorderWidth)
         );
         image.type = UnityEngine.UI.Image.Type.Sliced;
         
         panel.transform.SetParent(UiManager.UiGameObject!.transform, false);
         panel.transform.SetAsFirstSibling();
-        UnityEngine.Object.DontDestroyOnLoad(panel);
+        Object.DontDestroyOnLoad(panel);
         panel.SetActive(false);
         return panel;
     }
@@ -120,9 +125,16 @@ internal static class ConnectInterfaceHelpers {
     /// <param name="text">The button text.</param>
     /// <param name="onPress">The press callback.</param>
     /// <returns>The created button component.</returns>
-    public static TabButtonComponent CreateTabButton(ComponentGroup group, float x, float y, float width, string text, System.Action onPress) {
+    public static TabButtonComponent CreateTabButton(
+        ComponentGroup group, 
+        float x, 
+        float y, 
+        float width, 
+        string text, 
+        Action onPress
+    ) {
         var button = new TabButtonComponent(group, new Vector2(x, y), new Vector2(width, 50f), 
-            text, Resources.TextureManager.ButtonBg, Resources.FontManager.UIFontRegular, 18);
+            text, Resources.FontManager.UIFontRegular, 18);
         button.SetOnPress(onPress);
         return button;
     }
@@ -134,24 +146,26 @@ internal static class ConnectInterfaceHelpers {
     /// <param name="matchmakingTab">The matchmaking tab button.</param>
     /// <param name="steamTab">The steam tab button (optional).</param>
     /// <param name="directIpTab">The direct IP tab button.</param>
-    public static void PositionTabButtonsFixed(GameObject backgroundPanel, TabButtonComponent matchmakingTab, 
-        TabButtonComponent? steamTab, TabButtonComponent directIpTab) {
-        if (GameObjectField == null) return;
-        
+    public static void PositionTabButtonsFixed(
+        GameObject backgroundPanel,
+        TabButtonComponent matchmakingTab,
+        TabButtonComponent? steamTab,
+        TabButtonComponent directIpTab
+    ) {
         var bgWidth = backgroundPanel.GetComponent<RectTransform>().sizeDelta.x;
 
         if (steamTab != null) {
             // 3 buttons
-            var buttonWidth = bgWidth / 3f;
-            AdjustButtonFixed(GameObjectField.GetValue(matchmakingTab) as GameObject, -buttonWidth, buttonWidth);
-            AdjustButtonFixed(GameObjectField.GetValue(steamTab) as GameObject, 0f, buttonWidth);
-            AdjustButtonFixed(GameObjectField.GetValue(directIpTab) as GameObject, buttonWidth, buttonWidth);
+            var buttonWidth = (bgWidth - 2 * PanelBorderWidth) / 3f;
+            AdjustButtonFixed(matchmakingTab.GameObject, -buttonWidth, buttonWidth);
+            AdjustButtonFixed(steamTab.GameObject, 0f, buttonWidth);
+            AdjustButtonFixed(directIpTab.GameObject, buttonWidth, buttonWidth);
         } else {
             // 2 buttons
-            var buttonWidth = bgWidth / 2f;
+            var buttonWidth = (bgWidth - 2 * PanelBorderWidth) / 2f;
             var offset = buttonWidth / 2f;
-            AdjustButtonFixed(GameObjectField.GetValue(matchmakingTab) as GameObject, -offset, buttonWidth);
-            AdjustButtonFixed(GameObjectField.GetValue(directIpTab) as GameObject, offset, buttonWidth);
+            AdjustButtonFixed(matchmakingTab.GameObject, -offset, buttonWidth);
+            AdjustButtonFixed(directIpTab.GameObject, offset, buttonWidth);
         }
     }
 
@@ -188,7 +202,12 @@ internal static class ConnectInterfaceHelpers {
     /// <param name="text">The content of the text.</param>
     /// <param name="currentCoroutine">The current hide coroutine (will be stopped if not null).</param>
     /// <returns>The new hide coroutine.</returns>
-    public static Coroutine SetFeedbackText(ITextComponent feedbackText, Color color, string text, Coroutine? currentCoroutine) {
+    public static Coroutine SetFeedbackText(
+        ITextComponent feedbackText, 
+        Color color, 
+        string text, 
+        Coroutine? currentCoroutine
+    ) {
         feedbackText.SetColor(color);
         feedbackText.SetText(text);
         feedbackText.SetActive(true);
@@ -224,12 +243,22 @@ internal static class ConnectInterfaceHelpers {
         username = usernameInput.GetInput();
         
         if (username.Length == 0) {
-            newCoroutine = SetFeedbackText(feedbackText, Color.red, "Failed to connect:\nYou must enter a username", currentCoroutine);
+            newCoroutine = SetFeedbackText(
+                feedbackText, 
+                Color.red, 
+                "Failed to connect:\nYou must enter a username", 
+                currentCoroutine
+            );
             return false;
         }
-        
-        if (username.Length > 32) {
-            newCoroutine = SetFeedbackText(feedbackText, Color.red, "Failed to connect:\nUsername is too long", currentCoroutine);
+
+        if (username.Length > ServerManager.MaxUsernameLength) {
+            newCoroutine = SetFeedbackText(
+                feedbackText, 
+                Color.red, 
+                "Failed to connect:\nUsername is too long", 
+                currentCoroutine
+            );
             return false;
         }
         
@@ -242,9 +271,9 @@ internal static class ConnectInterfaceHelpers {
     /// <param name="directConnectButton">The direct connect button.</param>
     /// <param name="lobbyConnectButton">The lobby connect button.</param>
     public static void ResetConnectButtons(IButtonComponent directConnectButton, IButtonComponent lobbyConnectButton) {
-        directConnectButton.SetText("CONNECT");
+        directConnectButton.SetText(ConnectInterface.DirectConnectButtonText);
         directConnectButton.SetInteractable(true);
-        lobbyConnectButton.SetText("CONNECT");
+        lobbyConnectButton.SetText(ConnectInterface.DirectConnectButtonText);
         lobbyConnectButton.SetInteractable(true);
     }
 }

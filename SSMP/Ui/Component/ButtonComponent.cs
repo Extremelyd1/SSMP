@@ -18,7 +18,7 @@ internal class ButtonComponent : Component, IButtonComponent {
     /// <summary>
     /// The default height of a button.
     /// </summary>
-    public const float DefaultHeight = 38f;
+    private const float DefaultHeight = 38f;
 
     /// <summary>
     /// The background sprites.
@@ -48,16 +48,19 @@ internal class ButtonComponent : Component, IButtonComponent {
     /// <summary>
     /// Whether the user is hovering over the button.
     /// </summary>
+    // ReSharper disable once PrivateFieldCanBeConvertedToLocalVariable
     private bool _isHover;
 
     /// <summary>
     /// Whether the user has their mouse down on the button.
     /// </summary>
+    // ReSharper disable once PrivateFieldCanBeConvertedToLocalVariable
     private bool _isMouseDown;
 
     /// <summary>
     /// The gradient shine overlay for hover/active states.
     /// </summary>
+    // ReSharper disable once PrivateFieldCanBeConvertedToLocalVariable
     private readonly Image? _shineOverlay;
 
     public ButtonComponent(
@@ -257,21 +260,5 @@ internal class ButtonComponent : Component, IButtonComponent {
         }
 
         _text.color = color;
-    }
-
-    /// <summary>
-    /// Evaluates the state of the button to make sure the background sprite is correct.
-    /// </summary>
-    private void EvaluateState() {
-        if (GameObject == null || _image == null) {
-            return;
-        }
-
-        if (!GameObject.activeSelf) {
-            _image.sprite = _interactable ? _bgSprite.Neutral : _bgSprite.Disabled;
-
-            _isHover = false;
-            _isMouseDown = false;
-        }
     }
 }

@@ -16,15 +16,15 @@ public static class UiUtils {
         var texture = new Texture2D(width, height);
         var pixels = new Color[width * height];
         
-        for (int x = 0; x < width; x++) {
+        for (var x = 0; x < width; x++) {
             // Calculate alpha based on distance from center
-            float distFromCenter = Mathf.Abs((x / (float)width) - 0.5f) * 2f; // 0 at center, 1 at edges
-            float alpha = 1f - distFromCenter; // 1 at center, 0 at edges
+            var distFromCenter = Mathf.Abs((x / (float) width) - 0.5f) * 2f; // 0 at center, 1 at edges
+            var alpha = 1f - distFromCenter; // 1 at center, 0 at edges
             alpha = Mathf.Pow(alpha, 2f); // Sharper falloff
             
-            Color pixelColor = new Color(1f, 1f, 1f, alpha);
+            var pixelColor = new Color(1f, 1f, 1f, alpha);
             
-            for (int y = 0; y < height; y++) {
+            for (var y = 0; y < height; y++) {
                 pixels[y * width + x] = pixelColor;
             }
         }
@@ -39,26 +39,26 @@ public static class UiUtils {
     /// </summary>
     /// <param name="width">The width of the texture.</param>
     /// <param name="height">The height of the texture.</param>
+    /// <param name="borderWidth">The width of the border of the texture.</param>
     /// <param name="radius">The corner radius.</param>
     /// <returns>The created texture.</returns>
-    public static Texture2D CreateRoundedRectTexture(int width, int height, int radius) {
+    public static Texture2D CreateRoundedRectTexture(int width, int height, int borderWidth, int radius) {
         var texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
         var pixels = new Color[width * height];
         
         // Pre-calculate radius squared for performance
         var radiusSq = radius * radius;
-        var borderWidth = 6;
         var borderThreshold = radius - borderWidth;
         var borderThresholdSq = borderThreshold * borderThreshold;
         
         var fillColor = new Color(0.1f, 0.1f, 0.1f, 0.85f);
         
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
+        for (var y = 0; y < height; y++) {
+            for (var x = 0; x < width; x++) {
                 var index = y * width + x;
                 
                 // Check if in corner regions
-                bool inCorner = false;
+                var inCorner = false;
                 float distSq = 0;
                 
                 if (x < radius && y >= height - radius) {
@@ -104,8 +104,7 @@ public static class UiUtils {
                 }
                 
                 // Determine if border or fill
-                bool isBorder;
-                isBorder = inCorner
+                var isBorder = inCorner
                     ? distSq > borderThresholdSq
                     : x < borderWidth || x >= width - borderWidth ||
                       y < borderWidth || y >= height - borderWidth;

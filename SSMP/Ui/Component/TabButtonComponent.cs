@@ -1,5 +1,4 @@
 using System;
-using SSMP.Ui.Resources;
 using SSMP.Ui.Util;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -45,6 +44,7 @@ internal class TabButtonComponent : Component, IButtonComponent {
     /// <summary>
     /// Whether the mouse button is currently pressed down on the button.
     /// </summary>
+    // ReSharper disable once PrivateFieldCanBeConvertedToLocalVariable
     private bool _isMouseDown;
 
     /// <summary>
@@ -59,7 +59,6 @@ internal class TabButtonComponent : Component, IButtonComponent {
     /// <param name="position">The position of the button.</param>
     /// <param name="size">The size of the button.</param>
     /// <param name="text">The text displayed on the button.</param>
-    /// <param name="bgSprite">The background sprite (unused in this implementation).</param>
     /// <param name="font">The font of the text.</param>
     /// <param name="fontSize">The font size of the text.</param>
     public TabButtonComponent(
@@ -67,7 +66,6 @@ internal class TabButtonComponent : Component, IButtonComponent {
         Vector2 position,
         Vector2 size,
         string text,
-        MultiStateSprite bgSprite,
         Font font,
         int fontSize
     ) : base(componentGroup, position, size) {

@@ -7,7 +7,6 @@ using SSMP.Game.Settings;
 using SSMP.Hooks;
 using SSMP.Networking.Client;
 using SSMP.Networking.Transport.Common;
-using SSMP.Networking;
 using SSMP.Ui.Chat;
 using SSMP.Util;
 using UnityEngine;
@@ -21,11 +20,6 @@ namespace SSMP.Ui;
 /// <inheritdoc />
 internal class UiManager : IUiManager {
     #region Internal UI manager variables and properties
-
-    /// <summary>
-    /// The font size of header text.
-    /// </summary>
-    public const int HeaderFontSize = 34;
 
     /// <summary>
     /// The font size of normal text.

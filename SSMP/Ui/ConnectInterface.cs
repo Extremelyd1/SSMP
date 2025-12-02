@@ -1,13 +1,13 @@
 using System;
-using SSMP.Game;
 using SSMP.Game.Settings;
 using SSMP.Networking.Client;
 using SSMP.Ui.Component;
 using Steamworks;
 using SSMP.Networking.Transport.Common;
-using SSMP.Networking;
+using SSMP.Ui.Util;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
+// ReSharper disable ObjectCreationAsStatement
 
 namespace SSMP.Ui;
 
@@ -142,13 +142,9 @@ internal class ConnectInterface {
     /// </summary>
     private const float FeedbackTextOffset = 320f;
 
-
-
     #endregion
 
     #region Text Constants
-
-
 
     /// <summary>
     /// The text of the connection button while connecting.
@@ -253,7 +249,7 @@ internal class ConnectInterface {
     /// <summary>
     /// The text for the direct connect button.
     /// </summary>
-    private const string DirectConnectButtonText = "CONNECT";
+    public const string DirectConnectButtonText = "CONNECT";
 
     /// <summary>
     /// The text for the host button.
@@ -263,8 +259,6 @@ internal class ConnectInterface {
     #endregion
 
     #region Message Constants
-
-
 
     /// <summary>
     /// Error message when address is missing.
@@ -280,8 +274,6 @@ internal class ConnectInterface {
     /// Error message when port is invalid for hosting.
     /// </summary>
     private const string ErrorEnterValidPortHost = "Failed to host:\nYou must enter a valid port";
-
-
 
     /// <summary>
     /// Message displayed upon successful connection.
@@ -335,6 +327,7 @@ internal class ConnectInterface {
     /// <summary>
     /// The component group containing all background panel elements.
     /// </summary>
+    // ReSharper disable once PrivateFieldCanBeConvertedToLocalVariable
     private readonly ComponentGroup _backgroundGroup;
 
     /// <summary>
@@ -390,16 +383,19 @@ internal class ConnectInterface {
     /// <summary>
     /// The create lobby button component in the Steam tab.
     /// </summary>
+    // ReSharper disable once PrivateFieldCanBeConvertedToLocalVariable
     private readonly IButtonComponent _createLobbyButton;
 
     /// <summary>
     /// The browse lobby button component in the Steam tab.
     /// </summary>
+    // ReSharper disable once PrivateFieldCanBeConvertedToLocalVariable
     private readonly IButtonComponent _browseLobbyButton;
 
     /// <summary>
     /// The join friend button component in the Steam tab.
     /// </summary>
+    // ReSharper disable once PrivateFieldCanBeConvertedToLocalVariable
     private readonly IButtonComponent _joinFriendButton;
 
     /// <summary>
@@ -420,6 +416,7 @@ internal class ConnectInterface {
     /// <summary>
     /// The server/host button component in the Direct IP tab.
     /// </summary>
+    // ReSharper disable once PrivateFieldCanBeConvertedToLocalVariable
     private readonly IButtonComponent _serverButton;
 
     /// <summary>
@@ -431,8 +428,6 @@ internal class ConnectInterface {
     /// The currently active tab in the interface.
     /// </summary>
     private Tab _activeTab = Tab.Matchmaking;
-
-
 
     /// <summary>
     /// Event that is executed when the connect button is pressed.
@@ -490,8 +485,8 @@ internal class ConnectInterface {
         var tabWidth = TabButtonWidth;
         _matchmakingTab = ConnectInterfaceHelpers.CreateTabButton(_backgroundGroup, x - tabWidth, tabY, tabWidth, MatchmakingTabText, () => SwitchTab(Tab.Matchmaking));
         
-        if (true){
         //(UNCOMMENT)if (SteamManager.IsInitialized) {
+        if (true) {
             _steamTab = ConnectInterfaceHelpers.CreateTabButton(_backgroundGroup, x, tabY, tabWidth, SteamTabText, () => SwitchTab(Tab.Steam));
         }
         
@@ -520,7 +515,7 @@ internal class ConnectInterface {
 
         // Steam tab
         //(UNCOMMENT)if (SteamManager.IsInitialized) {
-         if (true){
+         if (true) {
             _steamGroup = new ComponentGroup(activeSelf: false, parent: _backgroundGroup);
             var steamY = contentY;
             
@@ -637,6 +632,7 @@ internal class ConnectInterface {
             return;
         }
 
+#pragma warning disable CS0162 // Unreachable code detected
         if (!ConnectInterfaceHelpers.ValidateUsername(_usernameInput, _feedbackText, out var username, _feedbackHideCoroutine, out var newCoroutine)) {
             _feedbackHideCoroutine = newCoroutine;
             return;
@@ -644,6 +640,7 @@ internal class ConnectInterface {
 
         _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.yellow, "Creating Steam lobby...", _feedbackHideCoroutine);
         Logger.Info($"Create lobby requested for user: {username}");
+#pragma warning restore CS0162 // Unreachable code detected
 
         // Create lobby via SteamManager
         //(UNCOMMENT)SteamManager.CreateLobby(username);
