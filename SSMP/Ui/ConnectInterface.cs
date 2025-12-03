@@ -556,15 +556,11 @@ internal class ConnectInterface {
         _portInput = new PortInputComponent(_directIpGroup, new Vector2(x, directY), new Vector2(ContentWidth, UniformHeight), joinPort == -1 ? "" : joinPort.ToString(), PortPlaceholder);
         directY -= UniformHeight + InputSpacing;
         
-        // Two buttons side by side - align with Port input field edges  
-        const float buttonGap = 10f;
-        var buttonWidth = (ContentWidth - buttonGap) / 2f; // 185px each
         
-        // Port field is centered at x with total width ContentWidth (380px)
-        // Port spans: [x - 190, x + 190]
-        // Left button (185px) should span: [x - 190, x - 5], center at x - 97.5
-        // Right button (185px) should span: [x + 5, x + 190], center at x + 97.5
-        var buttonOffset = ContentWidth / 2f - buttonWidth / 2f; // = 190 - 92.5 = 97.5
+        //Direct IP buttons constants
+        var buttonGap = 10f;
+        var buttonWidth = (ContentWidth - buttonGap) / 2f; 
+        var buttonOffset = ContentWidth / 2f - buttonWidth / 2f; 
         
         _directConnectButton = new ButtonComponent(_directIpGroup, new Vector2(x - buttonOffset, directY), 
             new Vector2(buttonWidth, UniformHeight), DirectConnectButtonText, 
