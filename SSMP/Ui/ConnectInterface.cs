@@ -25,7 +25,7 @@ internal class ConnectInterface {
     /// <summary>
     /// The standard width for content elements in the interface.
     /// </summary>
-    private const float ContentWidth = 410f;
+    private const float ContentWidth = 360f;
 
     /// <summary>
     /// The standard height for interactive elements (buttons, inputs).
@@ -556,14 +556,22 @@ internal class ConnectInterface {
         _portInput = new PortInputComponent(_directIpGroup, new Vector2(x, directY), new Vector2(ContentWidth, UniformHeight), joinPort == -1 ? "" : joinPort.ToString(), PortPlaceholder);
         directY -= UniformHeight + InputSpacing;
         
-        // Two buttons side by side
-        var buttonWidth = (ContentWidth - 10f) / 2f;
-        _directConnectButton = new ButtonComponent(_directIpGroup, new Vector2(x - buttonWidth / 2f - 5f, directY), 
+        // Two buttons side by side - align with Port input field edges  
+        const float buttonGap = 10f;
+        var buttonWidth = (ContentWidth - buttonGap) / 2f; // 185px each
+        
+        // Port field is centered at x with total width ContentWidth (380px)
+        // Port spans: [x - 190, x + 190]
+        // Left button (185px) should span: [x - 190, x - 5], center at x - 97.5
+        // Right button (185px) should span: [x + 5, x + 190], center at x + 97.5
+        var buttonOffset = ContentWidth / 2f - buttonWidth / 2f; // = 190 - 92.5 = 97.5
+        
+        _directConnectButton = new ButtonComponent(_directIpGroup, new Vector2(x - buttonOffset, directY), 
             new Vector2(buttonWidth, UniformHeight), DirectConnectButtonText, 
             Resources.TextureManager.ButtonBg, Resources.FontManager.UIFontRegular, UiManager.NormalFontSize);
         _directConnectButton.SetOnPress(OnDirectConnectButtonPressed);
         
-        _serverButton = new ButtonComponent(_directIpGroup, new Vector2(x + buttonWidth / 2f + 5f, directY), 
+        _serverButton = new ButtonComponent(_directIpGroup, new Vector2(x + buttonOffset, directY), 
             new Vector2(buttonWidth, UniformHeight), HostButtonText, 
             Resources.TextureManager.ButtonBg, Resources.FontManager.UIFontRegular, UiManager.NormalFontSize);
         _serverButton.SetOnPress(OnStartButtonPressed);
