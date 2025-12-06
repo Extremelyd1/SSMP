@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
 using GlobalEnums;
 using SSMP.Api.Client;
 using SSMP.Game.Settings;
@@ -40,6 +41,11 @@ internal class UiManager : IUiManager {
     /// The address to connect to the local device.
     /// </summary>
     private const string LocalhostAddress = "127.0.0.1";
+
+    /// <summary>
+    /// The ratio between the actual screen height and the default screen height (1080) for scaling purposes.
+    /// </summary>
+    public static readonly float ScreenHeightRatio = Screen.height / 1080f;
 
     /// <summary>
     /// Expression for the GameManager instance.
@@ -274,7 +280,21 @@ internal class UiManager : IUiManager {
         var canvasScaler = UiGameObject.AddComponent<CanvasScaler>();
         canvasScaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         canvasScaler.referenceResolution = new Vector2(1920f, 1080f);
-        canvasScaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Shrink;
+        canvasScaler.matchWidthOrHeight = 1f;
+        canvasScaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+        
+        MonoBehaviourUtil.Instance.StartCoroutine(WaitForSetup());
+
+        IEnumerator WaitForSetup() {
+            yield return new WaitForSeconds(10);
+
+            var prevScaleFactor = typeof(CanvasScaler).GetField(
+                "m_PrevScaleFactor",
+                BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance
+            )!.GetValue(canvasScaler);
+            
+            Logger.Warn($"m_PrevScaleFactor: {prevScaleFactor}");
+        }
 
         UiGameObject.AddComponent<GraphicRaycaster>();
 

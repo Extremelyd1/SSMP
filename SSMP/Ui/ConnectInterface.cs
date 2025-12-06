@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using SSMP.Game.Settings;
 using SSMP.Networking.Client;
 using SSMP.Ui.Component;
@@ -7,12 +8,17 @@ using SSMP.Networking.Transport.Common;
 using SSMP.Ui.Util;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
+// ReSharper disable ObjectCreationAsStatement
+// ReSharper disable HeuristicUnreachableCode
+// ReSharper disable UnusedMember.Local
+#pragma warning disable CS0162 // Unreachable code detected
 
 namespace SSMP.Ui;
 
 /// <summary>
 /// Manages the multiplayer connection interface with tabbed navigation for Matchmaking, Steam, and Direct IP connections.
 /// </summary>
+[SuppressMessage("Compiler", "CS0162:Unreachable code detected")]
 internal class ConnectInterface {
     #region Layout Constants
 
@@ -386,6 +392,7 @@ internal class ConnectInterface {
     /// <summary>
     /// Input field for entering a Lobby ID.
     /// </summary>
+    // ReSharper disable once NotAccessedField.Local
     private readonly IInputComponent _lobbyIdInput;
 
     /// <summary>
@@ -397,16 +404,19 @@ internal class ConnectInterface {
     /// <summary>
     /// Button to create a new Steam lobby.
     /// </summary>
+    // ReSharper disable once NotAccessedField.Local
     private readonly IButtonComponent _createLobbyButton;
 
     /// <summary>
     /// Button to open the lobby browser.
     /// </summary>
+    // ReSharper disable once NotAccessedField.Local
     private readonly IButtonComponent _browseLobbyButton;
 
     /// <summary>
     /// Button to join a friend via invite.
     /// </summary>
+    // ReSharper disable once NotAccessedField.Local
     private readonly IButtonComponent _joinFriendButton;
 
     // Direct IP tab components
@@ -478,43 +488,43 @@ internal class ConnectInterface {
 
         SubscribeToSteamEvents();
 
-        var layoutContext = CreateLayoutContext();
+        var currentY = InitialY;
 
         _backgroundGroup = new ComponentGroup(parent: connectGroup);
 
         // Build UI from top to bottom
-        CreateHeader(connectGroup, ref layoutContext);
-        _glowingNotch = CreateNotch(layoutContext);
-        _backgroundPanel = CreateBackgroundPanel(layoutContext);
+        CreateHeader(connectGroup, ref currentY);
+        _glowingNotch = CreateNotch(ref currentY);
+        _backgroundPanel = CreateBackgroundPanel(ref currentY);
 
-        _usernameInput = CreateUsernameSection(ref layoutContext);
-        var tabElements = CreateTabButtons(ref layoutContext);
+        _usernameInput = CreateUsernameSection(ref currentY);
+        var tabElements = CreateTabButtons(ref currentY);
         _matchmakingTab = tabElements.matchmaking;
         _steamTab = tabElements.steam;
         _directIpTab = tabElements.directIp;
 
-        var contentY = layoutContext.Y;
-
         // Create tab-specific content
-        var matchmakingComponents = CreateMatchmakingTab(contentY, layoutContext.SpacingMultiplier);
+        var matchmakingComponents = CreateMatchmakingTab(currentY);
         _matchmakingGroup = matchmakingComponents.group;
         _lobbyIdInput = matchmakingComponents.lobbyIdInput;
         _lobbyConnectButton = matchmakingComponents.connectButton;
 
-        var steamComponents = CreateSteamTab(contentY, layoutContext.SpacingMultiplier);
+        var steamComponents = CreateSteamTab(currentY);
         _steamGroup = steamComponents.group;
         _createLobbyButton = steamComponents.createButton;
         _browseLobbyButton = steamComponents.browseButton;
         _joinFriendButton = steamComponents.joinButton;
 
-        var directIpComponents = CreateDirectIpTab(contentY, layoutContext.SpacingMultiplier);
+        var directIpComponents = CreateDirectIpTab(currentY);
         _directIpGroup = directIpComponents.group;
         _addressInput = directIpComponents.addressInput;
         _portInput = directIpComponents.portInput;
         _directConnectButton = directIpComponents.connectButton;
         _serverButton = directIpComponents.hostButton;
 
-        _feedbackText = CreateFeedbackText(contentY, layoutContext.SpacingMultiplier);
+        currentY -= FeedbackTextOffset / UiManager.ScreenHeightRatio;
+
+        _feedbackText = CreateFeedbackText(currentY);
 
         FinalizeLayout();
 
@@ -532,85 +542,59 @@ internal class ConnectInterface {
     }
 
     /// <summary>
-    /// Creates layout context with resolution-aware spacing calculations.
-    /// </summary>
-    private LayoutContext CreateLayoutContext() {
-        const float referenceHeight = 1080f;
-        var spacingMultiplier = referenceHeight / Screen.height;
-
-        Logger.Info($"[ConnectInterface] Screen: {Screen.width}x{Screen.height}, " +
-                    $"spacing multiplier: {spacingMultiplier:F3}");
-
-        return new LayoutContext {
-            X = InitialX,
-            Y = InitialY,
-            SpacingMultiplier = spacingMultiplier
-        };
-    }
-
-    /// <summary>
     /// Creates the main header text at the top of the interface.
     /// </summary>
-    private void CreateHeader(ComponentGroup parent, ref LayoutContext ctx) {
+    private void CreateHeader(ComponentGroup parent, ref float currentY) {
         new TextComponent(
             parent,
-            new Vector2(ctx.X, ctx.Y),
+            new Vector2(InitialX, currentY),
             new Vector2(HeaderWidth, HeaderHeight),
             HeaderText,
             fontSize: 32,
             alignment: TextAnchor.MiddleCenter
         );
 
-        ctx.Y -= HeaderToNotchSpacing * ctx.SpacingMultiplier;
+        currentY -= HeaderToNotchSpacing / UiManager.ScreenHeightRatio;
     }
 
     /// <summary>
     /// Creates the glowing decorative notch below the header.
     /// </summary>
-    private GameObject CreateNotch(LayoutContext ctx) {
-        var notch = ConnectInterfaceHelpers.CreateGlowingNotch(ctx.X, ctx.Y);
+    private GameObject CreateNotch(ref float currentY) {
+        var notch = ConnectInterfaceHelpers.CreateGlowingNotch(InitialX, currentY);
         return notch;
     }
 
     /// <summary>
     /// Creates the main background panel with resolution-aware height scaling.
     /// </summary>
-    private GameObject CreateBackgroundPanel(LayoutContext ctx) {
-        // Dynamic height: base 550px at 1080p, scales to ~612px at 1440p
-        var dynamicHeight = 550f + (250f * (1f - ctx.SpacingMultiplier));
-
+    private GameObject CreateBackgroundPanel(ref float currentY) {
         return ConnectInterfaceHelpers.CreateBackgroundPanel(
-            ctx.X,
-            ctx.Y - NotchToPanelSpacing,
-            dynamicHeight
+            InitialX,
+            currentY - NotchToPanelSpacing / UiManager.ScreenHeightRatio
         );
     }
 
     /// <summary>
     /// Creates the username input section at the top of the panel.
     /// </summary>
-    private IInputComponent CreateUsernameSection(ref LayoutContext ctx) {
-        // 4K specific tweak: Shift everything down slightly
-        if (ctx.SpacingMultiplier < 0.6f) {
-            ctx.Y -= 45f * ctx.SpacingMultiplier;
-        }
-
-        ctx.Y -= (NotchToPanelSpacing + PanelPaddingTop) * ctx.SpacingMultiplier;
+    private IInputComponent CreateUsernameSection(ref float currentY) {
+        currentY -= (NotchToPanelSpacing + PanelPaddingTop) / UiManager.ScreenHeightRatio;
 
         new TextComponent(
             _backgroundGroup,
-            new Vector2(ctx.X + TextIndentWidth, ctx.Y),
+            new Vector2(InitialX + TextIndentWidth, currentY),
             new Vector2(ContentWidth, LabelHeight),
             IdentityLabelText,
             UiManager.NormalFontSize,
             alignment: TextAnchor.MiddleLeft
         );
 
-        ctx.Y -= LabelToInputSpacing * ctx.SpacingMultiplier;
+        currentY -= LabelToInputSpacing / UiManager.ScreenHeightRatio;
 
         var usernameInput = new InputComponent(
             _backgroundGroup,
-            new Vector2(ctx.X, ctx.Y),
+            new Vector2(InitialX, currentY),
             new Vector2(ContentWidth, UniformHeight),
             _modSettings.Username,
             UsernamePlaceholder,
@@ -618,7 +602,7 @@ internal class ConnectInterface {
             onValidateInput: (_, _, addedChar) => char.IsLetterOrDigit(addedChar) ? addedChar : '\0'
         );
 
-        ctx.Y -= (UniformHeight + InputSpacing) * ctx.SpacingMultiplier;
+        currentY -= (UniformHeight + InputSpacing) / UiManager.ScreenHeightRatio;
 
         return usernameInput;
     }
@@ -627,26 +611,24 @@ internal class ConnectInterface {
     /// Creates the tab navigation buttons (Matchmaking, Steam, Direct IP).
     /// </summary>
     private (TabButtonComponent matchmaking, TabButtonComponent? steam, TabButtonComponent directIp)
-        CreateTabButtons(ref LayoutContext ctx) {
-        var tabY = ctx.Y;
-
+        CreateTabButtons(ref float currentY) {
         var matchmaking = ConnectInterfaceHelpers.CreateTabButton(
             _backgroundGroup,
-            ctx.X - TabButtonWidth,
-            tabY,
+            InitialX - TabButtonWidth,
+            currentY,
             TabButtonWidth,
             MatchmakingTabText,
             () => SwitchTab(Tab.Matchmaking)
         );
 
-        TabButtonComponent? steam = null;
+        TabButtonComponent? steam;
         // Check if Steam is initialized (currently stubbed with true)
         //(UNCOMMENT)if (SteamManager.IsInitialized) {
         if (true) {
             steam = ConnectInterfaceHelpers.CreateTabButton(
                 _backgroundGroup,
-                ctx.X,
-                tabY,
+                InitialX,
+                currentY,
                 TabButtonWidth,
                 SteamTabText,
                 () => SwitchTab(Tab.Steam)
@@ -655,14 +637,14 @@ internal class ConnectInterface {
 
         var directIp = ConnectInterfaceHelpers.CreateTabButton(
             _backgroundGroup,
-            ctx.X + TabButtonWidth,
-            tabY,
+            InitialX + TabButtonWidth,
+            currentY,
             TabButtonWidth,
             DirectIpTabText,
             () => SwitchTab(Tab.DirectIp)
         );
 
-        ctx.Y -= TabSpacing * ctx.SpacingMultiplier;
+        currentY -= TabSpacing / UiManager.ScreenHeightRatio;
 
         return (matchmaking, steam, directIp);
     }
@@ -675,7 +657,7 @@ internal class ConnectInterface {
     /// Creates the Matchmaking tab content with lobby ID input and connect button.
     /// </summary>
     private (ComponentGroup group, IInputComponent lobbyIdInput, IButtonComponent connectButton)
-        CreateMatchmakingTab(float startY, float spacingMultiplier) {
+        CreateMatchmakingTab(float startY) {
         var group = new ComponentGroup(parent: _backgroundGroup);
         var y = startY;
 
@@ -688,7 +670,7 @@ internal class ConnectInterface {
             fontSize: 18,
             alignment: TextAnchor.MiddleCenter
         );
-        y -= JoinHeaderSpacing * spacingMultiplier;
+        y -= JoinHeaderSpacing / UiManager.ScreenHeightRatio;
 
         // Description
         new TextComponent(
@@ -699,7 +681,7 @@ internal class ConnectInterface {
             UiManager.SubTextFontSize,
             alignment: TextAnchor.MiddleCenter
         );
-        y -= JoinDescSpacing * spacingMultiplier;
+        y -= JoinDescSpacing / UiManager.ScreenHeightRatio;
 
         // Lobby ID label
         new TextComponent(
@@ -710,7 +692,7 @@ internal class ConnectInterface {
             UiManager.NormalFontSize,
             alignment: TextAnchor.MiddleLeft
         );
-        y -= LobbyIdLabelSpacing * spacingMultiplier;
+        y -= LobbyIdLabelSpacing / UiManager.ScreenHeightRatio;
 
         // Lobby ID input
         var lobbyIdInput = new InputComponent(
@@ -721,7 +703,7 @@ internal class ConnectInterface {
             LobbyIdPlaceholder,
             characterLimit: 12
         );
-        y -= (UniformHeight + 20f) * spacingMultiplier;
+        y -= (UniformHeight + 20f) / UiManager.ScreenHeightRatio;
 
         // Connect button
         var connectButton = new ButtonComponent(
@@ -742,7 +724,7 @@ internal class ConnectInterface {
     /// Creates the Steam tab content with lobby management buttons.
     /// </summary>
     private (ComponentGroup? group, IButtonComponent createButton, IButtonComponent browseButton,
-        IButtonComponent joinButton) CreateSteamTab(float startY, float spacingMultiplier) {
+        IButtonComponent joinButton) CreateSteamTab(float startY) {
         // Check if Steam is available
         //(UNCOMMENT)if (!SteamManager.IsInitialized) {
 
@@ -758,7 +740,7 @@ internal class ConnectInterface {
             UiManager.SubTextFontSize,
             alignment: TextAnchor.MiddleCenter
         );
-        y -= SteamTextSpacing * spacingMultiplier;
+        y -= SteamTextSpacing / UiManager.ScreenHeightRatio;
 
         // Create lobby button
         var createButton = new ButtonComponent(
@@ -771,7 +753,7 @@ internal class ConnectInterface {
             UiManager.NormalFontSize
         );
         createButton.SetOnPress(OnCreateLobbyButtonPressed);
-        y -= (UniformHeight + SteamButtonSpacing) * spacingMultiplier;
+        y -= (UniformHeight + SteamButtonSpacing) / UiManager.ScreenHeightRatio;
 
         // Browse lobbies button
         var browseButton = new ButtonComponent(
@@ -784,7 +766,7 @@ internal class ConnectInterface {
             UiManager.NormalFontSize
         );
         browseButton.SetOnPress(OnBrowseLobbyButtonPressed);
-        y -= (UniformHeight + SteamButtonSpacing) * spacingMultiplier;
+        y -= (UniformHeight + SteamButtonSpacing) / UiManager.ScreenHeightRatio;
 
         // Join friend button
         var joinButton = new ButtonComponent(
@@ -806,7 +788,7 @@ internal class ConnectInterface {
     /// </summary>
     private (ComponentGroup group, IInputComponent addressInput, IInputComponent portInput,
         IButtonComponent connectButton, IButtonComponent hostButton)
-        CreateDirectIpTab(float startY, float spacingMultiplier) {
+        CreateDirectIpTab(float startY) {
         var group = new ComponentGroup(activeSelf: false, parent: _backgroundGroup);
         var y = startY;
 
@@ -819,7 +801,7 @@ internal class ConnectInterface {
             UiManager.NormalFontSize,
             alignment: TextAnchor.MiddleLeft
         );
-        y -= ServerAddressLabelSpacing * spacingMultiplier;
+        y -= ServerAddressLabelSpacing / UiManager.ScreenHeightRatio;
 
         var addressInput = new IpInputComponent(
             group,
@@ -828,7 +810,7 @@ internal class ConnectInterface {
             _modSettings.ConnectAddress,
             ServerAddressPlaceholder
         );
-        y -= (UniformHeight + ServerAddressInputSpacing) * spacingMultiplier;
+        y -= (UniformHeight + ServerAddressInputSpacing) / UiManager.ScreenHeightRatio;
 
         // Port section
         new TextComponent(
@@ -839,7 +821,7 @@ internal class ConnectInterface {
             UiManager.NormalFontSize,
             alignment: TextAnchor.MiddleLeft
         );
-        y -= PortLabelSpacing * spacingMultiplier;
+        y -= PortLabelSpacing / UiManager.ScreenHeightRatio;
 
         var joinPort = _modSettings.ConnectPort;
         var portInput = new PortInputComponent(
@@ -849,17 +831,18 @@ internal class ConnectInterface {
             joinPort == -1 ? "" : joinPort.ToString(),
             PortPlaceholder
         );
-        y -= UniformHeight + (20f * spacingMultiplier);
+        y -= (UniformHeight + 20f) / UiManager.ScreenHeightRatio;
 
-        // Button layout calculation using new helper methods
-        var buttonLayout = ConnectInterfaceHelpers.CalculateButtonLayout(ContentWidth, spacingMultiplier);
-        var buttonHeight = ConnectInterfaceHelpers.GetButtonHeight(spacingMultiplier, UniformHeight);
+        // Direct IP button values
+        var buttonGap = 10f;
+        var buttonWidth = (ContentWidth - buttonGap) / 2f;
+        var buttonOffset = ((buttonWidth + buttonGap) / 2f) / (float) System.Math.Pow(UiManager.ScreenHeightRatio, 2);
 
         // Connect button (left)
         var connectButton = new ButtonComponent(
             group,
-            new Vector2(InitialX - buttonLayout.offset, y),
-            new Vector2(buttonLayout.width, buttonHeight),
+            new Vector2(InitialX - buttonOffset, y),
+            new Vector2(buttonWidth, UniformHeight),
             DirectConnectButtonText,
             Resources.TextureManager.ButtonBg,
             Resources.FontManager.UIFontRegular,
@@ -870,8 +853,8 @@ internal class ConnectInterface {
         // Host button (right)
         var hostButton = new ButtonComponent(
             group,
-            new Vector2(InitialX + buttonLayout.offset, y),
-            new Vector2(buttonLayout.width, buttonHeight),
+            new Vector2(InitialX + buttonOffset, y),
+            new Vector2(buttonWidth, UniformHeight),
             HostButtonText,
             Resources.TextureManager.ButtonBg,
             Resources.FontManager.UIFontRegular,
@@ -885,14 +868,10 @@ internal class ConnectInterface {
     /// <summary>
     /// Creates the feedback text component that displays connection status and errors.
     /// </summary>
-    private ITextComponent CreateFeedbackText(float contentY, float spacingMultiplier) {
-        // Soften the spacing reduction for feedback text to keep it a bit lower at high res
-        var effectiveMultiplier = (spacingMultiplier + 1f) / 2f;
-        var feedbackY = contentY - (FeedbackTextOffset * effectiveMultiplier);
-
+    private ITextComponent CreateFeedbackText(float contentY) {
         var feedback = new TextComponent(
             _backgroundGroup,
-            new Vector2(InitialX, feedbackY),
+            new Vector2(InitialX, contentY),
             new Vector2(ContentWidth, LabelHeight),
             new Vector2(0.5f, 1f),
             "",
@@ -1002,14 +981,12 @@ internal class ConnectInterface {
             return;
         }
 
-#pragma warning disable CS0162 // Unreachable code detected
         if (!ValidateUsername(out var username)) {
             return;
         }
 
         ShowFeedback(Color.yellow, "Creating Steam lobby...");
         Logger.Info($"Create lobby requested for user: {username}");
-#pragma warning restore CS0162 // Unreachable code detected
 
         //(UNCOMMENT)SteamManager.CreateLobby(username);
     }
@@ -1260,31 +1237,6 @@ internal class ConnectInterface {
                 $"Failed to connect:\n{((ConnectionFailedMessageResult) result).Message}",
             _ => ErrorUnknown
         };
-    }
-
-    #endregion
-
-    #region Helper Struct
-
-    /// <summary>
-    /// Context object for tracking UI layout calculations during interface construction.
-    /// </summary>
-    private struct LayoutContext {
-        /// <summary>
-        /// Current X coordinate for positioning UI elements.
-        /// </summary>
-        public float X;
-
-        /// <summary>
-        /// Current Y coordinate for positioning UI elements (decreases as we go down).
-        /// </summary>
-        public float Y;
-
-        /// <summary>
-        /// Resolution-based multiplier for spacing adjustments.
-        /// Calculated as referenceHeight / currentHeight (1.0 at 1080p, 0.75 at 1440p).
-        /// </summary>
-        public float SpacingMultiplier;
     }
 
     #endregion
