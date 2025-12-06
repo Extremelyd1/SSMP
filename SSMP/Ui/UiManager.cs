@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Reflection;
 using GlobalEnums;
 using SSMP.Api.Client;
 using SSMP.Game.Settings;
@@ -283,19 +282,6 @@ internal class UiManager : IUiManager {
         canvasScaler.matchWidthOrHeight = 1f;
         canvasScaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
         
-        MonoBehaviourUtil.Instance.StartCoroutine(WaitForSetup());
-
-        IEnumerator WaitForSetup() {
-            yield return new WaitForSeconds(10);
-
-            var prevScaleFactor = typeof(CanvasScaler).GetField(
-                "m_PrevScaleFactor",
-                BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance
-            )!.GetValue(canvasScaler);
-            
-            Logger.Warn($"m_PrevScaleFactor: {prevScaleFactor}");
-        }
-
         UiGameObject.AddComponent<GraphicRaycaster>();
 
         Object.DontDestroyOnLoad(UiGameObject);
