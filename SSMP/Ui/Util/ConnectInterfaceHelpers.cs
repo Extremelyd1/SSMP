@@ -4,6 +4,7 @@ using SSMP.Game.Server;
 using SSMP.Ui.Component;
 using SSMP.Util;
 using UnityEngine;
+using Logger = SSMP.Logging.Logger;
 using Object = UnityEngine.Object;
 
 namespace SSMP.Ui.Util;
@@ -35,7 +36,7 @@ internal static class ConnectInterfaceHelpers {
     /// <summary>
     /// The height of the background panel.
     /// </summary>
-    private const float PanelHeight = 600f;
+    private const float PanelHeight = 520f;
 
     /// <summary>
     /// The width of the border of the background panel.
@@ -46,6 +47,128 @@ internal static class ConnectInterfaceHelpers {
     /// The corner radius for the background panel.
     /// </summary>
     private const int PanelCornerRadius = 20;
+
+    /// <summary>
+    /// Determines the current resolution tier based on aspect ratio and spacing multiplier.
+    /// </summary>
+    /// <param name="spacingMultiplier">The spacing multiplier (referenceHeight / currentHeight)</param>
+    /// <returns>The detected resolution tier</returns>
+    public static ResolutionTier GetResolutionTier(float spacingMultiplier) {
+        float aspectRatio = (float) Screen.width / Screen.height;
+
+        Logger.Debug($"[ResolutionDetection] {Screen.width}x{Screen.height}, " +
+                     $"aspect={aspectRatio:F2}, spacingMult={spacingMultiplier:F3}");
+
+        // Ultrawide: 21:9 = 2.33, 32:9 = 3.55
+        // Range: 2.0+ catches all ultrawides including super ultrawides
+        if (aspectRatio >= 2.0f) {
+            return ResolutionTier.Ultrawide;
+        }
+
+        // Legacy aspect ratios: 4:3 = 1.33, 5:4 = 1.25, 16:10 = 1.6
+        // Range: below 1.7 but above 1.0 catches these non-16:9 formats
+        if (aspectRatio < 1.7f) {
+            return ResolutionTier.Legacy;
+        }
+
+        // Standard 16:9 (aspect ratio ~1.777)
+        // Now subdivide by height using spacing multiplier
+        // Height-based tiers for 16:9:
+        // 4K (2160p):  1080/2160 = 0.50
+        // 1440p:       1080/1440 = 0.75
+        // 1080p:       1080/1080 = 1.00
+
+        if (spacingMultiplier < 0.6f) {
+            // 4K and above (2160p+)
+            return ResolutionTier.UHD4K;
+        }
+
+        if (spacingMultiplier < 0.85f) {
+            // 1440p range
+            return ResolutionTier.QHD1440p;
+        }
+
+        // 1080p and below (includes 900p, 768p, etc.)
+        return ResolutionTier.Standard1080p;
+    }
+
+    /// <summary>
+    /// Gets the button layout configuration for a specific resolution tier.
+    /// </summary>
+    /// <param name="tier">The resolution tier</param>
+    /// <returns>The button layout configuration</returns>
+    public static ButtonLayoutConfig GetLayoutConfig(ResolutionTier tier) {
+        return tier switch {
+            ResolutionTier.Ultrawide => new ButtonLayoutConfig(
+                buttonGap: -25f,
+                sideMargin: 23f
+            ),
+
+            ResolutionTier.UHD4K => new ButtonLayoutConfig(
+                buttonGap: -80f,
+                sideMargin: 47f,
+                buttonHeightOverride: 65f
+            ),
+
+            ResolutionTier.QHD1440p => new ButtonLayoutConfig(
+                buttonGap: -5f,
+                sideMargin: 25f
+            ),
+
+            ResolutionTier.Legacy => new ButtonLayoutConfig(
+                buttonGap: 120f,
+                sideMargin: -45f
+            ),
+
+            ResolutionTier.Standard1080p => new ButtonLayoutConfig(
+                buttonGap: 5f,
+                sideMargin: 0f
+            ),
+
+            _ => new ButtonLayoutConfig(5f, 0f)
+        };
+    }
+
+    /// <summary>
+    /// Calculates button width and offset for split button layouts (e.g., Connect/Host buttons).
+    /// </summary>
+    /// <param name="contentWidth">The total content width available</param>
+    /// <param name="spacingMultiplier">The spacing multiplier for resolution scaling</param>
+    /// <returns>Tuple of (buttonWidth, buttonOffset)</returns>
+    public static (float width, float offset) CalculateButtonLayout(float contentWidth, float spacingMultiplier) {
+        var tier = GetResolutionTier(spacingMultiplier);
+        var config = GetLayoutConfig(tier);
+
+        Logger.Info($"[ButtonLayout] {tier} ({Screen.width}x{Screen.height}): " +
+                    $"gap={config.ButtonGap:F1}px, margin={config.SideMargin:F1}px");
+
+        // Calculate effective content width after margins
+        var effectiveWidth = contentWidth - (config.SideMargin * 2f);
+
+        // Calculate button dimensions
+        // Formula: 2*buttonWidth + gap = effectiveWidth
+        var buttonWidth = (effectiveWidth - config.ButtonGap) / 2f;
+
+        // Calculate offset from center to button center
+        var buttonOffset = effectiveWidth / 2f - buttonWidth / 2f;
+
+        Logger.Info($"[ButtonLayout] effectiveWidth={effectiveWidth:F1}, " +
+                    $"buttonWidth={buttonWidth:F1}, offset={buttonOffset:F1}");
+
+        return (buttonWidth, buttonOffset);
+    }
+
+    /// <summary>
+    /// Gets the button height for the current resolution, applying overrides when necessary.
+    /// </summary>
+    /// <param name="spacingMultiplier">The spacing multiplier for resolution scaling</param>
+    /// <param name="defaultHeight">The default button height</param>
+    /// <returns>The button height to use</returns>
+    public static float GetButtonHeight(float spacingMultiplier, float defaultHeight) {
+        var tier = GetResolutionTier(spacingMultiplier);
+        var config = GetLayoutConfig(tier);
+        return config.ButtonHeightOverride ?? defaultHeight;
+    }
 
     /// <summary>
     /// Creates a glowing horizontal notch under the multiplayer header.
@@ -59,7 +182,7 @@ internal static class ConnectInterfaceHelpers {
         rect.anchorMin = rect.anchorMax = new Vector2(x / 1920f, y / 1080f);
         rect.sizeDelta = new Vector2(NotchWidth, NotchHeight);
         rect.pivot = new Vector2(0.5f, 0.5f);
-        
+
         var image = notchObject.AddComponent<UnityEngine.UI.Image>();
         image.sprite = Sprite.Create(
             UiUtils.CreateHorizontalGradientTexture(256, 1),
@@ -67,11 +190,11 @@ internal static class ConnectInterfaceHelpers {
             new Vector2(0.5f, 0.5f)
         );
         image.color = Color.white;
-        
+
         notchObject.transform.SetParent(UiManager.UiGameObject!.transform, false);
         Object.DontDestroyOnLoad(notchObject);
         notchObject.SetActive(false);
-        
+
         return notchObject;
     }
 
@@ -81,18 +204,18 @@ internal static class ConnectInterfaceHelpers {
     /// <param name="x">The x position.</param>
     /// <param name="y">The y position.</param>
     /// <returns>The background panel GameObject.</returns>
-    public static GameObject CreateBackgroundPanel(float x, float y) {
+    public static GameObject CreateBackgroundPanel(float x, float y, float height = PanelHeight) {
         var panel = new GameObject("MenuBackground");
         var rect = panel.AddComponent<RectTransform>();
         rect.anchorMin = rect.anchorMax = new Vector2(x / 1920f, y / 1080f);
-        rect.sizeDelta = new Vector2(PanelWidth, PanelHeight);
+        rect.sizeDelta = new Vector2(PanelWidth, height);
         rect.pivot = new Vector2(0.5f, 1f);
-        
+
         var image = panel.AddComponent<UnityEngine.UI.Image>();
         image.color = Color.white;
-        
+
         var roundedTexture = UiUtils.CreateRoundedRectTexture(
-            (int) PanelWidth, 
+            (int) PanelWidth,
             (int) PanelHeight,
             PanelBorderWidth,
             PanelCornerRadius
@@ -107,7 +230,7 @@ internal static class ConnectInterfaceHelpers {
             new Vector4(PanelBorderWidth, PanelBorderWidth, PanelBorderWidth, PanelBorderWidth)
         );
         image.type = UnityEngine.UI.Image.Type.Sliced;
-        
+
         panel.transform.SetParent(UiManager.UiGameObject!.transform, false);
         panel.transform.SetAsFirstSibling();
         Object.DontDestroyOnLoad(panel);
@@ -126,14 +249,14 @@ internal static class ConnectInterfaceHelpers {
     /// <param name="onPress">The press callback.</param>
     /// <returns>The created button component.</returns>
     public static TabButtonComponent CreateTabButton(
-        ComponentGroup group, 
-        float x, 
-        float y, 
-        float width, 
-        string text, 
+        ComponentGroup group,
+        float x,
+        float y,
+        float width,
+        string text,
         Action onPress
     ) {
-        var button = new TabButtonComponent(group, new Vector2(x, y), new Vector2(width, 50f), 
+        var button = new TabButtonComponent(group, new Vector2(x, y), new Vector2(width, 50f),
             text, Resources.FontManager.UIFontRegular, 18);
         button.SetOnPress(onPress);
         return button;
@@ -203,18 +326,19 @@ internal static class ConnectInterfaceHelpers {
     /// <param name="currentCoroutine">The current hide coroutine (will be stopped if not null).</param>
     /// <returns>The new hide coroutine.</returns>
     public static Coroutine SetFeedbackText(
-        ITextComponent feedbackText, 
-        Color color, 
-        string text, 
+        ITextComponent feedbackText,
+        Color color,
+        string text,
         Coroutine? currentCoroutine
     ) {
         feedbackText.SetColor(color);
         feedbackText.SetText(text);
         feedbackText.SetActive(true);
-        
+
         if (currentCoroutine != null) {
             MonoBehaviourUtil.Instance.StopCoroutine(currentCoroutine);
         }
+
         return MonoBehaviourUtil.Instance.StartCoroutine(WaitHideFeedbackText(feedbackText));
     }
 
@@ -237,16 +361,16 @@ internal static class ConnectInterfaceHelpers {
     /// <param name="currentCoroutine">The current feedback hide coroutine.</param>
     /// <param name="newCoroutine">The new feedback hide coroutine (if validation fails).</param>
     /// <returns>True if the username is valid, false otherwise.</returns>
-    public static bool ValidateUsername(IInputComponent usernameInput, ITextComponent feedbackText, 
+    public static bool ValidateUsername(IInputComponent usernameInput, ITextComponent feedbackText,
         out string username, Coroutine? currentCoroutine, out Coroutine? newCoroutine) {
         newCoroutine = currentCoroutine;
         username = usernameInput.GetInput();
-        
+
         if (username.Length == 0) {
             newCoroutine = SetFeedbackText(
-                feedbackText, 
-                Color.red, 
-                "Failed to connect:\nYou must enter a username", 
+                feedbackText,
+                Color.red,
+                "Failed to connect:\nYou must enter a username",
                 currentCoroutine
             );
             return false;
@@ -254,14 +378,14 @@ internal static class ConnectInterfaceHelpers {
 
         if (username.Length > ServerManager.MaxUsernameLength) {
             newCoroutine = SetFeedbackText(
-                feedbackText, 
-                Color.red, 
-                "Failed to connect:\nUsername is too long", 
+                feedbackText,
+                Color.red,
+                "Failed to connect:\nUsername is too long",
                 currentCoroutine
             );
             return false;
         }
-        
+
         return true;
     }
 
@@ -275,5 +399,45 @@ internal static class ConnectInterfaceHelpers {
         directConnectButton.SetInteractable(true);
         lobbyConnectButton.SetText(ConnectInterface.DirectConnectButtonText);
         lobbyConnectButton.SetInteractable(true);
+    }
+}
+
+/// <summary>
+/// Resolution tier for UI layout calculations.
+/// </summary>
+public enum ResolutionTier {
+    /// <summary>1920x1080 and below (16:9)</summary>
+    Standard1080p,
+
+    /// <summary>2560x1440 (16:9)</summary>
+    QHD1440p,
+
+    /// <summary>3840x2160 and above (16:9)</summary>
+    UHD4K,
+
+    /// <summary>21:9+ aspect ratio (2560x1080, 3440x1440, 5120x1440, etc.)</summary>
+    Ultrawide,
+
+    /// <summary>4:3, 5:4, or other non-standard aspect ratios</summary>
+    Legacy
+}
+
+/// <summary>
+/// Configuration for button layout at a specific resolution tier.
+/// </summary>
+public readonly struct ButtonLayoutConfig {
+    /// <summary>Gap between buttons (negative = overlap, positive = separation)</summary>
+    public float ButtonGap { get; }
+
+    /// <summary>Margin from panel edges</summary>
+    public float SideMargin { get; }
+
+    /// <summary>Optional button height override</summary>
+    public float? ButtonHeightOverride { get; }
+
+    public ButtonLayoutConfig(float buttonGap, float sideMargin, float? buttonHeightOverride = null) {
+        ButtonGap = buttonGap;
+        SideMargin = sideMargin;
+        ButtonHeightOverride = buttonHeightOverride;
     }
 }

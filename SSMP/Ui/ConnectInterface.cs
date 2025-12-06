@@ -7,286 +7,301 @@ using SSMP.Networking.Transport.Common;
 using SSMP.Ui.Util;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
-// ReSharper disable ObjectCreationAsStatement
 
 namespace SSMP.Ui;
 
 /// <summary>
-/// Class for creating and managing the connect interface with tabbed navigation.
+/// Manages the multiplayer connection interface with tabbed navigation for Matchmaking, Steam, and Direct IP connections.
 /// </summary>
 internal class ConnectInterface {
     #region Layout Constants
 
     /// <summary>
-    /// The indent of some text elements.
+    /// Horizontal indentation for text labels relative to the panel edge.
     /// </summary>
     private const float TextIndentWidth = 5f;
 
     /// <summary>
-    /// The standard width for content elements in the interface.
+    /// Default width for content elements like input fields and buttons.
     /// </summary>
     private const float ContentWidth = 360f;
 
     /// <summary>
-    /// The standard height for interactive elements (buttons, inputs).
+    /// Standard height for input fields and buttons.
     /// </summary>
     private const float UniformHeight = 50f;
 
     /// <summary>
-    /// The initial X position for the UI elements.
+    /// Initial X position for the UI panel (centered at 1920x1080).
     /// </summary>
     private const float InitialX = 960f;
 
     /// <summary>
-    /// The initial Y position for the UI elements.
+    /// Initial Y position for the UI panel.
     /// </summary>
-    private const float InitialY = 780f;
+    private const float InitialY = 850f;
+
+    // Header dimensions
 
     /// <summary>
-    /// The width of the header text.
+    /// Width of the "MULTIPLAYER" header text.
     /// </summary>
     private const float HeaderWidth = 400f;
 
     /// <summary>
-    /// The height of the header text.
+    /// Height of the "MULTIPLAYER" header text.
     /// </summary>
     private const float HeaderHeight = 40f;
 
     /// <summary>
-    /// The vertical spacing between the header and the notch.
+    /// Spacing between the header and the glowing notch.
     /// </summary>
     private const float HeaderToNotchSpacing = 45f;
 
     /// <summary>
-    /// The vertical spacing between the notch and the background panel.
+    /// Spacing between the glowing notch and the main panel.
     /// </summary>
     private const float NotchToPanelSpacing = 35f;
 
-    /// <summary>
-    /// The vertical spacing between the background panel start and the first element.
-    /// </summary>
-    private const float PanelPaddingTop = 25f;
+    // Panel and element spacing
 
     /// <summary>
-    /// The height of label texts.
+    /// Padding at the top of the background panel.
+    /// </summary>
+    private const float PanelPaddingTop = 35f;
+
+    /// <summary>
+    /// Standard height for text labels.
     /// </summary>
     private const float LabelHeight = 20f;
 
     /// <summary>
-    /// The vertical spacing between a label and its input.
+    /// Spacing between a label and its associated input field.
     /// </summary>
-    private const float LabelToInputSpacing = 44f;
+    private const float LabelToInputSpacing = 38f;
 
     /// <summary>
-    /// The vertical spacing after an input field.
+    /// Spacing between consecutive input fields.
     /// </summary>
-    private const float InputSpacing = 40f;
+    private const float InputSpacing = 30f;
+
+    // Tab configuration
 
     /// <summary>
-    /// The width of the tab buttons.
+    /// Width of each tab button.
     /// </summary>
     private const float TabButtonWidth = 150f;
 
     /// <summary>
-    /// The vertical spacing after the tab buttons.
+    /// Vertical spacing reserved for the tab row.
     /// </summary>
-    private const float TabSpacing = 70f;
+    private const float TabSpacing = 60f;
+
+    // Content-specific spacing
 
     /// <summary>
-    /// The height of the description text.
+    /// Height allocated for description text blocks.
     /// </summary>
     private const float DescriptionHeight = 40f;
 
     /// <summary>
-    /// The vertical spacing after the join session header.
+    /// Spacing for the "JOIN SESSION" header.
     /// </summary>
     private const float JoinHeaderSpacing = 45f;
 
     /// <summary>
-    /// The vertical spacing after the join session description.
+    /// Spacing for the join session description text.
     /// </summary>
-    private const float JoinDescSpacing = 95f;
+    private const float JoinDescSpacing = 55f;
 
     /// <summary>
-    /// The vertical spacing between the Lobby ID label and input.
+    /// Spacing for the Lobby ID label.
     /// </summary>
-    private const float LobbyIdLabelSpacing = 54f;
+    private const float LobbyIdLabelSpacing = 42f;
 
     /// <summary>
-    /// The vertical spacing after the Steam connected text.
+    /// Spacing for simple text messages in the Steam tab.
     /// </summary>
     private const float SteamTextSpacing = 40f;
 
     /// <summary>
-    /// The vertical spacing between Steam buttons.
+    /// Spacing between buttons in the Steam tab.
     /// </summary>
     private const float SteamButtonSpacing = 10f;
 
     /// <summary>
-    /// The vertical spacing between the server address label and input.
+    /// Spacing for the Server Address label.
     /// </summary>
-    private const float ServerAddressLabelSpacing = 54f;
+    private const float ServerAddressLabelSpacing = 44f;
 
     /// <summary>
-    /// The vertical spacing after the server address input.
+    /// Spacing between Server Address input and the next element.
     /// </summary>
-    private const float ServerAddressInputSpacing = 28f;
+    private const float ServerAddressInputSpacing = 12f;
 
     /// <summary>
-    /// The vertical spacing between the port label and input.
+    /// Spacing for the Port label.
     /// </summary>
-    private const float PortLabelSpacing = 54f;
+    private const float PortLabelSpacing = 38f;
 
     /// <summary>
-    /// The vertical offset for the feedback text.
+    /// Y-offset for the feedback/error text relative to the content area.
     /// </summary>
-    private const float FeedbackTextOffset = 320f;
+    private const float FeedbackTextOffset = 260f;
 
     #endregion
 
-    #region Text Constants
+    #region UI Text Constants
 
     /// <summary>
-    /// The text of the connection button while connecting.
+    /// Text displayed on buttons while a connection is being attempted.
     /// </summary>
     private const string ConnectingText = "Connecting...";
 
     /// <summary>
-    /// The text for the main header.
+    /// Main title text for the multiplayer interface.
     /// </summary>
     private const string HeaderText = "M U L T I P L A Y E R";
 
     /// <summary>
-    /// The text for the identity section label.
+    /// Label text for the player identification section.
     /// </summary>
     private const string IdentityLabelText = "Identity";
 
     /// <summary>
-    /// The placeholder text for the username input.
+    /// Placeholder text for the username input field.
     /// </summary>
     private const string UsernamePlaceholder = "Enter Username";
 
+    // Tab names
+
     /// <summary>
-    /// The text for the Matchmaking tab.
+    /// Label for the Matchmaking tab.
     /// </summary>
     private const string MatchmakingTabText = "Matchmaking";
 
     /// <summary>
-    /// The text for the Steam tab.
+    /// Label for the Steam tab.
     /// </summary>
     private const string SteamTabText = "Steam";
 
     /// <summary>
-    /// The text for the Direct IP tab.
+    /// Label for the Direct IP tab.
     /// </summary>
     private const string DirectIpTabText = "Direct IP";
 
+    // Matchmaking tab
+
     /// <summary>
-    /// The text for the join session header.
+    /// Header text for the Matchmaking tab.
     /// </summary>
     private const string JoinSessionText = "JOIN SESSION";
 
     /// <summary>
-    /// The text for the join session description.
+    /// Description/instructions for the Matchmaking tab.
     /// </summary>
     private const string JoinSessionDescText = "Enter the unique Lobby ID\nto join an existing session.";
 
     /// <summary>
-    /// The text for the Lobby ID label.
+    /// Label for the Lobby ID input field.
     /// </summary>
     private const string LobbyIdLabelText = "Lobby ID";
 
     /// <summary>
-    /// The placeholder text for the Lobby ID input.
+    /// Placeholder text for the Lobby ID input.
     /// </summary>
     private const string LobbyIdPlaceholder = "e.g. 8x92-AC44";
 
     /// <summary>
-    /// The text for the lobby connect button.
+    /// Text for the Connect button in the Matchmaking tab.
     /// </summary>
     private const string LobbyConnectButtonText = "CONNECT TO LOBBY";
 
+    // Steam tab
+
     /// <summary>
-    /// The text displayed when connected to Steam Workshop.
+    /// Status text when connected to Steam.
     /// </summary>
     private const string SteamConnectedText = "Connected to Steam Workshop";
 
     /// <summary>
-    /// The text for the create lobby button.
+    /// Text for the Create Lobby button.
     /// </summary>
     private const string CreateLobbyButtonText = "+ CREATE LOBBY";
 
     /// <summary>
-    /// The text for the browse lobby button.
+    /// Text for the Browse Lobbies button.
     /// </summary>
     private const string BrowseLobbyButtonText = "☰ BROWSE PUBLIC LOBBIES";
 
     /// <summary>
-    /// The text for the join friend button.
+    /// Text for the Join Friend button.
     /// </summary>
     private const string JoinFriendButtonText = "→ JOIN FRIEND (INVITE)";
 
+    // Direct IP tab
+
     /// <summary>
-    /// The text for the server address label.
+    /// Label for the Server Address input.
     /// </summary>
     private const string ServerAddressLabelText = "Server Address";
 
     /// <summary>
-    /// The placeholder text for the server address input.
+    /// Placeholder for the Server Address input.
     /// </summary>
     private const string ServerAddressPlaceholder = "127.0.0.1";
 
     /// <summary>
-    /// The text for the port label.
+    /// Label for the Port input.
     /// </summary>
     private const string PortLabelText = "Port";
 
     /// <summary>
-    /// The placeholder text for the port input.
+    /// Placeholder for the Port input.
     /// </summary>
     private const string PortPlaceholder = "26960";
 
     /// <summary>
-    /// The text for the direct connect button.
+    /// Text for the Connect button in Direct IP tab. Public for access by helpers if needed.
     /// </summary>
     public const string DirectConnectButtonText = "CONNECT";
 
     /// <summary>
-    /// The text for the host button.
+    /// Text for the Host button in Direct IP tab.
     /// </summary>
     private const string HostButtonText = "HOST";
 
     #endregion
 
-    #region Message Constants
+    #region Error & Status Messages
 
     /// <summary>
-    /// Error message when address is missing.
+    /// Error message when address input is missing.
     /// </summary>
     private const string ErrorEnterAddress = "Failed to connect:\nYou must enter an address";
 
     /// <summary>
-    /// Error message when port is invalid.
+    /// Error message when port input is invalid or missing.
     /// </summary>
     private const string ErrorEnterValidPort = "Failed to connect:\nYou must enter a valid port";
 
     /// <summary>
-    /// Error message when port is invalid for hosting.
+    /// Error message when hosting port is invalid.
     /// </summary>
     private const string ErrorEnterValidPortHost = "Failed to host:\nYou must enter a valid port";
 
     /// <summary>
-    /// Message displayed upon successful connection.
+    /// Status message for successful connection.
     /// </summary>
     private const string MsgConnected = "Successfully connected";
 
     /// <summary>
-    /// Error message for invalid addons.
+    /// Error message for addon mismatch.
     /// </summary>
     private const string ErrorInvalidAddons = "Failed to connect:\nInvalid addons";
 
     /// <summary>
-    /// Error message for internal errors.
+    /// Error message for internal exceptions (Socket/IO).
     /// </summary>
     private const string ErrorInternal = "Failed to connect:\nInternal error";
 
@@ -296,7 +311,7 @@ internal class ConnectInterface {
     private const string ErrorTimeout = "Failed to connect:\nConnection timed out";
 
     /// <summary>
-    /// Error message for unknown connection failures.
+    /// Fallback error message for unknown failures.
     /// </summary>
     private const string ErrorUnknown = "Failed to connect:\nUnknown reason";
 
@@ -305,508 +320,972 @@ internal class ConnectInterface {
     #region Fields
 
     /// <summary>
-    /// The mod settings.
+    /// Persistent mod settings for storing connection preferences.
     /// </summary>
     private readonly ModSettings _modSettings;
 
+    // Core UI components
     /// <summary>
-    /// The username input component.
+    /// Input field for the username.
     /// </summary>
     private readonly IInputComponent _usernameInput;
 
     /// <summary>
-    /// The feedback text component.
+    /// Text component used to display status messages and errors.
     /// </summary>
     private readonly ITextComponent _feedbackText;
 
     /// <summary>
-    /// The background panel GameObject for the menu.
+    /// Main background panel of the interface.
     /// </summary>
     private readonly GameObject _backgroundPanel;
 
     /// <summary>
-    /// The component group containing all background panel elements.
-    /// </summary>
-    // ReSharper disable once PrivateFieldCanBeConvertedToLocalVariable
-    private readonly ComponentGroup _backgroundGroup;
-
-    /// <summary>
-    /// The coroutine that hides the feedback text after a delay.
-    /// </summary>
-    private Coroutine? _feedbackHideCoroutine;
-
-    /// <summary>
-    /// The glowing notch GameObject displayed under the header.
+    /// Decorative glowing notch at the top of the interface.
     /// </summary>
     private readonly GameObject _glowingNotch;
 
     /// <summary>
-    /// The matchmaking tab button component.
+    /// Component group containing the background elements.
+    /// </summary>
+    private readonly ComponentGroup _backgroundGroup;
+
+    // Tab system
+    /// <summary>
+    /// Tab button for the Matchmaking section.
     /// </summary>
     private readonly TabButtonComponent _matchmakingTab;
 
     /// <summary>
-    /// The Steam tab button component.
+    /// Tab button for the Steam section (nullable if Steam is not active).
     /// </summary>
     private readonly TabButtonComponent? _steamTab;
 
     /// <summary>
-    /// The Direct IP tab button component.
+    /// Tab button for the Direct IP section.
     /// </summary>
     private readonly TabButtonComponent _directIpTab;
 
+    // Tab content groups
     /// <summary>
-    /// The component group containing matchmaking tab content.
+    /// Component group holding Matchmaking tab content.
     /// </summary>
     private readonly ComponentGroup _matchmakingGroup;
 
     /// <summary>
-    /// The component group containing Steam tab content.
+    /// Component group holding Steam tab content.
     /// </summary>
     private readonly ComponentGroup? _steamGroup;
 
     /// <summary>
-    /// The component group containing Direct IP tab content.
+    /// Component group holding Direct IP tab content.
     /// </summary>
     private readonly ComponentGroup _directIpGroup;
 
+    // Matchmaking tab components
     /// <summary>
-    /// The lobby ID input component in the matchmaking tab.
+    /// Input field for entering a Lobby ID.
     /// </summary>
     private readonly IInputComponent _lobbyIdInput;
 
     /// <summary>
-    /// The lobby connect button component in the matchmaking tab.
+    /// Button to connect to a lobby via ID.
     /// </summary>
     private readonly IButtonComponent _lobbyConnectButton;
 
+    // Steam tab components
     /// <summary>
-    /// The create lobby button component in the Steam tab.
+    /// Button to create a new Steam lobby.
     /// </summary>
-    // ReSharper disable once PrivateFieldCanBeConvertedToLocalVariable
     private readonly IButtonComponent _createLobbyButton;
 
     /// <summary>
-    /// The browse lobby button component in the Steam tab.
+    /// Button to open the lobby browser.
     /// </summary>
-    // ReSharper disable once PrivateFieldCanBeConvertedToLocalVariable
     private readonly IButtonComponent _browseLobbyButton;
 
     /// <summary>
-    /// The join friend button component in the Steam tab.
+    /// Button to join a friend via invite.
     /// </summary>
-    // ReSharper disable once PrivateFieldCanBeConvertedToLocalVariable
     private readonly IButtonComponent _joinFriendButton;
 
+    // Direct IP tab components
     /// <summary>
-    /// The address input component in the Direct IP tab.
+    /// Input field for the server IP address.
     /// </summary>
     private readonly IInputComponent _addressInput;
 
     /// <summary>
-    /// The port input component in the Direct IP tab.
+    /// Input field for the server port.
     /// </summary>
     private readonly IInputComponent _portInput;
 
     /// <summary>
-    /// The direct connect button component in the Direct IP tab.
+    /// Button to connect via Direct IP.
     /// </summary>
     private readonly IButtonComponent _directConnectButton;
 
     /// <summary>
-    /// The server/host button component in the Direct IP tab.
+    /// Button to start hosting a server.
     /// </summary>
-    // ReSharper disable once PrivateFieldCanBeConvertedToLocalVariable
     private readonly IButtonComponent _serverButton;
 
     /// <summary>
-    /// Current active tab.
+    /// Coroutine handle for hiding feedback text after a delay.
     /// </summary>
-    private enum Tab { Matchmaking, Steam, DirectIp }
+    private Coroutine? _feedbackHideCoroutine;
+
+    #endregion
+
+    #region Events
 
     /// <summary>
-    /// The currently active tab in the interface.
-    /// </summary>
-    private Tab _activeTab = Tab.Matchmaking;
-
-    /// <summary>
-    /// Event that is executed when the connect button is pressed.
+    /// Fired when the user attempts to connect to a server.
+    /// Parameters: address, port, username, transportType
     /// </summary>
     public event Action<string, int, string, TransportType>? ConnectButtonPressed;
 
     /// <summary>
-    /// Event that is executed when the start hosting button is pressed.
+    /// Fired when the user attempts to start hosting a server.
+    /// Parameters: address, port, username, transportType
     /// </summary>
     public event Action<string, int, string, TransportType>? StartHostButtonPressed;
 
     #endregion
 
+    #region Tab Enum
+
     /// <summary>
-    /// Initializes a new instance of the ConnectInterface class.
+    /// Available tabs in the connection interface.
     /// </summary>
-    /// <param name="modSettings">The mod settings.</param>
-    /// <param name="connectGroup">The component group for the connect interface.</param>
+    private enum Tab {
+        Matchmaking,
+        Steam,
+        DirectIp
+    }
+
+    #endregion
+
+    #region Initialization
+
+    /// <summary>
+    /// Initializes the multiplayer connection interface with all tabs and UI elements.
+    /// </summary>
+    /// <param name="modSettings">Persistent mod settings for storing connection preferences.</param>
+    /// <param name="connectGroup">Parent component group for the interface.</param>
     public ConnectInterface(ModSettings modSettings, ComponentGroup connectGroup) {
         _modSettings = modSettings;
-        
-        // Subscribe to Steam lobby events
-        //(UNCOMMENT)SteamManager.LobbyCreatedEvent += OnSteamLobbyCreated;
-        //(UNCOMMENT)SteamManager.LobbyListReceivedEvent += OnLobbyListReceived;
-        //(UNCOMMENT)SteamManager.LobbyJoinedEvent += OnLobbyJoined;
 
-        var x = InitialX;
-        var y = InitialY;
+        SubscribeToSteamEvents();
 
-        // Header
-        new TextComponent(connectGroup, new Vector2(x, y), new Vector2(HeaderWidth, HeaderHeight), 
-            HeaderText, 32, alignment: TextAnchor.MiddleCenter);
-        y -= HeaderToNotchSpacing;
-        
-        // Create white notch with glow effect under header
-        _glowingNotch = ConnectInterfaceHelpers.CreateGlowingNotch(x, y);
-        y -= NotchToPanelSpacing;
+        var layoutContext = CreateLayoutContext();
 
-        // Background panel
-        _backgroundPanel = ConnectInterfaceHelpers.CreateBackgroundPanel(x, y);
         _backgroundGroup = new ComponentGroup(parent: connectGroup);
-        y -= PanelPaddingTop;
 
-        // Username section
-        new TextComponent(_backgroundGroup, new Vector2(x + TextIndentWidth, y), 
-            new Vector2(ContentWidth, LabelHeight), IdentityLabelText, UiManager.NormalFontSize, alignment: TextAnchor.MiddleLeft);
-        y -= LabelToInputSpacing;
-        _usernameInput = new InputComponent(_backgroundGroup, new Vector2(x, y), new Vector2(ContentWidth, UniformHeight),
-            _modSettings.Username, UsernamePlaceholder, characterLimit: 32,
-            onValidateInput: (_, _, addedChar) => char.IsLetterOrDigit(addedChar) ? addedChar : '\0');
-        y -= UniformHeight + InputSpacing;
+        // Build UI from top to bottom
+        CreateHeader(connectGroup, ref layoutContext);
+        _glowingNotch = CreateNotch(layoutContext);
+        _backgroundPanel = CreateBackgroundPanel(layoutContext);
 
-        // Tab buttons
-        var tabY = y;
-        var tabWidth = TabButtonWidth;
-        _matchmakingTab = ConnectInterfaceHelpers.CreateTabButton(_backgroundGroup, x - tabWidth, tabY, tabWidth, MatchmakingTabText, () => SwitchTab(Tab.Matchmaking));
-        
-        //(UNCOMMENT)if (SteamManager.IsInitialized) {
-        if (true) {
-            _steamTab = ConnectInterfaceHelpers.CreateTabButton(_backgroundGroup, x, tabY, tabWidth, SteamTabText, () => SwitchTab(Tab.Steam));
-        }
-        
-        _directIpTab = ConnectInterfaceHelpers.CreateTabButton(_backgroundGroup, x + tabWidth, tabY, tabWidth, DirectIpTabText, () => SwitchTab(Tab.DirectIp));
-        y -= TabSpacing;
+        _usernameInput = CreateUsernameSection(ref layoutContext);
+        var tabElements = CreateTabButtons(ref layoutContext);
+        _matchmakingTab = tabElements.matchmaking;
+        _steamTab = tabElements.steam;
+        _directIpTab = tabElements.directIp;
 
-        var contentY = y;
+        var contentY = layoutContext.Y;
 
-        // Matchmaking tab
-        _matchmakingGroup = new ComponentGroup(parent: _backgroundGroup);
-        var matchY = contentY;
-        new TextComponent(_matchmakingGroup, new Vector2(x, matchY), new Vector2(ContentWidth, LabelHeight), 
-            JoinSessionText, 18, alignment: TextAnchor.MiddleCenter);
-        matchY -= JoinHeaderSpacing;
-        new TextComponent(_matchmakingGroup, new Vector2(x, matchY), new Vector2(ContentWidth, DescriptionHeight), 
-            JoinSessionDescText, UiManager.SubTextFontSize, alignment: TextAnchor.MiddleCenter);
-        matchY -= JoinDescSpacing;
-        new TextComponent(_matchmakingGroup, new Vector2(x + TextIndentWidth, matchY), 
-            new Vector2(ContentWidth, LabelHeight), LobbyIdLabelText, UiManager.NormalFontSize, alignment: TextAnchor.MiddleLeft);
-        matchY -= LobbyIdLabelSpacing;
-        _lobbyIdInput = new InputComponent(_matchmakingGroup, new Vector2(x, matchY), new Vector2(ContentWidth, UniformHeight), "", LobbyIdPlaceholder, characterLimit: 12);
-        matchY -= UniformHeight + InputSpacing;
-        _lobbyConnectButton = new ButtonComponent(_matchmakingGroup, new Vector2(x, matchY), new Vector2(ContentWidth, UniformHeight), LobbyConnectButtonText,
-            Resources.TextureManager.ButtonBg, Resources.FontManager.UIFontRegular, UiManager.NormalFontSize);
-        _lobbyConnectButton.SetOnPress(OnLobbyConnectButtonPressed);
+        // Create tab-specific content
+        var matchmakingComponents = CreateMatchmakingTab(contentY, layoutContext.SpacingMultiplier);
+        _matchmakingGroup = matchmakingComponents.group;
+        _lobbyIdInput = matchmakingComponents.lobbyIdInput;
+        _lobbyConnectButton = matchmakingComponents.connectButton;
 
-        // Steam tab
-        //(UNCOMMENT)if (SteamManager.IsInitialized) {
-         if (true) {
-            _steamGroup = new ComponentGroup(activeSelf: false, parent: _backgroundGroup);
-            var steamY = contentY;
-            
-            new TextComponent(_steamGroup, new Vector2(x, steamY), new Vector2(ContentWidth, LabelHeight), 
-                SteamConnectedText, UiManager.SubTextFontSize, alignment: TextAnchor.MiddleCenter);
-            steamY -= SteamTextSpacing;
-            
-            _createLobbyButton = new ButtonComponent(_steamGroup, new Vector2(x, steamY), 
-                new Vector2(ContentWidth, UniformHeight), CreateLobbyButtonText, 
-                Resources.TextureManager.ButtonBg, Resources.FontManager.UIFontRegular, UiManager.NormalFontSize);
-            _createLobbyButton.SetOnPress(OnCreateLobbyButtonPressed);
-            steamY -= UniformHeight + SteamButtonSpacing;
-            
-            _browseLobbyButton = new ButtonComponent(_steamGroup, new Vector2(x, steamY), 
-                new Vector2(ContentWidth, UniformHeight), BrowseLobbyButtonText, 
-                Resources.TextureManager.ButtonBg, Resources.FontManager.UIFontRegular, UiManager.NormalFontSize);
-            _browseLobbyButton.SetOnPress(OnBrowseLobbyButtonPressed);
-            steamY -= UniformHeight + SteamButtonSpacing;
-            
-            _joinFriendButton = new ButtonComponent(_steamGroup, new Vector2(x, steamY), 
-                new Vector2(ContentWidth, UniformHeight), JoinFriendButtonText, 
-                Resources.TextureManager.ButtonBg, Resources.FontManager.UIFontRegular, UiManager.NormalFontSize);
-            _joinFriendButton.SetOnPress(OnJoinFriendButtonPressed);
-        }
+        var steamComponents = CreateSteamTab(contentY, layoutContext.SpacingMultiplier);
+        _steamGroup = steamComponents.group;
+        _createLobbyButton = steamComponents.createButton;
+        _browseLobbyButton = steamComponents.browseButton;
+        _joinFriendButton = steamComponents.joinButton;
 
-        // Direct IP tab
-        _directIpGroup = new ComponentGroup(activeSelf: false, parent: _backgroundGroup);
-        var directY = contentY;
-        new TextComponent(_directIpGroup, new Vector2(x + TextIndentWidth, directY), 
-            new Vector2(ContentWidth, LabelHeight), ServerAddressLabelText, UiManager.NormalFontSize, alignment: TextAnchor.MiddleLeft);
-        directY -= ServerAddressLabelSpacing;
-        _addressInput = new IpInputComponent(_directIpGroup, new Vector2(x, directY), new Vector2(ContentWidth, UniformHeight), _modSettings.ConnectAddress, ServerAddressPlaceholder);
-        directY -= UniformHeight + ServerAddressInputSpacing;
-        new TextComponent(_directIpGroup, new Vector2(x + TextIndentWidth, directY), 
-            new Vector2(ContentWidth, LabelHeight), PortLabelText, UiManager.NormalFontSize, alignment: TextAnchor.MiddleLeft);
-        directY -= PortLabelSpacing;
-        var joinPort = _modSettings.ConnectPort;
-        _portInput = new PortInputComponent(_directIpGroup, new Vector2(x, directY), new Vector2(ContentWidth, UniformHeight), joinPort == -1 ? "" : joinPort.ToString(), PortPlaceholder);
-        directY -= UniformHeight + InputSpacing;
-        
-        
-        //Direct IP buttons constants
-        var buttonGap = 10f;
-        var buttonWidth = (ContentWidth - buttonGap) / 2f; 
-        var buttonOffset = ContentWidth / 2f - buttonWidth / 2f; 
-        
-        _directConnectButton = new ButtonComponent(_directIpGroup, new Vector2(x - buttonOffset, directY), 
-            new Vector2(buttonWidth, UniformHeight), DirectConnectButtonText, 
-            Resources.TextureManager.ButtonBg, Resources.FontManager.UIFontRegular, UiManager.NormalFontSize);
-        _directConnectButton.SetOnPress(OnDirectConnectButtonPressed);
-        
-        _serverButton = new ButtonComponent(_directIpGroup, new Vector2(x + buttonOffset, directY), 
-            new Vector2(buttonWidth, UniformHeight), HostButtonText, 
-            Resources.TextureManager.ButtonBg, Resources.FontManager.UIFontRegular, UiManager.NormalFontSize);
-        _serverButton.SetOnPress(OnStartButtonPressed);
+        var directIpComponents = CreateDirectIpTab(contentY, layoutContext.SpacingMultiplier);
+        _directIpGroup = directIpComponents.group;
+        _addressInput = directIpComponents.addressInput;
+        _portInput = directIpComponents.portInput;
+        _directConnectButton = directIpComponents.connectButton;
+        _serverButton = directIpComponents.hostButton;
 
-        // Feedback text
-        _feedbackText = new TextComponent(_backgroundGroup, new Vector2(x, contentY - FeedbackTextOffset), 
-            new Vector2(ContentWidth, LabelHeight), new Vector2(0.5f, 1f), "", UiManager.SubTextFontSize, alignment: TextAnchor.UpperCenter);
-        _feedbackText.SetActive(false);
+        _feedbackText = CreateFeedbackText(contentY, layoutContext.SpacingMultiplier);
 
-        ConnectInterfaceHelpers.ReparentComponentGroup(_backgroundGroup, _backgroundPanel);
-        ConnectInterfaceHelpers.PositionTabButtonsFixed(_backgroundPanel, _matchmakingTab, _steamTab, _directIpTab);
+        FinalizeLayout();
+
         SwitchTab(Tab.Matchmaking);
     }
 
-
+    /// <summary>
+    /// Subscribes to Steam lobby-related events if Steam is available.
+    /// </summary>
+    private void SubscribeToSteamEvents() {
+        // Uncomment when Steam integration is ready
+        //(UNCOMMENT)SteamManager.LobbyCreatedEvent += OnSteamLobbyCreated;
+        //(UNCOMMENT)SteamManager.LobbyListReceivedEvent += OnLobbyListReceived;
+        //(UNCOMMENT)SteamManager.LobbyJoinedEvent += OnLobbyJoined;
+    }
 
     /// <summary>
-    /// Switches to a different tab.
+    /// Creates layout context with resolution-aware spacing calculations.
     /// </summary>
-    /// <param name="tab">The tab to switch to.</param>
+    private LayoutContext CreateLayoutContext() {
+        const float referenceHeight = 1080f;
+        var spacingMultiplier = referenceHeight / Screen.height;
+
+        Logger.Info($"[ConnectInterface] Screen: {Screen.width}x{Screen.height}, " +
+                    $"spacing multiplier: {spacingMultiplier:F3}");
+
+        return new LayoutContext {
+            X = InitialX,
+            Y = InitialY,
+            SpacingMultiplier = spacingMultiplier
+        };
+    }
+
+    /// <summary>
+    /// Creates the main header text at the top of the interface.
+    /// </summary>
+    private void CreateHeader(ComponentGroup parent, ref LayoutContext ctx) {
+        new TextComponent(
+            parent,
+            new Vector2(ctx.X, ctx.Y),
+            new Vector2(HeaderWidth, HeaderHeight),
+            HeaderText,
+            fontSize: 32,
+            alignment: TextAnchor.MiddleCenter
+        );
+
+        ctx.Y -= HeaderToNotchSpacing * ctx.SpacingMultiplier;
+    }
+
+    /// <summary>
+    /// Creates the glowing decorative notch below the header.
+    /// </summary>
+    private GameObject CreateNotch(LayoutContext ctx) {
+        var notch = ConnectInterfaceHelpers.CreateGlowingNotch(ctx.X, ctx.Y);
+        return notch;
+    }
+
+    /// <summary>
+    /// Creates the main background panel with resolution-aware height scaling.
+    /// </summary>
+    private GameObject CreateBackgroundPanel(LayoutContext ctx) {
+        // Dynamic height: base 550px at 1080p, scales to ~612px at 1440p
+        var dynamicHeight = 550f + (250f * (1f - ctx.SpacingMultiplier));
+
+        return ConnectInterfaceHelpers.CreateBackgroundPanel(
+            ctx.X,
+            ctx.Y - NotchToPanelSpacing,
+            dynamicHeight
+        );
+    }
+
+    /// <summary>
+    /// Creates the username input section at the top of the panel.
+    /// </summary>
+    private IInputComponent CreateUsernameSection(ref LayoutContext ctx) {
+        // 4K specific tweak: Shift everything down slightly
+        if (ctx.SpacingMultiplier < 0.6f) {
+            ctx.Y -= 45f * ctx.SpacingMultiplier;
+        }
+
+        ctx.Y -= (NotchToPanelSpacing + PanelPaddingTop) * ctx.SpacingMultiplier;
+
+        new TextComponent(
+            _backgroundGroup,
+            new Vector2(ctx.X + TextIndentWidth, ctx.Y),
+            new Vector2(ContentWidth, LabelHeight),
+            IdentityLabelText,
+            UiManager.NormalFontSize,
+            alignment: TextAnchor.MiddleLeft
+        );
+
+        ctx.Y -= LabelToInputSpacing * ctx.SpacingMultiplier;
+
+        var usernameInput = new InputComponent(
+            _backgroundGroup,
+            new Vector2(ctx.X, ctx.Y),
+            new Vector2(ContentWidth, UniformHeight),
+            _modSettings.Username,
+            UsernamePlaceholder,
+            characterLimit: 32,
+            onValidateInput: (_, _, addedChar) => char.IsLetterOrDigit(addedChar) ? addedChar : '\0'
+        );
+
+        ctx.Y -= (UniformHeight + InputSpacing) * ctx.SpacingMultiplier;
+
+        return usernameInput;
+    }
+
+    /// <summary>
+    /// Creates the tab navigation buttons (Matchmaking, Steam, Direct IP).
+    /// </summary>
+    private (TabButtonComponent matchmaking, TabButtonComponent? steam, TabButtonComponent directIp)
+        CreateTabButtons(ref LayoutContext ctx) {
+        var tabY = ctx.Y;
+
+        var matchmaking = ConnectInterfaceHelpers.CreateTabButton(
+            _backgroundGroup,
+            ctx.X - TabButtonWidth,
+            tabY,
+            TabButtonWidth,
+            MatchmakingTabText,
+            () => SwitchTab(Tab.Matchmaking)
+        );
+
+        TabButtonComponent? steam = null;
+        // Check if Steam is initialized (currently stubbed with true)
+        //(UNCOMMENT)if (SteamManager.IsInitialized) {
+        if (true) {
+            steam = ConnectInterfaceHelpers.CreateTabButton(
+                _backgroundGroup,
+                ctx.X,
+                tabY,
+                TabButtonWidth,
+                SteamTabText,
+                () => SwitchTab(Tab.Steam)
+            );
+        }
+
+        var directIp = ConnectInterfaceHelpers.CreateTabButton(
+            _backgroundGroup,
+            ctx.X + TabButtonWidth,
+            tabY,
+            TabButtonWidth,
+            DirectIpTabText,
+            () => SwitchTab(Tab.DirectIp)
+        );
+
+        ctx.Y -= TabSpacing * ctx.SpacingMultiplier;
+
+        return (matchmaking, steam, directIp);
+    }
+
+    #endregion
+
+    #region Tab Content Creation
+
+    /// <summary>
+    /// Creates the Matchmaking tab content with lobby ID input and connect button.
+    /// </summary>
+    private (ComponentGroup group, IInputComponent lobbyIdInput, IButtonComponent connectButton)
+        CreateMatchmakingTab(float startY, float spacingMultiplier) {
+        var group = new ComponentGroup(parent: _backgroundGroup);
+        var y = startY;
+
+        // Header
+        new TextComponent(
+            group,
+            new Vector2(InitialX, y),
+            new Vector2(ContentWidth, LabelHeight),
+            JoinSessionText,
+            fontSize: 18,
+            alignment: TextAnchor.MiddleCenter
+        );
+        y -= JoinHeaderSpacing * spacingMultiplier;
+
+        // Description
+        new TextComponent(
+            group,
+            new Vector2(InitialX, y),
+            new Vector2(ContentWidth, DescriptionHeight),
+            JoinSessionDescText,
+            UiManager.SubTextFontSize,
+            alignment: TextAnchor.MiddleCenter
+        );
+        y -= JoinDescSpacing * spacingMultiplier;
+
+        // Lobby ID label
+        new TextComponent(
+            group,
+            new Vector2(InitialX + TextIndentWidth, y),
+            new Vector2(ContentWidth, LabelHeight),
+            LobbyIdLabelText,
+            UiManager.NormalFontSize,
+            alignment: TextAnchor.MiddleLeft
+        );
+        y -= LobbyIdLabelSpacing * spacingMultiplier;
+
+        // Lobby ID input
+        var lobbyIdInput = new InputComponent(
+            group,
+            new Vector2(InitialX, y),
+            new Vector2(ContentWidth, UniformHeight),
+            "",
+            LobbyIdPlaceholder,
+            characterLimit: 12
+        );
+        y -= (UniformHeight + 20f) * spacingMultiplier;
+
+        // Connect button
+        var connectButton = new ButtonComponent(
+            group,
+            new Vector2(InitialX, y),
+            new Vector2(ContentWidth, UniformHeight),
+            LobbyConnectButtonText,
+            Resources.TextureManager.ButtonBg,
+            Resources.FontManager.UIFontRegular,
+            UiManager.NormalFontSize
+        );
+        connectButton.SetOnPress(OnLobbyConnectButtonPressed);
+
+        return (group, lobbyIdInput, connectButton);
+    }
+
+    /// <summary>
+    /// Creates the Steam tab content with lobby management buttons.
+    /// </summary>
+    private (ComponentGroup? group, IButtonComponent createButton, IButtonComponent browseButton,
+        IButtonComponent joinButton) CreateSteamTab(float startY, float spacingMultiplier) {
+        // Check if Steam is available
+        //(UNCOMMENT)if (!SteamManager.IsInitialized) {
+
+        var group = new ComponentGroup(activeSelf: false, parent: _backgroundGroup);
+        var y = startY;
+
+        // Status text
+        new TextComponent(
+            group,
+            new Vector2(InitialX, y),
+            new Vector2(ContentWidth, LabelHeight),
+            SteamConnectedText,
+            UiManager.SubTextFontSize,
+            alignment: TextAnchor.MiddleCenter
+        );
+        y -= SteamTextSpacing * spacingMultiplier;
+
+        // Create lobby button
+        var createButton = new ButtonComponent(
+            group,
+            new Vector2(InitialX, y),
+            new Vector2(ContentWidth, UniformHeight),
+            CreateLobbyButtonText,
+            Resources.TextureManager.ButtonBg,
+            Resources.FontManager.UIFontRegular,
+            UiManager.NormalFontSize
+        );
+        createButton.SetOnPress(OnCreateLobbyButtonPressed);
+        y -= (UniformHeight + SteamButtonSpacing) * spacingMultiplier;
+
+        // Browse lobbies button
+        var browseButton = new ButtonComponent(
+            group,
+            new Vector2(InitialX, y),
+            new Vector2(ContentWidth, UniformHeight),
+            BrowseLobbyButtonText,
+            Resources.TextureManager.ButtonBg,
+            Resources.FontManager.UIFontRegular,
+            UiManager.NormalFontSize
+        );
+        browseButton.SetOnPress(OnBrowseLobbyButtonPressed);
+        y -= (UniformHeight + SteamButtonSpacing) * spacingMultiplier;
+
+        // Join friend button
+        var joinButton = new ButtonComponent(
+            group,
+            new Vector2(InitialX, y),
+            new Vector2(ContentWidth, UniformHeight),
+            JoinFriendButtonText,
+            Resources.TextureManager.ButtonBg,
+            Resources.FontManager.UIFontRegular,
+            UiManager.NormalFontSize
+        );
+        joinButton.SetOnPress(OnJoinFriendButtonPressed);
+
+        return (group, createButton, browseButton, joinButton);
+    }
+
+    /// <summary>
+    /// Creates the Direct IP tab content with address/port inputs and connect/host buttons.
+    /// </summary>
+    private (ComponentGroup group, IInputComponent addressInput, IInputComponent portInput,
+        IButtonComponent connectButton, IButtonComponent hostButton)
+        CreateDirectIpTab(float startY, float spacingMultiplier) {
+        var group = new ComponentGroup(activeSelf: false, parent: _backgroundGroup);
+        var y = startY;
+
+        // Server address section
+        new TextComponent(
+            group,
+            new Vector2(InitialX + TextIndentWidth, y),
+            new Vector2(ContentWidth, LabelHeight),
+            ServerAddressLabelText,
+            UiManager.NormalFontSize,
+            alignment: TextAnchor.MiddleLeft
+        );
+        y -= ServerAddressLabelSpacing * spacingMultiplier;
+
+        var addressInput = new IpInputComponent(
+            group,
+            new Vector2(InitialX, y),
+            new Vector2(ContentWidth, UniformHeight),
+            _modSettings.ConnectAddress,
+            ServerAddressPlaceholder
+        );
+        y -= (UniformHeight + ServerAddressInputSpacing) * spacingMultiplier;
+
+        // Port section
+        new TextComponent(
+            group,
+            new Vector2(InitialX + TextIndentWidth, y),
+            new Vector2(ContentWidth, LabelHeight),
+            PortLabelText,
+            UiManager.NormalFontSize,
+            alignment: TextAnchor.MiddleLeft
+        );
+        y -= PortLabelSpacing * spacingMultiplier;
+
+        var joinPort = _modSettings.ConnectPort;
+        var portInput = new PortInputComponent(
+            group,
+            new Vector2(InitialX, y),
+            new Vector2(ContentWidth, UniformHeight),
+            joinPort == -1 ? "" : joinPort.ToString(),
+            PortPlaceholder
+        );
+        y -= UniformHeight + (20f * spacingMultiplier);
+
+        // Button layout calculation using new helper methods
+        var buttonLayout = ConnectInterfaceHelpers.CalculateButtonLayout(ContentWidth, spacingMultiplier);
+        var buttonHeight = ConnectInterfaceHelpers.GetButtonHeight(spacingMultiplier, UniformHeight);
+
+        // Connect button (left)
+        var connectButton = new ButtonComponent(
+            group,
+            new Vector2(InitialX - buttonLayout.offset, y),
+            new Vector2(buttonLayout.width, buttonHeight),
+            DirectConnectButtonText,
+            Resources.TextureManager.ButtonBg,
+            Resources.FontManager.UIFontRegular,
+            UiManager.NormalFontSize
+        );
+        connectButton.SetOnPress(OnDirectConnectButtonPressed);
+
+        // Host button (right)
+        var hostButton = new ButtonComponent(
+            group,
+            new Vector2(InitialX + buttonLayout.offset, y),
+            new Vector2(buttonLayout.width, buttonHeight),
+            HostButtonText,
+            Resources.TextureManager.ButtonBg,
+            Resources.FontManager.UIFontRegular,
+            UiManager.NormalFontSize
+        );
+        hostButton.SetOnPress(OnStartButtonPressed);
+
+        return (group, addressInput, portInput, connectButton, hostButton);
+    }
+
+    /// <summary>
+    /// Creates the feedback text component that displays connection status and errors.
+    /// </summary>
+    private ITextComponent CreateFeedbackText(float contentY, float spacingMultiplier) {
+        // Soften the spacing reduction for feedback text to keep it a bit lower at high res
+        var effectiveMultiplier = (spacingMultiplier + 1f) / 2f;
+        var feedbackY = contentY - (FeedbackTextOffset * effectiveMultiplier);
+
+        var feedback = new TextComponent(
+            _backgroundGroup,
+            new Vector2(InitialX, feedbackY),
+            new Vector2(ContentWidth, LabelHeight),
+            new Vector2(0.5f, 1f),
+            "",
+            UiManager.SubTextFontSize,
+            alignment: TextAnchor.UpperCenter
+        );
+
+        feedback.SetActive(false);
+
+        return feedback;
+    }
+
+    /// <summary>
+    /// Finalizes the UI layout by reparenting components and positioning tabs correctly.
+    /// </summary>
+    private void FinalizeLayout() {
+        ConnectInterfaceHelpers.ReparentComponentGroup(_backgroundGroup, _backgroundPanel);
+        ConnectInterfaceHelpers.PositionTabButtonsFixed(
+            _backgroundPanel,
+            _matchmakingTab,
+            _steamTab,
+            _directIpTab
+        );
+
+        LogFinalPositions();
+    }
+
+    /// <summary>
+    /// Logs the final Unity RectTransform positions after reparenting for debugging.
+    /// </summary>
+    private void LogFinalPositions() {
+        if (_portInput is Component.Component portComp &&
+            _directConnectButton is Component.Component connectComp &&
+            _serverButton is Component.Component hostComp) {
+            var portRect = portComp.GameObject.GetComponent<RectTransform>();
+            var connectRect = connectComp.GameObject.GetComponent<RectTransform>();
+            var hostRect = hostComp.GameObject.GetComponent<RectTransform>();
+
+            Logger.Info($"[ConnectInterface] Final Unity positions:");
+            Logger.Info($"  Port: pos={portRect.anchoredPosition}, size={portRect.sizeDelta}");
+            Logger.Info($"  Connect: pos={connectRect.anchoredPosition}, size={connectRect.sizeDelta}");
+            Logger.Info($"  Host: pos={hostRect.anchoredPosition}, size={hostRect.sizeDelta}");
+        }
+    }
+
+    #endregion
+
+    #region Tab Management
+
+    /// <summary>
+    /// Switches the active tab and updates button states and content visibility.
+    /// </summary>
+    /// <param name="tab">The tab to activate.</param>
     private void SwitchTab(Tab tab) {
-        _activeTab = tab;
-        
-        // Update tab button states
+        // Update tab button visual states
         _matchmakingTab.SetTabActive(tab == Tab.Matchmaking);
         _steamTab?.SetTabActive(tab == Tab.Steam);
         _directIpTab.SetTabActive(tab == Tab.DirectIp);
-        
-        // Show/hide content groups
+
+        // Show only the active tab's content
         _matchmakingGroup.SetActive(tab == Tab.Matchmaking);
         _steamGroup?.SetActive(tab == Tab.Steam);
         _directIpGroup.SetActive(tab == Tab.DirectIp);
     }
 
     /// <summary>
-    /// Sets whether the multiplayer menu (including background panel) is active.
+    /// Shows or hides the entire multiplayer menu interface.
     /// </summary>
-    /// <param name="active">Whether the menu should be active.</param>
+    /// <param name="active">True to show the menu, false to hide it.</param>
     public void SetMenuActive(bool active) {
         _backgroundPanel.SetActive(active);
         _glowingNotch.SetActive(active);
     }
 
+    #endregion
+
+    #region Button Callbacks - Matchmaking Tab
+
     /// <summary>
-    /// Callback method for when the lobby connect button is pressed.
+    /// Handles the Matchmaking tab's "Connect to Lobby" button press.
+    /// Initiates a search for Steam lobbies matching the entered Lobby ID.
     /// </summary>
     private void OnLobbyConnectButtonPressed() {
         //(UNCOMMENT)if (!SteamManager.IsInitialized) {
-        if (true){
-            _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.red, "Steam is not available.", _feedbackHideCoroutine);
+        if (true) {
+            ShowFeedback(Color.red, "Steam is not available.");
             return;
         }
-        
-        _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.yellow, "Searching for lobbies...", _feedbackHideCoroutine);
+
+        ShowFeedback(Color.yellow, "Searching for lobbies...");
         //(UNCOMMENT)SteamManager.RequestLobbyList();
     }
 
+    #endregion
+
+    #region Button Callbacks - Steam Tab
+
     /// <summary>
-    /// Callback method for when the create lobby button is pressed.
+    /// Handles the Steam tab's "Create Lobby" button press.
+    /// Creates a new Steam lobby and starts hosting.
     /// </summary>
     private void OnCreateLobbyButtonPressed() {
         //(UNCOMMENT)if (!SteamManager.IsInitialized) {
-        if (true){
-            _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.red, "Steam is not available. Please ensure Steam is running.", _feedbackHideCoroutine);
+        if (true) {
+            ShowFeedback(Color.red, "Steam is not available. Please ensure Steam is running.");
             Logger.Warn("Cannot create Steam lobby: Steam is not initialized");
             return;
         }
 
 #pragma warning disable CS0162 // Unreachable code detected
-        if (!ConnectInterfaceHelpers.ValidateUsername(_usernameInput, _feedbackText, out var username, _feedbackHideCoroutine, out var newCoroutine)) {
-            _feedbackHideCoroutine = newCoroutine;
+        if (!ValidateUsername(out var username)) {
             return;
         }
 
-        _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.yellow, "Creating Steam lobby...", _feedbackHideCoroutine);
+        ShowFeedback(Color.yellow, "Creating Steam lobby...");
         Logger.Info($"Create lobby requested for user: {username}");
 #pragma warning restore CS0162 // Unreachable code detected
 
-        // Create lobby via SteamManager
         //(UNCOMMENT)SteamManager.CreateLobby(username);
     }
 
     /// <summary>
-    /// Callback method for when the browse lobby button is pressed.
+    /// Handles the Steam tab's "Browse Public Lobbies" button press.
+    /// Requests a list of available public Steam lobbies.
     /// </summary>
     private void OnBrowseLobbyButtonPressed() {
         //(UNCOMMENT)if (!SteamManager.IsInitialized) {
-        if (true){
-            _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.red, "Steam is not available.", _feedbackHideCoroutine);
+        if (true) {
+            ShowFeedback(Color.red, "Steam is not available.");
             return;
         }
-        
-        _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.yellow, "Refreshing lobby list...", _feedbackHideCoroutine);
+
+        ShowFeedback(Color.yellow, "Refreshing lobby list...");
         //(UNCOMMENT)SteamManager.RequestLobbyList();
     }
 
     /// <summary>
-    /// Callback for when a Steam lobby is created.
-    /// </summary>
-    private void OnSteamLobbyCreated(CSteamID lobbyId, string username) {
-        Logger.Info($"Lobby created: {lobbyId}");
-        _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.green, $"Lobby created! Friends can join via Steam overlay.", _feedbackHideCoroutine);
-
-        // Fire event to start server hosting
-        // Port is ignored for Steam P2P, but we pass 0 for consistency
-        StartHostButtonPressed?.Invoke("", 0, username, TransportType.Steam); 
-    }
-
-    /// <summary>
-    /// Callback for Join Friend button (Steam tab).
+    /// Handles the Steam tab's "Join Friend" button press.
+    /// Opens the Steam Friends overlay to allow joining via friend invite.
     /// </summary>
     private void OnJoinFriendButtonPressed() {
         //(UNCOMMENT)if (!SteamManager.IsInitialized) {
-        if (true){
-            _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.red, "Steam is not available.", _feedbackHideCoroutine);
+        if (true) {
+            ShowFeedback(Color.red, "Steam is not available.");
             return;
         }
 
-        // Open Steam Friends overlay
         SteamFriends.ActivateGameOverlay("Friends");
-        _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.yellow, "Opened Steam Friends. Right-click friend to Join Game.", _feedbackHideCoroutine);
+        ShowFeedback(Color.yellow, "Opened Steam Friends. Right-click friend to Join Game.");
     }
 
-    /// <summary>
-    /// Callback for when a list of lobbies is received.
-    /// </summary>
-    private void OnLobbyListReceived(CSteamID[] lobbyIds) {
-        if (lobbyIds.Length == 0) {
-            _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.yellow, "No lobbies found.", _feedbackHideCoroutine);
-            return;
-        }
+    #endregion
 
-        Logger.Info($"Found {lobbyIds.Length} lobbies. Auto-joining first one for now.");
-        _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.yellow, $"Found {lobbyIds.Length} lobbies. Joining first...", _feedbackHideCoroutine);
-        
-        // For now, just join the first one
-        //(UNCOMMENT)SteamManager.JoinLobby(lobbyIds[0]);
-    }
+    #region Button Callbacks - Direct IP Tab
 
     /// <summary>
-    /// Callback for when a lobby is joined.
-    /// </summary>
-    private void OnLobbyJoined(CSteamID lobbyId) {
-        Logger.Info($"Joined lobby: {lobbyId}");
-        _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.green, "Joined lobby! Connecting to host...", _feedbackHideCoroutine);
-
-        var hostId = 0; //SteamManager.GetLobbyOwner(lobbyId);
-        
-        if (!ConnectInterfaceHelpers.ValidateUsername(_usernameInput, _feedbackText, out var username, _feedbackHideCoroutine, out var newCoroutine)) {
-            _feedbackHideCoroutine = newCoroutine;
-            return;
-        }
-
-        // Connect using Steam ID as address
-        ConnectButtonPressed?.Invoke(hostId.ToString(), 0, username, TransportType.Steam);
-    }
-
-    /// <summary>
-    /// Callback method for when the direct connect button is pressed.
+    /// Handles the Direct IP tab's "Connect" button press.
+    /// Validates inputs and initiates a direct IP connection to a server.
     /// </summary>
     private void OnDirectConnectButtonPressed() {
         var address = _addressInput.GetInput();
-        if (address.Length == 0) {
-            _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.red, ErrorEnterAddress, _feedbackHideCoroutine);
+        if (string.IsNullOrEmpty(address)) {
+            ShowFeedback(Color.red, ErrorEnterAddress);
             return;
         }
-        
-        var portString = _portInput.GetInput();
-        if (!int.TryParse(portString, out var port) || port == 0) {
-            _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.red, ErrorEnterValidPort, _feedbackHideCoroutine);
+
+        if (!TryParsePort(_portInput.GetInput(), out var port)) {
+            ShowFeedback(Color.red, ErrorEnterValidPort);
             return;
         }
-        
-        if (!ConnectInterfaceHelpers.ValidateUsername(_usernameInput, _feedbackText, out var username, _feedbackHideCoroutine, out var newCoroutine)) {
-            _feedbackHideCoroutine = newCoroutine;
+
+        if (!ValidateUsername(out var username)) {
             return;
         }
-        
-        // Save settings
-        _modSettings.ConnectAddress = address;
-        _modSettings.ConnectPort = port;
-        _modSettings.Username = username;
-        _modSettings.Save();
-        
+
+        SaveConnectionSettings(address, port, username);
+
         _directConnectButton.SetText(ConnectingText);
         _directConnectButton.SetInteractable(false);
-        
+
         Logger.Debug($"Connecting to {address}:{port} as {username}");
         ConnectButtonPressed?.Invoke(address, port, username, TransportType.Udp);
     }
 
     /// <summary>
-    /// Callback method for when the start hosting button is pressed.
+    /// Handles the Direct IP tab's "Host" button press.
+    /// Validates inputs and starts hosting a server on the specified port.
     /// </summary>
     private void OnStartButtonPressed() {
-        var portString = _portInput.GetInput();
-        if (!int.TryParse(portString, out var port) || port == 0) {
-            _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.red, ErrorEnterValidPortHost, _feedbackHideCoroutine);
+        if (!TryParsePort(_portInput.GetInput(), out var port)) {
+            ShowFeedback(Color.red, ErrorEnterValidPortHost);
             return;
         }
-        if (!ConnectInterfaceHelpers.ValidateUsername(_usernameInput, _feedbackText, out var username, _feedbackHideCoroutine, out var newCoroutine)) {
-            _feedbackHideCoroutine = newCoroutine;
+
+        if (!ValidateUsername(out var username)) {
             return;
         }
+
         StartHostButtonPressed?.Invoke("", port, username, TransportType.Udp);
     }
 
+    #endregion
+
+    #region Steam Event Callbacks
+
     /// <summary>
-    /// Callback method for when the client disconnects.
+    /// Called when a Steam lobby is successfully created.
+    /// Displays success message and triggers server hosting.
     /// </summary>
-    public void OnClientDisconnect() {
-        ConnectInterfaceHelpers.ResetConnectButtons(_directConnectButton, _lobbyConnectButton);
+    /// <param name="lobbyId">The unique Steam ID of the created lobby.</param>
+    /// <param name="username">The username of the lobby host.</param>
+    private void OnSteamLobbyCreated(CSteamID lobbyId, string username) {
+        Logger.Info($"Lobby created: {lobbyId}");
+        ShowFeedback(Color.green, "Lobby created! Friends can join via Steam overlay.");
+
+        // Start hosting with Steam transport (port 0 as it's not used for Steam P2P)
+        StartHostButtonPressed?.Invoke("", 0, username, TransportType.Steam);
     }
 
     /// <summary>
-    /// Callback method for when the client successfully connects.
+    /// Called when the list of available Steam lobbies is received.
+    /// Auto-joins the first lobby if any are found.
+    /// </summary>
+    /// <param name="lobbyIds">Array of Steam lobby IDs found in the search.</param>
+    private void OnLobbyListReceived(CSteamID[] lobbyIds) {
+        if (lobbyIds.Length == 0) {
+            ShowFeedback(Color.yellow, "No lobbies found.");
+            return;
+        }
+
+        Logger.Info($"Found {lobbyIds.Length} lobbies. Auto-joining first one.");
+        ShowFeedback(Color.yellow, $"Found {lobbyIds.Length} lobbies. Joining first...");
+
+        //(UNCOMMENT)SteamManager.JoinLobby(lobbyIds[0]);
+    }
+
+    /// <summary>
+    /// Called when successfully joined a Steam lobby.
+    /// Initiates connection to the lobby host via Steam P2P.
+    /// </summary>
+    /// <param name="lobbyId">The Steam ID of the joined lobby.</param>
+    private void OnLobbyJoined(CSteamID lobbyId) {
+        Logger.Info($"Joined lobby: {lobbyId}");
+        ShowFeedback(Color.green, "Joined lobby! Connecting to host...");
+
+        var hostId = 0; //SteamManager.GetLobbyOwner(lobbyId);
+
+        if (!ValidateUsername(out var username)) {
+            return;
+        }
+
+        // Connect using Steam ID as address with Steam transport
+        ConnectButtonPressed?.Invoke(hostId.ToString(), 0, username, TransportType.Steam);
+    }
+
+    #endregion
+
+    #region Connection Event Callbacks
+
+    /// <summary>
+    /// Called when the client successfully establishes a connection to the server.
+    /// Resets UI state and displays success message.
     /// </summary>
     public void OnSuccessfulConnect() {
-        _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.green, MsgConnected, _feedbackHideCoroutine);
+        ShowFeedback(Color.green, MsgConnected);
+        ResetConnectionButtons();
+    }
+
+    /// <summary>
+    /// Called when the client disconnects from the server.
+    /// Resets the connection UI to allow reconnection.
+    /// </summary>
+    public void OnClientDisconnect() {
+        ResetConnectionButtons();
+    }
+
+    /// <summary>
+    /// Called when a connection attempt fails.
+    /// Displays an appropriate error message based on the failure reason.
+    /// </summary>
+    /// <param name="result">Details about why the connection failed.</param>
+    public void OnFailedConnect(ConnectionFailedResult result) {
+        var message = GetFailureMessage(result);
+        ShowFeedback(Color.red, message);
+        ResetConnectionButtons();
+    }
+
+    #endregion
+
+    #region Helper Methods
+
+    /// <summary>
+    /// Validates the username input field.
+    /// </summary>
+    /// <param name="username">Output parameter containing the validated username.</param>
+    /// <returns>True if username is valid, false otherwise.</returns>
+    private bool ValidateUsername(out string username) {
+        if (!ConnectInterfaceHelpers.ValidateUsername(
+                _usernameInput,
+                _feedbackText,
+                out username,
+                _feedbackHideCoroutine,
+                out var newCoroutine)) {
+            _feedbackHideCoroutine = newCoroutine;
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Attempts to parse a port number string into a valid integer port.
+    /// </summary>
+    /// <param name="portString">The string to parse.</param>
+    /// <param name="port">Output parameter containing the parsed port number.</param>
+    /// <returns>True if parsing succeeded and port is valid (non-zero), false otherwise.</returns>
+    private bool TryParsePort(string portString, out int port) {
+        return int.TryParse(portString, out port) && port != 0;
+    }
+
+    /// <summary>
+    /// Saves connection settings (address, port, username) to persistent storage.
+    /// </summary>
+    private void SaveConnectionSettings(string address, int port, string username) {
+        _modSettings.ConnectAddress = address;
+        _modSettings.ConnectPort = port;
+        _modSettings.Username = username;
+        _modSettings.Save();
+    }
+
+    /// <summary>
+    /// Displays a feedback message to the user with the specified color.
+    /// Automatically hides the message after a delay.
+    /// </summary>
+    /// <param name="color">The color of the feedback text.</param>
+    /// <param name="message">The message to display.</param>
+    private void ShowFeedback(Color color, string message) {
+        _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(
+            _feedbackText,
+            color,
+            message,
+            _feedbackHideCoroutine
+        );
+    }
+
+    /// <summary>
+    /// Resets the connection buttons to their default state after a connection attempt.
+    /// </summary>
+    private void ResetConnectionButtons() {
         ConnectInterfaceHelpers.ResetConnectButtons(_directConnectButton, _lobbyConnectButton);
     }
 
     /// <summary>
-    /// Callback method for when the client fails to connect.
+    /// Converts a connection failure result into a user-friendly error message.
     /// </summary>
-    /// <param name="result">The result of the failed connection.</param>
-    public void OnFailedConnect(ConnectionFailedResult result) {
-        var message = result.Reason switch {
+    /// <param name="result">The connection failure details.</param>
+    /// <returns>A formatted error message string.</returns>
+    private string GetFailureMessage(ConnectionFailedResult result) {
+        return result.Reason switch {
             ConnectionFailedReason.InvalidAddons => ErrorInvalidAddons,
-            ConnectionFailedReason.SocketException or ConnectionFailedReason.IOException => 
-                ErrorInternal,
+            ConnectionFailedReason.SocketException or
+                ConnectionFailedReason.IOException => ErrorInternal,
             ConnectionFailedReason.TimedOut => ErrorTimeout,
-            ConnectionFailedReason.Other => $"Failed to connect:\n{((ConnectionFailedMessageResult)result).Message}",
+            ConnectionFailedReason.Other =>
+                $"Failed to connect:\n{((ConnectionFailedMessageResult) result).Message}",
             _ => ErrorUnknown
         };
-        
-        _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(_feedbackText, Color.red, message, _feedbackHideCoroutine);
-        ConnectInterfaceHelpers.ResetConnectButtons(_directConnectButton, _lobbyConnectButton);
     }
 
+    #endregion
 
+    #region Helper Struct
+
+    /// <summary>
+    /// Context object for tracking UI layout calculations during interface construction.
+    /// </summary>
+    private struct LayoutContext {
+        /// <summary>
+        /// Current X coordinate for positioning UI elements.
+        /// </summary>
+        public float X;
+
+        /// <summary>
+        /// Current Y coordinate for positioning UI elements (decreases as we go down).
+        /// </summary>
+        public float Y;
+
+        /// <summary>
+        /// Resolution-based multiplier for spacing adjustments.
+        /// Calculated as referenceHeight / currentHeight (1.0 at 1080p, 0.75 at 1440p).
+        /// </summary>
+        public float SpacingMultiplier;
+    }
+
+    #endregion
 }

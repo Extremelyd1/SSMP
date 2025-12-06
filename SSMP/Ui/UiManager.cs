@@ -274,7 +274,7 @@ internal class UiManager : IUiManager {
         var canvasScaler = UiGameObject.AddComponent<CanvasScaler>();
         canvasScaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         canvasScaler.referenceResolution = new Vector2(1920f, 1080f);
-        canvasScaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
+        canvasScaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Shrink;
 
         UiGameObject.AddComponent<GraphicRaycaster>();
 
