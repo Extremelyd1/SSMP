@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using GlobalEnums;
@@ -7,7 +7,6 @@ using SSMP.Game.Settings;
 using SSMP.Hooks;
 using SSMP.Networking.Client;
 using SSMP.Networking.Transport.Common;
-using SSMP.Networking;
 using SSMP.Ui.Chat;
 using SSMP.Util;
 using UnityEngine;
@@ -21,11 +20,6 @@ namespace SSMP.Ui;
 /// <inheritdoc />
 internal class UiManager : IUiManager {
     #region Internal UI manager variables and properties
-
-    /// <summary>
-    /// The font size of header text.
-    /// </summary>
-    public const int HeaderFontSize = 34;
 
     /// <summary>
     /// The font size of normal text.
@@ -46,6 +40,11 @@ internal class UiManager : IUiManager {
     /// The address to connect to the local device.
     /// </summary>
     private const string LocalhostAddress = "127.0.0.1";
+
+    /// <summary>
+    /// The ratio between the actual screen height and the default screen height (1080) for scaling purposes.
+    /// </summary>
+    public static readonly float ScreenHeightRatio = Screen.height / 1080f;
 
     /// <summary>
     /// Expression for the GameManager instance.
@@ -280,8 +279,9 @@ internal class UiManager : IUiManager {
         var canvasScaler = UiGameObject.AddComponent<CanvasScaler>();
         canvasScaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         canvasScaler.referenceResolution = new Vector2(1920f, 1080f);
-        canvasScaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
-
+        canvasScaler.matchWidthOrHeight = 1f;
+        canvasScaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+        
         UiGameObject.AddComponent<GraphicRaycaster>();
 
         Object.DontDestroyOnLoad(UiGameObject);
