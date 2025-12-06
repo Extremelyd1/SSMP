@@ -68,6 +68,9 @@ internal class SteamEncryptedTransportClient : IReliableTransportClient {
     /// Internal helper to send data with a specific P2P send type.
     /// </summary>
     private void SendInternal(byte[] buffer, int offset, int length, EP2PSend sendType) {
+        if (sendType == EP2PSend.k_EP2PSendReliable) {
+            Logger.Debug($"Steam P2P: Sending RELIABLE packet to {SteamId} of length {length}");
+        }
         if (!SteamManager.IsInitialized) {
             Logger.Warn($"Steam P2P: Cannot send to client {SteamId}, Steam not initialized");
             return;

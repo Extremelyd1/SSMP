@@ -253,7 +253,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId> : UpdateManager
             _localSequence++;
         }
 
-        SendPacketWithFragmentation(packet);
+        SendPacketWithFragmentation(packet, updatePacket.ContainsReliableData);
     }
 
     /// <summary>
@@ -275,9 +275,10 @@ internal abstract class UpdateManager<TOutgoing, TPacketId> : UpdateManager
     /// Fragments are sent sequentially to ensure they can be reassembled by the receiver.
     /// </summary>
     /// <param name="packet">The packet to send, which may be fragmented if too large.</param>
-    private void SendPacketWithFragmentation(Packet.Packet packet) {
+    /// <param name="isReliable">Whether the packet data needs to be delivered reliably.</param>
+    private void SendPacketWithFragmentation(Packet.Packet packet, bool isReliable) {
         if (packet.Length <= PacketMtu) {
-            SendPacket(packet);
+            SendPacket(packet, isReliable);
             return;
         }
 
@@ -289,7 +290,12 @@ internal abstract class UpdateManager<TOutgoing, TPacketId> : UpdateManager
             var fragment = new byte[length];
             Array.Copy(byteArray, index, fragment, 0, length);
 
-            SendPacket(new Packet.Packet(fragment));
+            // Fragmented packets are only reliable if the original packet was, and we only 
+            // set reliability for the first fragment or all? 
+            // In this implementation logic, it seems we treated the whole packet as reliable or not.
+            // However, typical fragmentation reliability depends on transport. 
+            // Assuming for now that if the main packet is reliable, we want to try and send fragments reliably too.
+            SendPacket(new Packet.Packet(fragment), isReliable);
             index += length;
         }
     }
@@ -356,9 +362,9 @@ internal abstract class UpdateManager<TOutgoing, TPacketId> : UpdateManager
     /// Sends the given packet over the corresponding medium.
     /// </summary>
     /// <param name="packet">The raw packet instance.</param>
-    private void SendPacket(Packet.Packet packet) {
+    /// <param name="isReliable">Whether the packet contains reliable data.</param>
+    private void SendPacket(Packet.Packet packet, bool isReliable) {
         var buffer = packet.ToArray();
-        var isReliable = packet.ContainsReliableData;
 
         switch (_transportSender) {
             case IReliableTransport reliableTransport when isReliable:
