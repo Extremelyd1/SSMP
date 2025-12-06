@@ -9,7 +9,7 @@ namespace SSMP.Networking.Transport.UDP;
 /// <summary>
 /// UDP+DTLS implementation of <see cref="IEncryptedTransportServer{TClient}"/> that wraps DtlsServer.
 /// </summary>
-internal class UdpEncryptedTransportServer : IEncryptedTransportServer<UdpEncryptedTransportClient> {
+internal class UdpEncryptedTransportServer : IEncryptedTransportServer {
     /// <summary>
     /// The underlying DTLS server.
     /// </summary>
@@ -20,7 +20,7 @@ internal class UdpEncryptedTransportServer : IEncryptedTransportServer<UdpEncryp
     private readonly ConcurrentDictionary<IPEndPoint, UdpEncryptedTransportClient> _clients;
 
     /// <inheritdoc />
-    public event Action<UdpEncryptedTransportClient>? ClientConnectedEvent;
+    public event Action<IEncryptedTransportClient>? ClientConnectedEvent;
 
     public UdpEncryptedTransportServer() {
         _dtlsServer = new DtlsServer();
@@ -40,9 +40,13 @@ internal class UdpEncryptedTransportServer : IEncryptedTransportServer<UdpEncryp
     }
 
     /// <inheritdoc />
-    public void DisconnectClient(UdpEncryptedTransportClient client) {
-        _dtlsServer.DisconnectClient(client.EndPoint);
-        _clients.TryRemove(client.EndPoint, out _);
+    public void DisconnectClient(IEncryptedTransportClient client) {
+        var udpClient = client as UdpEncryptedTransportClient;
+        if (udpClient == null)
+            return;
+        
+        _dtlsServer.DisconnectClient(udpClient.EndPoint);
+        _clients.TryRemove(udpClient.EndPoint, out _);
     }
 
     /// <summary>

@@ -2,6 +2,7 @@ using SSMP.Game.Settings;
 using SSMP.Logging;
 using SSMP.Networking.Packet;
 using SSMP.Networking.Server;
+using SSMP.Networking.Transport.UDP;
 using SSMPServer.Command;
 using SSMPServer.Logging;
 
@@ -88,7 +89,7 @@ public class Launcher {
 
         var serverManager = new ConsoleServerManager(netServer, packetManager, serverSettings, consoleLogger);
         serverManager.Initialize();
-        serverManager.Start(consoleSettings.Port, consoleSettings.FullSynchronisation);
+        serverManager.Start(consoleSettings.Port, consoleSettings.FullSynchronisation, new UdpEncryptedTransportServer());
 
         // Stop reading console input when the server shuts down
         serverManager.ServerShutdownEvent += () => {

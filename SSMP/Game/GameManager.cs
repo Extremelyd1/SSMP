@@ -4,7 +4,6 @@ using SSMP.Game.Settings;
 using SSMP.Networking.Client;
 using SSMP.Networking.Packet;
 using SSMP.Networking.Server;
-using SSMP.Networking.Transport.UDP;
 using SSMP.Ui;
 using SSMP.Ui.Resources;
 using SSMP.Util;
@@ -37,8 +36,8 @@ internal class GameManager {
 
         var packetManager = new PacketManager();
 
-        var udpTransport = new UdpEncryptedTransport();
-        var netClient = new NetClient(packetManager, udpTransport);
+        
+        var netClient = new NetClient(packetManager);
         var netServer = new NetServer(packetManager);
 
         var clientServerSettings = new ServerSettings();
@@ -76,6 +75,12 @@ internal class GameManager {
         ThreadUtil.Instantiate();
 
         TextureManager.LoadTextures();
+
+        // Initialize Steam if available
+        if (SteamManager.Initialize()) {
+            // Register Steam callback updates on Unity's update loop
+            MonoBehaviourUtil.Instance.OnUpdateEvent += SteamManager.RunCallbacks;
+        }
 
         _uiManager.Initialize();
         

@@ -16,7 +16,7 @@ public interface IServerPlayer {
     /// <summary>
     /// The IP address of the player.
     /// </summary>
-    string IpAddressString { get; }
+    string UniqueClientIdentifier { get; }
     
     /// <summary>
     /// The authentication key of the player.

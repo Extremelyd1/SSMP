@@ -59,24 +59,11 @@ internal class NetServerClient {
     public IEncryptedTransportClient TransportClient { get; }
     
     /// <summary>
-    /// The client identifier for this client.
+    /// Extracts the IPEndPoint for UDP-based transports only.
+    /// Used for IP-based banning functionality. Returns null for non-UDP transports (e.g., Steam P2P).
     /// </summary>
-    public IClientIdentifier ClientIdentifier => TransportClient.ClientIdentifier;
-
-    /// <summary>
-    /// The endpoint of the client (for UDP transports only, backward compatibility).
-    /// </summary>
-    public IPEndPoint EndPoint {
-        get {
-            // For UDP-based transports, extract the IPEndPoint
-            return TransportClient.ClientIdentifier switch
-            {
-                UdpClientIdentifier udp      => udp.EndPoint,
-                HolePunchClientIdentifier hp => hp.EndPoint,
-                _ => throw new InvalidOperationException("EndPoint is only available for UDP-based transports")
-            };
-        }
-    }
+    public IPEndPoint? EndPoint => TransportClient.EndPoint;
+    
 
     /// <summary>
     /// Construct the client with the given transport client.
@@ -87,15 +74,9 @@ internal class NetServerClient {
         TransportClient = transportClient;
 
         Id = GetId();
-        UpdateManager = new ServerUpdateManager();
         
-        // For UDP-based transports, set DtlsTransport for backward compatibility
-        UpdateManager.DtlsTransport = transportClient switch {
-            UdpEncryptedTransportClient udp => udp.DtlsServerClient.DtlsTransport,
-            HolePunchEncryptedTransportClient hp => hp.DtlsServerClient.DtlsTransport,
-            _ => null
-        };
-        // Steam P2P will use Transport property instead when implemented
+        UpdateManager = new ServerUpdateManager();
+        UpdateManager.TransportClient = transportClient;
         ChunkSender = new ServerChunkSender(UpdateManager);
         ChunkReceiver = new ServerChunkReceiver(UpdateManager);
         ConnectionManager = new ServerConnectionManager(packetManager, ChunkSender, ChunkReceiver, Id);

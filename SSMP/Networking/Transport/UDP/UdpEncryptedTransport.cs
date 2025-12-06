@@ -16,6 +16,9 @@ internal class UdpEncryptedTransport : IEncryptedTransport {
     /// <inheritdoc />
     public event Action<byte[], int>? DataReceivedEvent;
 
+    /// <inheritdoc />
+    public bool RequiresCongestionManagement => true;
+
     public UdpEncryptedTransport() {
         _dtlsClient = new DtlsClient();
         _dtlsClient.DataReceivedEvent += OnDataReceived;
@@ -36,9 +39,13 @@ internal class UdpEncryptedTransport : IEncryptedTransport {
     }
 
     /// <inheritdoc />
-    public int Receive(byte[] buffer, int offset, int length, int waitMillis) {
+    public int Receive(byte[]? buffer, int offset, int length, int waitMillis) {
         if (_dtlsClient.DtlsTransport == null) {
             throw new InvalidOperationException("Not connected");
+        }
+
+        if (buffer == null) {
+            return 0;
         }
 
         return _dtlsClient.DtlsTransport.Receive(buffer, offset, length, waitMillis);

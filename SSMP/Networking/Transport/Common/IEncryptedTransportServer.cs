@@ -5,12 +5,11 @@ namespace SSMP.Networking.Transport.Common;
 /// <summary>
 /// Interface for a server-side encrypted transport for starting/stopping and managing client (dis)connect.
 /// </summary>
-/// <typeparam name="TClient">The type of transport client this server manages.</typeparam>
-internal interface IEncryptedTransportServer<TClient> where TClient : IEncryptedTransportClient {
+internal interface IEncryptedTransportServer {
     /// <summary>
     /// Event raised when a client connects to the server.
     /// </summary>
-    event Action<TClient>? ClientConnectedEvent;
+    event Action<IEncryptedTransportClient>? ClientConnectedEvent;
     
     /// <summary>
     /// Start listening for connections.
@@ -27,5 +26,5 @@ internal interface IEncryptedTransportServer<TClient> where TClient : IEncrypted
     /// Disconnect a specific client.
     /// </summary>
     /// <param name="client">The client to disconnect.</param>
-    void DisconnectClient(TClient client);
+    void DisconnectClient(IEncryptedTransportClient client);
 }
