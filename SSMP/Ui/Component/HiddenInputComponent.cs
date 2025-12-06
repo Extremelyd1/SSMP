@@ -44,6 +44,27 @@ internal class HiddenInputComponent : InputComponent {
     ) {
     }
 
+    protected HiddenInputComponent(
+        ComponentGroup componentGroup,
+        Vector2 position,
+        Vector2 size,
+        string defaultValue,
+        string placeholderText,
+        int fontSize,
+        InputField.CharacterValidation characterValidation = InputField.CharacterValidation.None
+    ) : this(
+        componentGroup,
+        position,
+        size,
+        defaultValue,
+        placeholderText,
+        TextureManager.InputFieldBg,
+        Resources.FontManager.UIFontRegular,
+        fontSize,
+        characterValidation
+    ) {
+    }
+
     private HiddenInputComponent(
         ComponentGroup componentGroup,
         Vector2 position,
@@ -76,12 +97,12 @@ internal class HiddenInputComponent : InputComponent {
         var eventTrigger = GameObject.GetComponent<EventTrigger>();
         eventTrigger.triggers.Clear();
 
-        AddEventTrigger(eventTrigger, EventTriggerType.PointerEnter, data => {
+        AddEventTrigger(eventTrigger, EventTriggerType.PointerEnter, _ => {
             if (Interactable) {
                 Image.sprite = bgSprite.Hover;
             }
         });
-        AddEventTrigger(eventTrigger, EventTriggerType.PointerExit, data => {
+        AddEventTrigger(eventTrigger, EventTriggerType.PointerExit, _ => {
             if (Interactable) {
                 Image.sprite = bgSprite.Neutral;
 
@@ -94,7 +115,7 @@ internal class HiddenInputComponent : InputComponent {
                 _isHidden = true;
             }
         });
-        AddEventTrigger(eventTrigger, EventTriggerType.PointerDown, data => {
+        AddEventTrigger(eventTrigger, EventTriggerType.PointerDown, _ => {
             if (Interactable) {
                 Image.sprite = bgSprite.Active;
                 InputField.text = _currentInput;

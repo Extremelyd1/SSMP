@@ -10,7 +10,7 @@ internal class IpInputComponent : HiddenInputComponent {
     /// <summary>
     /// List of characters that cannot be input in this field.
     /// </summary>
-    private static readonly List<char> BlacklistedChars = new List<char> {
+    private static readonly List<char> BlacklistedChars = [
         ' ',
         '\n',
         '\t',
@@ -18,21 +18,37 @@ internal class IpInputComponent : HiddenInputComponent {
         '\f',
         '\b',
         '\r'
-    };
+    ];
 
     public IpInputComponent(
         ComponentGroup componentGroup,
         Vector2 position,
         string defaultValue,
         string placeholderText
+    ) : this(
+        componentGroup,
+        position,
+        new Vector2(DefaultWidth, DefaultHeight),
+        defaultValue,
+        placeholderText
+    ) {
+    }
+
+    public IpInputComponent(
+        ComponentGroup componentGroup,
+        Vector2 position,
+        Vector2 size,
+        string defaultValue,
+        string placeholderText
     ) : base(
         componentGroup,
         position,
+        size,
         defaultValue,
         placeholderText,
         UiManager.NormalFontSize
     ) {
-        InputField.onValidateInput += (text, index, addedChar) => {
+        InputField.onValidateInput += (_, _, addedChar) => {
             if (BlacklistedChars.Contains(addedChar)) {
                 return '\0';
             }

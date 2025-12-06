@@ -83,6 +83,30 @@ internal class InputComponent : Component, IInputComponent {
         Vector2 size,
         string defaultValue,
         string placeholderText,
+        int characterLimit = 0,
+        InputField.CharacterValidation characterValidation = InputField.CharacterValidation.None,
+        InputField.OnValidateInput? onValidateInput = null
+    ) : this(
+        componentGroup,
+        position,
+        size,
+        defaultValue,
+        placeholderText,
+        TextureManager.InputFieldBg,
+        Resources.FontManager.UIFontRegular,
+        UiManager.NormalFontSize,
+        characterLimit,
+        characterValidation,
+        onValidateInput
+    ) {
+    }
+
+    public InputComponent(
+        ComponentGroup componentGroup,
+        Vector2 position,
+        Vector2 size,
+        string defaultValue,
+        string placeholderText,
         MultiStateSprite bgSprite,
         Font font,
         int fontSize,

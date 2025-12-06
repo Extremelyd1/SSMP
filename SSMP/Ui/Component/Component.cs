@@ -15,7 +15,7 @@ internal abstract class Component : IComponent {
     /// <summary>
     /// The underlying GameObject of the component. 
     /// </summary>
-    protected readonly GameObject GameObject;
+    internal GameObject GameObject { get; }
 
     /// <summary>
     /// The Unity RectTransform instance.
