@@ -262,13 +262,20 @@ internal class NetServer : INetServer {
         foreach (var packet in packets) {
             // If the client is not registered, try to read as connection packet first
             if (!client.IsRegistered) {
+                var savedReadPos = packet.ReadPosition;
                 var connectionPacket = new ServerConnectionPacket();
-                var packetClone = new Packet.Packet(packet.ToArray());
-                
-                if (connectionPacket.ReadPacket(packetClone)) {
+
+                // Attempt connection parse on the original packet.
+                // If it fails, restore read position so we can try other packet types.
+                if (connectionPacket.ReadPacket(packet)) {
                     _packetManager.HandleServerConnectionPacket(id, connectionPacket);
+                    // Parsed successfully as connection packet; packet has been consumed.
+                    // Skip further processing to avoid double-handling.
                     continue;
                 }
+
+                // Restore read cursor for subsequent parsers
+                packet.ReadPosition = savedReadPos;
             }
 
             var serverUpdatePacket = new ServerUpdatePacket();

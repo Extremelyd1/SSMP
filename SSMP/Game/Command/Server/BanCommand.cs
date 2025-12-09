@@ -202,8 +202,9 @@ internal class BanCommand : IServerCommand, ICommandWithDescription {
              // For Steam, both are SteamID.
              bool match = false;
              if (isIp) {
-                  // If banning by IP, check if player starts with that IP
-                  if (p.UniqueClientIdentifier.StartsWith(identifier)) match = true;
+                 // For UDP, UniqueClientIdentifier is "IP:Port", so extract just the IP
+                 var playerIp = p.UniqueClientIdentifier.Split(':')[0];
+                 if (playerIp == identifier) match = true;
              } else {
                   if (p.UniqueClientIdentifier == identifier) match = true;
              }

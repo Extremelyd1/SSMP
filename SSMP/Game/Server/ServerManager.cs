@@ -1285,8 +1285,8 @@ internal abstract class ServerManager : IServerManager {
     
     // Check if the unique identifier is banned (supports both IPEndPoint and SteamID)
     if (_banList.IsIpBanned(uniqueIdentifier)) {
-        var identifierType = IPAddress.TryParse(uniqueIdentifier, out _) ? "IP" : "Steam ID";
-        Logger.Debug($"  Client is banned from the server ({identifierType}), rejected connection");
+        var displayType = IPAddress.TryParse(uniqueIdentifier, out _) ? "IP" : "Steam ID";
+        Logger.Debug($"  Client is banned from the server ({displayType}), rejected connection");
 
             serverInfo.ConnectionResult = ServerConnectionResult.RejectedOther;
             serverInfo.ConnectionRejectedMessage = "Banned from the server";
