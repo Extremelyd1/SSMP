@@ -57,14 +57,7 @@ internal class ClientConnectionManager : ConnectionManager {
     public void StartConnection(string username, string authKey, List<AddonData> addonData,
         Transport.Common.IEncryptedTransport transport) {
         Logger.Debug("StartConnection");
-        Logger.Debug($"AddonData count: {addonData?.Count ?? -1}");
-        if (addonData != null) {
-            foreach (var addon in addonData) {
-                Logger.Debug($"  Addon ID: {addon.Identifier}");
-            }
-        }
-     
-
+        
         // Create a connection packet that will be the entire chunk we will be sending
         var connectionPacket = new ServerConnectionPacket();
 
@@ -86,7 +79,6 @@ internal class ClientConnectionManager : ConnectionManager {
             // We need to write the length first because the server's PacketManager expects a length prefix
             packet.WriteLength();
             var buffer = packet.ToArray();
-            Logger.Debug($"StartConnection sending packet: length={buffer.Length}, first bytes: {buffer[0]:X2} {buffer[1]:X2} {buffer[2]:X2} {buffer[3]:X2}");
             transport.Send(buffer, 0, buffer.Length);
         } else {
             // UDP/HolePunch: Enqueue the raw packet to be sent using the chunk sender

@@ -67,7 +67,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId> : UpdateManager
     /// <summary>
     /// Object to lock asynchronous accesses.
     /// </summary>
-    protected readonly object Lock = new object();
+    protected readonly object Lock = new();
 
     /// <summary>
     /// The current instance of the update packet.

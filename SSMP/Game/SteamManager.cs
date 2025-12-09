@@ -10,11 +10,20 @@ namespace SSMP.Game;
 /// </summary>
 public static class SteamManager {
     /// <summary>
-    /// The actual version of the mod. (Probably should be centralized).
+    /// The current version of the mod.
     /// </summary>
     private const string MOD_VERSION = "0.0.6";
+
+    /// <summary>
+    /// The default maximum number of players allowed in a lobby.
+    /// </summary>
     private const int DEFAULT_MAX_PLAYERS = 4;
+
+    /// <summary>
+    /// The default lobby visibility type.
+    /// </summary>
     private const ELobbyType DEFAULT_LOBBY_TYPE = ELobbyType.k_ELobbyTypeFriendsOnly;
+
 
     /// <summary>
     /// Whether Steam API has been successfully initialized.
@@ -30,6 +39,11 @@ public static class SteamManager {
     /// Whether we are currently hosting a Steam lobby.
     /// </summary>
     public static bool IsHostingLobby { get; private set; }
+
+    /// <summary>
+    /// Whether we are currently in a Steam lobby (hosting or client).
+    /// </summary>
+    public static bool IsInLobby => CurrentLobbyId != CSteamID.Nil;
 
     /// <summary>
     /// Event fired when a Steam lobby is successfully created.

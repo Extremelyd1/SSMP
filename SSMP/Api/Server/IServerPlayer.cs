@@ -14,7 +14,8 @@ public interface IServerPlayer {
     ushort Id { get; }
     
     /// <summary>
-    /// The IP address of the player.
+    /// The Unique client identifier of the player.
+    /// Interchangeable between IPEndPoint and SteamID.
     /// </summary>
     string UniqueClientIdentifier { get; }
     

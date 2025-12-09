@@ -30,7 +30,7 @@ internal class NetClient : INetClient {
     /// <summary>
     /// The client update manager for this net client.
     /// </summary>
-    public ClientUpdateManager UpdateManager { get; private set; }
+    public ClientUpdateManager UpdateManager { get; }
 
     /// <summary>
     /// Event that is called when the client connects to a server.
@@ -88,7 +88,7 @@ internal class NetClient : INetClient {
     /// <summary>
     /// Lock object for synchronizing connection state changes.
     /// </summary>
-    private readonly object _connectionLock = new object();
+    private readonly object _connectionLock = new();
 
 
 
@@ -146,11 +146,6 @@ internal class NetClient : INetClient {
         new Thread(() => {
             try {
                 _transport = transport;
-                UpdateManager = new ClientUpdateManager();
-                
-                // Recreate ChunkSender to use the new UpdateManager
-                _chunkSender = new ClientChunkSender(UpdateManager);
-                
                 _transport.DataReceivedEvent += OnReceiveData;
                 _transport.Connect(address, port);
                 
@@ -260,6 +255,7 @@ internal class NetClient : INetClient {
             try {
                 var clientUpdatePacket = new ClientUpdatePacket();
                 if (!clientUpdatePacket.ReadPacket(packet)) {
+                    // If ReadPacket returns false, we received a malformed packet, which we simply ignore for now
                     continue;
                 }
 
@@ -267,18 +263,22 @@ internal class NetClient : INetClient {
                 // UpdateManager will skip UDP-specific logic for Steam transports
                 UpdateManager.OnReceivePacket<ClientUpdatePacket, ClientUpdatePacketId>(clientUpdatePacket);
 
+                // First check for slice or slice ack data and handle it separately by passing it onto either the chunk 
+                // sender or chunk receiver
                 var packetData = clientUpdatePacket.GetPacketData();
             
                 if (packetData.TryGetValue(ClientUpdatePacketId.Slice, out var sliceData)) {
                     packetData.Remove(ClientUpdatePacketId.Slice);
-                    _chunkReceiver.ProcessReceivedData((SliceData)sliceData);
+                    _chunkReceiver.ProcessReceivedData((SliceData) sliceData);
                 }
 
                 if (packetData.TryGetValue(ClientUpdatePacketId.SliceAck, out var sliceAckData)) {
                     packetData.Remove(ClientUpdatePacketId.SliceAck);
-                    _chunkSender.ProcessReceivedData((SliceAckData)sliceAckData);
+                    _chunkSender.ProcessReceivedData((SliceAckData) sliceAckData);
                 }
 
+                // Then, if we are already connected to a server,
+                // we let the packet manager handle the rest of the packet data
                 if (ConnectionStatus == ClientConnectionStatus.Connected) {
                     _packetManager.HandleClientUpdatePacket(clientUpdatePacket);
                 }

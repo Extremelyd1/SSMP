@@ -35,8 +35,8 @@ internal class GameManager {
         var modSettings = ModSettings.Load();
 
         var packetManager = new PacketManager();
-
         
+        //We lazily create the transport based on user's selection
         var netClient = new NetClient(packetManager);
         var netServer = new NetServer(packetManager);
 

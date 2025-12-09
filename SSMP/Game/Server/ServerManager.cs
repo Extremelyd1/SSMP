@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Net;
 using SSMP.Animation;
 using SSMP.Api.Command.Server;
 using SSMP.Api.Eventing.ServerEvents;
@@ -365,7 +366,7 @@ internal abstract class ServerManager : IServerManager {
     /// <param name="port">The port the server should run on.</param>
     /// <param name="fullSynchronisation">Whether full synchronisation should be enabled.</param>
     /// <param name="transportServer">The transport server to use.</param>
-    public virtual void Start(int port, bool fullSynchronisation, IEncryptedTransportServer transportServer) {
+    public void Start(int port, bool fullSynchronisation, IEncryptedTransportServer transportServer) {
         // Stop existing server
         if (_netServer.IsStarted) {
             Logger.Info("Server was running, shutting it down before starting");
@@ -1279,10 +1280,13 @@ internal abstract class ServerManager : IServerManager {
         var clientDisplayString = netServerClient.TransportClient.ToDisplayString();
         Logger.Info($"Received connection request from {clientDisplayString}, username: {clientInfo.Username}");
 
-        // Extract IPEndPoint if this is a UDP-based transport (for IP banning)
-        var endPoint = netServerClient.EndPoint;
-        if (endPoint != null && _banList.IsIpBanned(endPoint.Address.ToString())) {
-            Logger.Debug("  Client is banned from the server (IP), rejected connection");
+    // Get the unique identifier (IP address for UDP, Steam ID for Steam clients)
+    var uniqueIdentifier = netServerClient.TransportClient.GetUniqueIdentifier();
+    
+    // Check if the unique identifier is banned (supports both IPEndPoint and SteamID)
+    if (_banList.IsIpBanned(uniqueIdentifier)) {
+        var identifierType = IPAddress.TryParse(uniqueIdentifier, out _) ? "IP" : "Steam ID";
+        Logger.Debug($"  Client is banned from the server ({identifierType}), rejected connection");
 
             serverInfo.ConnectionResult = ServerConnectionResult.RejectedOther;
             serverInfo.ConnectionRejectedMessage = "Banned from the server";
@@ -1434,7 +1438,7 @@ internal abstract class ServerManager : IServerManager {
         // Create new player data and store it
         var playerData = new ServerPlayerData(
             netServerClient.Id,
-            netServerClient.TransportClient.GetUniqueIdentifier(),
+            uniqueIdentifier,
             clientInfo.Username,
             clientInfo.AuthKey,
             _authorizedList

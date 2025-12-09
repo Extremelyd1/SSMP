@@ -71,7 +71,13 @@ internal static class CommandUtil {
         [MaybeNullWhen(false)] out ServerPlayerData player
     ) {
         foreach (var onlinePlayer in players) {
-            if (onlinePlayer.UniqueClientIdentifier.Equals(ipAddress)) {
+            var identifier = onlinePlayer.UniqueClientIdentifier;
+
+            if (identifier.Contains(':')) {
+                identifier = identifier.Split(':')[0];
+            }
+            
+            if (identifier.Equals(ipAddress)) {
                 player = onlinePlayer;
                 return true;
             }

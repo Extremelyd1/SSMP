@@ -21,7 +21,6 @@ using SSMP.Networking.Packet.Data;
 using SSMP.Networking.Packet.Update;
 using SSMP.Networking.Transport.Common;
 using SSMP.Networking.Transport.SteamP2P;
-using SSMP.Networking;
 using SSMP.Networking.Transport.UDP;
 using SSMP.Ui;
 using SSMP.Util;
@@ -479,11 +478,11 @@ internal class ClientManager : IClientManager {
     }
 
     /// <summary>
-    /// Connect the client to the server with the given connection details.
+    /// Connect the client to the server with the given address, port, username and TransportType
     /// </summary>
-    /// <param name="address">The address to connect to.</param>
-    /// <param name="port">The port to connect to.</param>
-    /// <param name="username">The username to connect with.</param>
+    /// <param name="address">The address of the server.</param>
+    /// <param name="port">The port of the server.</param>
+    /// <param name="username">The username of the client.</param>
     /// <param name="transportType">The transport type to use.</param>
     private void Connect(string address, int port, string username, TransportType transportType) {
         // If we are hosting and using Steam, we need to connect to our own Steam ID
@@ -491,7 +490,12 @@ internal class ClientManager : IClientManager {
             address = SteamUser.GetSteamID().ToString();
         }
 
-        Logger.Info($"Connecting client to server: {address}:{port} as {username}");
+        // Log connection details based on transport type
+        if (transportType == TransportType.Steam) {
+            Logger.Info($"Connecting client via Steam to {address} as {username}");
+        } else {
+            Logger.Info($"Connecting client to server: {address}:{port} as {username}");
+        }
 
         // Stop existing client
         if (_netClient.IsConnected) {
@@ -538,16 +542,20 @@ internal class ClientManager : IClientManager {
         Logger.Info("Disconnecting from server");
 
         _autoConnect = false;
-        
+    
         _netClient.Disconnect();
-        
-        // If we are in a Steam lobby, we leave it
-        SteamManager.LeaveLobby();
+    
+        // Leave Steam Lobby in case we are connected
+        if (SteamManager.IsInLobby) {
+            Logger.Info("Leaving Steam lobby.");
+            SteamManager.LeaveLobby();
+        }
 
         // Let the player manager know we disconnected
         _playerManager.OnDisconnect();
 
         // Clear the player data dictionary
+        Logger.Info($"Clearing {_playerData.Count} player(s) from cache");
         _playerData.Clear();
 
         _uiManager.OnClientDisconnect();
