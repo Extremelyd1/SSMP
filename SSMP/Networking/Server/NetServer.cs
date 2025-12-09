@@ -34,12 +34,7 @@ internal class NetServer : INetServer {
     /// Underlying encrypted transport server instance.
     /// </summary>
     private IEncryptedTransportServer? _transportServer;
-
-    /// <summary>
-    /// Dictionary mapping client identifiers to net server clients.
-    /// </summary>
-
-
+        
     /// <summary>
     /// Dictionary mapping client IDs to net server clients.
     /// </summary>

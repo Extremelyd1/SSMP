@@ -1,4 +1,6 @@
 using System;
+using System.Reflection;
+using Mono.Cecil;
 using Steamworks;
 using SSMP.Logging;
 
@@ -12,7 +14,7 @@ public static class SteamManager {
     /// <summary>
     /// The current version of the mod.
     /// </summary>
-    private const string MOD_VERSION = "0.0.6";
+    private static readonly string MOD_VERSION = Assembly.GetExecutingAssembly().GetName().Version.ToString();
 
     /// <summary>
     /// The default maximum number of players allowed in a lobby.
