@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace SSMP.Networking.Transport.Common;
 
@@ -19,22 +19,18 @@ internal interface IEncryptedTransport {
     void Connect(string address, int port);
     
     /// <summary>
-    /// Send data to the connected peer.
+    /// Send data to the server.
     /// </summary>
-    /// <param name="buffer">Buffer containing the data to send.</param>
-    /// <param name="offset">Offset in the buffer to start sending from.</param>
-    /// <param name="length">Number of bytes to send.</param>
+    /// <param name="buffer">The byte array buffer containing the data.</param>
+    /// <param name="offset">The offset in the buffer to start sending from.</param>
+    /// <param name="length">The number of bytes to send from the buffer.</param>
     void Send(byte[] buffer, int offset, int length);
 
     /// <summary>
-    /// Receive data from the connected peer.
+    /// Indicates whether this transport requires application-level congestion management.
+    /// Returns false for transports with built-in congestion handling (e.g., Steam P2P).
     /// </summary>
-    /// <param name="buffer">Buffer to store received data.</param>
-    /// <param name="offset">Offset in the buffer to start storing data.</param>
-    /// <param name="length">Maximum number of bytes to receive.</param>
-    /// <param name="waitMillis">Time in milliseconds to wait for data.</param>
-    /// <returns>Number of bytes received.</returns>
-    int Receive(byte[] buffer, int offset, int length, int waitMillis);
+    bool RequiresCongestionManagement { get; }
 
     /// <summary>
     /// Disconnect from the remote peer.

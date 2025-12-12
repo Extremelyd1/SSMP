@@ -103,6 +103,8 @@ internal class ServerConnectionManager : ConnectionManager {
             ConnectionRequestEvent?.Invoke(_clientId, clientInfo, serverInfo);
         } catch (Exception e) {
             Logger.Error($"Exception occurred while executing the connection request event:\n{e}");
+            serverInfo.ConnectionResult = ServerConnectionResult.RejectedOther;
+            serverInfo.ConnectionRejectedMessage = "Internal server error";
         }
 
         SendServerInfo(serverInfo);

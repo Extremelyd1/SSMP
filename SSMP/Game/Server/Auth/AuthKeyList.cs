@@ -41,20 +41,28 @@ internal class AuthKeyList {
     /// Add the given auth key to the list.
     /// </summary>
     /// <param name="authKey">The authentication key to add.</param>
-    public void Add(string authKey) {
-        _approved.Add(authKey);
+    /// <returns>True if the key was added, false if it was already present.</returns>
+    public bool Add(string authKey) {
+        if (!_approved.Add(authKey)) {
+            return false;
+        }
 
         WriteToFile();
+        return true;
     }
 
     /// <summary>
     /// Remove the given auth key from the list.
     /// </summary>
     /// <param name="authKey">The authentication key to remove.</param>
-    public void Remove(string authKey) {
-        _approved.Remove(authKey);
+    /// <returns>True if the key was removed, false if it was not present.</returns>
+    public bool Remove(string authKey) {
+        if (!_approved.Remove(authKey)) {
+            return false;
+        }
 
         WriteToFile();
+        return true;
     }
 
     /// <summary>

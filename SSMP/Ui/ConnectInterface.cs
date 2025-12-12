@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
+using SSMP.Game;
 using SSMP.Game.Settings;
 using SSMP.Networking.Client;
 using SSMP.Ui.Component;
@@ -8,6 +9,7 @@ using SSMP.Networking.Transport.Common;
 using SSMP.Ui.Util;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
+
 // ReSharper disable ObjectCreationAsStatement
 // ReSharper disable HeuristicUnreachableCode
 // ReSharper disable UnusedMember.Local
@@ -405,19 +407,19 @@ internal class ConnectInterface {
     /// Button to create a new Steam lobby.
     /// </summary>
     // ReSharper disable once NotAccessedField.Local
-    private readonly IButtonComponent _createLobbyButton;
+    private IButtonComponent? _createLobbyButton;
 
     /// <summary>
     /// Button to open the lobby browser.
     /// </summary>
     // ReSharper disable once NotAccessedField.Local
-    private readonly IButtonComponent _browseLobbyButton;
+    private IButtonComponent? _browseLobbyButton;
 
     /// <summary>
     /// Button to join a friend via invite.
     /// </summary>
     // ReSharper disable once NotAccessedField.Local
-    private readonly IButtonComponent _joinFriendButton;
+    private IButtonComponent? _joinFriendButton;
 
     // Direct IP tab components
     /// <summary>
@@ -535,10 +537,9 @@ internal class ConnectInterface {
     /// Subscribes to Steam lobby-related events if Steam is available.
     /// </summary>
     private void SubscribeToSteamEvents() {
-        // Uncomment when Steam integration is ready
-        //(UNCOMMENT)SteamManager.LobbyCreatedEvent += OnSteamLobbyCreated;
-        //(UNCOMMENT)SteamManager.LobbyListReceivedEvent += OnLobbyListReceived;
-        //(UNCOMMENT)SteamManager.LobbyJoinedEvent += OnLobbyJoined;
+        SteamManager.LobbyCreatedEvent += OnSteamLobbyCreated;
+        SteamManager.LobbyListReceivedEvent += OnLobbyListReceived;
+        SteamManager.LobbyJoinedEvent += OnLobbyJoined;
     }
 
     /// <summary>
@@ -621,10 +622,8 @@ internal class ConnectInterface {
             () => SwitchTab(Tab.Matchmaking)
         );
 
-        TabButtonComponent? steam;
-        // Check if Steam is initialized (currently stubbed with true)
-        //(UNCOMMENT)if (SteamManager.IsInitialized) {
-        if (true) {
+        TabButtonComponent? steam = null;
+        if (SteamManager.IsInitialized) {
             steam = ConnectInterfaceHelpers.CreateTabButton(
                 _backgroundGroup,
                 InitialX,
@@ -723,10 +722,11 @@ internal class ConnectInterface {
     /// <summary>
     /// Creates the Steam tab content with lobby management buttons.
     /// </summary>
-    private (ComponentGroup? group, IButtonComponent createButton, IButtonComponent browseButton,
-        IButtonComponent joinButton) CreateSteamTab(float startY) {
-        // Check if Steam is available
-        //(UNCOMMENT)if (!SteamManager.IsInitialized) {
+    private (ComponentGroup? group, IButtonComponent? createButton, IButtonComponent? browseButton,
+        IButtonComponent? joinButton) CreateSteamTab(float startY) {
+        if (!SteamManager.IsInitialized) {
+            return (null, null, null, null);
+        }
 
         var group = new ComponentGroup(activeSelf: false, parent: _backgroundGroup);
         var y = startY;
@@ -955,14 +955,13 @@ internal class ConnectInterface {
     /// Initiates a search for Steam lobbies matching the entered Lobby ID.
     /// </summary>
     private void OnLobbyConnectButtonPressed() {
-        //(UNCOMMENT)if (!SteamManager.IsInitialized) {
-        if (true) {
+        if (!SteamManager.IsInitialized) {
             ShowFeedback(Color.red, "Steam is not available.");
             return;
         }
 
         ShowFeedback(Color.yellow, "Searching for lobbies...");
-        //(UNCOMMENT)SteamManager.RequestLobbyList();
+        SteamManager.RequestLobbyList();
     }
 
     #endregion
@@ -974,8 +973,7 @@ internal class ConnectInterface {
     /// Creates a new Steam lobby and starts hosting.
     /// </summary>
     private void OnCreateLobbyButtonPressed() {
-        //(UNCOMMENT)if (!SteamManager.IsInitialized) {
-        if (true) {
+        if (!SteamManager.IsInitialized) {
             ShowFeedback(Color.red, "Steam is not available. Please ensure Steam is running.");
             Logger.Warn("Cannot create Steam lobby: Steam is not initialized");
             return;
@@ -988,7 +986,7 @@ internal class ConnectInterface {
         ShowFeedback(Color.yellow, "Creating Steam lobby...");
         Logger.Info($"Create lobby requested for user: {username}");
 
-        //(UNCOMMENT)SteamManager.CreateLobby(username);
+        SteamManager.CreateLobby(username);
     }
 
     /// <summary>
@@ -996,14 +994,13 @@ internal class ConnectInterface {
     /// Requests a list of available public Steam lobbies.
     /// </summary>
     private void OnBrowseLobbyButtonPressed() {
-        //(UNCOMMENT)if (!SteamManager.IsInitialized) {
-        if (true) {
+        if (!SteamManager.IsInitialized) {
             ShowFeedback(Color.red, "Steam is not available.");
             return;
         }
 
         ShowFeedback(Color.yellow, "Refreshing lobby list...");
-        //(UNCOMMENT)SteamManager.RequestLobbyList();
+        SteamManager.RequestLobbyList();
     }
 
     /// <summary>
@@ -1011,8 +1008,7 @@ internal class ConnectInterface {
     /// Opens the Steam Friends overlay to allow joining via friend invite.
     /// </summary>
     private void OnJoinFriendButtonPressed() {
-        //(UNCOMMENT)if (!SteamManager.IsInitialized) {
-        if (true) {
+        if (!SteamManager.IsInitialized) {
             ShowFeedback(Color.red, "Steam is not available.");
             return;
         }
@@ -1103,7 +1099,7 @@ internal class ConnectInterface {
         Logger.Info($"Found {lobbyIds.Length} lobbies. Auto-joining first one.");
         ShowFeedback(Color.yellow, $"Found {lobbyIds.Length} lobbies. Joining first...");
 
-        //(UNCOMMENT)SteamManager.JoinLobby(lobbyIds[0]);
+        SteamManager.JoinLobby(lobbyIds[0]);
     }
 
     /// <summary>

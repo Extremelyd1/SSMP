@@ -23,10 +23,25 @@ internal class Packet : IPacket {
     private int _readPos;
 
     /// <summary>
+    /// Gets or sets the current read position within the packet buffer.
+    /// This allows callers to save and restore the read cursor to safely
+    /// attempt different parsing strategies without allocating a clone.
+    /// </summary>
+    public int ReadPosition {
+        get => _readPos;
+        set {
+            if (value < 0 || value > _buffer.Count) {
+                throw new ArgumentOutOfRangeException(nameof(value), "ReadPosition must be within the buffer bounds");
+            }
+            _readPos = value;
+        }
+    }
+
+    /// <summary>
     /// The length of the packet content.
     /// </summary>
     public int Length => _buffer.Count;
-
+    
     /// <summary>
     /// Creates a packet with the given byte array of data. Used when receiving packets to read data from.
     /// </summary>

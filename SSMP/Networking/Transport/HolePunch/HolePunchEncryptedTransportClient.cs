@@ -14,14 +14,12 @@ internal class HolePunchEncryptedTransportClient : IEncryptedTransportClient {
     /// The underlying DTLS server client.
     /// </summary>
     private readonly DtlsServerClient _dtlsServerClient;
-    
-    /// <summary>
-    /// The client identifier for this hole-punched client.
-    /// </summary>
-    private readonly HolePunchClientIdentifier _clientIdentifier;
 
     /// <inheritdoc />
-    public IClientIdentifier ClientIdentifier => _clientIdentifier;
+    public string ToDisplayString() => "UDP Hole Punch";
+
+    /// <inheritdoc />
+    public string GetUniqueIdentifier() => _dtlsServerClient.EndPoint.ToString();
     
     /// <summary>
     /// The IP endpoint of the server client after NAT traversal.
@@ -29,17 +27,11 @@ internal class HolePunchEncryptedTransportClient : IEncryptedTransportClient {
     /// </summary>
     public IPEndPoint EndPoint => _dtlsServerClient.EndPoint;
     
-    /// <summary>
-    /// Internal access to the underlying DTLS server client for backward compatibility.
-    /// </summary>
-    internal DtlsServerClient DtlsServerClient => _dtlsServerClient;
-    
     /// <inheritdoc />
     public event Action<byte[], int>? DataReceivedEvent;
 
     public HolePunchEncryptedTransportClient(DtlsServerClient dtlsServerClient) {
         _dtlsServerClient = dtlsServerClient;
-        _clientIdentifier = new HolePunchClientIdentifier(dtlsServerClient.EndPoint);
     }
 
     /// <inheritdoc />

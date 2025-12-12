@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 using System.Threading;
 using Org.BouncyCastle.Tls;
 
-namespace SSMP.Networking;
+namespace SSMP.Networking.Transport.UDP;
 
 /// <summary>
 /// Abstract base class of the client and server datagram transports for DTLS over UDP.

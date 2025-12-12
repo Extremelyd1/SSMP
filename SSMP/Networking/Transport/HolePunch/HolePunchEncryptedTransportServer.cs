@@ -10,7 +10,7 @@ namespace SSMP.Networking.Transport.HolePunch;
 /// UDP Hole Punching implementation of <see cref="IEncryptedTransportServer{TClient}"/>.
 /// Wraps DtlsServer with Master Server registration and NAT traversal coordination.
 /// </summary>
-internal class HolePunchEncryptedTransportServer : IEncryptedTransportServer<HolePunchEncryptedTransportClient> {
+internal class HolePunchEncryptedTransportServer : IEncryptedTransportServer {
     private readonly string _masterServerAddress;
     /// <summary>
     /// The underlying DTLS server.
@@ -22,7 +22,7 @@ internal class HolePunchEncryptedTransportServer : IEncryptedTransportServer<Hol
     private readonly ConcurrentDictionary<IPEndPoint, HolePunchEncryptedTransportClient> _clients;
 
     /// <inheritdoc />
-    public event Action<HolePunchEncryptedTransportClient>? ClientConnectedEvent;
+    public event Action<IEncryptedTransportClient>? ClientConnectedEvent;
 
     /// <summary>
     /// Construct a hole punching server with the given master server address.
@@ -56,9 +56,10 @@ internal class HolePunchEncryptedTransportServer : IEncryptedTransportServer<Hol
     }
 
     /// <inheritdoc />
-    public void DisconnectClient(HolePunchEncryptedTransportClient client) {
-        _dtlsServer?.DisconnectClient(client.EndPoint);
-        _clients.TryRemove(client.EndPoint, out _);
+    public void DisconnectClient(IEncryptedTransportClient client) {
+        var holePunchClient = client as HolePunchEncryptedTransportClient;
+        _dtlsServer?.DisconnectClient(holePunchClient.EndPoint);
+        _clients.TryRemove(holePunchClient.EndPoint, out _);
     }
 
     /// <summary>
