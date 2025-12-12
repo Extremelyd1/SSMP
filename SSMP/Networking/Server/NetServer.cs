@@ -400,18 +400,35 @@ internal class NetServer : INetServer {
             _processingThread = null;
         }
 
-        // Stop transport server first to prevent new connections and unregister from loopback
-        _transportServer?.Stop();
+        // Unregister event handler before stopping transport
         if (_transportServer != null) {
             _transportServer.ClientConnectedEvent -= OnClientConnected;
-            _taskTokenSource?.Dispose();
-            _taskTokenSource = null;
-
-            // Invoke the shutdown event to notify all registered parties of the shutdown
-            ShutdownEvent?.Invoke();
+            _transportServer.Stop();
         }
-    }
 
+        // Dispose and clear task token source
+        _taskTokenSource?.Dispose();
+        _taskTokenSource = null;
+
+        // Clear leftover data
+        _leftoverData = null;
+
+        // Clean up existing clients
+        foreach (var client in _clientsById.Values) {
+            client.Disconnect();
+        }
+        _clientsById.Clear();
+
+        // Clean up throttled clients
+        _throttledClients.Clear();
+
+        // Clean up received queue
+        while (_receivedQueue.TryDequeue(out _)) { }
+
+        // Invoke the shutdown event to notify all registered parties of the shutdown
+        ShutdownEvent?.Invoke();
+    }
+    
     /// <summary>
     /// Callback method for when a client disconnects from the server.
     /// </summary>
