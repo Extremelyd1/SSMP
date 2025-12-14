@@ -478,7 +478,7 @@ internal class ClientManager : IClientManager {
     }
 
     /// <summary>
-    /// Connect the client to the server with the given address, port, username and TransportType
+    /// Connect the client to the server with the given address, port, username and TransportType.
     /// </summary>
     /// <param name="address">The address of the server.</param>
     /// <param name="port">The port of the server.</param>
@@ -555,7 +555,7 @@ internal class ClientManager : IClientManager {
         _playerManager.OnDisconnect();
 
         // Clear the player data dictionary
-        Logger.Info($"Clearing {_playerData.Count} player(s) from cache");
+        Logger.Info($"Clearing {_playerData.Count} player(s) from store");
         _playerData.Clear();
 
         _uiManager.OnClientDisconnect();

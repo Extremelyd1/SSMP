@@ -1280,13 +1280,13 @@ internal abstract class ServerManager : IServerManager {
         var clientDisplayString = netServerClient.TransportClient.ToDisplayString();
         Logger.Info($"Received connection request from {clientDisplayString}, username: {clientInfo.Username}");
 
-    // Get the unique identifier (IP address for UDP, Steam ID for Steam clients)
-    var uniqueIdentifier = netServerClient.TransportClient.GetUniqueIdentifier();
+        // Get the unique identifier (IP address for UDP, Steam ID for Steam clients)
+        var uniqueIdentifier = netServerClient.TransportClient.GetUniqueIdentifier();
     
-    // Check if the unique identifier is banned (supports both IPEndPoint and SteamID)
-    if (_banList.IsIpBanned(uniqueIdentifier)) {
-        var displayType = IPAddress.TryParse(uniqueIdentifier, out _) ? "IP" : "Steam ID";
-        Logger.Debug($"  Client is banned from the server ({displayType}), rejected connection");
+        // Check if the unique identifier is banned (supports both IPEndPoint and SteamID)
+        if (_banList.IsIpBanned(uniqueIdentifier)) {
+            var displayType = IPAddress.TryParse(uniqueIdentifier, out _) ? "IP" : "Steam ID";
+            Logger.Debug($"  Client is banned from the server ({displayType}), rejected connection");
 
             serverInfo.ConnectionResult = ServerConnectionResult.RejectedOther;
             serverInfo.ConnectionRejectedMessage = "Banned from the server";

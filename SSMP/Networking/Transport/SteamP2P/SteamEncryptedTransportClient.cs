@@ -13,14 +13,9 @@ namespace SSMP.Networking.Transport.SteamP2P;
 /// </summary>
 internal class SteamEncryptedTransportClient : IReliableTransportClient {
     /// <summary>
-    /// P2P channel for communication.
-    /// </summary>
-    private const int P2P_CHANNEL = 0;
-
-    /// <summary>
     /// The Steam ID of the client.
     /// </summary>
-    private readonly ulong _steamId;
+    public ulong SteamId { get; }
 
     /// <summary>
     /// Cached Steam ID struct to avoid repeated allocations.
@@ -31,16 +26,10 @@ internal class SteamEncryptedTransportClient : IReliableTransportClient {
     public string ToDisplayString() => "SteamP2P";
     
     /// <inheritdoc />
-    public string GetUniqueIdentifier() => _steamId.ToString();
+    public string GetUniqueIdentifier() => SteamId.ToString();
     
     /// <inheritdoc />
     public IPEndPoint? EndPoint => null; // Steam doesn't need throttling
-
-    /// <summary>
-    /// The Steam ID of the client.
-    /// Provides direct access to the underlying Steam ID for Steam-specific operations.
-    /// </summary>
-    public ulong SteamId => _steamId;
 
     /// <inheritdoc />
     public event Action<byte[], int>? DataReceivedEvent;
@@ -50,7 +39,7 @@ internal class SteamEncryptedTransportClient : IReliableTransportClient {
     /// </summary>
     /// <param name="steamId">The Steam ID of the client.</param>
     public SteamEncryptedTransportClient(ulong steamId) {
-        _steamId = steamId;
+        SteamId = steamId;
         _steamIdStruct = new CSteamID(steamId);
     }
 
@@ -82,7 +71,7 @@ internal class SteamEncryptedTransportClient : IReliableTransportClient {
             return;
         }
 
-        if (!SteamNetworking.SendP2PPacket(_steamIdStruct, buffer, (uint) length, sendType, P2P_CHANNEL)) {
+        if (!SteamNetworking.SendP2PPacket(_steamIdStruct, buffer, (uint) length, sendType)) {
             Logger.Warn($"Steam P2P: Failed to send packet to client {SteamId}");
         }
     }

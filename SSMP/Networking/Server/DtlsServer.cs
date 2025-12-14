@@ -220,7 +220,7 @@ internal class DtlsServer {
 
             // Create a precise copy of the buffer for this packet
             var packetBuffer = new byte[numReceived];
-            Buffer.BlockCopy(buffer, 0, packetBuffer, 0, numReceived);
+            Array.Copy(buffer, 0, packetBuffer, 0, numReceived);
 
             ProcessReceivedPacket(ipEndPoint, packetBuffer, numReceived, cancellationToken);
         }

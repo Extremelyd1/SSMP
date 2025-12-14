@@ -53,7 +53,7 @@ internal class NetServer : INetServer {
     private readonly ConcurrentQueue<ReceivedData> _receivedQueue;
     
     /// <summary>
-    /// Wait handle for inter-thread signalling when new data is ready to be processed.
+    /// Wait handle for inter-thread signaling when new data is ready to be processed.
     /// </summary>
     private readonly AutoResetEvent _processingWaitHandle;
 
@@ -94,7 +94,6 @@ internal class NetServer : INetServer {
         PacketManager packetManager
     ) {
         _packetManager = packetManager;
-
 
         _clientsById = new ConcurrentDictionary<ushort, NetServerClient>();
         _throttledClients = new ConcurrentDictionary<IPEndPoint, Stopwatch>();
@@ -294,16 +293,14 @@ internal class NetServer : INetServer {
             client.UpdateManager.OnReceivePacket<ServerUpdatePacket, ServerUpdatePacketId>(serverUpdatePacket);
 
             var packetData = serverUpdatePacket.GetPacketData();
-            if (packetData.TryGetValue(ServerUpdatePacketId.Slice, out var sliceData)) {
-                packetData.Remove(ServerUpdatePacketId.Slice);
+            if (packetData.Remove(ServerUpdatePacketId.Slice, out var sliceData)) {
                 client.ChunkReceiver.ProcessReceivedData((SliceData) sliceData);
             }
 
-            if (packetData.TryGetValue(ServerUpdatePacketId.SliceAck, out var sliceAckData)) {
-                packetData.Remove(ServerUpdatePacketId.SliceAck);
+            if (packetData.Remove(ServerUpdatePacketId.SliceAck, out var sliceAckData)) {
                 client.ChunkSender.ProcessReceivedData((SliceAckData) sliceAckData);
             }
-        
+
             if (client.IsRegistered) {
                 _packetManager.HandleServerUpdatePacket(id, serverUpdatePacket);
             }

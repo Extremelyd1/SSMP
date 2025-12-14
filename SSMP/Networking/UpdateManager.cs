@@ -43,7 +43,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId> : UpdateManager
     /// to check against resent data.
     /// </summary>
     private const int ReceiveQueueSize = AckSize;
-    
+
     /// <summary>
     /// The UDP congestion manager instance. Null if congestion management is disabled.
     /// </summary>
@@ -105,7 +105,6 @@ internal abstract class UpdateManager<TOutgoing, TPacketId> : UpdateManager
     /// Gets or sets the transport for client-side communication.
     /// </summary>
     public IEncryptedTransport? Transport {
-        get => _transportSender as IEncryptedTransport;
         set => _transportSender = value;
     }
     
@@ -243,6 +242,8 @@ internal abstract class UpdateManager<TOutgoing, TPacketId> : UpdateManager
                 return;
             }
 
+            // Reset the packet by creating a new instance,
+            // but keep the original instance for reliability data re-sending
             updatePacket = CurrentUpdatePacket;
             CurrentUpdatePacket = new TOutgoing();
         }
@@ -335,6 +336,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId> : UpdateManager
     /// Callback method for when the heart beat timer elapses. Will invoke the timeout event.
     /// </summary>
     private void OnHeartBeatTimerElapsed(object sender, ElapsedEventArgs elapsedEventArgs) {
+        // The timer has surpassed the connection timeout value, so we call the timeout event
         TimeoutEvent?.Invoke();
     }
 

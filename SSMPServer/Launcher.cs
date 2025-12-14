@@ -89,7 +89,11 @@ public class Launcher {
 
         var serverManager = new ConsoleServerManager(netServer, packetManager, serverSettings, consoleLogger);
         serverManager.Initialize();
-        serverManager.Start(consoleSettings.Port, consoleSettings.FullSynchronisation, new UdpEncryptedTransportServer());
+        serverManager.Start(
+            consoleSettings.Port, 
+            consoleSettings.FullSynchronisation, 
+            new UdpEncryptedTransportServer()
+        );
 
         // Stop reading console input when the server shuts down
         serverManager.ServerShutdownEvent += () => {

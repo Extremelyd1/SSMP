@@ -1,5 +1,4 @@
 using System;
-using System.Buffers;
 using SSMP.Logging;
 
 namespace SSMP.Networking.Transport.SteamP2P;
@@ -9,7 +8,13 @@ namespace SSMP.Networking.Transport.SteamP2P;
 /// when hosting a Steam lobby. Steam P2P does not support self-connection.
 /// </summary>
 internal static class SteamLoopbackChannel {
+    /// <summary>
+    /// The server transport for looping communication.
+    /// </summary>
     private static SteamEncryptedTransportServer? _server;
+    /// <summary>
+    /// The client transport for looping communication.
+    /// </summary>
     private static SteamEncryptedTransport? _client;
 
     /// <summary>
@@ -53,7 +58,7 @@ internal static class SteamLoopbackChannel {
         // Create exact-sized buffer since Packet constructor assumes entire array is valid
         var copy = new byte[length];
         try {
-            Buffer.BlockCopy(data, offset, copy, 0, length);
+            Array.Copy(data, offset, copy, 0, length);
             srv.ReceiveLoopbackPacket(copy, length);
         } catch (InvalidOperationException ex) when (ex.Message.Contains("Steamworks is not initialized")) {
             // Steam shut down - ignore silently
@@ -75,7 +80,7 @@ internal static class SteamLoopbackChannel {
         // Create exact-sized buffer since Packet constructor assumes entire array is valid
         var copy = new byte[length];
         try {
-            Buffer.BlockCopy(data, offset, copy, 0, length);
+            Array.Copy(data, offset, copy, 0, length);
             client.ReceiveLoopbackPacket(copy, length);
         } catch (InvalidOperationException ex) when (ex.Message.Contains("Steamworks is not initialized")) {
             // Steam shut down - ignore silently

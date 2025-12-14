@@ -1,5 +1,4 @@
 using System;
-using System.Buffers;
 using System.Collections.Concurrent;
 using System.Threading;
 using SSMP.Game;
@@ -10,25 +9,20 @@ using Steamworks;
 namespace SSMP.Networking.Transport.SteamP2P;
 
 /// <summary>
-/// Steam P2P implementation of <see cref="IEncryptedTransportServer{TClient}"/>.
+/// Steam P2P implementation of <see cref="IEncryptedTransportServer"/>.
 /// Manages multiple client connections via Steam P2P networking.
 /// </summary>
 internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
     /// <summary>
-    /// P2P channel for server communication.
-    /// </summary>
-    private const int P2P_CHANNEL = 0;
-
-    /// <summary>
     /// Maximum Steam P2P packet size.
     /// </summary>
-    private const int MAX_PACKET_SIZE = 1200;
+    private const int MaxPacketSize = 1200;
 
     /// <summary>
     /// Polling interval in milliseconds for Steam P2P packet receive loop.
     /// 17.2ms achieves ~58Hz polling rate to balance responsiveness and CPU usage.
     /// </summary>
-    private const double POLL_INTERVAL_MS = 17.2;
+    private const double PollIntervalMS = 17.2;
 
     /// <inheritdoc />
     public event Action<IEncryptedTransportClient>? ClientConnectedEvent;
@@ -41,7 +35,7 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
     /// <summary>
     /// Buffer for receiving P2P packets.
     /// </summary>
-    private readonly byte[] _receiveBuffer = new byte[MAX_PACKET_SIZE];
+    private readonly byte[] _receiveBuffer = new byte[MaxPacketSize];
 
     /// <summary>
     /// Whether the server is currently running.
@@ -171,6 +165,7 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
     /// Steam API limitation: no blocking receive or callback available for server-side, must poll.
     /// </summary>
     private void ReceiveLoop() {
+        // Make token a local variable in case _receiveTokenSource is re-initialized
         var token = _receiveTokenSource;
         if (token == null) return;
 
@@ -186,7 +181,7 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
 
                 // Steam API does not provide a blocking receive or callback for P2P packets,
                 // so we must poll. Sleep interval is tuned to achieve ~58Hz polling rate.
-                Thread.Sleep(TimeSpan.FromMilliseconds(POLL_INTERVAL_MS));
+                Thread.Sleep(TimeSpan.FromMilliseconds(PollIntervalMS));
             } catch (InvalidOperationException ex) when (ex.Message.Contains("Steamworks is not initialized")) {
                 // Steam shut down during operation - exit gracefully
                 Logger.Info("Steam P2P Server: Steamworks shut down during receive, exiting loop");
@@ -205,15 +200,19 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
     private void ProcessIncomingPackets() {
         if (!_isRunning || !SteamManager.IsInitialized) return;
 
-        while (SteamNetworking.IsP2PPacketAvailable(out uint packetSize, P2P_CHANNEL)) {
-            if (!SteamNetworking.ReadP2PPacket(_receiveBuffer, MAX_PACKET_SIZE, out packetSize,
-                    out CSteamID remoteSteamId, P2P_CHANNEL)) {
+        while (SteamNetworking.IsP2PPacketAvailable(out var packetSize)) {
+            if (!SteamNetworking.ReadP2PPacket(
+                _receiveBuffer,
+                MaxPacketSize,
+                out packetSize,
+                out var remoteSteamId
+            )) {
                 continue;
             }
 
             if (_clients.TryGetValue(remoteSteamId, out var client)) {
                 var data = new byte[packetSize];
-                Buffer.BlockCopy(_receiveBuffer, 0, data, 0, (int) packetSize);
+                Array.Copy(_receiveBuffer, 0, data, 0, (int) packetSize);
                 client.RaiseDataReceived(data, (int) packetSize);
             } else {
                 Logger.Warn($"Steam P2P: Received packet from unknown client {remoteSteamId}");
@@ -240,7 +239,6 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
             client.RaiseDataReceived(data, length);
         } catch (InvalidOperationException) {
             // Steam shut down between check and API call - ignore silently
-            return;
         }
     }
 }

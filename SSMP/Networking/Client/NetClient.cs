@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net.Sockets;
 using System.Threading;
-using System.Threading.Tasks;
 using Org.BouncyCastle.Tls;
 using SSMP.Api.Client;
 using SSMP.Api.Client.Networking;
@@ -68,7 +67,7 @@ internal class NetClient : INetClient {
     /// <summary>
     /// Chunk sender instance for sending large amounts of data.
     /// </summary>
-    private ClientChunkSender _chunkSender;
+    private readonly ClientChunkSender _chunkSender;
 
     /// <summary>
     /// Chunk receiver instance for receiving large amounts of data.
@@ -89,8 +88,6 @@ internal class NetClient : INetClient {
     /// Lock object for synchronizing connection state changes.
     /// </summary>
     private readonly object _connectionLock = new();
-
-
 
     /// <summary>
     /// Construct the net client with the given packet manager.
@@ -148,20 +145,17 @@ internal class NetClient : INetClient {
                 _transport = transport;
                 _transport.DataReceivedEvent += OnReceiveData;
                 _transport.Connect(address, port);
-                
+
                 UpdateManager.Transport = _transport;
                 UpdateManager.StartUpdates();
                 _chunkSender.Start();
-                
+
                 // Only UDP/HolePunch need timeout management (Steam has built-in connection tracking)
                 if (_transport.RequiresCongestionManagement) {
                     UpdateManager.TimeoutEvent += OnConnectTimedOut;
                 }
 
-                
                 _connectionManager.StartConnection(username, authKey, addonData, _transport);
-                
-                
             } catch (TlsTimeoutException) {
                 Logger.Info("DTLS connection timed out");
                 HandleConnectFailed(new ConnectionFailedResult { Reason = ConnectionFailedReason.TimedOut });
@@ -191,7 +185,8 @@ internal class NetClient : INetClient {
     /// <summary>
     /// Internal disconnect implementation without locking (assumes caller holds lock).
     /// </summary>
-    /// <param name="shouldFireEvent">Whether to fire DisconnectEvent. Set to false when cleaning up an old connection before immediately starting a new one.</param>
+    /// <param name="shouldFireEvent">Whether to fire DisconnectEvent. Set to false when cleaning up an old connection
+    /// before immediately starting a new one.</param>
     private void InternalDisconnect(bool shouldFireEvent = true) {
         if (ConnectionStatus == ClientConnectionStatus.NotConnected) {
             return;
@@ -205,8 +200,7 @@ internal class NetClient : INetClient {
             UpdateManager.TimeoutEvent -= OnUpdateTimedOut;
             _chunkSender.Stop();
             _chunkReceiver.Reset();
-            
-            
+
             if (_transport != null) {
                 _transport.DataReceivedEvent -= OnReceiveData;
                 _transport.Disconnect();
@@ -266,14 +260,12 @@ internal class NetClient : INetClient {
                 // First check for slice or slice ack data and handle it separately by passing it onto either the chunk 
                 // sender or chunk receiver
                 var packetData = clientUpdatePacket.GetPacketData();
-            
-                if (packetData.TryGetValue(ClientUpdatePacketId.Slice, out var sliceData)) {
-                    packetData.Remove(ClientUpdatePacketId.Slice);
+
+                if (packetData.Remove(ClientUpdatePacketId.Slice, out var sliceData)) {
                     _chunkReceiver.ProcessReceivedData((SliceData) sliceData);
                 }
 
-                if (packetData.TryGetValue(ClientUpdatePacketId.SliceAck, out var sliceAckData)) {
-                    packetData.Remove(ClientUpdatePacketId.SliceAck);
+                if (packetData.Remove(ClientUpdatePacketId.SliceAck, out var sliceAckData)) {
                     _chunkSender.ProcessReceivedData((SliceAckData) sliceAckData);
                 }
 
