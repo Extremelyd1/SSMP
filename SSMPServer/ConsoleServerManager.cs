@@ -66,12 +66,29 @@ internal class ConsoleServerManager : ServerManager {
                 return;
             }
 
-            base.RegisterCommands();
-
-            CommandManager.RegisterCommand(_exitCommand);
-            CommandManager.RegisterCommand(_consoleSettingsCommand);
-            CommandManager.RegisterCommand(_logCommand);
+            Stop();
         };
+    }
+
+    /// <summary>
+    /// Starts a server with the given port.
+    /// </summary>
+    /// <param name="port">The port the server should run on.</param>
+    /// <param name="fullSynchronisation">Whether full synchronisation should be enabled.</param>
+    /// <param name="transportServer">The transport server to use.</param>
+    public new void Start(int port, bool fullSynchronisation, IEncryptedTransportServer transportServer) {
+        base.Start(port, fullSynchronisation, transportServer);
+        
+        InitializeSaveFile();
+    }
+
+    /// <inheritdoc />
+    protected override void RegisterCommands() {
+        base.RegisterCommands();
+
+        CommandManager.RegisterCommand(_exitCommand);
+        CommandManager.RegisterCommand(_consoleSettingsCommand);
+        CommandManager.RegisterCommand(_logCommand);
     }
 
     /// <inheritdoc />
