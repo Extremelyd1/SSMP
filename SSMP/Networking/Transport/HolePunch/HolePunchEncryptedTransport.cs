@@ -49,26 +49,12 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     }
 
     /// <inheritdoc />
-    /// <inheritdoc />
     public void Send(byte[] buffer, int offset, int length) {
         if (_dtlsClient?.DtlsTransport == null) {
             throw new InvalidOperationException("Not connected");
         }
 
         _dtlsClient.DtlsTransport.Send(buffer, offset, length);
-    }
-
-    /// <inheritdoc />
-    public int Receive(byte[]? buffer, int offset, int length, int waitMillis) {
-        if (_dtlsClient?.DtlsTransport == null) {
-            throw new InvalidOperationException("Not connected");
-        }
-
-        if (buffer == null) {
-            return 0;
-        }
-
-        return _dtlsClient.DtlsTransport.Receive(buffer, offset, length, waitMillis);
     }
 
     /// <inheritdoc />

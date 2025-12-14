@@ -355,7 +355,7 @@ internal class CongestionManager<TOutgoing, TPacketId>
     /// Marks them as lost and resends reliable data if needed.
     /// </summary>
     private void CheckForLostPackets() {
-        foreach (var (sequence, sentPacket) in _sentQueue) {
+        foreach (var sentPacket in _sentQueue.Values) {
             // If the packet was not marked as lost already and the stopwatch has elapsed the maximum expected
             // round trip time, we resend the reliable data
             if (!sentPacket.Lost && sentPacket.Stopwatch.ElapsedMilliseconds > MaximumExpectedRtt) {

@@ -87,11 +87,10 @@ internal class BanCommand : IServerCommand, ICommandWithDescription {
         var players = _serverManager.Players.Cast<ServerPlayerData>();
 
         if (isIpBan) {
-            // UnbanIP Logic
+            // Unban IP Logic
             // Try to resolve as Username first to get identifier
             if (CommandUtil.TryGetPlayerByName(_serverManager.Players, identifier, out var player)) {
-                var playerData = (ServerPlayerData)player;
-                UnbanIdentifier(sender, playerData.UniqueClientIdentifier);
+                UnbanIdentifier(sender, player.UniqueClientIdentifier);
                 return;
             }
 
@@ -105,14 +104,11 @@ internal class BanCommand : IServerCommand, ICommandWithDescription {
 
             // Assume Identifier (IP or SteamID)
             UnbanIdentifier(sender, identifier);
-
         } else {
             // Unban logic (AuthKey based)
-
             // Try to resolve as Username first to get AuthKey
             if (CommandUtil.TryGetPlayerByName(_serverManager.Players, identifier, out var player)) {
-                var playerData = (ServerPlayerData)player;
-                UnbanAuthKey(sender, playerData.AuthKey);
+                UnbanAuthKey(sender, player.AuthKey);
                 return;
             }
             
@@ -133,8 +129,7 @@ internal class BanCommand : IServerCommand, ICommandWithDescription {
         var players = _serverManager.Players.Cast<ServerPlayerData>().ToList();
 
         if (isIpBan) {
-            // /banip logic: Target Identifier (IP/SteamID)
-            
+            // Ban IP logic: Target Identifier (IP/SteamID)
             // 1. Try IP Address directly
             if (IPAddress.TryParse(identifier, out var address)) {
                 BanIdentifier(sender, address.ToString(), players);
@@ -143,8 +138,7 @@ internal class BanCommand : IServerCommand, ICommandWithDescription {
 
             // 2. Try Username -> Identifier resolution
             if (CommandUtil.TryGetPlayerByName(_serverManager.Players, identifier, out var player)) {
-                var playerData = (ServerPlayerData)player;
-                BanIdentifier(sender, playerData.UniqueClientIdentifier, players);
+                BanIdentifier(sender, player.UniqueClientIdentifier, players);
                 return;
             }
 
@@ -158,13 +152,11 @@ internal class BanCommand : IServerCommand, ICommandWithDescription {
 
             // 4. Fallback: Assume the input IS the Identifier (e.g. SteamID)
             BanIdentifier(sender, identifier, players);
-
         } else {
-            // /ban logic: Target AuthKey
-
+            // Ban logic: Target AuthKey
             // 1. Try Username -> AuthKey resolution
             if (CommandUtil.TryGetPlayerByName(_serverManager.Players, identifier, out var player)) {
-                var playerData = (ServerPlayerData)player;
+                var playerData = (ServerPlayerData) player;
                 BanAuthKey(sender, playerData);
                 return;
             }
@@ -190,15 +182,16 @@ internal class BanCommand : IServerCommand, ICommandWithDescription {
     /// <summary>
     /// Bans a player by their identifier (IP address or Steam ID) and kicks them if online.
     /// </summary>
-    private void BanIdentifier(ICommandSender sender, string identifier, List<ServerPlayerData> players) {
+    private void BanIdentifier(ICommandSender sender, string identifier, IEnumerable<ServerPlayerData> players) {
+        var isIp = IPAddress.TryParse(identifier, out _);
+        var idTypeMsg = isIp ? "IP Address" : "Identifier";
+        
         if (!_banList.AddIp(identifier)) {
-            sender.SendMessage($"Identifier '{identifier}' is already banned.");
+            sender.SendMessage($"{idTypeMsg} '{identifier}' is already banned.");
             return;
         }
-        
-        var isIp = IPAddress.TryParse(identifier, out _);
-        var msg = isIp ? "IP Address" : "Identifier";
-        sender.SendMessage($"{msg} '{identifier}' has been banned");
+
+        sender.SendMessage($"{idTypeMsg} '{identifier}' has been banned");
 
         // Use CommandUtil to find and kick matching players
         if (isIp) {
@@ -277,7 +270,7 @@ internal class BanCommand : IServerCommand, ICommandWithDescription {
     /// </summary>
     private void SendUsage(ICommandSender sender, CommandType type) {
         var message = (type.IsIpBan, type.IsUnban) switch {
-            (true, true) => $"{Aliases[3]} <username|auth key|ip|steam id|all>",
+            (true, true) => $"{Aliases[2]} <username|auth key|ip|steam id|all>",
             (true, false) => $"{Aliases[1]} <username|auth key|ip|steam id>",
             (false, true) => $"{Aliases[0]} <username|auth key|all>",
             (false, false) => $"{Trigger} <username|auth key>"

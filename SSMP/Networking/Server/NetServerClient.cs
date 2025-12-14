@@ -1,11 +1,7 @@
-using System;
 using System.Collections.Concurrent;
-using System.Net;
 using SSMP.Networking.Chunk;
 using SSMP.Networking.Packet;
 using SSMP.Networking.Transport.Common;
-using SSMP.Networking.Transport.HolePunch;
-using SSMP.Networking.Transport.UDP;
 
 namespace SSMP.Networking.Server;
 
@@ -57,13 +53,6 @@ internal class NetServerClient {
     /// The transport client for this server client.
     /// </summary>
     public IEncryptedTransportClient TransportClient { get; }
-    
-    /// <summary>
-    /// Extracts the IPEndPoint for UDP-based transports only.
-    /// Used for IP-based banning functionality. Returns null for non-UDP transports (e.g., Steam P2P).
-    /// </summary>
-    public IPEndPoint? EndPoint => TransportClient.EndPoint;
-    
 
     /// <summary>
     /// Construct the client with the given transport client.
@@ -74,7 +63,7 @@ internal class NetServerClient {
         TransportClient = transportClient;
 
         Id = GetId();
-        
+
         UpdateManager = new ServerUpdateManager();
         UpdateManager.TransportClient = transportClient;
         ChunkSender = new ServerChunkSender(UpdateManager);

@@ -41,7 +41,7 @@ internal class Packet : IPacket {
     /// The length of the packet content.
     /// </summary>
     public int Length => _buffer.Count;
-    
+
     /// <summary>
     /// Creates a packet with the given byte array of data. Used when receiving packets to read data from.
     /// </summary>

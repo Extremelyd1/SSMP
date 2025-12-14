@@ -54,10 +54,12 @@ internal class ClientConnectionManager : ConnectionManager {
     /// <param name="addonData">List of addon data that represents the enabled networked addons that the client uses.
     /// </param>
     /// <param name="transport">The transport to use for sending (for Steam direct sending).</param>
-    public void StartConnection(string username, string authKey, List<AddonData> addonData,
-        Transport.Common.IEncryptedTransport transport) {
-        Logger.Debug("StartConnection");
-        
+    public void StartConnection(
+        string username, 
+        string authKey, 
+        List<AddonData> addonData,
+        Transport.Common.IEncryptedTransport transport
+    ) {
         // Create a connection packet that will be the entire chunk we will be sending
         var connectionPacket = new ServerConnectionPacket();
 
