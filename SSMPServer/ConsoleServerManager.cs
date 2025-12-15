@@ -76,7 +76,7 @@ internal class ConsoleServerManager : ServerManager {
     /// <param name="port">The port the server should run on.</param>
     /// <param name="fullSynchronisation">Whether full synchronisation should be enabled.</param>
     /// <param name="transportServer">The transport server to use.</param>
-    public new void Start(int port, bool fullSynchronisation, IEncryptedTransportServer transportServer) {
+    public override void Start(int port, bool fullSynchronisation, IEncryptedTransportServer transportServer) {
         base.Start(port, fullSynchronisation, transportServer);
         
         InitializeSaveFile();

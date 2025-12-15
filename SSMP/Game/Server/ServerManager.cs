@@ -366,7 +366,7 @@ internal abstract class ServerManager : IServerManager {
     /// <param name="port">The port the server should run on.</param>
     /// <param name="fullSynchronisation">Whether full synchronisation should be enabled.</param>
     /// <param name="transportServer">The transport server to use.</param>
-    protected void Start(int port, bool fullSynchronisation, IEncryptedTransportServer transportServer) {
+    public virtual void Start(int port, bool fullSynchronisation, IEncryptedTransportServer transportServer) {
         // Stop existing server
         if (_netServer.IsStarted) {
             Logger.Info("Server was running, shutting it down before starting");
