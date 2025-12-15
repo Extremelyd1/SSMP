@@ -21,6 +21,9 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     /// <inheritdoc />
     public event Action<byte[], int>? DataReceivedEvent;
 
+    /// <inheritdoc />
+    public bool RequiresCongestionManagement => true;
+
     /// <summary>
     /// Construct a hole punching transport with the given master server address.
     /// </summary>
@@ -52,15 +55,6 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
         }
 
         _dtlsClient.DtlsTransport.Send(buffer, offset, length);
-    }
-
-    /// <inheritdoc />
-    public int Receive(byte[] buffer, int offset, int length, int waitMillis) {
-        if (_dtlsClient?.DtlsTransport == null) {
-            throw new InvalidOperationException("Not connected");
-        }
-
-        return _dtlsClient.DtlsTransport.Receive(buffer, offset, length, waitMillis);
     }
 
     /// <inheritdoc />

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Net;
 using System.Threading;
 using SSMP.Api.Server;
@@ -12,7 +13,6 @@ using SSMP.Networking.Packet.Connection;
 using SSMP.Networking.Packet.Data;
 using SSMP.Networking.Packet.Update;
 using SSMP.Networking.Transport.Common;
-using SSMP.Networking.Transport.UDP;
 
 namespace SSMP.Networking.Server;
 
@@ -33,24 +33,19 @@ internal class NetServer : INetServer {
     /// <summary>
     /// Underlying encrypted transport server instance.
     /// </summary>
-    private readonly IEncryptedTransportServer<UdpEncryptedTransportClient> _transportServer;
-
-    /// <summary>
-    /// Dictionary mapping client identifiers to net server clients.
-    /// </summary>
-    private readonly ConcurrentDictionary<IClientIdentifier, NetServerClient> _clientsByIdentifier;
-
+    private IEncryptedTransportServer? _transportServer;
+        
     /// <summary>
     /// Dictionary mapping client IDs to net server clients.
     /// </summary>
     private readonly ConcurrentDictionary<ushort, NetServerClient> _clientsById;
 
     /// <summary>
-    /// Dictionary for the IP addresses of clients that have their connection throttled mapped to a stopwatch
-    /// that keeps track of their last connection attempt. The client may use different local ports to establish
-    /// connection so we only register the address and not the port as with established clients.
+    /// Dictionary for throttling clients by their endpoint.
+    /// Maps endpoint to a stopwatch tracking their last connection attempt.
+    /// Steam clients (which return null ThrottleKey) are not throttled.
     /// </summary>
-    private readonly ConcurrentDictionary<IPAddress, Stopwatch> _throttledClients;
+    private readonly ConcurrentDictionary<IPEndPoint, Stopwatch> _throttledClients;
 
     /// <summary>
     /// Concurrent queue that contains received data from a client ready for processing.
@@ -58,7 +53,7 @@ internal class NetServer : INetServer {
     private readonly ConcurrentQueue<ReceivedData> _receivedQueue;
     
     /// <summary>
-    /// Wait handle for inter-thread signalling when new data is ready to be processed.
+    /// Wait handle for inter-thread signaling when new data is ready to be processed.
     /// </summary>
     private readonly AutoResetEvent _processingWaitHandle;
 
@@ -96,16 +91,12 @@ internal class NetServer : INetServer {
     public bool IsStarted { get; private set; }
 
     public NetServer(
-        PacketManager packetManager,
-        IEncryptedTransportServer<UdpEncryptedTransportClient>? transportServer = null
+        PacketManager packetManager
     ) {
         _packetManager = packetManager;
 
-        _transportServer = transportServer ?? new UdpEncryptedTransportServer();
-
-        _clientsByIdentifier = new ConcurrentDictionary<IClientIdentifier, NetServerClient>();
         _clientsById = new ConcurrentDictionary<ushort, NetServerClient>();
-        _throttledClients = new ConcurrentDictionary<IPAddress, Stopwatch>();
+        _throttledClients = new ConcurrentDictionary<IPEndPoint, Stopwatch>();
 
         _receivedQueue = new ConcurrentQueue<ReceivedData>();
         
@@ -121,7 +112,12 @@ internal class NetServer : INetServer {
     /// Starts the server on the given port.
     /// </summary>
     /// <param name="port">The networking port.</param>
-    public void Start(int port) {
+    /// <param name="transportServer">The transport server to use.</param>
+    public void Start(int port, IEncryptedTransportServer transportServer) {
+        if (transportServer == null) {
+            throw new ArgumentNullException(nameof(transportServer));
+        }
+
         if (IsStarted) {
             Stop();
         }
@@ -129,6 +125,7 @@ internal class NetServer : INetServer {
         Logger.Info($"Starting NetServer on port {port}");
         IsStarted = true;
         
+        _transportServer = transportServer;
         _transportServer.Start(port);
 
         // Create a cancellation token source for the tasks that we are creating
@@ -145,7 +142,7 @@ internal class NetServer : INetServer {
     /// Callback when a new client connects via any transport.
     /// Subscribe to the client's data event and enqueue received data.
     /// </summary>
-    private void OnClientConnected(UdpEncryptedTransportClient transportClient) {
+    private void OnClientConnected(IEncryptedTransportClient transportClient) {
         transportClient.DataReceivedEvent += (buffer, length) => {
             _receivedQueue.Enqueue(new ReceivedData {
                 TransportClient = transportClient,
@@ -174,30 +171,26 @@ internal class NetServer : INetServer {
                 );
 
                 var transportClient = receivedData.TransportClient;
-                var clientId = transportClient.ClientIdentifier;
 
-                if (!_clientsByIdentifier.TryGetValue(clientId, out var client)) {
-                    // Extract IP for throttling (UDP transports only)
-                    if (clientId is UdpClientIdentifier udpId) {
-                        var clientAddress = udpId.EndPoint.Address;
-                        
-                        // If the client is throttled, check their stopwatch for how long still
-                        if (_throttledClients.TryGetValue(clientAddress, out var clientStopwatch)) {
-                            if (clientStopwatch.ElapsedMilliseconds < ThrottleTime) {
-                                // Reset stopwatch and ignore packets so the client times out
-                                clientStopwatch.Restart();
-                                continue;
-                            }
+                // Try to find existing client by transport client reference
+                var client = _clientsById.Values.FirstOrDefault(c => c.TransportClient == transportClient);
+                
+                if (client == null) {
+                    // Extract throttle key for throttling
+                    var throttleKey = transportClient.EndPoint;
 
-                            // Stopwatch exceeds max throttle time so we remove the client from the dict
-                            _throttledClients.TryRemove(clientAddress, out _);
+                    if (throttleKey != null && _throttledClients.TryGetValue(throttleKey, out var clientStopwatch)) {
+                        if (clientStopwatch.ElapsedMilliseconds < ThrottleTime) {
+                            // Reset stopwatch and ignore packets so the client times out
+                            clientStopwatch.Restart();
+                            continue;
                         }
-                        
-                        Logger.Info(
-                            $"Received packet from unknown client with address: {udpId.EndPoint}, creating new client");
-                    } else {
-                        Logger.Info($"Received packet from unknown client: {clientId.ToDisplayString()}, creating new client");
+
+                        // Stopwatch exceeds max throttle time so we remove the client from the dict
+                        _throttledClients.TryRemove(throttleKey, out _);
                     }
+
+                    Logger.Info($"Received packet from unknown client: {transportClient.ToDisplayString()}, creating new client");
 
                     // We didn't find a client with the given identifier, so we assume it is a new client
                     // that wants to connect
@@ -226,7 +219,7 @@ internal class NetServer : INetServer {
         netServerClient.UpdateManager.TimeoutEvent += () => HandleClientTimeout(netServerClient);
         netServerClient.UpdateManager.StartUpdates();
 
-        _clientsByIdentifier.TryAdd(transportClient.ClientIdentifier, netServerClient);
+        // Only add to _clientsById dictionary
         _clientsById.TryAdd(netServerClient.Id, netServerClient);
 
         return netServerClient;
@@ -246,8 +239,7 @@ internal class NetServer : INetServer {
         }
 
         client.Disconnect();
-        _transportServer.DisconnectClient((UdpEncryptedTransportClient)client.TransportClient);
-        _clientsByIdentifier.TryRemove(client.ClientIdentifier, out _);
+        _transportServer?.DisconnectClient(client.TransportClient);
         _clientsById.TryRemove(id, out _);
 
         Logger.Info($"Client {id} timed out");
@@ -262,43 +254,54 @@ internal class NetServer : INetServer {
         var id = client.Id;
 
         foreach (var packet in packets) {
-            // Create a server update packet from the raw packet instance
-            var serverUpdatePacket = new ServerUpdatePacket();
-            if (!serverUpdatePacket.ReadPacket(packet)) {
-                // If ReadPacket returns false, we received a malformed packet
-                if (client.IsRegistered) {
-                    // Since the client is registered already, we simply ignore the packet
+            // If the client is not registered, try to read as connection packet first
+            if (!client.IsRegistered) {
+                var savedReadPos = packet.ReadPosition;
+                var connectionPacket = new ServerConnectionPacket();
+
+                // Attempt connection parse on the original packet.
+                // If it fails, restore read position so we can try other packet types.
+                if (connectionPacket.ReadPacket(packet)) {
+                    _packetManager.HandleServerConnectionPacket(id, connectionPacket);
+                    // Parsed successfully as connection packet; packet has been consumed.
+                    // Skip further processing to avoid double-handling.
                     continue;
                 }
 
-                // If the client is not yet registered, we log the malformed packet, and throttle the client
-                Logger.Debug($"Received malformed packet from client with IP: {client.EndPoint}");
+                // Restore read cursor for subsequent parsers
+                packet.ReadPosition = savedReadPos;
+            }
 
-                // We throttle the client, because chances are that they are using an outdated version of the
-                // networking protocol, and keeping connection will potentially never time them out
-                var udpId = (UdpClientIdentifier)client.ClientIdentifier;
-                _throttledClients[udpId.EndPoint.Address] = Stopwatch.StartNew();
+            var serverUpdatePacket = new ServerUpdatePacket();
+            if (!serverUpdatePacket.ReadPacket(packet)) {
+                if (client.IsRegistered) {
+                    continue;
+                }
+
+                Logger.Debug($"Received malformed packet from client: {client.TransportClient.ToDisplayString()}");
+
+                var throttleKey = client.TransportClient.EndPoint;
+                if (throttleKey != null) {
+                    _throttledClients[throttleKey] = Stopwatch.StartNew();
+                }
 
                 continue;
             }
 
+            // Route all transports through UpdateManager for sequence/ACK tracking
+            // UpdateManager will skip UDP-specific logic for Steam transports
             client.UpdateManager.OnReceivePacket<ServerUpdatePacket, ServerUpdatePacketId>(serverUpdatePacket);
 
-            // First process slice or slice ack data if it exists and pass it onto the chunk sender or chunk receiver
             var packetData = serverUpdatePacket.GetPacketData();
-            if (packetData.TryGetValue(ServerUpdatePacketId.Slice, out var sliceData)) {
-                packetData.Remove(ServerUpdatePacketId.Slice);
+            if (packetData.Remove(ServerUpdatePacketId.Slice, out var sliceData)) {
                 client.ChunkReceiver.ProcessReceivedData((SliceData) sliceData);
             }
 
-            if (packetData.TryGetValue(ServerUpdatePacketId.SliceAck, out var sliceAckData)) {
-                packetData.Remove(ServerUpdatePacketId.SliceAck);
+            if (packetData.Remove(ServerUpdatePacketId.SliceAck, out var sliceAckData)) {
                 client.ChunkSender.ProcessReceivedData((SliceAckData) sliceAckData);
             }
-            
-            // Then, if the client is registered, we let the packet manager handle the rest of the data
+
             if (client.IsRegistered) {
-                // Let the packet manager handle the received data
                 _packetManager.HandleServerUpdatePacket(id, serverUpdatePacket);
             }
         }
@@ -362,8 +365,10 @@ internal class NetServer : INetServer {
             // Wait for it to finish sending, then disconnect and throttle
             client.ConnectionManager.FinishConnection(() => { 
                 OnClientDisconnect(clientId);
-                var udpId = (UdpClientIdentifier)client.ClientIdentifier;
-                _throttledClients[udpId.EndPoint.Address] = Stopwatch.StartNew();
+                var throttleKey = client.TransportClient.EndPoint;
+                if (throttleKey != null) {
+                    _throttledClients[throttleKey] = Stopwatch.StartNew();
+                }
             });
         }
     }
@@ -388,30 +393,39 @@ internal class NetServer : INetServer {
             if (!_processingThread.Join(1000)) {
                 Logger.Warn("Processing thread did not exit within timeout");
             }
+
             _processingThread = null;
         }
-        
-        // Clean up existing clients
-        foreach (var client in _clientsByIdentifier.Values) {
-            client.Disconnect();
+
+        // Unregister event handler before stopping transport
+        if (_transportServer != null) {
+            _transportServer.ClientConnectedEvent -= OnClientConnected;
+            _transportServer.Stop();
         }
 
-        _clientsByIdentifier.Clear();
-        _clientsById.Clear();
-        _throttledClients.Clear();
-        
-        _transportServer.Stop();
-        _transportServer.ClientConnectedEvent -= OnClientConnected;
-
-        _leftoverData = null;
-
+        // Dispose and clear task token source
         _taskTokenSource?.Dispose();
         _taskTokenSource = null;
+
+        // Clear leftover data
+        _leftoverData = null;
+
+        // Clean up existing clients
+        foreach (var client in _clientsById.Values) {
+            client.Disconnect();
+        }
+        _clientsById.Clear();
+
+        // Clean up throttled clients
+        _throttledClients.Clear();
+
+        // Clean up received queue
+        while (_receivedQueue.TryDequeue(out _)) { }
 
         // Invoke the shutdown event to notify all registered parties of the shutdown
         ShutdownEvent?.Invoke();
     }
-
+    
     /// <summary>
     /// Callback method for when a client disconnects from the server.
     /// </summary>
@@ -423,8 +437,7 @@ internal class NetServer : INetServer {
         }
 
         client.Disconnect();
-        _transportServer.DisconnectClient((UdpEncryptedTransportClient)client.TransportClient);
-        _clientsByIdentifier.TryRemove(client.ClientIdentifier, out _);
+        _transportServer?.DisconnectClient(client.TransportClient);
         _clientsById.TryRemove(id, out _);
 
         Logger.Info($"Client {id} disconnected");

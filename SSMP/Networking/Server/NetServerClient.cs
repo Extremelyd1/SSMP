@@ -1,11 +1,7 @@
-using System;
 using System.Collections.Concurrent;
-using System.Net;
 using SSMP.Networking.Chunk;
 using SSMP.Networking.Packet;
 using SSMP.Networking.Transport.Common;
-using SSMP.Networking.Transport.HolePunch;
-using SSMP.Networking.Transport.UDP;
 
 namespace SSMP.Networking.Server;
 
@@ -57,26 +53,6 @@ internal class NetServerClient {
     /// The transport client for this server client.
     /// </summary>
     public IEncryptedTransportClient TransportClient { get; }
-    
-    /// <summary>
-    /// The client identifier for this client.
-    /// </summary>
-    public IClientIdentifier ClientIdentifier => TransportClient.ClientIdentifier;
-
-    /// <summary>
-    /// The endpoint of the client (for UDP transports only, backward compatibility).
-    /// </summary>
-    public IPEndPoint EndPoint {
-        get {
-            // For UDP-based transports, extract the IPEndPoint
-            return TransportClient.ClientIdentifier switch
-            {
-                UdpClientIdentifier udp      => udp.EndPoint,
-                HolePunchClientIdentifier hp => hp.EndPoint,
-                _ => throw new InvalidOperationException("EndPoint is only available for UDP-based transports")
-            };
-        }
-    }
 
     /// <summary>
     /// Construct the client with the given transport client.
@@ -87,15 +63,9 @@ internal class NetServerClient {
         TransportClient = transportClient;
 
         Id = GetId();
+
         UpdateManager = new ServerUpdateManager();
-        
-        // For UDP-based transports, set DtlsTransport for backward compatibility
-        UpdateManager.DtlsTransport = transportClient switch {
-            UdpEncryptedTransportClient udp => udp.DtlsServerClient.DtlsTransport,
-            HolePunchEncryptedTransportClient hp => hp.DtlsServerClient.DtlsTransport,
-            _ => null
-        };
-        // Steam P2P will use Transport property instead when implemented
+        UpdateManager.TransportClient = transportClient;
         ChunkSender = new ServerChunkSender(UpdateManager);
         ChunkReceiver = new ServerChunkReceiver(UpdateManager);
         ConnectionManager = new ServerConnectionManager(packetManager, ChunkSender, ChunkReceiver, Id);

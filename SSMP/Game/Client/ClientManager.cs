@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using GlobalEnums;
+using Steamworks;
 using SSMP.Animation;
 using SSMP.Api.Client;
 using SSMP.Eventing;
@@ -18,6 +19,9 @@ using SSMP.Networking.Client;
 using SSMP.Networking.Packet;
 using SSMP.Networking.Packet.Data;
 using SSMP.Networking.Packet.Update;
+using SSMP.Networking.Transport.Common;
+using SSMP.Networking.Transport.SteamP2P;
+using SSMP.Networking.Transport.UDP;
 using SSMP.Ui;
 using SSMP.Util;
 using UnityEngine;
@@ -280,9 +284,9 @@ internal class ClientManager : IClientManager {
         serverManager.AuthorizeKey(_modSettings.AuthKey!);
 
         // Register handlers for events from UI
-        _uiManager.RequestClientConnectEvent += (address, port, username, _ ,autoConnect) => {
+        _uiManager.RequestClientConnectEvent += (address, port, username, transportType, autoConnect) => {
             _autoConnect = autoConnect;
-            Connect(address, port, username);
+            Connect(address, port, username, transportType);
         };
         _uiManager.RequestClientDisconnectEvent += Disconnect;
         _uiManager.RequestServerStartHostEvent += (_, _, _, _) => {
@@ -474,13 +478,24 @@ internal class ClientManager : IClientManager {
     }
 
     /// <summary>
-    /// Connect the client to the server with the given address, port and username.
+    /// Connect the client to the server with the given address, port, username and TransportType.
     /// </summary>
     /// <param name="address">The address of the server.</param>
     /// <param name="port">The port of the server.</param>
     /// <param name="username">The username of the client.</param>
-    private void Connect(string address, int port, string username) {
-        Logger.Info($"Connecting client to server: {address}:{port} as {username}");
+    /// <param name="transportType">The transport type to use.</param>
+    private void Connect(string address, int port, string username, TransportType transportType) {
+        // If we are hosting and using Steam, we need to connect to our own Steam ID
+        if (_autoConnect && transportType == TransportType.Steam) {
+            address = SteamUser.GetSteamID().ToString();
+        }
+
+        // Log connection details based on transport type
+        if (transportType == TransportType.Steam) {
+            Logger.Info($"Connecting client via Steam to {address} as {username}");
+        } else {
+            Logger.Info($"Connecting client to server: {address}:{port} as {username}");
+        }
 
         // Stop existing client
         if (_netClient.IsConnected) {
@@ -491,13 +506,21 @@ internal class ClientManager : IClientManager {
         // Store username, so we know what to send the server if we are connected
         _username = username;
 
+        // Create the appropriate transport
+        var transport = transportType switch {
+            TransportType.Udp => (IEncryptedTransport)new UdpEncryptedTransport(),
+            TransportType.Steam => new SteamEncryptedTransport(),
+            _ => throw new ArgumentOutOfRangeException(nameof(transportType), transportType, "Unsupported transport type")
+        };
+
         // Connect the network client
         _netClient.Connect(
             address,
             port,
             username,
             _modSettings.AuthKey!,
-            _addonManager.GetNetworkedAddonData()
+            _addonManager.GetNetworkedAddonData(),
+            transport
         );
     }
 
@@ -519,13 +542,20 @@ internal class ClientManager : IClientManager {
         Logger.Info("Disconnecting from server");
 
         _autoConnect = false;
-        
+    
         _netClient.Disconnect();
+    
+        // Leave Steam Lobby in case we are connected
+        if (SteamManager.IsInLobby) {
+            Logger.Info("Leaving Steam lobby.");
+            SteamManager.LeaveLobby();
+        }
 
         // Let the player manager know we disconnected
         _playerManager.OnDisconnect();
 
         // Clear the player data dictionary
+        Logger.Info($"Clearing {_playerData.Count} player(s) from store");
         _playerData.Clear();
 
         _uiManager.OnClientDisconnect();

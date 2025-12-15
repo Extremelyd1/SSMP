@@ -62,7 +62,7 @@ internal class NetClient : INetClient {
     /// <summary>
     /// The encrypted transport instance for handling encrypted connections.
     /// </summary>
-    private readonly IEncryptedTransport _transport;
+    private IEncryptedTransport? _transport;
 
     /// <summary>
     /// Chunk sender instance for sending large amounts of data.
@@ -87,43 +87,41 @@ internal class NetClient : INetClient {
     /// <summary>
     /// Lock object for synchronizing connection state changes.
     /// </summary>
-    private readonly object _connectionLock = new object();
-
-
+    private readonly object _connectionLock = new();
 
     /// <summary>
-    /// Construct the net client with the given packet manager and encrypted transport.
+    /// Construct the net client with the given packet manager.
     /// </summary>
     /// <param name="packetManager">The packet manager instance.</param>
-    /// <param name="transport">The encrypted transport implementation to use for connections.</param>
-    public NetClient(PacketManager packetManager, IEncryptedTransport transport) {
+    public NetClient(PacketManager packetManager) {
         _packetManager = packetManager;
-        _transport = transport;
 
+        // Create initial update manager with default settings (will be recreated if needed in Connect)
         UpdateManager = new ClientUpdateManager();
 
         _chunkSender = new ClientChunkSender(UpdateManager);
         _chunkReceiver = new ClientChunkReceiver(UpdateManager);
         _connectionManager = new ClientConnectionManager(_packetManager, _chunkSender, _chunkReceiver);
 
-        _transport.DataReceivedEvent += OnReceiveData;
         _connectionManager.ServerInfoReceivedEvent += OnServerInfoReceived;
     }
 
     /// <summary>
     /// Starts establishing a connection with the given host on the given port.
     /// </summary>
-    /// <param name="address">The address of the host to connect to.</param>
-    /// <param name="port">The port of the host to connect to.</param>
-    /// <param name="username">The username of the client.</param>
-    /// <param name="authKey">The auth key of the client.</param>
+    /// <param name="address">The address to connect to.</param>
+    /// <param name="port">The port to connect to.</param>
+    /// <param name="username">The username to connect with.</param>
+    /// <param name="authKey">The authentication key to use.</param>
     /// <param name="addonData">A list of addon data that the client has.</param>
+    /// <param name="transport">The transport to use.</param>
     public void Connect(
         string address,
         int port,
         string username,
         string authKey,
-        List<AddonData> addonData
+        List<AddonData> addonData,
+        IEncryptedTransport transport
     ) {
         // Prevent multiple simultaneous connection attempts
         lock (_connectionLock) {
@@ -144,15 +142,20 @@ internal class NetClient : INetClient {
         // Start a new thread for establishing the connection, otherwise Unity will hang
         new Thread(() => {
             try {
+                _transport = transport;
+                _transport.DataReceivedEvent += OnReceiveData;
                 _transport.Connect(address, port);
 
                 UpdateManager.Transport = _transport;
-                UpdateManager.TimeoutEvent += OnConnectTimedOut;
                 UpdateManager.StartUpdates();
-
                 _chunkSender.Start();
-                _connectionManager.StartConnection(username, authKey, addonData);
-                
+
+                // Only UDP/HolePunch need timeout management (Steam has built-in connection tracking)
+                if (_transport.RequiresCongestionManagement) {
+                    UpdateManager.TimeoutEvent += OnConnectTimedOut;
+                }
+
+                _connectionManager.StartConnection(username, authKey, addonData, _transport);
             } catch (TlsTimeoutException) {
                 Logger.Info("DTLS connection timed out");
                 HandleConnectFailed(new ConnectionFailedResult { Reason = ConnectionFailedReason.TimedOut });
@@ -169,6 +172,7 @@ internal class NetClient : INetClient {
         }) { IsBackground = true }.Start();
     }
 
+
     /// <summary>
     /// Disconnect from the current server.
     /// </summary>
@@ -181,7 +185,8 @@ internal class NetClient : INetClient {
     /// <summary>
     /// Internal disconnect implementation without locking (assumes caller holds lock).
     /// </summary>
-    /// <param name="shouldFireEvent">Whether to fire DisconnectEvent. Set to false when cleaning up an old connection before immediately starting a new one.</param>
+    /// <param name="shouldFireEvent">Whether to fire DisconnectEvent. Set to false when cleaning up an old connection
+    /// before immediately starting a new one.</param>
     private void InternalDisconnect(bool shouldFireEvent = true) {
         if (ConnectionStatus == ClientConnectionStatus.NotConnected) {
             return;
@@ -195,7 +200,11 @@ internal class NetClient : INetClient {
             UpdateManager.TimeoutEvent -= OnUpdateTimedOut;
             _chunkSender.Stop();
             _chunkReceiver.Reset();
-            _transport.Disconnect();
+
+            if (_transport != null) {
+                _transport.DataReceivedEvent -= OnReceiveData;
+                _transport.Disconnect();
+            }
         } catch (Exception e) {
             Logger.Error($"Error in NetClient.InternalDisconnect: {e}");
         }
@@ -238,26 +247,25 @@ internal class NetClient : INetClient {
 
         foreach (var packet in packets) {
             try {
-                // Create a ClientUpdatePacket from the raw packet instance,
-                // and read the values into it
                 var clientUpdatePacket = new ClientUpdatePacket();
                 if (!clientUpdatePacket.ReadPacket(packet)) {
                     // If ReadPacket returns false, we received a malformed packet, which we simply ignore for now
                     continue;
                 }
 
+                // Route all transports through UpdateManager for sequence/ACK tracking
+                // UpdateManager will skip UDP-specific logic for Steam transports
                 UpdateManager.OnReceivePacket<ClientUpdatePacket, ClientUpdatePacketId>(clientUpdatePacket);
 
                 // First check for slice or slice ack data and handle it separately by passing it onto either the chunk 
                 // sender or chunk receiver
                 var packetData = clientUpdatePacket.GetPacketData();
-                if (packetData.TryGetValue(ClientUpdatePacketId.Slice, out var sliceData)) {
-                    packetData.Remove(ClientUpdatePacketId.Slice);
+
+                if (packetData.Remove(ClientUpdatePacketId.Slice, out var sliceData)) {
                     _chunkReceiver.ProcessReceivedData((SliceData) sliceData);
                 }
 
-                if (packetData.TryGetValue(ClientUpdatePacketId.SliceAck, out var sliceAckData)) {
-                    packetData.Remove(ClientUpdatePacketId.SliceAck);
+                if (packetData.Remove(ClientUpdatePacketId.SliceAck, out var sliceAckData)) {
                     _chunkSender.ProcessReceivedData((SliceAckData) sliceAckData);
                 }
 

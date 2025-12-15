@@ -4,6 +4,7 @@ using SSMP.Game.Settings;
 using SSMP.Networking.Packet;
 using SSMP.Networking.Packet.Data;
 using SSMP.Networking.Server;
+using SSMP.Networking.Transport.Common;
 using SSMPServer.Command;
 using SSMPServer.Logging;
 
@@ -55,7 +56,7 @@ internal class ConsoleServerManager : ServerManager {
     /// <inheritdoc />
     public override void Initialize() {
         base.Initialize();
-        
+
         // Start loading addons
         AddonManager.LoadAddons();
 
@@ -69,9 +70,14 @@ internal class ConsoleServerManager : ServerManager {
         };
     }
 
-    /// <inheritdoc />
-    public override void Start(int port, bool fullSynchronisation) {
-        base.Start(port, fullSynchronisation);
+    /// <summary>
+    /// Starts a server with the given port.
+    /// </summary>
+    /// <param name="port">The port the server should run on.</param>
+    /// <param name="fullSynchronisation">Whether full synchronisation should be enabled.</param>
+    /// <param name="transportServer">The transport server to use.</param>
+    public override void Start(int port, bool fullSynchronisation, IEncryptedTransportServer transportServer) {
+        base.Start(port, fullSynchronisation, transportServer);
         
         InitializeSaveFile();
     }

@@ -10,11 +10,16 @@ using SSMP.Networking.Packet.Update;
 namespace SSMP.Networking.Client;
 
 /// <summary>
-/// Specialization of <see cref="UdpUpdateManager{TOutgoing,TPacketId}"/> for client to server packet sending.
+/// Specialization of <see cref="UpdateManager{TOutgoing,TPacketId}"/> for client to server packet sending.
 /// </summary>
-internal class ClientUpdateManager : UdpUpdateManager<ServerUpdatePacket, ServerUpdatePacketId> {
+internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpdatePacketId> {
     /// <inheritdoc />
     public override void ResendReliableData(ServerUpdatePacket lostPacket) {
+        // Steam has built-in reliability, no need to resend
+        if (IsSteamTransport()) {
+            return;
+        }
+
         lock (Lock) {
             CurrentUpdatePacket.SetLostReliableData(lostPacket);
         }

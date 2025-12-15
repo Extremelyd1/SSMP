@@ -34,20 +34,28 @@ internal class BanList : AuthKeyList {
     /// Add the given address to the ban list.
     /// </summary>
     /// <param name="address">The address to add.</param>
-    public void AddIp(string address) {
-        _ipAddresses.Add(address);
+    /// <returns>True if the address was added, false if it was already present.</returns>
+    public bool AddIp(string address) {
+        if (!_ipAddresses.Add(address)) {
+            return false;
+        }
 
         WriteToFile();
+        return true;
     }
 
     /// <summary>
     /// Remove the given address from the ban list.
     /// </summary>
     /// <param name="address">The address to remove.</param>
-    public void RemoveIp(string address) {
-        _ipAddresses.Remove(address);
+    /// <returns>True if the address was removed, false if it was not present.</returns>
+    public bool RemoveIp(string address) {
+        if (!_ipAddresses.Remove(address)) {
+            return false;
+        }
 
         WriteToFile();
+        return true;
     }
 
     /// <summary>

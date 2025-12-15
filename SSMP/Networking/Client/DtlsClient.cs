@@ -6,6 +6,7 @@ using System.Threading;
 using Org.BouncyCastle.Tls;
 using Org.BouncyCastle.Tls.Crypto.Impl.BC;
 using SSMP.Logging;
+using SSMP.Networking.Transport.UDP;
 
 namespace SSMP.Networking.Client;
 
@@ -228,7 +229,7 @@ internal class DtlsClient {
 
             // Create a copy of the buffer for this specific packet. The original buffer will be reused in the next iteration
             var packetBuffer = new byte[numReceived];
-            Buffer.BlockCopy(buffer, 0, packetBuffer, 0, numReceived);
+            Array.Copy(buffer, 0, packetBuffer, 0, numReceived);
 
             var added = false;
             try {

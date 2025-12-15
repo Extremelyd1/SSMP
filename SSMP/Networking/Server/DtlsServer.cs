@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Org.BouncyCastle.Tls;
 using Org.BouncyCastle.Tls.Crypto.Impl.BC;
 using SSMP.Logging;
+using SSMP.Networking.Transport.UDP;
 
 namespace SSMP.Networking.Server;
 
@@ -202,6 +203,10 @@ internal class DtlsServer {
                 break;
             } catch (ObjectDisposedException) {
                 break;
+            } catch (ThreadAbortException) {
+                // Thread is being forcefully terminated during shutdown - exit gracefully
+                Logger.Info("SocketReceiveLoop: Thread aborted during shutdown");
+                break;
             } catch (Exception e) {
                 Logger.Error($"Unexpected exception in SocketReceiveLoop:\n{e}");
                 continue;
@@ -215,7 +220,7 @@ internal class DtlsServer {
 
             // Create a precise copy of the buffer for this packet
             var packetBuffer = new byte[numReceived];
-            Buffer.BlockCopy(buffer, 0, packetBuffer, 0, numReceived);
+            Array.Copy(buffer, 0, packetBuffer, 0, numReceived);
 
             ProcessReceivedPacket(ipEndPoint, packetBuffer, numReceived, cancellationToken);
         }
