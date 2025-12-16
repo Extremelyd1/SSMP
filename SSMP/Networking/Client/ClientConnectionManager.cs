@@ -11,7 +11,8 @@ namespace SSMP.Networking.Client;
 /// <summary>
 /// Client-side manager for handling the initial connection to the server.
 /// </summary>
-internal class ClientConnectionManager : ConnectionManager {
+internal class ClientConnectionManager : ConnectionManager
+{
     /// <summary>
     /// The client-side chunk sender used to handle sending chunks.
     /// </summary>
@@ -35,7 +36,8 @@ internal class ClientConnectionManager : ConnectionManager {
         PacketManager packetManager,
         ClientChunkSender chunkSender,
         ClientChunkReceiver chunkReceiver
-    ) : base(packetManager) {
+    ) : base(packetManager)
+    {
         _chunkSender = chunkSender;
         _chunkReceiver = chunkReceiver;
 
@@ -53,18 +55,18 @@ internal class ClientConnectionManager : ConnectionManager {
     /// <param name="authKey">The authentication key of the player.</param>
     /// <param name="addonData">List of addon data that represents the enabled networked addons that the client uses.
     /// </param>
-    /// <param name="transport">The transport to use for sending (for Steam direct sending).</param>
     public void StartConnection(
-        string username, 
-        string authKey, 
-        List<AddonData> addonData,
-        Transport.Common.IEncryptedTransport transport
-    ) {
+        string username,
+        string authKey,
+        List<AddonData> addonData
+    )
+    {
         // Create a connection packet that will be the entire chunk we will be sending
         var connectionPacket = new ServerConnectionPacket();
 
         // Set the client info data in the connection packet
-        connectionPacket.SetSendingPacketData(ServerConnectionPacketId.ClientInfo, new ClientInfo {
+        connectionPacket.SetSendingPacketData(ServerConnectionPacketId.ClientInfo, new ClientInfo
+        {
             Username = username,
             AuthKey = authKey,
             AddonData = addonData
@@ -74,25 +76,17 @@ internal class ClientConnectionManager : ConnectionManager {
         var packet = new Packet.Packet();
         connectionPacket.CreatePacket(packet);
 
-        // For Steam (no congestion management), send directly through transport
-        // For UDP/HolePunch, use ChunkSender for fragmentation
-        if (!transport.RequiresCongestionManagement) {
-            // Steam: Send connection packet directly
-            // We need to write the length first because the server's PacketManager expects a length prefix
-            packet.WriteLength();
-            var buffer = packet.ToArray();
-            transport.Send(buffer, 0, buffer.Length);
-        } else {
-            // UDP/HolePunch: Enqueue the raw packet to be sent using the chunk sender
-            _chunkSender.EnqueuePacket(packet);
-        }
+        // All transports use ChunkSender for connection packets
+        // This ensures consistent handling on the server side via ChunkReceiver
+        _chunkSender.EnqueuePacket(packet);
     }
 
     /// <summary>
     /// Callback method for when server info is received from the server.
     /// </summary>
     /// <param name="serverInfo">The server info instance received from the server.</param>
-    private void OnServerInfoReceived(ServerInfo serverInfo) {
+    private void OnServerInfoReceived(ServerInfo serverInfo)
+    {
         Logger.Debug($"ServerInfo received, connection accepted: {serverInfo.ConnectionResult}");
 
         ServerInfoReceivedEvent?.Invoke(serverInfo);
@@ -102,10 +96,12 @@ internal class ClientConnectionManager : ConnectionManager {
     /// Callback method for when a new chunk is received from the server.
     /// </summary>
     /// <param name="packet">The raw packet that contains the data from the chunk.</param>
-    private void OnChunkReceived(Packet.Packet packet) {
+    private void OnChunkReceived(Packet.Packet packet)
+    {
         // Create the connection packet instance and try to read it
         var connectionPacket = new ClientConnectionPacket();
-        if (!connectionPacket.ReadPacket(packet)) {
+        if (!connectionPacket.ReadPacket(packet))
+        {
             Logger.Debug("Received malformed connection packet chunk from server");
             return;
         }

@@ -20,7 +20,8 @@ namespace SSMP.Networking.Client;
 /// The networking client that manages the UDP client for sending and receiving data. This only
 /// manages client side networking, e.g. sending to and receiving from the server.
 /// </summary>
-internal class NetClient : INetClient {
+internal class NetClient : INetClient
+{
     /// <summary>
     /// The packet manager instance.
     /// </summary>
@@ -93,7 +94,8 @@ internal class NetClient : INetClient {
     /// Construct the net client with the given packet manager.
     /// </summary>
     /// <param name="packetManager">The packet manager instance.</param>
-    public NetClient(PacketManager packetManager) {
+    public NetClient(PacketManager packetManager)
+    {
         _packetManager = packetManager;
 
         // Create initial update manager with default settings (will be recreated if needed in Connect)
@@ -122,15 +124,19 @@ internal class NetClient : INetClient {
         string authKey,
         List<AddonData> addonData,
         IEncryptedTransport transport
-    ) {
+    )
+    {
         // Prevent multiple simultaneous connection attempts
-        lock (_connectionLock) {
-            if (ConnectionStatus == ClientConnectionStatus.Connecting) {
+        lock (_connectionLock)
+        {
+            if (ConnectionStatus == ClientConnectionStatus.Connecting)
+            {
                 Logger.Warn("Connection attempt already in progress, ignoring duplicate request");
                 return;
             }
 
-            if (ConnectionStatus == ClientConnectionStatus.Connected) {
+            if (ConnectionStatus == ClientConnectionStatus.Connected)
+            {
                 Logger.Warn("Already connected, disconnecting first");
                 // Don't fire DisconnectEvent when transitioning to a new connection
                 InternalDisconnect(shouldFireEvent: false);
@@ -140,8 +146,10 @@ internal class NetClient : INetClient {
         }
 
         // Start a new thread for establishing the connection, otherwise Unity will hang
-        new Thread(() => {
-            try {
+        new Thread(() =>
+        {
+            try
+            {
                 _transport = transport;
                 _transport.DataReceivedEvent += OnReceiveData;
                 _transport.Connect(address, port);
@@ -151,21 +159,30 @@ internal class NetClient : INetClient {
                 _chunkSender.Start();
 
                 // Only UDP/HolePunch need timeout management (Steam has built-in connection tracking)
-                if (_transport.RequiresCongestionManagement) {
+                if (_transport.RequiresCongestionManagement)
+                {
                     UpdateManager.TimeoutEvent += OnConnectTimedOut;
                 }
 
-                _connectionManager.StartConnection(username, authKey, addonData, _transport);
-            } catch (TlsTimeoutException) {
+                _connectionManager.StartConnection(username, authKey, addonData);
+            }
+            catch (TlsTimeoutException)
+            {
                 Logger.Info("DTLS connection timed out");
                 HandleConnectFailed(new ConnectionFailedResult { Reason = ConnectionFailedReason.TimedOut });
-            } catch (SocketException e) {
+            }
+            catch (SocketException e)
+            {
                 Logger.Error($"Failed to connect due to SocketException:\n{e}");
                 HandleConnectFailed(new ConnectionFailedResult { Reason = ConnectionFailedReason.SocketException });
-            } catch (Exception e) when (e is IOException) {
+            }
+            catch (Exception e) when (e is IOException)
+            {
                 Logger.Error($"Failed to connect due to IOException:\n{e}");
                 HandleConnectFailed(new ConnectionFailedResult { Reason = ConnectionFailedReason.IOException });
-            } catch (Exception e) {
+            }
+            catch (Exception e)
+            {
                 Logger.Error($"Unexpected error during connection:\n{e}");
                 HandleConnectFailed(new ConnectionFailedResult { Reason = ConnectionFailedReason.IOException });
             }
@@ -176,8 +193,10 @@ internal class NetClient : INetClient {
     /// <summary>
     /// Disconnect from the current server.
     /// </summary>
-    public void Disconnect() {
-        lock (_connectionLock) {
+    public void Disconnect()
+    {
+        lock (_connectionLock)
+        {
             InternalDisconnect();
         }
     }
@@ -187,25 +206,31 @@ internal class NetClient : INetClient {
     /// </summary>
     /// <param name="shouldFireEvent">Whether to fire DisconnectEvent. Set to false when cleaning up an old connection
     /// before immediately starting a new one.</param>
-    private void InternalDisconnect(bool shouldFireEvent = true) {
-        if (ConnectionStatus == ClientConnectionStatus.NotConnected) {
+    private void InternalDisconnect(bool shouldFireEvent = true)
+    {
+        if (ConnectionStatus == ClientConnectionStatus.NotConnected)
+        {
             return;
         }
 
         var wasConnectedOrConnecting = ConnectionStatus != ClientConnectionStatus.NotConnected;
 
-        try {
+        try
+        {
             UpdateManager.StopUpdates();
             UpdateManager.TimeoutEvent -= OnConnectTimedOut;
             UpdateManager.TimeoutEvent -= OnUpdateTimedOut;
             _chunkSender.Stop();
             _chunkReceiver.Reset();
 
-            if (_transport != null) {
+            if (_transport != null)
+            {
                 _transport.DataReceivedEvent -= OnReceiveData;
                 _transport.Disconnect();
             }
-        } catch (Exception e) {
+        }
+        catch (Exception e)
+        {
             Logger.Error($"Error in NetClient.InternalDisconnect: {e}");
         }
 
@@ -219,11 +244,16 @@ internal class NetClient : INetClient {
 
         // Fire DisconnectEvent on main thread for all disconnects (internal or explicit)
         // This provides a consistent notification for observers to clean up resources
-        if (shouldFireEvent && wasConnectedOrConnecting) {
-            ThreadUtil.RunActionOnMainThread(() => {
-                try {
+        if (shouldFireEvent && wasConnectedOrConnecting)
+        {
+            ThreadUtil.RunActionOnMainThread(() =>
+            {
+                try
+                {
                     DisconnectEvent?.Invoke();
-                } catch (Exception e) {
+                }
+                catch (Exception e)
+                {
                     Logger.Error($"Error in DisconnectEvent: {e}");
                 }
             });
@@ -237,18 +267,23 @@ internal class NetClient : INetClient {
     /// </summary>
     /// <param name="buffer">Byte array containing the received bytes.</param>
     /// <param name="length">The number of bytes in the <paramref name="buffer"/>.</param>
-    private void OnReceiveData(byte[] buffer, int length) {
-        if (ConnectionStatus == ClientConnectionStatus.NotConnected) {
+    private void OnReceiveData(byte[] buffer, int length)
+    {
+        if (ConnectionStatus == ClientConnectionStatus.NotConnected)
+        {
             Logger.Error("Client is not connected to a server, but received data, ignoring");
             return;
         }
 
         var packets = PacketManager.HandleReceivedData(buffer, length, ref _leftoverData);
 
-        foreach (var packet in packets) {
-            try {
+        foreach (var packet in packets)
+        {
+            try
+            {
                 var clientUpdatePacket = new ClientUpdatePacket();
-                if (!clientUpdatePacket.ReadPacket(packet)) {
+                if (!clientUpdatePacket.ReadPacket(packet))
+                {
                     // If ReadPacket returns false, we received a malformed packet, which we simply ignore for now
                     continue;
                 }
@@ -261,41 +296,53 @@ internal class NetClient : INetClient {
                 // sender or chunk receiver
                 var packetData = clientUpdatePacket.GetPacketData();
 
-                if (packetData.Remove(ClientUpdatePacketId.Slice, out var sliceData)) {
-                    _chunkReceiver.ProcessReceivedData((SliceData) sliceData);
+                if (packetData.Remove(ClientUpdatePacketId.Slice, out var sliceData))
+                {
+                    _chunkReceiver.ProcessReceivedData((SliceData)sliceData);
                 }
 
-                if (packetData.Remove(ClientUpdatePacketId.SliceAck, out var sliceAckData)) {
-                    _chunkSender.ProcessReceivedData((SliceAckData) sliceAckData);
+                if (packetData.Remove(ClientUpdatePacketId.SliceAck, out var sliceAckData))
+                {
+                    _chunkSender.ProcessReceivedData((SliceAckData)sliceAckData);
                 }
 
                 // Then, if we are already connected to a server,
                 // we let the packet manager handle the rest of the packet data
-                if (ConnectionStatus == ClientConnectionStatus.Connected) {
+                if (ConnectionStatus == ClientConnectionStatus.Connected)
+                {
                     _packetManager.HandleClientUpdatePacket(clientUpdatePacket);
                 }
-            } catch (Exception e) {
+            }
+            catch (Exception e)
+            {
                 Logger.Error($"Error processing incoming packet: {e}");
             }
         }
     }
 
-    private void OnServerInfoReceived(ServerInfo serverInfo) {
-        if (serverInfo.ConnectionResult == ServerConnectionResult.Accepted) {
+    private void OnServerInfoReceived(ServerInfo serverInfo)
+    {
+        if (serverInfo.ConnectionResult == ServerConnectionResult.Accepted)
+        {
             Logger.Debug("Connection to server accepted");
 
             // De-register the "connect failed" and register the actual timeout handler if we time out
             UpdateManager.TimeoutEvent -= OnConnectTimedOut;
             UpdateManager.TimeoutEvent += OnUpdateTimedOut;
 
-            lock (_connectionLock) {
+            lock (_connectionLock)
+            {
                 ConnectionStatus = ClientConnectionStatus.Connected;
             }
 
-            ThreadUtil.RunActionOnMainThread(() => {
-                try {
+            ThreadUtil.RunActionOnMainThread(() =>
+            {
+                try
+                {
                     ConnectEvent?.Invoke(serverInfo);
-                } catch (Exception e) {
+                }
+                catch (Exception e)
+                {
                     Logger.Error($"Error in ConnectEvent: {e}");
                 }
             });
@@ -304,11 +351,13 @@ internal class NetClient : INetClient {
 
         // Connection rejected
         var result = serverInfo.ConnectionResult == ServerConnectionResult.InvalidAddons
-            ? new ConnectionInvalidAddonsResult {
+            ? new ConnectionInvalidAddonsResult
+            {
                 Reason = ConnectionFailedReason.InvalidAddons,
                 AddonData = serverInfo.AddonData
             }
-            : (ConnectionFailedResult)new ConnectionFailedMessageResult {
+            : (ConnectionFailedResult)new ConnectionFailedMessageResult
+            {
                 Reason = ConnectionFailedReason.Other,
                 Message = serverInfo.ConnectionRejectedMessage
             };
@@ -319,14 +368,16 @@ internal class NetClient : INetClient {
     /// <summary>
     /// Callback method for when the client connection fails.
     /// </summary>
-    private void OnConnectTimedOut() => HandleConnectFailed(new ConnectionFailedResult {
+    private void OnConnectTimedOut() => HandleConnectFailed(new ConnectionFailedResult
+    {
         Reason = ConnectionFailedReason.TimedOut
     });
 
     /// <summary>
     /// Callback method for when the client times out while connected.
     /// </summary>
-    private void OnUpdateTimedOut() {
+    private void OnUpdateTimedOut()
+    {
         ThreadUtil.RunActionOnMainThread(() => { TimeoutEvent?.Invoke(); });
     }
 
@@ -334,8 +385,10 @@ internal class NetClient : INetClient {
     /// Handles a failed connection with the given result.
     /// </summary>
     /// <param name="result">The connection failed result containing failure details.</param>
-    private void HandleConnectFailed(ConnectionFailedResult result) {
-        lock (_connectionLock) {
+    private void HandleConnectFailed(ConnectionFailedResult result)
+    {
+        lock (_connectionLock)
+        {
             InternalDisconnect();
         }
 
@@ -345,12 +398,15 @@ internal class NetClient : INetClient {
     /// <inheritdoc />
     public IClientAddonNetworkSender<TPacketId> GetNetworkSender<TPacketId>(
         ClientAddon addon
-    ) where TPacketId : Enum {
+    ) where TPacketId : Enum
+    {
         ValidateAddon(addon);
 
         // Check whether there already is a network sender for the given addon
-        if (addon.NetworkSender != null) {
-            if (!(addon.NetworkSender is IClientAddonNetworkSender<TPacketId> addonNetworkSender)) {
+        if (addon.NetworkSender != null)
+        {
+            if (!(addon.NetworkSender is IClientAddonNetworkSender<TPacketId> addonNetworkSender))
+            {
                 throw new InvalidOperationException(
                     "Cannot request network senders with differing generic parameters");
             }
@@ -368,12 +424,15 @@ internal class NetClient : INetClient {
     /// <summary>
     /// Validates that an addon is non-null and has requested network access.
     /// </summary>
-    private static void ValidateAddon(ClientAddon addon) {
-        if (addon == null) {
+    private static void ValidateAddon(ClientAddon addon)
+    {
+        if (addon == null)
+        {
             throw new ArgumentNullException(nameof(addon));
         }
 
-        if (!addon.NeedsNetwork) {
+        if (!addon.NeedsNetwork)
+        {
             throw new InvalidOperationException("Addon has not requested network access through property");
         }
     }
@@ -382,20 +441,25 @@ internal class NetClient : INetClient {
     public IClientAddonNetworkReceiver<TPacketId> GetNetworkReceiver<TPacketId>(
         ClientAddon addon,
         Func<TPacketId, IPacketData> packetInstantiator
-    ) where TPacketId : Enum {
+    ) where TPacketId : Enum
+    {
         ValidateAddon(addon);
 
-        if (packetInstantiator == null) {
+        if (packetInstantiator == null)
+        {
             throw new ArgumentNullException(nameof(packetInstantiator));
         }
 
         ClientAddonNetworkReceiver<TPacketId>? networkReceiver = null;
 
         // Check whether an existing network receiver exists
-        if (addon.NetworkReceiver == null) {
+        if (addon.NetworkReceiver == null)
+        {
             networkReceiver = new ClientAddonNetworkReceiver<TPacketId>(addon, _packetManager);
             addon.NetworkReceiver = networkReceiver;
-        } else if (addon.NetworkReceiver is not IClientAddonNetworkReceiver<TPacketId>) {
+        }
+        else if (addon.NetworkReceiver is not IClientAddonNetworkReceiver<TPacketId>)
+        {
             throw new InvalidOperationException(
                 "Cannot request network receivers with differing generic parameters");
         }

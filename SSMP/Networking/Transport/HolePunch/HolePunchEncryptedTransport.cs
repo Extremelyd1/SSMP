@@ -8,11 +8,18 @@ namespace SSMP.Networking.Transport.HolePunch;
 /// UDP Hole Punching implementation of <see cref="IEncryptedTransport"/>.
 /// Wraps DtlsClient with Master Server NAT traversal coordination.
 /// </summary>
-internal class HolePunchEncryptedTransport : IEncryptedTransport {
+internal class HolePunchEncryptedTransport : IEncryptedTransport
+{
+    /// <summary>
+    /// Maximum packet size for UDP hole punch transport.
+    /// </summary>
+    private const int HolePunchMaxPacketSize = 1200;
+
     /// <summary>
     /// Master server address for NAT traversal coordination.
     /// </summary>
     private readonly string _masterServerAddress;
+
     /// <summary>
     /// The underlying DTLS client that is used once P2P connection has been established.
     /// </summary>
@@ -24,11 +31,21 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     /// <inheritdoc />
     public bool RequiresCongestionManagement => true;
 
+    /// <inheritdoc />
+    public bool RequiresReliability => true;
+
+    /// <inheritdoc />
+    public bool RequiresSequencing => true;
+
+    /// <inheritdoc />
+    public int MaxPacketSize => HolePunchMaxPacketSize;
+
     /// <summary>
     /// Construct a hole punching transport with the given master server address.
     /// </summary>
     /// <param name="masterServerAddress">Master server address for NAT traversal coordination.</param>
-    public HolePunchEncryptedTransport(string masterServerAddress) {
+    public HolePunchEncryptedTransport(string masterServerAddress)
+    {
         _masterServerAddress = masterServerAddress;
     }
 
@@ -37,7 +54,8 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     /// </summary>
     /// <param name="address">LobbyID or PeerID to be resolved via Master Server.</param>
     /// <param name="port">Port parameter (resolved via Master Server).</param>
-    public void Connect(string address, int port) {
+    public void Connect(string address, int port)
+    {
         // TODO: Implementation steps:
         // 1. Contact Master Server with LobbyID/PeerID to get peer's public IP:Port
         // 2. Perform UDP hole punching (simultaneous send from both sides)
@@ -49,8 +67,10 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     }
 
     /// <inheritdoc />
-    public void Send(byte[] buffer, int offset, int length) {
-        if (_dtlsClient?.DtlsTransport == null) {
+    public void Send(byte[] buffer, int offset, int length)
+    {
+        if (_dtlsClient?.DtlsTransport == null)
+        {
             throw new InvalidOperationException("Not connected");
         }
 
@@ -58,7 +78,8 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     }
 
     /// <inheritdoc />
-    public void Disconnect() {
+    public void Disconnect()
+    {
         _dtlsClient?.Disconnect();
         _dtlsClient = null;
     }
@@ -66,7 +87,8 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     /// <summary>
     /// Raises the <see cref="DataReceivedEvent"/> with the given data.
     /// </summary>
-    private void OnDataReceived(byte[] data, int length) {
+    private void OnDataReceived(byte[] data, int length)
+    {
         DataReceivedEvent?.Invoke(data, length);
     }
 }

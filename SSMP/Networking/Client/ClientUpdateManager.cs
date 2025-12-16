@@ -1,9 +1,11 @@
+using System.Runtime.CompilerServices;
 using SSMP.Animation;
 using SSMP.Game;
 using SSMP.Game.Client.Entity;
 using SSMP.Game.Settings;
 using SSMP.Internals;
 using SSMP.Math;
+using SSMP.Networking.Packet;
 using SSMP.Networking.Packet.Data;
 using SSMP.Networking.Packet.Update;
 
@@ -12,15 +14,19 @@ namespace SSMP.Networking.Client;
 /// <summary>
 /// Specialization of <see cref="UpdateManager{TOutgoing,TPacketId}"/> for client to server packet sending.
 /// </summary>
-internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpdatePacketId> {
+internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpdatePacketId>
+{
     /// <inheritdoc />
-    public override void ResendReliableData(ServerUpdatePacket lostPacket) {
-        // Steam has built-in reliability, no need to resend
-        if (IsSteamTransport()) {
+    public override void ResendReliableData(ServerUpdatePacket lostPacket)
+    {
+        // Transports with built-in reliability (e.g., Steam P2P) don't need app-level resending
+        if (!RequiresReliability)
+        {
             return;
         }
 
-        lock (Lock) {
+        lock (Lock)
+        {
             CurrentUpdatePacket.SetLostReliableData(lostPacket);
         }
     }
@@ -29,15 +35,32 @@ internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpd
     /// Find an existing or create a new PlayerUpdate instance in the current update packet.
     /// </summary>
     /// <returns>The existing or new PlayerUpdate instance.</returns>
-    private PlayerUpdate FindOrCreatePlayerUpdate() {
+    private PlayerUpdate FindOrCreatePlayerUpdate()
+    {
         if (!CurrentUpdatePacket.TryGetSendingPacketData(
                 ServerUpdatePacketId.PlayerUpdate,
-                out var packetData)) {
+                out var packetData))
+        {
             packetData = new PlayerUpdate();
             CurrentUpdatePacket.SetSendingPacketData(ServerUpdatePacketId.PlayerUpdate, packetData);
         }
 
-        return (PlayerUpdate) packetData;
+        return (PlayerUpdate)packetData;
+    }
+
+    /// <summary>
+    /// Get or create a packet data collection for the specified packet ID.
+    /// </summary>
+    private PacketDataCollection<T> GetOrCreateCollection<T>(ServerUpdatePacketId packetId) where T : IPacketData, new()
+    {
+        if (CurrentUpdatePacket.TryGetSendingPacketData(packetId, out var packetData))
+        {
+            return (PacketDataCollection<T>)packetData;
+        }
+
+        var collection = new PacketDataCollection<T>();
+        CurrentUpdatePacket.SetSendingPacketData(packetId, collection);
+        return collection;
     }
 
     /// <summary>
@@ -47,15 +70,18 @@ internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpd
     /// <param name="sliceId">The ID of the slice within the chunk.</param>
     /// <param name="numSlices">The number of slices in the chunk.</param>
     /// <param name="data">The raw data in the slice as a byte array.</param>
-    public void SetSliceData(byte chunkId, byte sliceId, byte numSlices, byte[] data) {
-        lock (Lock) {
-            var sliceData = new SliceData {
-                ChunkId = chunkId,
-                SliceId = sliceId,
-                NumSlices = numSlices,
-                Data = data
-            };
+    public void SetSliceData(byte chunkId, byte sliceId, byte numSlices, byte[] data)
+    {
+        var sliceData = new SliceData
+        {
+            ChunkId = chunkId,
+            SliceId = sliceId,
+            NumSlices = numSlices,
+            Data = data
+        };
 
+        lock (Lock)
+        {
             CurrentUpdatePacket.SetSendingPacketData(ServerUpdatePacketId.Slice, sliceData);
         }
     }
@@ -66,14 +92,17 @@ internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpd
     /// <param name="chunkId">The ID of the chunk the slice belongs to.</param>
     /// <param name="numSlices">The number of slices in the chunk.</param>
     /// <param name="acked">A boolean array containing whether a certain slice in the chunk was acknowledged.</param>
-    public void SetSliceAckData(byte chunkId, ushort numSlices, bool[] acked) {
-        lock (Lock) {
-            var sliceAckData = new SliceAckData {
-                ChunkId = chunkId,
-                NumSlices = numSlices,
-                Acked = acked
-            };
+    public void SetSliceAckData(byte chunkId, ushort numSlices, bool[] acked)
+    {
+        var sliceAckData = new SliceAckData
+        {
+            ChunkId = chunkId,
+            NumSlices = numSlices,
+            Acked = acked
+        };
 
+        lock (Lock)
+        {
             CurrentUpdatePacket.SetSendingPacketData(ServerUpdatePacketId.SliceAck, sliceAckData);
         }
     }
@@ -82,8 +111,10 @@ internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpd
     /// Update the player position in the current packet.
     /// </summary>
     /// <param name="position">Vector2 representing the new position.</param>
-    public void UpdatePlayerPosition(Vector2 position) {
-        lock (Lock) {
+    public void UpdatePlayerPosition(Vector2 position)
+    {
+        lock (Lock)
+        {
             var playerUpdate = FindOrCreatePlayerUpdate();
             playerUpdate.UpdateTypes.Add(PlayerUpdateType.Position);
             playerUpdate.Position = position;
@@ -94,8 +125,10 @@ internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpd
     /// Update the player scale in the current packet.
     /// </summary>
     /// <param name="scale">The boolean scale.</param>
-    public void UpdatePlayerScale(bool scale) {
-        lock (Lock) {
+    public void UpdatePlayerScale(bool scale)
+    {
+        lock (Lock)
+        {
             var playerUpdate = FindOrCreatePlayerUpdate();
             playerUpdate.UpdateTypes.Add(PlayerUpdateType.Scale);
             playerUpdate.Scale = scale;
@@ -106,8 +139,10 @@ internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpd
     /// Update the player map position in the current packet.
     /// </summary>
     /// <param name="mapPosition">Vector2 representing the new map position.</param>
-    public void UpdatePlayerMapPosition(Vector2 mapPosition) {
-        lock (Lock) {
+    public void UpdatePlayerMapPosition(Vector2 mapPosition)
+    {
+        lock (Lock)
+        {
             var playerUpdate = FindOrCreatePlayerUpdate();
             playerUpdate.UpdateTypes.Add(PlayerUpdateType.MapPosition);
             playerUpdate.MapPosition = mapPosition;
@@ -118,17 +153,20 @@ internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpd
     /// Update whether the player has a map icon.
     /// </summary>
     /// <param name="hasIcon">Whether the player has a map icon.</param>
-    public void UpdatePlayerMapIcon(bool hasIcon) {
-        lock (Lock) {
+    public void UpdatePlayerMapIcon(bool hasIcon)
+    {
+        lock (Lock)
+        {
             if (!CurrentUpdatePacket.TryGetSendingPacketData(
                     ServerUpdatePacketId.PlayerMapUpdate,
                     out var packetData
-                )) {
+                ))
+            {
                 packetData = new PlayerMapUpdate();
                 CurrentUpdatePacket.SetSendingPacketData(ServerUpdatePacketId.PlayerMapUpdate, packetData);
             }
 
-            ((PlayerMapUpdate) packetData).HasIcon = hasIcon;
+            ((PlayerMapUpdate)packetData).HasIcon = hasIcon;
         }
     }
 
@@ -138,42 +176,34 @@ internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpd
     /// <param name="clip">The animation clip.</param>
     /// <param name="frame">The frame of the animation.</param>
     /// <param name="effectInfo">Byte array of effect info.</param>
-    public void UpdatePlayerAnimation(AnimationClip clip, int frame = 0, byte[]? effectInfo = null) {
-        lock (Lock) {
+    public void UpdatePlayerAnimation(AnimationClip clip, int frame = 0, byte[]? effectInfo = null)
+    {
+        lock (Lock)
+        {
             var playerUpdate = FindOrCreatePlayerUpdate();
             playerUpdate.UpdateTypes.Add(PlayerUpdateType.Animation);
-
-            // Create a new animation info instance
-            var animationInfo = new AnimationInfo {
-                ClipId = (ushort) clip,
-                Frame = (byte) frame,
+            playerUpdate.AnimationInfos.Add(new AnimationInfo
+            {
+                ClipId = (ushort)clip,
+                Frame = (byte)frame,
                 EffectInfo = effectInfo
-            };
-
-            // And add it to the list of animation info instances
-            playerUpdate.AnimationInfos.Add(animationInfo);
+            });
         }
     }
-    
+
     /// <summary>
     /// Set entity spawn data for an entity that spawned later in the scene.
     /// </summary>
     /// <param name="id">The ID of the entity.</param>
     /// <param name="spawningType">The type of the entity that spawned the new entity.</param>
     /// <param name="spawnedType">The type of the entity that was spawned.</param>
-    public void SetEntitySpawn(ushort id, EntityType spawningType, EntityType spawnedType) {
-        lock (Lock) {
-            PacketDataCollection<EntitySpawn> entitySpawnCollection;
-
-            // Check if there is an existing data collection or create one if not
-            if (CurrentUpdatePacket.TryGetSendingPacketData(ServerUpdatePacketId.EntitySpawn, out var packetData)) {
-                entitySpawnCollection = (PacketDataCollection<EntitySpawn>) packetData;
-            } else {
-                entitySpawnCollection = new PacketDataCollection<EntitySpawn>();
-                CurrentUpdatePacket.SetSendingPacketData(ServerUpdatePacketId.EntitySpawn, entitySpawnCollection);
-            }
-                
-            entitySpawnCollection.DataInstances.Add(new EntitySpawn {
+    public void SetEntitySpawn(ushort id, EntityType spawningType, EntityType spawnedType)
+    {
+        lock (Lock)
+        {
+            var entitySpawnCollection = GetOrCreateCollection<EntitySpawn>(ServerUpdatePacketId.EntitySpawn);
+            entitySpawnCollection.DataInstances.Add(new EntitySpawn
+            {
                 Id = id,
                 SpawningType = spawningType,
                 SpawnedType = spawnedType
@@ -185,53 +215,29 @@ internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpd
     /// Find an existing or create a new EntityUpdate instance in the current update packet.
     /// </summary>
     /// <param name="entityId">The ID of the entity.</param>
+    /// <param name="packetId">The packet ID for the entity update type.</param>
     /// <typeparam name="T">The type of the entity update. Either <see cref="EntityUpdate"/> or
     /// <see cref="ReliableEntityUpdate"/>.</typeparam>
     /// <returns>The existing or new EntityUpdate instance.</returns>
-    private T FindOrCreateEntityUpdate<T>(ushort entityId) where T : BaseEntityUpdate, new() {
-        var entityUpdate = default(T);
-        PacketDataCollection<T> entityUpdateCollection;
+    private T FindOrCreateEntityUpdate<T>(ushort entityId, ServerUpdatePacketId packetId)
+        where T : BaseEntityUpdate, new()
+    {
+        var entityUpdateCollection = GetOrCreateCollection<T>(packetId);
 
-        var packetId = typeof(T) == typeof(EntityUpdate) 
-            ? ServerUpdatePacketId.EntityUpdate 
-            : ServerUpdatePacketId.ReliableEntityUpdate;
-
-        // First check whether there actually exists entity data at all
-        if (CurrentUpdatePacket.TryGetSendingPacketData(
-                packetId,
-                out var packetData
-        )) {
-            // And if there exists data already, try to find a match for the entity type and id
-            entityUpdateCollection = (PacketDataCollection<T>) packetData;
-            foreach (var existingPacketData in entityUpdateCollection.DataInstances) {
-                var existingEntityUpdate = (T) existingPacketData;
-                if (existingEntityUpdate.Id == entityId) {
-                    entityUpdate = existingEntityUpdate;
-                    break;
-                }
+        // Search for existing entity update
+        var dataInstances = entityUpdateCollection.DataInstances;
+        for (int i = 0; i < dataInstances.Count; i++)
+        {
+            var existingUpdate = (T)dataInstances[i];
+            if (existingUpdate.Id == entityId)
+            {
+                return existingUpdate;
             }
-        } else {
-            // If no data exists yet, we instantiate the data collection class and put it at the respective key
-            entityUpdateCollection = new PacketDataCollection<T>();
-            CurrentUpdatePacket.SetSendingPacketData(packetId, entityUpdateCollection);
         }
 
-        // If no existing instance was found, create one and add it to the (newly created) collection
-        if (entityUpdate == null) {
-            if (typeof(T) == typeof(EntityUpdate)) {
-                entityUpdate = (T) (object) new EntityUpdate {
-                    Id = entityId
-                };
-            } else {
-                entityUpdate = (T) (object) new ReliableEntityUpdate {
-                    Id = entityId
-                };
-            }
-
-
-            entityUpdateCollection.DataInstances.Add(entityUpdate);
-        }
-
+        // Create new entity update
+        var entityUpdate = new T { Id = entityId };
+        entityUpdateCollection.DataInstances.Add(entityUpdate);
         return entityUpdate;
     }
 
@@ -240,10 +246,11 @@ internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpd
     /// </summary>
     /// <param name="entityId">The ID of the entity.</param>
     /// <param name="position">The new position of the entity.</param>
-    public void UpdateEntityPosition(ushort entityId, Vector2 position) {
-        lock (Lock) {
-            var entityUpdate = FindOrCreateEntityUpdate<EntityUpdate>(entityId);
-
+    public void UpdateEntityPosition(ushort entityId, Vector2 position)
+    {
+        lock (Lock)
+        {
+            var entityUpdate = FindOrCreateEntityUpdate<EntityUpdate>(entityId, ServerUpdatePacketId.EntityUpdate);
             entityUpdate.UpdateTypes.Add(EntityUpdateType.Position);
             entityUpdate.Position = position;
         }
@@ -254,10 +261,11 @@ internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpd
     /// </summary>
     /// <param name="entityId">The ID of the entity.</param>
     /// <param name="scale">The scale data of the entity.</param>
-    public void UpdateEntityScale(ushort entityId, EntityUpdate.ScaleData scale) {
-        lock (Lock) {
-            var entityUpdate = FindOrCreateEntityUpdate<EntityUpdate>(entityId);
-
+    public void UpdateEntityScale(ushort entityId, EntityUpdate.ScaleData scale)
+    {
+        lock (Lock)
+        {
+            var entityUpdate = FindOrCreateEntityUpdate<EntityUpdate>(entityId, ServerUpdatePacketId.EntityUpdate);
             entityUpdate.UpdateTypes.Add(EntityUpdateType.Scale);
             entityUpdate.Scale = scale;
         }
@@ -269,39 +277,44 @@ internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpd
     /// <param name="entityId">The ID of the entity.</param>
     /// <param name="animationId">The new animation ID of the entity.</param>
     /// <param name="animationWrapMode">The wrap mode of the animation of the entity.</param>
-    public void UpdateEntityAnimation(ushort entityId, byte animationId, byte animationWrapMode) {
-        lock (Lock) {
-            var entityUpdate = FindOrCreateEntityUpdate<EntityUpdate>(entityId);
-
+    public void UpdateEntityAnimation(ushort entityId, byte animationId, byte animationWrapMode)
+    {
+        lock (Lock)
+        {
+            var entityUpdate = FindOrCreateEntityUpdate<EntityUpdate>(entityId, ServerUpdatePacketId.EntityUpdate);
             entityUpdate.UpdateTypes.Add(EntityUpdateType.Animation);
             entityUpdate.AnimationId = animationId;
             entityUpdate.AnimationWrapMode = animationWrapMode;
         }
     }
-    
+
     /// <summary>
     /// Update whether an entity is active or not.
     /// </summary>
     /// <param name="entityId">The ID of the entity.</param>
     /// <param name="isActive">Whether the entity is active or not.</param>
-    public void UpdateEntityIsActive(ushort entityId, bool isActive) {
-        lock (Lock) {
-            var entityUpdate = FindOrCreateEntityUpdate<ReliableEntityUpdate>(entityId);
-
+    public void UpdateEntityIsActive(ushort entityId, bool isActive)
+    {
+        lock (Lock)
+        {
+            var entityUpdate =
+                FindOrCreateEntityUpdate<ReliableEntityUpdate>(entityId, ServerUpdatePacketId.ReliableEntityUpdate);
             entityUpdate.UpdateTypes.Add(EntityUpdateType.Active);
             entityUpdate.IsActive = isActive;
         }
     }
-    
+
     /// <summary>
     /// Add data to an entity's update in the current packet.
     /// </summary>
     /// <param name="entityId">The ID of the entity.</param>
     /// <param name="data">The entity network data to add.</param>
-    public void AddEntityData(ushort entityId, EntityNetworkData data) {
-        lock (Lock) {
-            var entityUpdate = FindOrCreateEntityUpdate<ReliableEntityUpdate>(entityId);
-
+    public void AddEntityData(ushort entityId, EntityNetworkData data)
+    {
+        lock (Lock)
+        {
+            var entityUpdate =
+                FindOrCreateEntityUpdate<ReliableEntityUpdate>(entityId, ServerUpdatePacketId.ReliableEntityUpdate);
             entityUpdate.UpdateTypes.Add(EntityUpdateType.Data);
             entityUpdate.GenericData.Add(data);
         }
@@ -313,15 +326,20 @@ internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpd
     /// <param name="entityId">The ID of the entity.</param>
     /// <param name="fsmIndex">The index of the FSM of the entity.</param>
     /// <param name="data">The host FSM data to add.</param>
-    public void AddEntityHostFsmData(ushort entityId, byte fsmIndex, EntityHostFsmData data) {
-        lock (Lock) {
-            var entityUpdate = FindOrCreateEntityUpdate<ReliableEntityUpdate>(entityId);
-
+    public void AddEntityHostFsmData(ushort entityId, byte fsmIndex, EntityHostFsmData data)
+    {
+        lock (Lock)
+        {
+            var entityUpdate =
+                FindOrCreateEntityUpdate<ReliableEntityUpdate>(entityId, ServerUpdatePacketId.ReliableEntityUpdate);
             entityUpdate.UpdateTypes.Add(EntityUpdateType.HostFsm);
 
-            if (entityUpdate.HostFsmData.TryGetValue(fsmIndex, out var existingData)) {
+            if (entityUpdate.HostFsmData.TryGetValue(fsmIndex, out var existingData))
+            {
                 existingData.MergeData(data);
-            } else {
+            }
+            else
+            {
                 entityUpdate.HostFsmData.Add(fsmIndex, data);
             }
         }
@@ -330,8 +348,10 @@ internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpd
     /// <summary>
     /// Set that the player has disconnected in the current packet.
     /// </summary>
-    public void SetPlayerDisconnect() {
-        lock (Lock) {
+    public void SetPlayerDisconnect()
+    {
+        lock (Lock)
+        {
             CurrentUpdatePacket.SetSendingPacketData(ServerUpdatePacketId.PlayerDisconnect, new EmptyData());
         }
     }
@@ -348,17 +368,19 @@ internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpd
         Vector2 position,
         bool scale,
         ushort animationClipId
-    ) {
-        lock (Lock) {
-            CurrentUpdatePacket.SetSendingPacketData(
-                ServerUpdatePacketId.PlayerEnterScene,
-                new ServerPlayerEnterScene {
-                    NewSceneName = sceneName,
-                    Position = position,
-                    Scale = scale,
-                    AnimationClipId = animationClipId
-                }
-            );
+    )
+    {
+        var enterSceneData = new ServerPlayerEnterScene
+        {
+            NewSceneName = sceneName,
+            Position = position,
+            Scale = scale,
+            AnimationClipId = animationClipId
+        };
+
+        lock (Lock)
+        {
+            CurrentUpdatePacket.SetSendingPacketData(ServerUpdatePacketId.PlayerEnterScene, enterSceneData);
         }
     }
 
@@ -366,22 +388,23 @@ internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpd
     /// Set that the player has left the given scene in the current packet.
     /// </summary>
     /// <param name="sceneName">The name of the scene that the player left.</param>
-    public void SetLeftScene(string sceneName) {
-        lock (Lock) {
-            CurrentUpdatePacket.SetSendingPacketData(
-                ServerUpdatePacketId.PlayerLeaveScene, 
-                new ServerPlayerLeaveScene {
-                    SceneName = sceneName
-                }
-            );
+    public void SetLeftScene(string sceneName)
+    {
+        var leaveSceneData = new ServerPlayerLeaveScene { SceneName = sceneName };
+
+        lock (Lock)
+        {
+            CurrentUpdatePacket.SetSendingPacketData(ServerUpdatePacketId.PlayerLeaveScene, leaveSceneData);
         }
     }
 
     /// <summary>
     /// Set that the player has died in the current packet.
     /// </summary>
-    public void SetDeath() {
-        lock (Lock) {
+    public void SetDeath()
+    {
+        lock (Lock)
+        {
             CurrentUpdatePacket.SetSendingPacketData(ServerUpdatePacketId.PlayerDeath, new ReliableEmptyData());
         }
     }
@@ -390,11 +413,13 @@ internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpd
     /// Set a chat message in the current packet.
     /// </summary>
     /// <param name="message">The string message.</param>
-    public void SetChatMessage(string message) {
-        lock (Lock) {
-            CurrentUpdatePacket.SetSendingPacketData(ServerUpdatePacketId.ChatMessage, new ChatMessage {
-                Message = message
-            });
+    public void SetChatMessage(string message)
+    {
+        var chatMessage = new ChatMessage { Message = message };
+
+        lock (Lock)
+        {
+            CurrentUpdatePacket.SetSendingPacketData(ServerUpdatePacketId.ChatMessage, chatMessage);
         }
     }
 
@@ -403,18 +428,13 @@ internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpd
     /// </summary>
     /// <param name="index">The index of the save data entry.</param>
     /// <param name="value">The array of bytes that represents the changed value.</param>
-    public void SetSaveUpdate(ushort index, byte[] value) {
-        lock (Lock) {
-            PacketDataCollection<SaveUpdate> saveUpdateCollection;
-
-            if (CurrentUpdatePacket.TryGetSendingPacketData(ServerUpdatePacketId.SaveUpdate, out var packetData)) {
-                saveUpdateCollection = (PacketDataCollection<SaveUpdate>) packetData;
-            } else {
-                saveUpdateCollection = new PacketDataCollection<SaveUpdate>();
-                CurrentUpdatePacket.SetSendingPacketData(ServerUpdatePacketId.SaveUpdate, saveUpdateCollection);
-            }
-            
-            saveUpdateCollection.DataInstances.Add(new SaveUpdate {
+    public void SetSaveUpdate(ushort index, byte[] value)
+    {
+        lock (Lock)
+        {
+            var saveUpdateCollection = GetOrCreateCollection<SaveUpdate>(ServerUpdatePacketId.SaveUpdate);
+            saveUpdateCollection.DataInstances.Add(new SaveUpdate
+            {
                 SaveDataIndex = index,
                 Value = value
             });
@@ -425,11 +445,13 @@ internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpd
     /// Set server settings update.
     /// </summary>
     /// <param name="serverSettings">The server settings instance that contains the updated values.</param>
-    public void SetServerSettingsUpdate(ServerSettings serverSettings) {
-        lock (Lock) {
-            CurrentUpdatePacket.SetSendingPacketData(ServerUpdatePacketId.ServerSettings, new ServerSettingsUpdate {
-                ServerSettings = serverSettings
-            });
+    public void SetServerSettingsUpdate(ServerSettings serverSettings)
+    {
+        var settingsUpdate = new ServerSettingsUpdate { ServerSettings = serverSettings };
+
+        lock (Lock)
+        {
+            CurrentUpdatePacket.SetSendingPacketData(ServerUpdatePacketId.ServerSettings, settingsUpdate);
         }
     }
 
@@ -441,33 +463,40 @@ internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpd
     /// <param name="skinId">The ID of the skin that the player would like to switch to, or null, if the skin does not
     /// need to be updated.</param>
     /// <param name="crestType">The type of crest that the player has switched to.</param>
-    public void AddPlayerSettingUpdate(Team? team = null, byte? skinId = null, CrestType? crestType = null) {
-        if (!team.HasValue && !skinId.HasValue && !crestType.HasValue) {
+    public void AddPlayerSettingUpdate(Team? team = null, byte? skinId = null, CrestType? crestType = null)
+    {
+        if (!team.HasValue && !skinId.HasValue && !crestType.HasValue)
+        {
             return;
         }
 
-        lock (Lock) {
+        lock (Lock)
+        {
             if (!CurrentUpdatePacket.TryGetSendingPacketData(
                     ServerUpdatePacketId.PlayerSetting,
                     out var packetData
-                )) {
+                ))
+            {
                 packetData = new ServerPlayerSettingUpdate();
                 CurrentUpdatePacket.SetSendingPacketData(ServerUpdatePacketId.PlayerSetting, packetData);
             }
 
-            var playerSettingUpdate = (ServerPlayerSettingUpdate) packetData;
+            var playerSettingUpdate = (ServerPlayerSettingUpdate)packetData;
 
-            if (team.HasValue) {
+            if (team.HasValue)
+            {
                 playerSettingUpdate.UpdateTypes.Add(PlayerSettingUpdateType.Team);
                 playerSettingUpdate.Team = team.Value;
             }
 
-            if (skinId.HasValue) {
+            if (skinId.HasValue)
+            {
                 playerSettingUpdate.UpdateTypes.Add(PlayerSettingUpdateType.Skin);
                 playerSettingUpdate.SkinId = skinId.Value;
             }
 
-            if (crestType.HasValue) {
+            if (crestType.HasValue)
+            {
                 playerSettingUpdate.UpdateTypes.Add(PlayerSettingUpdateType.Crest);
                 playerSettingUpdate.CrestType = crestType.Value;
             }

@@ -7,7 +7,13 @@ namespace SSMP.Networking.Transport.UDP;
 /// <summary>
 /// UDP+DTLS implementation of <see cref="IEncryptedTransport"/> that wraps DtlsClient.
 /// </summary>
-internal class UdpEncryptedTransport : IEncryptedTransport {
+internal class UdpEncryptedTransport : IEncryptedTransport
+{
+    /// <summary>
+    /// Maximum UDP packet size to avoid fragmentation.
+    /// </summary>
+    private const int UdpMaxPacketSize = 1200;
+
     /// <summary>
     /// The underlying DTLS client.
     /// </summary>
@@ -19,34 +25,49 @@ internal class UdpEncryptedTransport : IEncryptedTransport {
     /// <inheritdoc />
     public bool RequiresCongestionManagement => true;
 
-    public UdpEncryptedTransport() {
+    /// <inheritdoc />
+    public bool RequiresReliability => true;
+
+    /// <inheritdoc />
+    public bool RequiresSequencing => true;
+
+    /// <inheritdoc />
+    public int MaxPacketSize => UdpMaxPacketSize;
+
+    public UdpEncryptedTransport()
+    {
         _dtlsClient = new DtlsClient();
         _dtlsClient.DataReceivedEvent += OnDataReceived;
     }
 
     /// <inheritdoc />
-    public void Connect(string address, int port) {
+    public void Connect(string address, int port)
+    {
         _dtlsClient.Connect(address, port);
     }
 
     /// <inheritdoc />
-    public void Send(byte[] buffer, int offset, int length) {
-        if (_dtlsClient.DtlsTransport == null) {
+    public void Send(byte[] buffer, int offset, int length)
+    {
+        if (_dtlsClient.DtlsTransport == null)
+        {
             throw new InvalidOperationException("Not connected");
         }
 
         _dtlsClient.DtlsTransport.Send(buffer, offset, length);
     }
-    
+
     /// <inheritdoc />
-    public void Disconnect() {
+    public void Disconnect()
+    {
         _dtlsClient.Disconnect();
     }
 
     /// <summary>
     /// Raises the <see cref="DataReceivedEvent"/> with the given data.
     /// </summary>
-    private void OnDataReceived(byte[] data, int length) {
+    private void OnDataReceived(byte[] data, int length)
+    {
         DataReceivedEvent?.Invoke(data, length);
     }
 }

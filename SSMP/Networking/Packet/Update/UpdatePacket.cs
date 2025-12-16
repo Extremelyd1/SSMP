@@ -24,25 +24,18 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
     /// An array containing booleans that indicate whether sequence number (Ack - x) is also acknowledged
     /// for the x-th value in the array.
     /// </summary>
-    public bool[] AckField { get; private set; }
-    
+    public bool[] AckField { get; private set; } = new bool[ConnectionManager.AckSize];
+
     /// <summary>
     /// Resend packet data indexed by sequence number it originates from.
     /// </summary>
-    protected readonly Dictionary<ushort, Dictionary<TPacketId, IPacketData>> ResendPacketData;
+    private readonly Dictionary<ushort, Dictionary<TPacketId, IPacketData>> _resendPacketData = new();
     
     /// <summary>
     /// Resend addon packet data indexed by sequence number it originates from.
     /// </summary>
-    protected readonly Dictionary<ushort, Dictionary<byte, AddonPacketData>> ResendAddonPacketData;
-    
-    protected UpdatePacket() {
-        AckField = new bool[UpdateManager.AckSize];
-        
-        ResendPacketData = new Dictionary<ushort, Dictionary<TPacketId, IPacketData>>();
-        ResendAddonPacketData = new Dictionary<ushort, Dictionary<byte, AddonPacketData>>();
-    }
-    
+    private readonly Dictionary<ushort, Dictionary<byte, AddonPacketData>> _resendAddonPacketData = new();
+
     /// <summary>
     /// Write header info into the given packet (sequence number, acknowledgement number and ack field).
     /// </summary>
@@ -53,7 +46,7 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
 
         ulong ackFieldInt = 0;
         ulong currentFieldValue = 1;
-        for (var i = 0; i < UpdateManager.AckSize; i++) {
+        for (var i = 0; i < ConnectionManager.AckSize; i++) {
             if (AckField[i]) {
                 ackFieldInt |= currentFieldValue;
             }
@@ -73,11 +66,11 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
         Ack = packet.ReadUShort();
 
         // Initialize the AckField array
-        AckField = new bool[UpdateManager.AckSize];
+        AckField = new bool[ConnectionManager.AckSize];
 
         var ackFieldInt = packet.ReadULong();
         ulong currentFieldValue = 1;
-        for (var i = 0; i < UpdateManager.AckSize; i++) {
+        for (var i = 0; i < ConnectionManager.AckSize; i++) {
             AckField[i] = (ackFieldInt & currentFieldValue) != 0;
 
             currentFieldValue *= 2;
@@ -91,8 +84,8 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
         base.CreatePacket(packet);
         
         // Put the length of the resend data as an ushort in the packet
-        var resendLength = (ushort) ResendPacketData.Count;
-        if (ResendPacketData.Count > ushort.MaxValue) {
+        var resendLength = (ushort) _resendPacketData.Count;
+        if (_resendPacketData.Count > ushort.MaxValue) {
             resendLength = ushort.MaxValue;
 
             Logger.Error("Length of resend packet data dictionary does not fit in ushort");
@@ -101,7 +94,7 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
         packet.Write(resendLength);
 
         // Add each entry of lost data to resend to the packet
-        foreach (var seqPacketDataPair in ResendPacketData) {
+        foreach (var seqPacketDataPair in _resendPacketData) {
             var seq = seqPacketDataPair.Key;
             var packetData = seqPacketDataPair.Value;
 
@@ -119,8 +112,8 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
         }
         
         // Put the length of the addon resend data as an ushort in the packet
-        resendLength = (ushort) ResendAddonPacketData.Count;
-        if (ResendAddonPacketData.Count > ushort.MaxValue) {
+        resendLength = (ushort) _resendAddonPacketData.Count;
+        if (_resendAddonPacketData.Count > ushort.MaxValue) {
             resendLength = ushort.MaxValue;
 
             Logger.Error("Length of addon resend packet data dictionary does not fit in ushort");
@@ -129,7 +122,7 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
         packet.Write(resendLength);
 
         // Add each entry of lost addon data to resend to the packet
-        foreach (var seqAddonDictPair in ResendAddonPacketData) {
+        foreach (var seqAddonDictPair in _resendAddonPacketData) {
             var seq = seqAddonDictPair.Key;
             var addonDataDict = seqAddonDictPair.Value;
 
@@ -178,7 +171,7 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
                 ReadPacketData(packet, packetData);
 
                 // Input the data into the resend dictionary keyed by its sequence number
-                ResendPacketData[seq] = packetData;
+                _resendPacketData[seq] = packetData;
             }
 
             // Read the length of the addon resend data
@@ -193,7 +186,7 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
                 ReadAddonDataDict(packet, addonDataDict);
 
                 // Input the dictionary into the resend dictionary keyed by its sequence number
-                ResendAddonPacketData[seq] = addonDataDict;
+                _resendAddonPacketData[seq] = addonDataDict;
             }
         } catch (Exception e) {
             Logger.Debug($"Exception while reading update packet resend data:\n{e}");
@@ -212,7 +205,7 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
         var lostPacketData = lostPacket.GetPacketData();
 
         // Finally, put the packet data dictionary in the resend dictionary keyed by its sequence number
-        ResendPacketData[lostPacket.Sequence] = CopyReliableDataDict(
+        _resendPacketData[lostPacket.Sequence] = CopyReliableDataDict(
             lostPacketData,
             t => NormalPacketData.ContainsKey(t)
         );
@@ -239,7 +232,7 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
         }
 
         // Put the addon data dictionary in the resend dictionary keyed by its sequence number
-        ResendAddonPacketData[lostPacket.Sequence] = toResendAddonData;
+        _resendAddonPacketData[lostPacket.Sequence] = toResendAddonData;
     }
     
     /// <summary>
@@ -307,12 +300,12 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
         }
         
         // Iteratively add the resent packet data, but make sure to merge it with existing data
-        foreach (var resentPacketData in ResendPacketData.Values) {
+        foreach (var resentPacketData in _resendPacketData.Values) {
             AddResendData(resentPacketData, CachedAllPacketData!);
         }
         
         // Iteratively add the resent addon data, but make sure to merge it with existing data
-        foreach (var resentAddonData in ResendAddonPacketData.Values) {
+        foreach (var resentAddonData in _resendAddonPacketData.Values) {
             foreach (var addonIdDataPair in resentAddonData) {
                 var addonId = addonIdDataPair.Key;
                 var addonPacketData = addonIdDataPair.Value;
@@ -337,18 +330,18 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
         // For each key in the resend dictionary, we check whether it is contained in the
         // queue of sequence numbers that we already received. If so, we remove it from the dictionary
         // because it is duplicate data that we already handled
-        foreach (var resendSequence in new List<ushort>(ResendPacketData.Keys)) {
+        foreach (var resendSequence in new List<ushort>(_resendPacketData.Keys)) {
             if (receivedSequenceNumbers.Contains(resendSequence)) {
                 // Logger.Info("Dropping resent data due to duplication");
-                ResendPacketData.Remove(resendSequence);
+                _resendPacketData.Remove(resendSequence);
             }
         }
 
         // Do the same for addon data
-        foreach (var resendSequence in new List<ushort>(ResendAddonPacketData.Keys)) {
+        foreach (var resendSequence in new List<ushort>(_resendAddonPacketData.Keys)) {
             if (receivedSequenceNumbers.Contains(resendSequence)) {
                 // Logger.Info("Dropping resent data due to duplication");
-                ResendAddonPacketData.Remove(resendSequence);
+                _resendAddonPacketData.Remove(resendSequence);
             }
         }
     }

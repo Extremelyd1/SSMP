@@ -12,7 +12,8 @@ namespace SSMP.Networking.Transport.SteamP2P;
 /// Steam P2P implementation of <see cref="IEncryptedTransportServer"/>.
 /// Manages multiple client connections via Steam P2P networking.
 /// </summary>
-internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
+internal class SteamEncryptedTransportServer : IEncryptedTransportServer
+{
     /// <summary>
     /// Maximum Steam P2P packet size.
     /// </summary>
@@ -62,12 +63,15 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
     /// </summary>
     /// <param name="port">Port parameter (unused for Steam P2P)</param>
     /// <exception cref="InvalidOperationException">Thrown if Steam is not initialized.</exception>
-    public void Start(int port) {
-        if (!SteamManager.IsInitialized) {
+    public void Start(int port)
+    {
+        if (!SteamManager.IsInitialized)
+        {
             throw new InvalidOperationException("Cannot start Steam P2P server: Steam is not initialized");
         }
 
-        if (_isRunning) {
+        if (_isRunning)
+        {
             Logger.Warn("Steam P2P server already running");
             return;
         }
@@ -80,7 +84,7 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
 
         Logger.Info("Steam P2P: Server started, listening for connections");
 
-        SteamLoopbackChannel.RegisterServer(this);
+        SteamLoopbackChannel.GetOrCreate().RegisterServer(this);
 
         _receiveTokenSource = new CancellationTokenSource();
         _receiveThread = new Thread(ReceiveLoop) { IsBackground = true };
@@ -88,7 +92,8 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
     }
 
     /// <inheritdoc />
-    public void Stop() {
+    public void Stop()
+    {
         if (!_isRunning) return;
 
         Logger.Info("Steam P2P: Stopping server");
@@ -97,8 +102,10 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
 
         _receiveTokenSource?.Cancel();
 
-        if (_receiveThread != null) {
-            if (!_receiveThread.Join(5000)) {
+        if (_receiveThread != null)
+        {
+            if (!_receiveThread.Join(5000))
+            {
                 Logger.Warn("Steam P2P Server: Receive thread did not terminate within 5 seconds");
             }
 
@@ -108,11 +115,13 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
         _receiveTokenSource?.Dispose();
         _receiveTokenSource = null;
 
-        foreach (var client in _clients.Values) {
+        foreach (var client in _clients.Values)
+        {
             DisconnectClient(client);
         }
 
-        SteamLoopbackChannel.UnregisterServer();
+        SteamLoopbackChannel.GetOrCreate().UnregisterServer();
+        SteamLoopbackChannel.ReleaseIfEmpty();
 
         _clients.Clear();
         _sessionRequestCallback?.Dispose();
@@ -122,13 +131,15 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
     }
 
     /// <inheritdoc />
-    public void DisconnectClient(IEncryptedTransportClient client) {
+    public void DisconnectClient(IEncryptedTransportClient client)
+    {
         if (client is not SteamEncryptedTransportClient steamClient) return;
-        
+
         var steamId = new CSteamID(steamClient.SteamId);
         if (!_clients.TryRemove(steamId, out _)) return;
 
-        if (SteamManager.IsInitialized) {
+        if (SteamManager.IsInitialized)
+        {
             SteamNetworking.CloseP2PSessionWithUser(steamId);
         }
 
@@ -139,13 +150,15 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
     /// Callback handler for P2P session requests.
     /// Automatically accepts all requests and creates client connections.
     /// </summary>
-    private void OnP2PSessionRequest(P2PSessionRequest_t request) {
+    private void OnP2PSessionRequest(P2PSessionRequest_t request)
+    {
         if (!_isRunning) return;
 
         var remoteSteamId = request.m_steamIDRemote;
         Logger.Info($"Steam P2P: Received session request from {remoteSteamId}");
 
-        if (!SteamNetworking.AcceptP2PSessionWithUser(remoteSteamId)) {
+        if (!SteamNetworking.AcceptP2PSessionWithUser(remoteSteamId))
+        {
             Logger.Warn($"Steam P2P: Failed to accept session from {remoteSteamId}");
             return;
         }
@@ -164,29 +177,37 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
     /// Continuously polls for incoming P2P packets.
     /// Steam API limitation: no blocking receive or callback available for server-side, must poll.
     /// </summary>
-    private void ReceiveLoop() {
+    private void ReceiveLoop()
+    {
         // Make token a local variable in case _receiveTokenSource is re-initialized
         var token = _receiveTokenSource;
         if (token == null) return;
 
-        while (_isRunning && !token.IsCancellationRequested) {
-            try {
+        while (_isRunning && !token.IsCancellationRequested)
+        {
+            try
+            {
                 // Exit cleanly if Steam shuts down (e.g., during forceful game closure)
-                if (!SteamManager.IsInitialized) {
+                if (!SteamManager.IsInitialized)
+                {
                     Logger.Info("Steam P2P Server: Steam shut down, exiting receive loop");
                     break;
                 }
-                
+
                 ProcessIncomingPackets();
 
                 // Steam API does not provide a blocking receive or callback for P2P packets,
                 // so we must poll. Sleep interval is tuned to achieve ~58Hz polling rate.
                 Thread.Sleep(TimeSpan.FromMilliseconds(PollIntervalMS));
-            } catch (InvalidOperationException ex) when (ex.Message.Contains("Steamworks is not initialized")) {
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("Steamworks is not initialized"))
+            {
                 // Steam shut down during operation - exit gracefully
                 Logger.Info("Steam P2P Server: Steamworks shut down during receive, exiting loop");
                 break;
-            } catch (Exception e) {
+            }
+            catch (Exception e)
+            {
                 Logger.Error($"Steam P2P: Error in server receive loop: {e}");
             }
         }
@@ -197,24 +218,30 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
     /// <summary>
     /// Processes available P2P packets.
     /// </summary>
-    private void ProcessIncomingPackets() {
+    private void ProcessIncomingPackets()
+    {
         if (!_isRunning || !SteamManager.IsInitialized) return;
 
-        while (SteamNetworking.IsP2PPacketAvailable(out var packetSize)) {
+        while (SteamNetworking.IsP2PPacketAvailable(out var packetSize))
+        {
             if (!SteamNetworking.ReadP2PPacket(
-                _receiveBuffer,
-                MaxPacketSize,
-                out packetSize,
-                out var remoteSteamId
-            )) {
+                    _receiveBuffer,
+                    MaxPacketSize,
+                    out packetSize,
+                    out var remoteSteamId
+                ))
+            {
                 continue;
             }
 
-            if (_clients.TryGetValue(remoteSteamId, out var client)) {
+            if (_clients.TryGetValue(remoteSteamId, out var client))
+            {
                 var data = new byte[packetSize];
-                Array.Copy(_receiveBuffer, 0, data, 0, (int) packetSize);
-                client.RaiseDataReceived(data, (int) packetSize);
-            } else {
+                Array.Copy(_receiveBuffer, 0, data, 0, (int)packetSize);
+                client.RaiseDataReceived(data, (int)packetSize);
+            }
+            else
+            {
                 Logger.Warn($"Steam P2P: Received packet from unknown client {remoteSteamId}");
             }
         }
@@ -223,13 +250,16 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
     /// <summary>
     /// Receives a packet from the loopback channel.
     /// </summary>
-    public void ReceiveLoopbackPacket(byte[] data, int length) {
+    public void ReceiveLoopbackPacket(byte[] data, int length)
+    {
         if (!_isRunning || !SteamManager.IsInitialized) return;
 
-        try {
+        try
+        {
             var steamId = SteamUser.GetSteamID();
 
-            if (!_clients.TryGetValue(steamId, out var client)) {
+            if (!_clients.TryGetValue(steamId, out var client))
+            {
                 client = new SteamEncryptedTransportClient(steamId.m_SteamID);
                 _clients[steamId] = client;
                 ClientConnectedEvent?.Invoke(client);
@@ -237,7 +267,9 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
             }
 
             client.RaiseDataReceived(data, length);
-        } catch (InvalidOperationException) {
+        }
+        catch (InvalidOperationException)
+        {
             // Steam shut down between check and API call - ignore silently
         }
     }
