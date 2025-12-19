@@ -10,9 +10,6 @@
         <TargetFramework>netstandard2.1</TargetFramework>
         <LangVersion>latest</LangVersion>
         <Nullable>enable</Nullable>
-        <RestoreAdditionalProjectSources>
-            https://nuget.bepinex.dev/v3/index.json
-        </RestoreAdditionalProjectSources>
         <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
         <!-- CI environment variable is automatically set by GitHub actions -->
         <RestoreLockedMode Condition="'$(CI)' == 'true'">True</RestoreLockedMode>
