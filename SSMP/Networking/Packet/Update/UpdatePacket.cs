@@ -30,7 +30,7 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
     /// Resend packet data indexed by sequence number it originates from.
     /// </summary>
     private readonly Dictionary<ushort, Dictionary<TPacketId, IPacketData>> _resendPacketData = new();
-    
+
     /// <summary>
     /// Resend addon packet data indexed by sequence number it originates from.
     /// </summary>
@@ -80,9 +80,9 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
     /// <inheritdoc />
     public override void CreatePacket(Packet packet) {
         WriteHeaders(packet);
-        
+
         base.CreatePacket(packet);
-        
+
         // Put the length of the resend data as an ushort in the packet
         var resendLength = (ushort) _resendPacketData.Count;
         if (_resendPacketData.Count > ushort.MaxValue) {
@@ -110,7 +110,7 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
             WritePacketData(packet, packetData);
             ContainsReliableData = true;
         }
-        
+
         // Put the length of the addon resend data as an ushort in the packet
         resendLength = (ushort) _resendAddonPacketData.Count;
         if (_resendAddonPacketData.Count > ushort.MaxValue) {
@@ -139,7 +139,7 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
             WriteAddonDataDict(packet, addonDataDict);
             ContainsReliableData = true;
         }
-        
+
         packet.WriteLength();
     }
 
@@ -195,7 +195,7 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
 
         return true;
     }
-    
+
     /// <summary>
     /// Set the reliable packet data contained in the lost packet as resend data in this one.
     /// </summary>
@@ -226,7 +226,8 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
                 addonPacketData.PacketData,
                 rawPacketId =>
                     AddonPacketData.TryGetValue(addonId, out var existingAddonData)
-                    && existingAddonData.PacketData.ContainsKey(rawPacketId));
+                    && existingAddonData.PacketData.ContainsKey(rawPacketId)
+            );
 
             toResendAddonData[addonId] = newAddonPacketData;
         }
@@ -234,7 +235,7 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
         // Put the addon data dictionary in the resend dictionary keyed by its sequence number
         _resendAddonPacketData[lostPacket.Sequence] = toResendAddonData;
     }
-    
+
     /// <summary>
     /// Copy all reliable data in the given dictionary of lost packet data into a new dictionary.
     /// </summary>
@@ -274,7 +275,7 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
     /// <inheritdoc />
     protected override void CacheAllPacketData() {
         base.CacheAllPacketData();
-        
+
         void AddResendData<TKey>(
             Dictionary<TKey, IPacketData> dataDict,
             Dictionary<TKey, IPacketData> cachedData
@@ -298,12 +299,12 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
                 }
             }
         }
-        
+
         // Iteratively add the resent packet data, but make sure to merge it with existing data
         foreach (var resentPacketData in _resendPacketData.Values) {
             AddResendData(resentPacketData, CachedAllPacketData!);
         }
-        
+
         // Iteratively add the resent addon data, but make sure to merge it with existing data
         foreach (var resentAddonData in _resendAddonPacketData.Values) {
             foreach (var addonIdDataPair in resentAddonData) {
@@ -317,10 +318,10 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
                 }
             }
         }
-        
+
         IsAllPacketDataCached = true;
     }
-    
+
     /// <summary>
     /// Drops resend data that is duplicate, i.e. that we already received in an earlier packet.
     /// </summary>

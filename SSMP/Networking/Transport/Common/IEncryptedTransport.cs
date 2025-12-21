@@ -6,8 +6,7 @@ namespace SSMP.Networking.Transport.Common;
 /// Base interface defining transport capabilities and wire semantics.
 /// Both client and server transports share these properties.
 /// </summary>
-internal interface IEncryptedTransport
-{
+internal interface IEncryptedTransport {
     /// <summary>
     /// Event raised when data is received from the remote peer.
     /// </summary>

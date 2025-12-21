@@ -14,8 +14,7 @@ namespace SSMP.Networking;
 /// <typeparam name="TPacketId">The type of the packet ID.</typeparam>
 internal class CongestionManager<TOutgoing, TPacketId>
     where TOutgoing : UpdatePacket<TPacketId>, new()
-    where TPacketId : Enum
-{
+    where TPacketId : Enum {
     /// <summary>
     /// Number of milliseconds between sending packets if the channel is clear.
     /// </summary>
@@ -90,8 +89,7 @@ internal class CongestionManager<TOutgoing, TPacketId>
     /// </summary>
     /// <param name="updateManager">The update manager to adjust send rates for.</param>
     /// <param name="rttTracker">The RTT tracker for RTT measurements.</param>
-    public CongestionManager(UpdateManager<TOutgoing, TPacketId> updateManager, RttTracker rttTracker)
-    {
+    public CongestionManager(UpdateManager<TOutgoing, TPacketId> updateManager, RttTracker rttTracker) {
         _updateManager = updateManager;
         _rttTracker = rttTracker;
 
@@ -104,8 +102,7 @@ internal class CongestionManager<TOutgoing, TPacketId>
     /// <summary>
     /// Called when a packet is received to adjust send rates based on current RTT.
     /// </summary>
-    public void OnReceivePacket()
-    {
+    public void OnReceivePacket() {
         AdjustSendRateIfNeeded();
     }
 
@@ -113,14 +110,10 @@ internal class CongestionManager<TOutgoing, TPacketId>
     /// Adjusts send rate between high and low based on current average RTT and congestion state.
     /// Implements adaptive thresholds to prevent rapid switching.
     /// </summary>
-    private void AdjustSendRateIfNeeded()
-    {
-        if (_isChannelCongested)
-        {
+    private void AdjustSendRateIfNeeded() {
+        if (_isChannelCongested) {
             HandleCongestedState();
-        }
-        else
-        {
+        } else {
             HandleNonCongestedState();
         }
     }
@@ -129,24 +122,18 @@ internal class CongestionManager<TOutgoing, TPacketId>
     /// Handles logic when channel is currently congested.
     /// Monitors if RTT drops below threshold long enough to switch back to high send rate.
     /// </summary>
-    private void HandleCongestedState()
-    {
+    private void HandleCongestedState() {
         var currentRtt = _rttTracker.AverageRtt;
 
-        if (_belowThresholdStopwatch.IsRunning)
-        {
+        if (_belowThresholdStopwatch.IsRunning) {
             // If our average is above the threshold again, we reset the stopwatch
-            if (currentRtt > CongestionThreshold)
-            {
+            if (currentRtt > CongestionThreshold) {
                 _belowThresholdStopwatch.Reset();
             }
-        }
-        else
-        {
+        } else {
             // If the stopwatch wasn't running, and we are below the threshold
             // we can start the stopwatch again
-            if (currentRtt < CongestionThreshold)
-            {
+            if (currentRtt < CongestionThreshold) {
                 _belowThresholdStopwatch.Start();
             }
         }
@@ -154,8 +141,7 @@ internal class CongestionManager<TOutgoing, TPacketId>
         // If the average RTT was below the threshold for a certain amount of time,
         // we can go back to high send rates
         if (_belowThresholdStopwatch.IsRunning
-            && _belowThresholdStopwatch.ElapsedMilliseconds > _currentSwitchTimeThreshold)
-        {
+            && _belowThresholdStopwatch.ElapsedMilliseconds > _currentSwitchTimeThreshold) {
             SwitchToHighSendRate();
         }
     }
@@ -164,17 +150,14 @@ internal class CongestionManager<TOutgoing, TPacketId>
     /// Handles logic when channel is not congested.
     /// Monitors if RTT exceeds threshold to switch to low send rate, and adjusts switch thresholds.
     /// </summary>
-    private void HandleNonCongestedState()
-    {
+    private void HandleNonCongestedState() {
         // Check whether we have spent enough time in this mode to decrease the switch threshold
-        if (_currentCongestionStopwatch.ElapsedMilliseconds > TimeSpentCongestionThreshold)
-        {
+        if (_currentCongestionStopwatch.ElapsedMilliseconds > TimeSpentCongestionThreshold) {
             DecreaseSwitchThreshold();
         }
 
         // If our average round trip time exceeds the threshold, switch to congestion values
-        if (_rttTracker.AverageRtt > CongestionThreshold)
-        {
+        if (_rttTracker.AverageRtt > CongestionThreshold) {
             SwitchToLowSendRate();
         }
     }
@@ -182,8 +165,7 @@ internal class CongestionManager<TOutgoing, TPacketId>
     /// <summary>
     /// Switches from congested to non-congested mode with high send rate.
     /// </summary>
-    private void SwitchToHighSendRate()
-    {
+    private void SwitchToHighSendRate() {
         Logger.Debug("Switched to non-congested send rates");
 
         _isChannelCongested = false;
@@ -200,8 +182,7 @@ internal class CongestionManager<TOutgoing, TPacketId>
     /// Switches from non-congested to congested mode with low send rate.
     /// Increases switch threshold if we didn't spend enough time in high send rate.
     /// </summary>
-    private void SwitchToLowSendRate()
-    {
+    private void SwitchToLowSendRate() {
         Logger.Debug("Switched to congested send rates");
 
         _isChannelCongested = true;
@@ -209,8 +190,7 @@ internal class CongestionManager<TOutgoing, TPacketId>
 
         // If we were too short in the High send rates before switching again, we
         // double the threshold for switching
-        if (!_spentTimeThreshold)
-        {
+        if (!_spentTimeThreshold) {
             IncreaseSwitchThreshold();
         }
 
@@ -222,8 +202,7 @@ internal class CongestionManager<TOutgoing, TPacketId>
     /// Decreases the switch threshold when stable time is spent in non-congested mode.
     /// Helps the system recover faster from temporary congestion.
     /// </summary>
-    private void DecreaseSwitchThreshold()
-    {
+    private void DecreaseSwitchThreshold() {
         // We spent at least the threshold in non-congestion mode
         _spentTimeThreshold = true;
 
@@ -236,11 +215,11 @@ internal class CongestionManager<TOutgoing, TPacketId>
         );
 
         Logger.Debug(
-            $"Proper time spent in non-congested mode, halved switch threshold to: {_currentSwitchTimeThreshold}");
+            $"Proper time spent in non-congested mode, halved switch threshold to: {_currentSwitchTimeThreshold}"
+        );
 
         // After we reach the minimum threshold, there's no reason to keep the stopwatch going
-        if (_currentSwitchTimeThreshold == MinimumSwitchThreshold)
-        {
+        if (_currentSwitchTimeThreshold == MinimumSwitchThreshold) {
             _currentCongestionStopwatch.Reset();
         }
     }
@@ -249,8 +228,7 @@ internal class CongestionManager<TOutgoing, TPacketId>
     /// Increases the switch threshold when switching too quickly between modes.
     /// Prevents rapid oscillation between send rates.
     /// </summary>
-    private void IncreaseSwitchThreshold()
-    {
+    private void IncreaseSwitchThreshold() {
         // Cap it at a maximum
         _currentSwitchTimeThreshold = System.Math.Min(
             _currentSwitchTimeThreshold * 2,
@@ -258,6 +236,7 @@ internal class CongestionManager<TOutgoing, TPacketId>
         );
 
         Logger.Debug(
-            $"Too little time spent in non-congested mode, doubled switch threshold to: {_currentSwitchTimeThreshold}");
+            $"Too little time spent in non-congested mode, doubled switch threshold to: {_currentSwitchTimeThreshold}"
+        );
     }
 }

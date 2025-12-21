@@ -16,8 +16,7 @@ namespace SSMP.Networking;
 /// </summary>
 internal abstract class UpdateManager<TOutgoing, TPacketId>
     where TOutgoing : UpdatePacket<TPacketId>, new()
-    where TPacketId : Enum
-{
+    where TPacketId : Enum {
     /// <summary>
     /// The time in milliseconds to disconnect after not receiving any updates.
     /// </summary>
@@ -138,10 +137,8 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// Gets or sets the transport for client-side communication.
     /// Captures transport capabilities when set.
     /// </summary>
-    public IEncryptedTransport? Transport
-    {
-        set
-        {
+    public IEncryptedTransport? Transport {
+        set {
             _transportSender = value;
             if (value == null) return;
 
@@ -155,8 +152,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// Note: Server-side clients don't expose capability flags directly,
     /// so we maintain default values (true for all capabilities).
     /// </summary>
-    public IEncryptedTransportClient? TransportClient
-    {
+    public IEncryptedTransportClient? TransportClient {
         set => _transportSender = value;
     }
 
@@ -169,7 +165,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// Moving average of round trip time (RTT) between sending and receiving a packet.
     /// Uses RttTracker when available, falls back to CongestionManager, returns 0 if neither.
     /// </summary>
-    public int AverageRtt => (int)System.Math.Round(_rttTracker.AverageRtt);
+    public int AverageRtt => (int) System.Math.Round(_rttTracker.AverageRtt);
 
     /// <summary>
     /// Event that is called when the client times out.
@@ -179,23 +175,20 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// <summary>
     /// Construct the update manager with a UDP socket.
     /// </summary>
-    protected UpdateManager()
-    {
+    protected UpdateManager() {
         _rttTracker = new RttTracker();
         _reliabilityManager = new ReliabilityManager<TOutgoing, TPacketId>(this, _rttTracker);
         _congestionManager = new CongestionManager<TOutgoing, TPacketId>(this, _rttTracker);
         _receivedQueue = new ConcurrentFixedSizeQueue<ushort>(ReceiveQueueSize);
         _currentPacket = new TOutgoing();
 
-        _sendTimer = new Timer
-        {
+        _sendTimer = new Timer {
             AutoReset = true,
             Interval = CurrentSendRate
         };
         _sendTimer.Elapsed += OnSendTimerElapsed;
 
-        _heartBeatTimer = new Timer
-        {
+        _heartBeatTimer = new Timer {
             AutoReset = false,
             Interval = ConnectionTimeout
         };
@@ -206,8 +199,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// Start the update manager. This will start the send and heartbeat timers, which will respectively trigger
     /// sending update packets and trigger on connection timing out.
     /// </summary>
-    public void StartUpdates()
-    {
+    public void StartUpdates() {
         _lastSendRate = CurrentSendRate;
         _sendTimer.Start();
         _heartBeatTimer.Start();
@@ -217,10 +209,8 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// <summary>
     /// Stop sending the periodic UDP update packets after sending the current one.
     /// </summary>
-    public void StopUpdates()
-    {
-        if (!_isUpdating)
-        {
+    public void StopUpdates() {
+        if (!_isUpdating) {
             return;
         }
 
@@ -242,15 +232,13 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// <typeparam name="TOtherPacketId">The packet ID type of the incoming packet.</typeparam>
     public void OnReceivePacket<TIncoming, TOtherPacketId>(TIncoming packet)
         where TIncoming : UpdatePacket<TOtherPacketId>
-        where TOtherPacketId : Enum
-    {
+        where TOtherPacketId : Enum {
         // Reset the connection timeout timer
         _heartBeatTimer.Stop();
         _heartBeatTimer.Start();
 
         // Transports with built-in sequencing (e.g., Steam P2P) bypass app-level sequence/ACK/congestion logic
-        if (!_requiresSequencing)
-        {
+        if (!_requiresSequencing) {
             return;
         }
 
@@ -260,11 +248,9 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
 
         // Process ACK field efficiently with cached reference
         var ackField = packet.AckField;
-        for (ushort i = 0; i < ConnectionManager.AckSize; i++)
-        {
-            if (ackField[i])
-            {
-                var sequenceToCheck = (ushort)(packet.Ack - i - 1);
+        for (ushort i = 0; i < ConnectionManager.AckSize; i++) {
+            if (ackField[i]) {
+                var sequenceToCheck = (ushort) (packet.Ack - i - 1);
                 NotifyAckReceived(sequenceToCheck);
             }
         }
@@ -276,8 +262,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
 
         packet.DropDuplicateResendData(_receivedQueue.GetCopy());
 
-        if (IsSequenceGreaterThan(sequence, _remoteSequence))
-        {
+        if (IsSequenceGreaterThan(sequence, _remoteSequence)) {
             _remoteSequence = sequence;
         }
     }
@@ -288,27 +273,21 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// For Steam: bypasses reliability features and sends packet directly.
     /// Automatically fragments packets that exceed MTU size.
     /// </summary>
-    private void CreateAndSendPacket()
-    {
+    private void CreateAndSendPacket() {
         var rawPacket = new Packet.Packet();
         TOutgoing packetToSend;
 
-        lock (_lock)
-        {
+        lock (_lock) {
             // Transports requiring sequencing: Configure sequence and ACK data
-            if (_requiresSequencing)
-            {
+            if (_requiresSequencing) {
                 _currentPacket.Sequence = _localSequence;
                 _currentPacket.Ack = _remoteSequence;
                 PopulateAckField();
             }
 
-            try
-            {
+            try {
                 _currentPacket.CreatePacket(rawPacket);
-            }
-            catch (Exception e)
-            {
+            } catch (Exception e) {
                 Logger.Error($"Failed to create packet: {e}");
                 return;
             }
@@ -320,11 +299,9 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         }
 
         // Transports requiring sequencing: Track for RTT, reliability
-        if (_requiresSequencing)
-        {
+        if (_requiresSequencing) {
             _rttTracker.OnSendPacket(_localSequence);
-            if (_requiresReliability)
-            {
+            if (_requiresReliability) {
                 _reliabilityManager.OnSendPacket(_localSequence, packetToSend);
             }
 
@@ -339,14 +316,12 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// Each bit indicates whether a packet with that sequence number was received.
     /// Only used for UDP/HolePunch transports.
     /// </summary>
-    private void PopulateAckField()
-    {
+    private void PopulateAckField() {
         var receivedQueue = _receivedQueue.GetCopy();
         var ackField = _currentPacket.AckField;
 
-        for (ushort i = 0; i < ConnectionManager.AckSize; i++)
-        {
-            var pastSequence = (ushort)(_remoteSequence - i - 1);
+        for (ushort i = 0; i < ConnectionManager.AckSize; i++) {
+            var pastSequence = (ushort) (_remoteSequence - i - 1);
             ackField[i] = receivedQueue.Contains(pastSequence);
         }
     }
@@ -357,10 +332,8 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// </summary>
     /// <param name="packet">The packet to send, which may be fragmented if too large.</param>
     /// <param name="isReliable">Whether the packet data needs to be delivered reliably.</param>
-    private void SendWithFragmentation(Packet.Packet packet, bool isReliable)
-    {
-        if (packet.Length <= PacketMtu)
-        {
+    private void SendWithFragmentation(Packet.Packet packet, bool isReliable) {
+        if (packet.Length <= PacketMtu) {
             SendPacket(packet, isReliable);
             return;
         }
@@ -369,8 +342,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         var remaining = data.Length;
         var offset = 0;
 
-        while (remaining > 0)
-        {
+        while (remaining > 0) {
             var chunkSize = System.Math.Min(remaining, PacketMtu);
             var fragment = new byte[chunkSize];
 
@@ -393,8 +365,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// Notifies RTT tracker and reliability manager that an ACK was received for the given sequence.
     /// </summary>
     /// <param name="sequence">The acknowledged sequence number.</param>
-    private void NotifyAckReceived(ushort sequence)
-    {
+    private void NotifyAckReceived(ushort sequence) {
         _rttTracker.OnAckReceived(sequence);
         _reliabilityManager.OnAckReceived(sequence);
     }
@@ -403,12 +374,10 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// Callback method for when the send timer elapses. Will create and send a new update packet and update the
     /// timer interval in case the send rate changes.
     /// </summary>
-    private void OnSendTimerElapsed(object sender, ElapsedEventArgs elapsedEventArgs)
-    {
+    private void OnSendTimerElapsed(object sender, ElapsedEventArgs elapsedEventArgs) {
         CreateAndSendPacket();
 
-        if (_lastSendRate != CurrentSendRate)
-        {
+        if (_lastSendRate != CurrentSendRate) {
             _sendTimer.Interval = CurrentSendRate;
             _lastSendRate = CurrentSendRate;
         }
@@ -422,8 +391,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// <param name="sequence1">The first sequence number to compare.</param>
     /// <param name="sequence2">The second sequence number to compare.</param>
     /// <returns>True if the first sequence number is greater than the second sequence number.</returns>
-    private static bool IsSequenceGreaterThan(ushort sequence1, ushort sequence2)
-    {
+    private static bool IsSequenceGreaterThan(ushort sequence1, ushort sequence2) {
         return (sequence1 > sequence2 && sequence1 - sequence2 <= SequenceWrapThreshold) ||
                (sequence1 < sequence2 && sequence2 - sequence1 > SequenceWrapThreshold);
     }
@@ -440,13 +408,11 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// </summary>
     /// <param name="packet">The raw packet instance.</param>
     /// <param name="isReliable">Whether the packet contains reliable data.</param>
-    private void SendPacket(Packet.Packet packet, bool isReliable)
-    {
+    private void SendPacket(Packet.Packet packet, bool isReliable) {
         var buffer = packet.ToArray();
         var length = buffer.Length;
 
-        switch (_transportSender)
-        {
+        switch (_transportSender) {
             case IReliableTransport reliableTransport when isReliable:
                 reliableTransport.SendReliable(buffer, 0, length);
                 break;
@@ -476,10 +442,9 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         byte addonId,
         byte packetId,
         byte packetIdSize,
-        IPacketData packetData)
-    {
-        lock (_lock)
-        {
+        IPacketData packetData
+    ) {
+        lock (_lock) {
             var addonPacketData = GetOrCreateAddonPacketData(addonId, packetIdSize);
             addonPacketData.PacketData[packetId] = packetData;
         }
@@ -499,29 +464,22 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         byte packetId,
         byte packetIdSize,
         TPacketData packetData
-    ) where TPacketData : IPacketData, new()
-    {
-        lock (_lock)
-        {
+    ) where TPacketData : IPacketData, new() {
+        lock (_lock) {
             var addonPacketData = GetOrCreateAddonPacketData(addonId, packetIdSize);
 
-            if (!addonPacketData.PacketData.TryGetValue(packetId, out var existingPacketData))
-            {
+            if (!addonPacketData.PacketData.TryGetValue(packetId, out var existingPacketData)) {
                 existingPacketData = new PacketDataCollection<TPacketData>();
                 addonPacketData.PacketData[packetId] = existingPacketData;
             }
 
-            if (existingPacketData is not RawPacketDataCollection existingDataCollection)
-            {
+            if (existingPacketData is not RawPacketDataCollection existingDataCollection) {
                 throw new InvalidOperationException("Could not add addon data with existing non-collection data");
             }
 
-            if (packetData is RawPacketDataCollection packetDataAsCollection)
-            {
+            if (packetData is RawPacketDataCollection packetDataAsCollection) {
                 existingDataCollection.DataInstances.AddRange(packetDataAsCollection.DataInstances);
-            }
-            else
-            {
+            } else {
                 existingDataCollection.DataInstances.Add(packetData);
             }
         }
@@ -533,10 +491,8 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// <param name="addonId">The ID of the addon.</param>
     /// <param name="packetIdSize">The size of the packet ID space.</param>
     /// <returns>The addon packet data instance.</returns>
-    private AddonPacketData GetOrCreateAddonPacketData(byte addonId, byte packetIdSize)
-    {
-        if (!_currentPacket.TryGetSendingAddonPacketData(addonId, out var addonPacketData))
-        {
+    private AddonPacketData GetOrCreateAddonPacketData(byte addonId, byte packetIdSize) {
+        if (!_currentPacket.TryGetSendingAddonPacketData(addonId, out var addonPacketData)) {
             addonPacketData = new AddonPacketData(packetIdSize);
             _currentPacket.SetSendingAddonPacketData(addonId, addonPacketData);
         }

@@ -7,8 +7,7 @@ namespace SSMP.Networking.Transport.SteamP2P;
 /// Instance-based channel for handling loopback communication (local client to local server)
 /// when hosting a Steam lobby. Steam P2P does not support self-connection.
 /// </summary>
-internal class SteamLoopbackChannel
-{
+internal class SteamLoopbackChannel {
     /// <summary>
     /// Lock for thread-safe singleton access.
     /// </summary>
@@ -32,18 +31,15 @@ internal class SteamLoopbackChannel
     /// <summary>
     /// Private constructor for singleton pattern.
     /// </summary>
-    private SteamLoopbackChannel()
-    {
+    private SteamLoopbackChannel() {
     }
 
     /// <summary>
     /// Gets or creates the singleton loopback channel instance.
     /// Thread-safe.
     /// </summary>
-    public static SteamLoopbackChannel GetOrCreate()
-    {
-        lock (_lock)
-        {
+    public static SteamLoopbackChannel GetOrCreate() {
+        lock (_lock) {
             return _instance ??= new SteamLoopbackChannel();
         }
     }
@@ -52,12 +48,9 @@ internal class SteamLoopbackChannel
     /// Releases the singleton instance if both server and client are unregistered.
     /// Thread-safe.
     /// </summary>
-    public static void ReleaseIfEmpty()
-    {
-        lock (_lock)
-        {
-            if (_instance?._server == null && _instance?._client == null)
-            {
+    public static void ReleaseIfEmpty() {
+        lock (_lock) {
+            if (_instance?._server == null && _instance?._client == null) {
                 _instance = null;
             }
         }
@@ -66,10 +59,8 @@ internal class SteamLoopbackChannel
     /// <summary>
     /// Registers the server instance to receive loopback packets.
     /// </summary>
-    public void RegisterServer(SteamEncryptedTransportServer server)
-    {
-        lock (_lock)
-        {
+    public void RegisterServer(SteamEncryptedTransportServer server) {
+        lock (_lock) {
             _server = server;
         }
     }
@@ -77,10 +68,8 @@ internal class SteamLoopbackChannel
     /// <summary>
     /// Unregisters the server instance.
     /// </summary>
-    public void UnregisterServer()
-    {
-        lock (_lock)
-        {
+    public void UnregisterServer() {
+        lock (_lock) {
             _server = null;
         }
     }
@@ -88,10 +77,8 @@ internal class SteamLoopbackChannel
     /// <summary>
     /// Registers the client instance to receive loopback packets.
     /// </summary>
-    public void RegisterClient(SteamEncryptedTransport client)
-    {
-        lock (_lock)
-        {
+    public void RegisterClient(SteamEncryptedTransport client) {
+        lock (_lock) {
             _client = client;
         }
     }
@@ -99,10 +86,8 @@ internal class SteamLoopbackChannel
     /// <summary>
     /// Unregisters the client instance.
     /// </summary>
-    public void UnregisterClient()
-    {
-        lock (_lock)
-        {
+    public void UnregisterClient() {
+        lock (_lock) {
             _client = null;
         }
     }
@@ -110,33 +95,25 @@ internal class SteamLoopbackChannel
     /// <summary>
     /// Sends a packet from the client to the server via loopback.
     /// </summary>
-    public void SendToServer(byte[] data, int offset, int length)
-    {
+    public void SendToServer(byte[] data, int offset, int length) {
         SteamEncryptedTransportServer? srv;
-        lock (_lock)
-        {
+        lock (_lock) {
             srv = _server;
         }
 
-        if (srv == null)
-        {
+        if (srv == null) {
             Logger.Debug("Steam Loopback: Server not registered, dropping packet");
             return;
         }
 
         // Create exact-sized buffer since Packet constructor assumes entire array is valid
         var copy = new byte[length];
-        try
-        {
+        try {
             Array.Copy(data, offset, copy, 0, length);
             srv.ReceiveLoopbackPacket(copy, length);
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("Steamworks is not initialized"))
-        {
+        } catch (InvalidOperationException ex) when (ex.Message.Contains("Steamworks is not initialized")) {
             // Steam shut down - ignore silently
-        }
-        catch (Exception e)
-        {
+        } catch (Exception e) {
             Logger.Error($"Steam Loopback: Error sending to server: {e}");
         }
     }
@@ -144,33 +121,25 @@ internal class SteamLoopbackChannel
     /// <summary>
     /// Sends a packet from the server to the client via loopback.
     /// </summary>
-    public void SendToClient(byte[] data, int offset, int length)
-    {
+    public void SendToClient(byte[] data, int offset, int length) {
         SteamEncryptedTransport? client;
-        lock (_lock)
-        {
+        lock (_lock) {
             client = _client;
         }
 
-        if (client == null)
-        {
+        if (client == null) {
             Logger.Debug("Steam Loopback: Client not registered, dropping packet");
             return;
         }
 
         // Create exact-sized buffer since Packet constructor assumes entire array is valid
         var copy = new byte[length];
-        try
-        {
+        try {
             Array.Copy(data, offset, copy, 0, length);
             client.ReceiveLoopbackPacket(copy, length);
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("Steamworks is not initialized"))
-        {
+        } catch (InvalidOperationException ex) when (ex.Message.Contains("Steamworks is not initialized")) {
             // Steam shut down - ignore silently
-        }
-        catch (Exception e)
-        {
+        } catch (Exception e) {
             Logger.Error($"Steam Loopback: Error sending to client: {e}");
         }
     }
