@@ -43,23 +43,27 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
 
     /// <summary>
     /// The RTT tracker for measuring round-trip times.
+    /// Lazily initialized only when transport requires sequencing.
     /// </summary>
-    private readonly RttTracker _rttTracker;
+    private RttTracker? _rttTracker;
 
     /// <summary>
     /// The reliability manager for packet loss detection and resending.
+    /// Lazily initialized only when transport requires reliability.
     /// </summary>
-    private readonly ReliabilityManager<TOutgoing, TPacketId> _reliabilityManager;
+    private ReliabilityManager<TOutgoing, TPacketId>? _reliabilityManager;
 
     /// <summary>
     /// The UDP congestion manager instance. Null if congestion management is disabled.
+    /// Lazily initialized only when transport requires sequencing.
     /// </summary>
-    private readonly CongestionManager<TOutgoing, TPacketId>? _congestionManager;
+    private CongestionManager<TOutgoing, TPacketId>? _congestionManager;
 
     /// <summary>
     /// Fixed-size queue containing sequence numbers that have been received.
+    /// Lazily initialized only when transport requires sequencing.
     /// </summary>
-    private readonly ConcurrentFixedSizeQueue<ushort> _receivedQueue;
+    private ConcurrentFixedSizeQueue<ushort>? _receivedQueue;
 
     /// <summary>
     /// Timer for keeping track of when to send an update packet.
@@ -144,16 +148,39 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
 
             _requiresSequencing = value.RequiresSequencing;
             _requiresReliability = value.RequiresReliability;
+            InitializeManagersIfNeeded();
         }
     }
 
     /// <summary>
     /// Sets the transport client for server-side communication.
-    /// Note: Server-side clients don't expose capability flags directly,
-    /// so we maintain default values (true for all capabilities).
+    /// Captures transport capabilities when set.
     /// </summary>
     public IEncryptedTransportClient? TransportClient {
-        set => _transportSender = value;
+        set {
+            _transportSender = value;
+            if (value == null) return;
+
+            _requiresSequencing = value.RequiresSequencing;
+            _requiresReliability = value.RequiresReliability;
+            InitializeManagersIfNeeded();
+        }
+    }
+
+    /// <summary>
+    /// Lazily initializes managers only when the transport requires them.
+    /// This saves memory for Steam connections that don't need sequencing/reliability/congestion managers.
+    /// </summary>
+    private void InitializeManagersIfNeeded() {
+        if (_requiresSequencing) {
+            _rttTracker ??= new RttTracker();
+            _receivedQueue ??= new ConcurrentFixedSizeQueue<ushort>(ReceiveQueueSize);
+            _congestionManager ??= new CongestionManager<TOutgoing, TPacketId>(this, _rttTracker);
+        }
+
+        if (_requiresReliability && _rttTracker != null) {
+            _reliabilityManager ??= new ReliabilityManager<TOutgoing, TPacketId>(this, _rttTracker);
+        }
     }
 
     /// <summary>
@@ -163,9 +190,9 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
 
     /// <summary>
     /// Moving average of round trip time (RTT) between sending and receiving a packet.
-    /// Uses RttTracker when available, falls back to CongestionManager, returns 0 if neither.
+    /// Uses RttTracker when available, returns 0 if not initialized (e.g., Steam transport).
     /// </summary>
-    public int AverageRtt => (int) System.Math.Round(_rttTracker.AverageRtt);
+    public int AverageRtt => _rttTracker != null ? (int) System.Math.Round(_rttTracker.AverageRtt) : 0;
 
     /// <summary>
     /// Event that is called when the client times out.
@@ -176,10 +203,6 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// Construct the update manager with a UDP socket.
     /// </summary>
     protected UpdateManager() {
-        _rttTracker = new RttTracker();
-        _reliabilityManager = new ReliabilityManager<TOutgoing, TPacketId>(this, _rttTracker);
-        _congestionManager = new CongestionManager<TOutgoing, TPacketId>(this, _rttTracker);
-        _receivedQueue = new ConcurrentFixedSizeQueue<ushort>(ReceiveQueueSize);
         _currentPacket = new TOutgoing();
 
         _sendTimer = new Timer {
@@ -258,7 +281,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         _congestionManager?.OnReceivePacket();
 
         var sequence = packet.Sequence;
-        _receivedQueue.Enqueue(sequence);
+        _receivedQueue!.Enqueue(sequence);
 
         packet.DropDuplicateResendData(_receivedQueue.GetCopy());
 
@@ -300,9 +323,9 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
 
         // Transports requiring sequencing: Track for RTT, reliability
         if (_requiresSequencing) {
-            _rttTracker.OnSendPacket(_localSequence);
+            _rttTracker!.OnSendPacket(_localSequence);
             if (_requiresReliability) {
-                _reliabilityManager.OnSendPacket(_localSequence, packetToSend);
+                _reliabilityManager!.OnSendPacket(_localSequence, packetToSend);
             }
 
             _localSequence++;
@@ -317,7 +340,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// Only used for UDP/HolePunch transports.
     /// </summary>
     private void PopulateAckField() {
-        var receivedQueue = _receivedQueue.GetCopy();
+        var receivedQueue = _receivedQueue!.GetCopy();
         var ackField = _currentPacket.AckField;
 
         for (ushort i = 0; i < ConnectionManager.AckSize; i++) {
@@ -366,8 +389,8 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// </summary>
     /// <param name="sequence">The acknowledged sequence number.</param>
     private void NotifyAckReceived(ushort sequence) {
-        _rttTracker.OnAckReceived(sequence);
-        _reliabilityManager.OnAckReceived(sequence);
+        _rttTracker?.OnAckReceived(sequence);
+        _reliabilityManager?.OnAckReceived(sequence);
     }
 
     /// <summary>

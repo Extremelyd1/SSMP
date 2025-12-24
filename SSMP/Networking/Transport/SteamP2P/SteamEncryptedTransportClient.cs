@@ -32,6 +32,15 @@ internal class SteamEncryptedTransportClient : IReliableTransportClient {
     public IPEndPoint? EndPoint => null; // Steam doesn't need throttling
 
     /// <inheritdoc />
+    public bool RequiresCongestionManagement => false;
+
+    /// <inheritdoc />
+    public bool RequiresReliability => false;
+
+    /// <inheritdoc />
+    public bool RequiresSequencing => false;
+
+    /// <inheritdoc />
     public event Action<byte[], int>? DataReceivedEvent;
 
     /// <summary>
