@@ -381,7 +381,7 @@ internal class NetServer : INetServer {
         _taskTokenSource?.Cancel();
 
         // Wait for processing thread to exit gracefully (with timeout)
-        if (_processingThread != null && _processingThread.IsAlive) {
+        if (_processingThread is { IsAlive: true }) {
             if (!_processingThread.Join(1000)) {
                 Logger.Warn("Processing thread did not exit within timeout");
             }

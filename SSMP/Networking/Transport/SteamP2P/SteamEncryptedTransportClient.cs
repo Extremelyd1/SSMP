@@ -81,7 +81,8 @@ internal class SteamEncryptedTransportClient : IReliableTransportClient {
             return;
         }
 
-        if (!SteamNetworking.SendP2PPacket(_steamIdStruct, buffer, (uint) length, sendType)) {
+        // Server sends to client on Channel 1
+        if (!SteamNetworking.SendP2PPacket(_steamIdStruct, buffer, (uint) length, sendType, 1)) {
             Logger.Warn($"Steam P2P: Failed to send packet to client {SteamId}");
         }
     }

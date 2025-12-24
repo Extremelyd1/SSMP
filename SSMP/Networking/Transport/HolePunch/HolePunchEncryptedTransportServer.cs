@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Net;
-using System.Net.Sockets;
 using System.Threading;
 using SSMP.Logging;
 using SSMP.Networking.Matchmaking;
@@ -27,6 +26,17 @@ internal class HolePunchEncryptedTransportServer : IEncryptedTransportServer {
     private const int PunchPacketDelayMs = 50;
 
     /// <summary>
+    /// Pre-allocated punch packet bytes ("PUNCH").
+    /// </summary>
+    private static readonly byte[] PunchPacket = "PUNCH"u8.ToArray();
+
+    /// <summary>
+    /// MMS client instance for lobby management.
+    /// Stored to enable proper cleanup when server shuts down.
+    /// </summary>
+    private MmsClient? _mmsClient;
+
+    /// <summary>
     /// The underlying DTLS server.
     /// </summary>
     private readonly DtlsServer _dtlsServer;
@@ -39,7 +49,8 @@ internal class HolePunchEncryptedTransportServer : IEncryptedTransportServer {
     /// <inheritdoc />
     public event Action<IEncryptedTransportClient>? ClientConnectedEvent;
 
-    public HolePunchEncryptedTransportServer() {
+    public HolePunchEncryptedTransportServer(MmsClient? mmsClient = null) {
+        _mmsClient = mmsClient;
         _dtlsServer = new DtlsServer();
         _clients = new ConcurrentDictionary<IPEndPoint, HolePunchEncryptedTransportClient>();
         _dtlsServer.DataReceivedEvent += OnClientDataReceived;
@@ -50,7 +61,7 @@ internal class HolePunchEncryptedTransportServer : IEncryptedTransportServer {
         Logger.Info($"HolePunch Server: Starting on port {port}");
         
         // Subscribe to punch coordination
-        PunchCoordinator.PunchClientRequested += OnPunchClientRequested;
+        MmsClient.PunchClientRequested += OnPunchClientRequested;
         
         _dtlsServer.Start(port);
     }
@@ -59,8 +70,12 @@ internal class HolePunchEncryptedTransportServer : IEncryptedTransportServer {
     public void Stop() {
         Logger.Info("HolePunch Server: Stopping");
         
+        // Close MMS lobby if we have an MMS client
+        _mmsClient?.CloseLobby();
+        _mmsClient = null;
+        
         // Unsubscribe from punch coordination
-        PunchCoordinator.PunchClientRequested -= OnPunchClientRequested;
+        MmsClient.PunchClientRequested -= OnPunchClientRequested;
         
         _dtlsServer.Stop();
         _clients.Clear();
@@ -92,13 +107,11 @@ internal class HolePunchEncryptedTransportServer : IEncryptedTransportServer {
     /// Uses the DTLS server's socket so the punch comes from the correct port.
     /// </summary>
     /// <param name="clientEndpoint">The client's public endpoint.</param>
-    public void PunchToClient(IPEndPoint clientEndpoint) {
+    private void PunchToClient(IPEndPoint clientEndpoint) {
         Logger.Debug($"HolePunch Server: Punching to client at {clientEndpoint}");
         
-        var punchPacket = new byte[] { 0x50, 0x55, 0x4E, 0x43, 0x48 }; // "PUNCH"
-        
         for (var i = 0; i < PunchPacketCount; i++) {
-            _dtlsServer.SendRaw(punchPacket, clientEndpoint);
+            _dtlsServer.SendRaw(PunchPacket, clientEndpoint);
             Thread.Sleep(PunchPacketDelayMs);
         }
         

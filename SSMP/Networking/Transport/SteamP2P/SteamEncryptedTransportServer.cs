@@ -201,12 +201,14 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
     private void ProcessIncomingPackets() {
         if (!_isRunning || !SteamManager.IsInitialized) return;
 
-        while (SteamNetworking.IsP2PPacketAvailable(out var packetSize)) {
+        // Server listens for client packets on Channel 0
+        while (SteamNetworking.IsP2PPacketAvailable(out var packetSize, 0)) {
             if (!SteamNetworking.ReadP2PPacket(
                     _receiveBuffer,
                     MaxPacketSize,
                     out packetSize,
-                    out var remoteSteamId
+                    out var remoteSteamId,
+                    0 // Channel 0: Client -> Server
                 )) {
                 continue;
             }

@@ -74,12 +74,12 @@ internal class ClientTlsClient(TlsCrypto crypto) : AbstractTlsClient(crypto) {
             if (serverCertificate.Certificate == null || serverCertificate.Certificate.IsEmpty) {
                 throw new TlsFatalAlert(AlertDescription.bad_certificate);
             }
-            
+
             var chain = serverCertificate.Certificate.GetCertificateList();
 
             Logger.Info("Server certificate fingerprint(s):");
-            for (var i = 0; i < chain.Length; i++) {
-                var entry = X509CertificateStructure.GetInstance(chain[i].GetEncoded());
+            foreach (var t in chain) {
+                var entry = X509CertificateStructure.GetInstance(t.GetEncoded());
                 Logger.Info($"  fingerprint:SHA256 {Fingerprint(entry)} ({entry.Subject})");
             }
         }
@@ -112,6 +112,7 @@ internal class ClientTlsClient(TlsCrypto crypto) : AbstractTlsClient(crypto) {
                 fp.Append(':');
                 fp.Append(hex.Substring(i, 2));
             }
+
             return fp.ToString();
         }
     }

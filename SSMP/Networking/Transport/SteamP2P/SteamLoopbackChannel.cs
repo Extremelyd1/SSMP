@@ -11,7 +11,7 @@ internal class SteamLoopbackChannel {
     /// <summary>
     /// Lock for thread-safe singleton access.
     /// </summary>
-    private static readonly object _lock = new();
+    private static readonly object Lock = new();
 
     /// <summary>
     /// Singleton instance, created on first use.
@@ -39,7 +39,7 @@ internal class SteamLoopbackChannel {
     /// Thread-safe.
     /// </summary>
     public static SteamLoopbackChannel GetOrCreate() {
-        lock (_lock) {
+        lock (Lock) {
             return _instance ??= new SteamLoopbackChannel();
         }
     }
@@ -49,7 +49,7 @@ internal class SteamLoopbackChannel {
     /// Thread-safe.
     /// </summary>
     public static void ReleaseIfEmpty() {
-        lock (_lock) {
+        lock (Lock) {
             if (_instance?._server == null && _instance?._client == null) {
                 _instance = null;
             }
@@ -60,7 +60,7 @@ internal class SteamLoopbackChannel {
     /// Registers the server instance to receive loopback packets.
     /// </summary>
     public void RegisterServer(SteamEncryptedTransportServer server) {
-        lock (_lock) {
+        lock (Lock) {
             _server = server;
         }
     }
@@ -69,7 +69,7 @@ internal class SteamLoopbackChannel {
     /// Unregisters the server instance.
     /// </summary>
     public void UnregisterServer() {
-        lock (_lock) {
+        lock (Lock) {
             _server = null;
         }
     }
@@ -78,7 +78,7 @@ internal class SteamLoopbackChannel {
     /// Registers the client instance to receive loopback packets.
     /// </summary>
     public void RegisterClient(SteamEncryptedTransport client) {
-        lock (_lock) {
+        lock (Lock) {
             _client = client;
         }
     }
@@ -87,7 +87,7 @@ internal class SteamLoopbackChannel {
     /// Unregisters the client instance.
     /// </summary>
     public void UnregisterClient() {
-        lock (_lock) {
+        lock (Lock) {
             _client = null;
         }
     }
@@ -97,7 +97,7 @@ internal class SteamLoopbackChannel {
     /// </summary>
     public void SendToServer(byte[] data, int offset, int length) {
         SteamEncryptedTransportServer? srv;
-        lock (_lock) {
+        lock (Lock) {
             srv = _server;
         }
 
@@ -123,7 +123,7 @@ internal class SteamLoopbackChannel {
     /// </summary>
     public void SendToClient(byte[] data, int offset, int length) {
         SteamEncryptedTransport? client;
-        lock (_lock) {
+        lock (Lock) {
             client = _client;
         }
 

@@ -463,6 +463,12 @@ internal class ConnectInterface {
     /// </summary>
     private readonly MmsClient _mmsClient;
 
+    /// <summary>
+    /// Public accessor for the MMS client.
+    /// Used by server manager to pass to HolePunch transport for lobby cleanup.
+    /// </summary>
+    public MmsClient MmsClient => _mmsClient;
+
     #endregion
 
     #region Events
@@ -1014,15 +1020,15 @@ internal class ConnectInterface {
         var (clientIp, clientPort, socket) = stunResult.Value;
         
         // Store socket for HolePunchEncryptedTransport to use
-        ClientSocketHolder.PreBoundSocket = socket;
+        StunClient.PreBoundSocket = socket;
 
         ShowFeedback(Color.yellow, "Joining lobby...");
 
         // Join lobby and register our endpoint for punch-back
         var result = _mmsClient.JoinLobby(lobbyId, clientIp, clientPort);
         if (result == null) {
-            ClientSocketHolder.PreBoundSocket?.Dispose();
-            ClientSocketHolder.PreBoundSocket = null;
+            StunClient.PreBoundSocket?.Dispose();
+            StunClient.PreBoundSocket = null;
             ShowFeedback(Color.red, "Lobby not found or offline");
             return;
         }
@@ -1214,7 +1220,7 @@ internal class ConnectInterface {
         Logger.Info($"Joined lobby: {lobbyId}");
         ShowFeedback(Color.green, "Joined lobby! Connecting to host...");
 
-        var hostId = 0; //SteamManager.GetLobbyOwner(lobbyId);
+        var hostId = SteamManager.GetLobbyOwner(lobbyId);
 
         if (!ValidateUsername(out var username)) {
             return;

@@ -27,7 +27,7 @@ internal class HolePunchEncryptedTransportClient : IEncryptedTransportClient {
     public IPEndPoint EndPoint => _dtlsServerClient.EndPoint;
 
     /// <inheritdoc />
-    IPEndPoint? IEncryptedTransportClient.EndPoint => EndPoint;
+    IPEndPoint IEncryptedTransportClient.EndPoint => EndPoint;
 
     /// <inheritdoc />
     public bool RequiresCongestionManagement => true;

@@ -29,21 +29,22 @@ internal class NetServerClient {
     /// Whether the client is registered.
     /// </summary>
     public bool IsRegistered { get; set; }
-    
+
     /// <summary>
     /// The update manager for the client.
     /// </summary>
     public ServerUpdateManager UpdateManager { get; }
-    
+
     /// <summary>
     /// The chunk sender instance for sending large amounts of data.
     /// </summary>
     public ServerChunkSender ChunkSender { get; }
+
     /// <summary>
     /// The chunk receiver instance for receiving large amounts of data.
     /// </summary>
     public ServerChunkReceiver ChunkReceiver { get; }
-    
+
     /// <summary>
     /// The connection manager for the client.
     /// </summary>
@@ -64,8 +65,9 @@ internal class NetServerClient {
 
         Id = GetId();
 
-        UpdateManager = new ServerUpdateManager();
-        UpdateManager.TransportClient = transportClient;
+        UpdateManager = new ServerUpdateManager {
+            TransportClient = transportClient
+        };
         ChunkSender = new ServerChunkSender(UpdateManager);
         ChunkReceiver = new ServerChunkReceiver(UpdateManager);
         ConnectionManager = new ServerConnectionManager(packetManager, ChunkSender, ChunkReceiver, Id);

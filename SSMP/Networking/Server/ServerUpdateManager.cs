@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
+using System.Linq;
 using SSMP.Game;
 using SSMP.Game.Client.Entity;
 using SSMP.Game.Settings;
@@ -35,7 +35,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     /// <param name="packetId">The ID of the packet data.</param>
     /// <typeparam name="T">The type of the generic client packet data.</typeparam>
     /// <returns>An instance of the packet data in the packet.</returns>
-    private T FindOrCreatePacketData<T>(ushort id, ClientUpdatePacketId packetId) where T : GenericClientData, new() {
+    private T? FindOrCreatePacketData<T>(ushort id, ClientUpdatePacketId packetId) where T : GenericClientData, new() {
         return FindOrCreatePacketData(
             packetId,
             packetData => packetData.Id == id,
@@ -51,7 +51,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     /// <param name="constructFunc">The function to construct the packet data if it does not exist.</param>
     /// <typeparam name="T">The type of the generic client packet data.</typeparam>
     /// <returns>An instance of the packet data in the packet.</returns>
-    private T FindOrCreatePacketData<T>(
+    private T? FindOrCreatePacketData<T>(
         ClientUpdatePacketId packetId,
         Func<T, bool> findFunc,
         Func<T> constructFunc
@@ -64,11 +64,8 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
 
             // Search for existing packet data
             var dataInstances = packetDataCollection.DataInstances;
-            for (int i = 0; i < dataInstances.Count; i++) {
-                var existingData = (T) dataInstances[i];
-                if (findFunc(existingData)) {
-                    return existingData;
-                }
+            foreach (var existingData in dataInstances.Cast<T?>().Where(existingData => findFunc(existingData!))) {
+                return existingData;
             }
         } else {
             // Create new collection if it doesn't exist
@@ -143,7 +140,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     public void AddPlayerConnectData(ushort id, string username) {
         lock (Lock) {
             var playerConnect = FindOrCreatePacketData<PlayerConnect>(id, ClientUpdatePacketId.PlayerConnect);
-            playerConnect.Username = username;
+            playerConnect!.Username = username;
         }
     }
 
@@ -157,7 +154,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
         lock (Lock) {
             var playerDisconnect =
                 FindOrCreatePacketData<ClientPlayerDisconnect>(id, ClientUpdatePacketId.PlayerDisconnect);
-            playerDisconnect.Username = username;
+            playerDisconnect!.Username = username;
             playerDisconnect.TimedOut = timedOut;
         }
     }
@@ -184,7 +181,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
         lock (Lock) {
             var playerEnterScene =
                 FindOrCreatePacketData<ClientPlayerEnterScene>(id, ClientUpdatePacketId.PlayerEnterScene);
-            playerEnterScene.Username = username;
+            playerEnterScene!.Username = username;
             playerEnterScene.Position = position;
             playerEnterScene.Scale = scale;
             playerEnterScene.Team = team;
@@ -230,7 +227,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
         lock (Lock) {
             var playerLeaveScene =
                 FindOrCreatePacketData<ClientPlayerLeaveScene>(id, ClientUpdatePacketId.PlayerLeaveScene);
-            playerLeaveScene.SceneName = sceneName;
+            playerLeaveScene!.SceneName = sceneName;
         }
     }
 
@@ -242,7 +239,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     public void UpdatePlayerPosition(ushort id, Vector2 position) {
         lock (Lock) {
             var playerUpdate = FindOrCreatePacketData<PlayerUpdate>(id, ClientUpdatePacketId.PlayerUpdate);
-            playerUpdate.UpdateTypes.Add(PlayerUpdateType.Position);
+            playerUpdate!.UpdateTypes.Add(PlayerUpdateType.Position);
             playerUpdate.Position = position;
         }
     }
@@ -255,7 +252,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     public void UpdatePlayerScale(ushort id, bool scale) {
         lock (Lock) {
             var playerUpdate = FindOrCreatePacketData<PlayerUpdate>(id, ClientUpdatePacketId.PlayerUpdate);
-            playerUpdate.UpdateTypes.Add(PlayerUpdateType.Scale);
+            playerUpdate!.UpdateTypes.Add(PlayerUpdateType.Scale);
             playerUpdate.Scale = scale;
         }
     }
@@ -268,7 +265,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     public void UpdatePlayerMapPosition(ushort id, Vector2 mapPosition) {
         lock (Lock) {
             var playerUpdate = FindOrCreatePacketData<PlayerUpdate>(id, ClientUpdatePacketId.PlayerUpdate);
-            playerUpdate.UpdateTypes.Add(PlayerUpdateType.MapPosition);
+            playerUpdate!.UpdateTypes.Add(PlayerUpdateType.MapPosition);
             playerUpdate.MapPosition = mapPosition;
         }
     }
@@ -281,7 +278,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     public void UpdatePlayerMapIcon(ushort id, bool hasIcon) {
         lock (Lock) {
             var playerMapUpdate = FindOrCreatePacketData<PlayerMapUpdate>(id, ClientUpdatePacketId.PlayerMapUpdate);
-            playerMapUpdate.HasIcon = hasIcon;
+            playerMapUpdate!.HasIcon = hasIcon;
         }
     }
 
@@ -295,7 +292,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     public void UpdatePlayerAnimation(ushort id, ushort clipId, byte frame, byte[]? effectInfo) {
         lock (Lock) {
             var playerUpdate = FindOrCreatePacketData<PlayerUpdate>(id, ClientUpdatePacketId.PlayerUpdate);
-            playerUpdate.UpdateTypes.Add(PlayerUpdateType.Animation);
+            playerUpdate!.UpdateTypes.Add(PlayerUpdateType.Animation);
             playerUpdate.AnimationInfos.Add(
                 new AnimationInfo {
                     ClipId = clipId,
@@ -333,17 +330,15 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     /// <typeparam name="T">The type of the entity update. Either <see cref="EntityUpdate"/> or
     /// <see cref="ReliableEntityUpdate"/>.</typeparam>
     /// <returns>An instance of the entity update in the packet.</returns>
-    private T FindOrCreateEntityUpdate<T>(ushort entityId, ClientUpdatePacketId packetId)
+    private T? FindOrCreateEntityUpdate<T>(ushort entityId, ClientUpdatePacketId packetId)
         where T : BaseEntityUpdate, new() {
         var entityUpdateCollection = GetOrCreateCollection<T>(packetId);
 
         // Search for existing entity update
         var dataInstances = entityUpdateCollection.DataInstances;
-        for (int i = 0; i < dataInstances.Count; i++) {
-            var existingUpdate = (T) dataInstances[i];
-            if (existingUpdate.Id == entityId) {
-                return existingUpdate;
-            }
+        foreach (var existingUpdate in
+                 dataInstances.Cast<T?>().Where(existingUpdate => existingUpdate!.Id == entityId)) {
+            return existingUpdate;
         }
 
         // Create new entity update
@@ -360,7 +355,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     public void UpdateEntityPosition(ushort entityId, Vector2 position) {
         lock (Lock) {
             var entityUpdate = FindOrCreateEntityUpdate<EntityUpdate>(entityId, ClientUpdatePacketId.EntityUpdate);
-            entityUpdate.UpdateTypes.Add(EntityUpdateType.Position);
+            entityUpdate!.UpdateTypes.Add(EntityUpdateType.Position);
             entityUpdate.Position = position;
         }
     }
@@ -373,7 +368,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     public void UpdateEntityScale(ushort entityId, EntityUpdate.ScaleData scale) {
         lock (Lock) {
             var entityUpdate = FindOrCreateEntityUpdate<EntityUpdate>(entityId, ClientUpdatePacketId.EntityUpdate);
-            entityUpdate.UpdateTypes.Add(EntityUpdateType.Scale);
+            entityUpdate!.UpdateTypes.Add(EntityUpdateType.Scale);
             entityUpdate.Scale = scale;
         }
     }
@@ -387,7 +382,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     public void UpdateEntityAnimation(ushort entityId, byte animationId, byte animationWrapMode) {
         lock (Lock) {
             var entityUpdate = FindOrCreateEntityUpdate<EntityUpdate>(entityId, ClientUpdatePacketId.EntityUpdate);
-            entityUpdate.UpdateTypes.Add(EntityUpdateType.Animation);
+            entityUpdate!.UpdateTypes.Add(EntityUpdateType.Animation);
             entityUpdate.AnimationId = animationId;
             entityUpdate.AnimationWrapMode = animationWrapMode;
         }
@@ -402,7 +397,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
         lock (Lock) {
             var entityUpdate =
                 FindOrCreateEntityUpdate<ReliableEntityUpdate>(entityId, ClientUpdatePacketId.ReliableEntityUpdate);
-            entityUpdate.UpdateTypes.Add(EntityUpdateType.Active);
+            entityUpdate!.UpdateTypes.Add(EntityUpdateType.Active);
             entityUpdate.IsActive = isActive;
         }
     }
@@ -416,7 +411,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
         lock (Lock) {
             var entityUpdate =
                 FindOrCreateEntityUpdate<ReliableEntityUpdate>(entityId, ClientUpdatePacketId.ReliableEntityUpdate);
-            entityUpdate.UpdateTypes.Add(EntityUpdateType.Data);
+            entityUpdate!.UpdateTypes.Add(EntityUpdateType.Data);
             entityUpdate.GenericData.AddRange(data);
         }
     }
@@ -431,7 +426,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
         lock (Lock) {
             var entityUpdate =
                 FindOrCreateEntityUpdate<ReliableEntityUpdate>(entityId, ClientUpdatePacketId.ReliableEntityUpdate);
-            entityUpdate.UpdateTypes.Add(EntityUpdateType.HostFsm);
+            entityUpdate!.UpdateTypes.Add(EntityUpdateType.HostFsm);
 
             if (entityUpdate.HostFsmData.TryGetValue(fsmIndex, out var existingData)) {
                 existingData.MergeData(data);
@@ -483,14 +478,13 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
             );
 
             if (team.HasValue) {
-                playerSettingUpdate.UpdateTypes.Add(PlayerSettingUpdateType.Team);
+                playerSettingUpdate!.UpdateTypes.Add(PlayerSettingUpdateType.Team);
                 playerSettingUpdate.Team = team.Value;
             }
 
-            if (skinId.HasValue) {
-                playerSettingUpdate.UpdateTypes.Add(PlayerSettingUpdateType.Skin);
-                playerSettingUpdate.SkinId = skinId.Value;
-            }
+            if (!skinId.HasValue) return;
+            playerSettingUpdate!.UpdateTypes.Add(PlayerSettingUpdateType.Skin);
+            playerSettingUpdate.SkinId = skinId.Value;
         }
     }
 
@@ -521,17 +515,17 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
             );
 
             if (team.HasValue) {
-                playerSettingUpdate.UpdateTypes.Add(PlayerSettingUpdateType.Team);
+                playerSettingUpdate!.UpdateTypes.Add(PlayerSettingUpdateType.Team);
                 playerSettingUpdate.Team = team.Value;
             }
 
             if (skinId.HasValue) {
-                playerSettingUpdate.UpdateTypes.Add(PlayerSettingUpdateType.Skin);
+                playerSettingUpdate!.UpdateTypes.Add(PlayerSettingUpdateType.Skin);
                 playerSettingUpdate.SkinId = skinId.Value;
             }
 
             if (crestType.HasValue) {
-                playerSettingUpdate.UpdateTypes.Add(PlayerSettingUpdateType.Crest);
+                playerSettingUpdate!.UpdateTypes.Add(PlayerSettingUpdateType.Crest);
                 playerSettingUpdate.CrestType = crestType.Value;
             }
         }

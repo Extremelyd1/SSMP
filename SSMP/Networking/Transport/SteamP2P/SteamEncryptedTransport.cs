@@ -129,7 +129,8 @@ internal class SteamEncryptedTransport : IReliableTransport {
             return;
         }
 
-        if (!SteamNetworking.SendP2PPacket(_remoteSteamId, buffer, (uint) length, sendType)) {
+        // Client sends to server on Channel 0
+        if (!SteamNetworking.SendP2PPacket(_remoteSteamId, buffer, (uint) length, sendType, 0)) {
             Logger.Warn($"Steam P2P: Failed to send packet to {_remoteSteamId}");
         }
     }
@@ -137,21 +138,22 @@ internal class SteamEncryptedTransport : IReliableTransport {
     private void Receive(byte[]? buffer, int offset, int length) {
         if (!_isConnected || !SteamManager.IsInitialized) return;
 
-        if (!SteamNetworking.IsP2PPacketAvailable(out var packetSize)) return;
+        // Check for available packet on Channel 1
+        if (!SteamNetworking.IsP2PPacketAvailable(out var packetSize, 1)) return;
 
+        // Client listens for server packets on Channel 1 (to differentiate from server traffic on Channel 0)
         if (!SteamNetworking.ReadP2PPacket(
                 _receiveBuffer,
                 SteamMaxPacketSize,
                 out packetSize,
-                out var remoteSteamId
+                out var remoteSteamId,
+                1 // Channel 1: Server -> Client
             )) {
             return;
         }
 
         if (remoteSteamId != _remoteSteamId) {
             Logger.Warn($"Steam P2P: Received packet from unexpected peer {remoteSteamId}, expected {_remoteSteamId}");
-            //return 0;
-            return;
         }
 
         var size = (int) packetSize;
