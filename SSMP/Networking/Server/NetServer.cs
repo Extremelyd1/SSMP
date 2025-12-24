@@ -29,12 +29,12 @@ internal class NetServer : INetServer {
     /// The packet manager instance.
     /// </summary>
     private readonly PacketManager _packetManager;
-    
+
     /// <summary>
     /// Underlying encrypted transport server instance.
     /// </summary>
     private IEncryptedTransportServer? _transportServer;
-        
+
     /// <summary>
     /// Dictionary mapping client IDs to net server clients.
     /// </summary>
@@ -51,7 +51,7 @@ internal class NetServer : INetServer {
     /// Concurrent queue that contains received data from a client ready for processing.
     /// </summary>
     private readonly ConcurrentQueue<ReceivedData> _receivedQueue;
-    
+
     /// <summary>
     /// Wait handle for inter-thread signaling when new data is ready to be processed.
     /// </summary>
@@ -99,11 +99,11 @@ internal class NetServer : INetServer {
         _throttledClients = new ConcurrentDictionary<IPEndPoint, Stopwatch>();
 
         _receivedQueue = new ConcurrentQueue<ReceivedData>();
-        
+
         _processingWaitHandle = new AutoResetEvent(false);
-        
+
         _packetManager.RegisterServerConnectionPacketHandler<ClientInfo>(
-            ServerConnectionPacketId.ClientInfo, 
+            ServerConnectionPacketId.ClientInfo,
             OnClientInfoReceived
         );
     }
@@ -121,10 +121,10 @@ internal class NetServer : INetServer {
         if (IsStarted) {
             Stop();
         }
-        
+
         Logger.Info($"Starting NetServer on port {port}");
         IsStarted = true;
-        
+
         _transportServer = transportServer;
         _transportServer.Start(port);
 
@@ -144,11 +144,13 @@ internal class NetServer : INetServer {
     /// </summary>
     private void OnClientConnected(IEncryptedTransportClient transportClient) {
         transportClient.DataReceivedEvent += (buffer, length) => {
-            _receivedQueue.Enqueue(new ReceivedData {
-                TransportClient = transportClient,
-                Buffer = buffer,
-                NumReceived = length
-            });
+            _receivedQueue.Enqueue(
+                new ReceivedData {
+                    TransportClient = transportClient,
+                    Buffer = buffer,
+                    NumReceived = length
+                }
+            );
             _processingWaitHandle.Set();
         };
     }
@@ -174,7 +176,7 @@ internal class NetServer : INetServer {
 
                 // Try to find existing client by transport client reference
                 var client = _clientsById.Values.FirstOrDefault(c => c.TransportClient == transportClient);
-                
+
                 if (client == null) {
                     // Extract throttle key for throttling
                     var throttleKey = transportClient.EndPoint;
@@ -190,7 +192,9 @@ internal class NetServer : INetServer {
                         _throttledClients.TryRemove(throttleKey, out _);
                     }
 
-                    Logger.Info($"Received packet from unknown client: {transportClient.ToDisplayString()}, creating new client");
+                    Logger.Info(
+                        $"Received packet from unknown client: {transportClient.ToDisplayString()}, creating new client"
+                    );
 
                     // We didn't find a client with the given identifier, so we assume it is a new client
                     // that wants to connect
@@ -209,7 +213,7 @@ internal class NetServer : INetServer {
     /// <returns>A new net server client instance.</returns>
     private NetServerClient CreateNewClient(IEncryptedTransportClient transportClient) {
         var netServerClient = new NetServerClient(transportClient, _packetManager);
-        
+
         netServerClient.ChunkSender.Start();
 
         netServerClient.ConnectionManager.ConnectionRequestEvent += OnConnectionRequest;
@@ -254,24 +258,8 @@ internal class NetServer : INetServer {
         var id = client.Id;
 
         foreach (var packet in packets) {
-            // If the client is not registered, try to read as connection packet first
-            if (!client.IsRegistered) {
-                var savedReadPos = packet.ReadPosition;
-                var connectionPacket = new ServerConnectionPacket();
-
-                // Attempt connection parse on the original packet.
-                // If it fails, restore read position so we can try other packet types.
-                if (connectionPacket.ReadPacket(packet)) {
-                    _packetManager.HandleServerConnectionPacket(id, connectionPacket);
-                    // Parsed successfully as connection packet; packet has been consumed.
-                    // Skip further processing to avoid double-handling.
-                    continue;
-                }
-
-                // Restore read cursor for subsequent parsers
-                packet.ReadPosition = savedReadPos;
-            }
-
+            // Connection packets (ClientInfo) are handled via ChunkReceiver, not here.
+            // All packets here should be ServerUpdatePackets.
             var serverUpdatePacket = new ServerUpdatePacket();
             if (!serverUpdatePacket.ReadPacket(packet)) {
                 if (client.IsRegistered) {
@@ -322,19 +310,22 @@ internal class NetServer : INetServer {
 
             return;
         }
-        
+
         // Invoke the connection request event ourselves first, then check the result
         ConnectionRequestEvent?.Invoke(client, clientInfo, serverInfo);
 
         if (serverInfo.ConnectionResult == ServerConnectionResult.Accepted) {
-            Logger.Debug($"Connection request for client ID {clientId} was accepted, finishing connection sends, then registering client");
+            Logger.Debug(
+                $"Connection request for client ID {clientId} was accepted, finishing connection sends, then registering client"
+            );
 
             client.ConnectionManager.FinishConnection(() => {
-                Logger.Debug("Connection has finished sending data, registering client");
-                
-                client.IsRegistered = true;
-                client.ConnectionManager.StopAcceptingConnection();
-            });
+                    Logger.Debug("Connection has finished sending data, registering client");
+
+                    client.IsRegistered = true;
+                    client.ConnectionManager.StopAcceptingConnection();
+                }
+            );
         } else {
             // Connection rejected - stop accepting new connection attempts immediately
             // FinishConnection and throttling will be handled in OnClientInfoReceived after
@@ -363,13 +354,14 @@ internal class NetServer : INetServer {
         if (serverInfo.ConnectionResult != ServerConnectionResult.Accepted) {
             // The rejection message has now been enqueued (by ProcessClientInfo -> SendServerInfo)
             // Wait for it to finish sending, then disconnect and throttle
-            client.ConnectionManager.FinishConnection(() => { 
-                OnClientDisconnect(clientId);
-                var throttleKey = client.TransportClient.EndPoint;
-                if (throttleKey != null) {
-                    _throttledClients[throttleKey] = Stopwatch.StartNew();
+            client.ConnectionManager.FinishConnection(() => {
+                    OnClientDisconnect(clientId);
+                    var throttleKey = client.TransportClient.EndPoint;
+                    if (throttleKey != null) {
+                        _throttledClients[throttleKey] = Stopwatch.StartNew();
+                    }
                 }
-            });
+            );
         }
     }
 
@@ -414,18 +406,20 @@ internal class NetServer : INetServer {
         foreach (var client in _clientsById.Values) {
             client.Disconnect();
         }
+
         _clientsById.Clear();
 
         // Clean up throttled clients
         _throttledClients.Clear();
 
         // Clean up received queue
-        while (_receivedQueue.TryDequeue(out _)) { }
+        while (_receivedQueue.TryDequeue(out _)) {
+        }
 
         // Invoke the shutdown event to notify all registered parties of the shutdown
         ShutdownEvent?.Invoke();
     }
-    
+
     /// <summary>
     /// Callback method for when a client disconnects from the server.
     /// </summary>
@@ -485,7 +479,8 @@ internal class NetServer : INetServer {
         if (addon.NetworkSender != null) {
             if (!(addon.NetworkSender is IServerAddonNetworkSender<TPacketId> addonNetworkSender)) {
                 throw new InvalidOperationException(
-                    "Cannot request network senders with differing generic parameters");
+                    "Cannot request network senders with differing generic parameters"
+                );
             }
 
             return addonNetworkSender;
@@ -529,7 +524,8 @@ internal class NetServer : INetServer {
             addon.NetworkReceiver = networkReceiver;
         } else if (addon.NetworkReceiver is not IServerAddonNetworkReceiver<TPacketId>) {
             throw new InvalidOperationException(
-                "Cannot request network receivers with differing generic parameters");
+                "Cannot request network receivers with differing generic parameters"
+            );
         }
 
         // After we know that this call did not use a different generic, we can update packet info
@@ -551,12 +547,12 @@ internal class ReceivedData {
     /// The transport client that sent this data.
     /// </summary>
     public required IEncryptedTransportClient TransportClient { get; init; }
-    
+
     /// <summary>
     /// Byte array of the buffer containing received data.
     /// </summary>
     public required byte[] Buffer { get; init; }
-    
+
     /// <summary>
     /// The number of bytes in the buffer that were received. The rest of the buffer is empty.
     /// </summary>

@@ -24,6 +24,24 @@ internal interface IEncryptedTransportClient {
     IPEndPoint? EndPoint { get; }
 
     /// <summary>
+    /// Indicates whether this transport requires application-level congestion management.
+    /// Returns false for transports with built-in congestion handling (e.g., Steam P2P).
+    /// </summary>
+    bool RequiresCongestionManagement { get; }
+
+    /// <summary>
+    /// Indicates whether the application must handle reliability (retransmission).
+    /// Returns false for transports with built-in reliable delivery (e.g., Steam P2P).
+    /// </summary>
+    bool RequiresReliability { get; }
+
+    /// <summary>
+    /// Indicates whether the application must handle packet sequencing.
+    /// Returns false for transports with built-in ordering (e.g., Steam P2P).
+    /// </summary>
+    bool RequiresSequencing { get; }
+
+    /// <summary>
     /// Event raised when data is received from this client.
     /// </summary>
     event Action<byte[], int>? DataReceivedEvent;

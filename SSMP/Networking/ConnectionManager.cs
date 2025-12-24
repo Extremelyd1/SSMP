@@ -5,7 +5,12 @@ namespace SSMP.Networking;
 /// <summary>
 /// Abstract base class that manages handling the initial connection to a server.
 /// </summary>
-internal abstract class ConnectionManager {
+internal abstract class ConnectionManager(PacketManager packetManager) {
+    /// <summary>
+    /// The number of ack numbers from previous packets to store in the packet. 
+    /// </summary>
+    public const int AckSize = 64;
+
     /// <summary>
     /// The maximum size that a slice can be in bytes.
     /// </summary>
@@ -24,16 +29,12 @@ internal abstract class ConnectionManager {
     /// <summary>
     /// The number of milliseconds a connection attempt can maximally take before being timed out.
     /// </summary>
-    public const int TimeoutMillis = 60000;
-    
+    protected const int TimeoutMillis = 60000;
+
     /// <summary>
     /// The packet manager instance to register handlers for slice and slice ack data.
     /// </summary>
-    protected readonly PacketManager PacketManager;
-
-    protected ConnectionManager(PacketManager packetManager) {
-        PacketManager = packetManager;
-    }
+    protected readonly PacketManager PacketManager = packetManager;
 
     /// <summary>
     /// Check whether the first ID is smaller than the second ID. Accounts for ID wrap-around, by inverse comparison
