@@ -63,6 +63,11 @@ internal class ModSettings {
     /// The last used server settings in a hosted server.
     /// </summary>
     public ServerSettings? ServerSettings { get; set; }
+
+    /// <summary>
+    /// The URL of the MatchMaking Service (MMS). Defaults to localhost.
+    /// </summary>
+    public string MmsUrl { get; set; } = "http://localhost:5000";
     
     /// <summary>
     /// Load the mod settings from file or create a new instance.

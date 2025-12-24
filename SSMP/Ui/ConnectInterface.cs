@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using SSMP.Game;
 using SSMP.Game.Settings;
 using SSMP.Networking.Client;
+using SSMP.Networking.Matchmaking;
 using SSMP.Ui.Component;
 using Steamworks;
 using SSMP.Networking.Transport.Common;
@@ -223,7 +224,12 @@ internal class ConnectInterface {
     /// <summary>
     /// Text for the Connect button in the Matchmaking tab.
     /// </summary>
-    private const string LobbyConnectButtonText = "CONNECT TO LOBBY";
+    private const string LobbyConnectButtonText = "CONNECT";
+
+    /// <summary>
+    /// Text for the Host Lobby button in the Matchmaking tab.
+    /// </summary>
+    private const string HostLobbyButtonText = "HOST LOBBY";
 
     // Steam tab
 
@@ -402,6 +408,11 @@ internal class ConnectInterface {
     /// </summary>
     private readonly IButtonComponent _lobbyConnectButton;
 
+    /// <summary>
+    /// Button to host a new lobby.
+    /// </summary>
+    private readonly IButtonComponent _hostLobbyButton;
+
     // Steam tab components
     /// <summary>
     /// Button to create a new Steam lobby.
@@ -447,6 +458,11 @@ internal class ConnectInterface {
     /// </summary>
     private Coroutine? _feedbackHideCoroutine;
 
+    /// <summary>
+    /// Client for the MatchMaking Service (MMS).
+    /// </summary>
+    private readonly MmsClient _mmsClient;
+
     #endregion
 
     #region Events
@@ -487,6 +503,7 @@ internal class ConnectInterface {
     /// <param name="connectGroup">Parent component group for the interface.</param>
     public ConnectInterface(ModSettings modSettings, ComponentGroup connectGroup) {
         _modSettings = modSettings;
+        _mmsClient = new MmsClient(modSettings.MmsUrl);
 
         SubscribeToSteamEvents();
 
@@ -510,6 +527,7 @@ internal class ConnectInterface {
         _matchmakingGroup = matchmakingComponents.group;
         _lobbyIdInput = matchmakingComponents.lobbyIdInput;
         _lobbyConnectButton = matchmakingComponents.connectButton;
+        _hostLobbyButton = matchmakingComponents.hostButton;
 
         var steamComponents = CreateSteamTab(currentY);
         _steamGroup = steamComponents.group;
@@ -634,9 +652,11 @@ internal class ConnectInterface {
             );
         }
 
+        // Position DirectIp tab next to Steam, or in center if Steam not available
+        var directIpX = SteamManager.IsInitialized ? InitialX + TabButtonWidth : InitialX;
         var directIp = ConnectInterfaceHelpers.CreateTabButton(
             _backgroundGroup,
-            InitialX + TabButtonWidth,
+            directIpX,
             currentY,
             TabButtonWidth,
             DirectIpTabText,
@@ -653,9 +673,9 @@ internal class ConnectInterface {
     #region Tab Content Creation
 
     /// <summary>
-    /// Creates the Matchmaking tab content with lobby ID input and connect button.
+    /// Creates the Matchmaking tab content with lobby ID input and connect/host buttons.
     /// </summary>
-    private (ComponentGroup group, IInputComponent lobbyIdInput, IButtonComponent connectButton)
+    private (ComponentGroup group, IInputComponent lobbyIdInput, IButtonComponent connectButton, IButtonComponent hostButton)
         CreateMatchmakingTab(float startY) {
         var group = new ComponentGroup(parent: _backgroundGroup);
         var y = startY;
@@ -704,11 +724,16 @@ internal class ConnectInterface {
         );
         y -= (UniformHeight + 20f) / UiManager.ScreenHeightRatio;
 
-        // Connect button
+        // Two buttons side-by-side (same layout as Direct IP tab)
+        var buttonGap = 10f;
+        var buttonWidth = (ContentWidth - buttonGap) / 2f;
+        var buttonOffset = ((buttonWidth + buttonGap) / 2f) / (float) System.Math.Pow(UiManager.ScreenHeightRatio, 2);
+
+        // Connect button (left)
         var connectButton = new ButtonComponent(
             group,
-            new Vector2(InitialX, y),
-            new Vector2(ContentWidth, UniformHeight),
+            new Vector2(InitialX - buttonOffset, y),
+            new Vector2(buttonWidth, UniformHeight),
             LobbyConnectButtonText,
             Resources.TextureManager.ButtonBg,
             Resources.FontManager.UIFontRegular,
@@ -716,7 +741,19 @@ internal class ConnectInterface {
         );
         connectButton.SetOnPress(OnLobbyConnectButtonPressed);
 
-        return (group, lobbyIdInput, connectButton);
+        // Host Lobby button (right)
+        var hostButton = new ButtonComponent(
+            group,
+            new Vector2(InitialX + buttonOffset, y),
+            new Vector2(buttonWidth, UniformHeight),
+            HostLobbyButtonText,
+            Resources.TextureManager.ButtonBg,
+            Resources.FontManager.UIFontRegular,
+            UiManager.NormalFontSize
+        );
+        hostButton.SetOnPress(OnHostLobbyButtonPressed);
+
+        return (group, lobbyIdInput, connectButton, hostButton);
     }
 
     /// <summary>
@@ -952,16 +989,82 @@ internal class ConnectInterface {
 
     /// <summary>
     /// Handles the Matchmaking tab's "Connect to Lobby" button press.
-    /// Initiates a search for Steam lobbies matching the entered Lobby ID.
+    /// Looks up lobby via MMS and connects to the host.
     /// </summary>
     private void OnLobbyConnectButtonPressed() {
-        if (!SteamManager.IsInitialized) {
-            ShowFeedback(Color.red, "Steam is not available.");
+        if (!ValidateUsername(out var username)) {
             return;
         }
 
-        ShowFeedback(Color.yellow, "Searching for lobbies...");
-        SteamManager.RequestLobbyList();
+        var lobbyId = _lobbyIdInput.GetInput();
+        if (string.IsNullOrWhiteSpace(lobbyId)) {
+            ShowFeedback(Color.red, "Enter a lobby ID");
+            return;
+        }
+
+        ShowFeedback(Color.yellow, "Discovering endpoint...");
+
+        // Discover our public endpoint and keep the socket for reuse
+        var stunResult = StunClient.DiscoverPublicEndpointWithSocket(0);
+        if (stunResult == null) {
+            ShowFeedback(Color.red, "Failed to discover public endpoint");
+            return;
+        }
+
+        var (clientIp, clientPort, socket) = stunResult.Value;
+        
+        // Store socket for HolePunchEncryptedTransport to use
+        ClientSocketHolder.PreBoundSocket = socket;
+
+        ShowFeedback(Color.yellow, "Joining lobby...");
+
+        // Join lobby and register our endpoint for punch-back
+        var result = _mmsClient.JoinLobby(lobbyId, clientIp, clientPort);
+        if (result == null) {
+            ClientSocketHolder.PreBoundSocket?.Dispose();
+            ClientSocketHolder.PreBoundSocket = null;
+            ShowFeedback(Color.red, "Lobby not found or offline");
+            return;
+        }
+
+        var (hostIp, hostPort) = result.Value;
+
+        // Loopback Guard: If connecting to ourself (same Public IP), use Localhost.
+        // This fixes Connection Timeouts when routers don't support NAT Loopback / Hairpinning.
+        if (hostIp == clientIp) {
+            Logger.Info("ConnectInterface: Host IP matches Client IP. Switching to 127.0.0.1 for local connection.");
+            ShowFeedback(Color.yellow, "Local Host detected! Using Localhost.");
+            hostIp = "127.0.0.1";
+        }
+
+        ShowFeedback(Color.green, $"Connecting to {hostIp}:{hostPort}...");
+        ConnectButtonPressed?.Invoke(hostIp, hostPort, username, TransportType.HolePunch);
+    }
+
+    /// <summary>
+    /// Handles the Matchmaking tab's "Host Lobby" button press.
+    /// Creates a new hole punch lobby and starts hosting.
+    /// </summary>
+    private void OnHostLobbyButtonPressed() {
+        if (!ValidateUsername(out var username)) {
+            return;
+        }
+
+        ShowFeedback(Color.yellow, "Creating lobby...");
+        Logger.Info($"Host lobby requested for user: {username} (HolePunch transport)");
+
+        // Create lobby on MMS
+        var lobbyId = _mmsClient.CreateLobby(26960);
+        if (lobbyId == null) {
+            ShowFeedback(Color.red, "Failed to create lobby. Is MMS running?");
+            return;
+        }
+
+        // Start polling for pending clients to punch back
+        _mmsClient.StartPendingClientPolling();
+
+        ShowFeedback(Color.green, $"Lobby: {lobbyId}");
+        StartHostButtonPressed?.Invoke("0.0.0.0", 26960, username, TransportType.HolePunch);
     }
 
     #endregion

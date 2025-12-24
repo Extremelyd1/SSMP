@@ -4,6 +4,7 @@ using SSMP.Game.Settings;
 using SSMP.Networking.Packet;
 using SSMP.Networking.Server;
 using SSMP.Networking.Transport.Common;
+using SSMP.Networking.Transport.HolePunch;
 using SSMP.Networking.Transport.SteamP2P;
 using SSMP.Networking.Transport.UDP;
 using SSMP.Ui;
@@ -91,6 +92,7 @@ internal class ModServerManager : ServerManager {
         IEncryptedTransportServer transportServer = transportType switch {
             TransportType.Udp => new UdpEncryptedTransportServer(),
             TransportType.Steam => new SteamEncryptedTransportServer(),
+            TransportType.HolePunch => new HolePunchEncryptedTransportServer(),
             _ => throw new ArgumentOutOfRangeException(nameof(transportType), transportType, null)
         };
 

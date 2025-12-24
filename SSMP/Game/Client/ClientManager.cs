@@ -20,6 +20,7 @@ using SSMP.Networking.Packet;
 using SSMP.Networking.Packet.Data;
 using SSMP.Networking.Packet.Update;
 using SSMP.Networking.Transport.Common;
+using SSMP.Networking.Transport.HolePunch;
 using SSMP.Networking.Transport.SteamP2P;
 using SSMP.Networking.Transport.UDP;
 using SSMP.Ui;
@@ -510,6 +511,7 @@ internal class ClientManager : IClientManager {
         var transport = transportType switch {
             TransportType.Udp => (IEncryptedTransport)new UdpEncryptedTransport(),
             TransportType.Steam => new SteamEncryptedTransport(),
+            TransportType.HolePunch => new HolePunchEncryptedTransport(),
             _ => throw new ArgumentOutOfRangeException(nameof(transportType), transportType, "Unsupported transport type")
         };
 

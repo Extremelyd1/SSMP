@@ -91,6 +91,13 @@ internal class DtlsServer {
     }
 
     /// <summary>
+    /// Send a raw UDP packet to the given endpoint (for hole punching).
+    /// </summary>
+    public void SendRaw(byte[] data, IPEndPoint endPoint) {
+        _socket?.SendTo(data, endPoint);
+    }
+
+    /// <summary>
     /// Stop the DTLS server by disconnecting all clients and cancelling all running threads.
     /// </summary>
     public void Stop() {
@@ -282,6 +289,7 @@ internal class DtlsServer {
         }
 
         // 2. Handle new connection attempt
+        Logger.Debug($"DtlsServer: Received packet from new endpoint {ipEndPoint} ({numReceived} bytes). Starting handshake.");
         var newTransport = new ServerDatagramTransport(_socket!) {
             IPEndPoint = ipEndPoint
         };
