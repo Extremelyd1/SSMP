@@ -232,6 +232,37 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// <summary>
     /// Stop sending the periodic UDP update packets after sending the current one.
     /// </summary>
+    /// <summary>
+    /// Resets the update manager state, clearing queues and sequences.
+    /// </summary>
+    public void Reset() {
+        lock (_lock) {
+            _receivedQueue?.Clear();
+            _rttTracker?.Reset();
+            
+            _localSequence = 0;
+            _remoteSequence = 0;
+            _currentPacket = new TOutgoing();
+            _lastSendRate = CurrentSendRate;
+            
+            // RttTracker reset logic (assuming it has one or just make a new one if it's cheap)
+            if (_rttTracker != null) _rttTracker = new RttTracker();
+            
+            // Similarly for others if needed, but RTT is key.
+            // ReliabilityManager buffers packets. It should be cleared.
+            if (_reliabilityManager != null && _rttTracker != null) {
+                 _reliabilityManager = new ReliabilityManager<TOutgoing, TPacketId>(this, _rttTracker);
+            }
+            
+            if (_congestionManager != null && _rttTracker != null) {
+                _congestionManager = new CongestionManager<TOutgoing, TPacketId>(this, _rttTracker);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Stop sending the periodic UDP update packets after sending the current one.
+    /// </summary>
     public void StopUpdates() {
         if (!_isUpdating) {
             return;

@@ -115,7 +115,7 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     /// </summary>
     public HolePunchEncryptedTransport() {
         _dtlsClient = new DtlsClient();
-        
+
         // Forward decrypted data from DTLS to our event subscribers
         _dtlsClient.DataReceivedEvent += OnDataReceived;
     }
@@ -132,11 +132,17 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     /// - Remote: Hole-punch first, then DTLS connection over punched socket
     /// </remarks>
     public void Connect(string address, int port) {
-        // Detect self-connect scenario (host connecting to own server)
-        if (address == LocalhostAddress) {
-            Logger.Debug("HolePunch: Self-connect detected, using direct DTLS");
-            
-            // No hole-punching needed for localhost
+        // Detect self-connect or LAN scenario
+        if (address == LocalhostAddress || IsPrivateIp(address)) {
+            Logger.Debug($"HolePunch: Local/LAN connection detected ({address}), using direct DTLS");
+
+            // We don't need the pre-bound socket for LAN, so clean it up
+            if (StunClient.PreBoundSocket != null) {
+                StunClient.PreBoundSocket.Close();
+                StunClient.PreBoundSocket = null;
+            }
+
+            // No hole-punching needed for localhost/LAN
             _dtlsClient.Connect(address, port);
             return;
         }
@@ -144,9 +150,25 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
         // Remote connection requires NAT traversal
         Logger.Info($"HolePunch: Starting NAT traversal to {address}:{port}");
         var socket = PerformHolePunch(address, port);
-        
+
         // Establish DTLS connection using the hole-punched socket
         _dtlsClient.Connect(address, port, socket);
+    }
+
+    /// <summary>
+    /// Checks if an IP address is a private (LAN) address.
+    /// </summary>
+    private static bool IsPrivateIp(string ipAddress) {
+        if (!IPAddress.TryParse(ipAddress, out var ip)) return false;
+
+        var bytes = ip.GetAddressBytes();
+
+        return bytes[0] switch {
+            10 => true, // 10.0.0.0/8
+            172 => bytes[1] >= 16 && bytes[1] <= 31, // 172.16.0.0/12
+            192 => bytes[1] == 168, // 192.168.0.0/16
+            _ => false
+        };
     }
 
     /// <summary>
@@ -196,7 +218,7 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
         // This is important because the NAT mapping was created with this socket
         var socket = StunClient.PreBoundSocket;
         StunClient.PreBoundSocket = null;
-        
+
         if (socket == null) {
             // Create new socket as fallback
             // Note: This won't work well with coordinated NAT traversal since
@@ -205,7 +227,7 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
             socket.Bind(new IPEndPoint(IPAddress.Any, 0));
             Logger.Warn("HolePunch: No pre-bound socket, creating new one (NAT traversal may fail)");
         }
-        
+
         // Suppress ICMP Port Unreachable errors (SIO_UDP_CONNRESET)
         // When we send to a port that's not open yet, we get ICMP errors
         // These would normally cause SocketException, but we want to ignore them
@@ -216,7 +238,7 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
             // Some platforms don't support this option, continue anyway
             Logger.Warn("HolePunch: Failed to set SioUdpConnReset (ignored platform?)");
         }
-        
+
         try {
             // Parse target endpoint
             var endpoint = new IPEndPoint(IPAddress.Parse(address), port);
@@ -227,7 +249,7 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
             // Each packet refreshes the NAT timer and increases chance of success
             for (var i = 0; i < PunchPacketCount; i++) {
                 socket.SendTo(PunchPacket, endpoint);
-                
+
                 // Wait between packets to spread them over time
                 Thread.Sleep(PunchPacketDelayMs);
             }
@@ -235,7 +257,7 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
             // "Connect" the socket to filter incoming packets to only this peer
             // This is important for DTLS which expects point-to-point communication
             socket.Connect(endpoint);
-            
+
             Logger.Info($"HolePunch: NAT traversal complete, socket connected to {endpoint}");
             return socket;
         } catch (Exception ex) {

@@ -1,37 +1,38 @@
 using System.Collections.Concurrent;
+using System.Net.WebSockets;
 
 namespace MMS.Models;
 
 /// <summary>
-/// Represents a pending client waiting to punch.
+/// Client waiting for NAT hole-punch.
 /// </summary>
 public record PendingClient(string ClientIp, int ClientPort, DateTime RequestedAt);
 
 /// <summary>
-/// Represents a game lobby for matchmaking.
+/// Game lobby. ConnectionData serves as both identifier and connection info.
+/// Steam: ConnectionData = Steam lobby ID. Matchmaking: ConnectionData = IP:Port.
 /// </summary>
-public class Lobby {
-    public string Id { get; init; } = null!;
-    public string HostToken { get; init; } = null!;
-    public string HostIp { get; set; } = null!;
-    public int HostPort { get; set; }
-    public DateTime LastHeartbeat { get; set; }
+public class Lobby(
+    string connectionData,
+    string hostToken,
+    string lobbyCode,
+    string lobbyName,
+    string lobbyType = "matchmaking",
+    string? hostLanIp = null
+) {
+    public string ConnectionData { get; } = connectionData;
+    public string HostToken { get; } = hostToken;
+    public string LobbyCode { get; } = lobbyCode;
+    public string LobbyName { get; } = lobbyName;
+    public string LobbyType { get; } = lobbyType;
+    public string? HostLanIp { get; } = hostLanIp;
 
-    /// <summary>
-    /// Clients waiting for the host to punch back to them.
-    /// </summary>
+    public DateTime LastHeartbeat { get; set; } = DateTime.UtcNow;
     public ConcurrentQueue<PendingClient> PendingClients { get; } = new();
-
-    /// <summary>
-    /// Whether this lobby is considered dead (no heartbeat for 60+ seconds).
-    /// </summary>
     public bool IsDead => DateTime.UtcNow - LastHeartbeat > TimeSpan.FromSeconds(60);
 
-    public Lobby(string id, string hostToken, string hostIp, int hostPort) {
-        Id = id;
-        HostToken = hostToken;
-        HostIp = hostIp;
-        HostPort = hostPort;
-        LastHeartbeat = DateTime.UtcNow;
-    }
+    /// <summary>
+    /// WebSocket connection from the host for push notifications.
+    /// </summary>
+    public WebSocket? HostWebSocket { get; set; }
 }

@@ -87,6 +87,15 @@ internal class NetServerClient {
     }
 
     /// <summary>
+    /// Resets the static ID counter and used IDs.
+    /// Should be called when the server is stopped to ensure the next server session starts with ID 0.
+    /// </summary>
+    public static void ResetIds() {
+        UsedIds.Clear();
+        _lastId = 0;
+    }
+
+    /// <summary>
     /// Get a new ID that is not in use by another client.
     /// </summary>
     /// <returns>An unused ID.</returns>

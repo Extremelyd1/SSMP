@@ -106,20 +106,27 @@ internal class DtlsServer {
         _socket?.Close();
         _socket = null;
 
-        // Wait for the socket receive thread to exit
+        // Wait for the socket receive thread to exit (short timeout to prevent freezing)
         if (_socketReceiveThread != null && _socketReceiveThread.IsAlive) {
-            _socketReceiveThread.Join(TimeSpan.FromSeconds(5));
+            if (!_socketReceiveThread.Join(500)) {
+                Logger.Warn("Socket receive thread did not exit within timeout, abandoning");
+            }
         }
         _socketReceiveThread = null;
 
         _tlsServer?.Cancel();
 
-        // Disconnect all clients
+        // Disconnect all clients without waiting for threads serially
+        // We just cancel tokens and close transports. The threads are background and will die.
         foreach (var kvp in _connections) {
             var connInfo = kvp.Value;
             lock (connInfo) {
                 if (connInfo.State == ConnectionState.Connected && connInfo.Client != null) {
-                    InternalDisconnectClient(connInfo.Client);
+                    // Signal cancellation but don't join
+                    connInfo.Client.ReceiveLoopTokenSource.Cancel();
+                    connInfo.Client.DtlsTransport.Close();
+                    connInfo.Client.DatagramTransport.Dispose();
+                    connInfo.Client.ReceiveLoopTokenSource.Dispose();
                 } else {
                     connInfo.DatagramTransport.Close();
                 }

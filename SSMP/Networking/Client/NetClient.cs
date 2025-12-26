@@ -147,6 +147,7 @@ internal class NetClient : INetClient {
                     _transport.Connect(address, port);
 
                     UpdateManager.Transport = _transport;
+                    UpdateManager.Reset();
                     UpdateManager.StartUpdates();
                     _chunkSender.Start();
 
@@ -258,6 +259,7 @@ internal class NetClient : INetClient {
                 // Route all transports through UpdateManager for sequence/ACK tracking
                 // UpdateManager will skip UDP-specific logic for Steam transports
                 UpdateManager.OnReceivePacket<ClientUpdatePacket, ClientUpdatePacketId>(clientUpdatePacket);
+
 
                 // First check for slice or slice ack data and handle it separately by passing it onto either the chunk 
                 // sender or chunk receiver

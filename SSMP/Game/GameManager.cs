@@ -77,8 +77,8 @@ internal class GameManager {
 
         // Initialize Steam if available
         if (SteamManager.Initialize()) {
-            // Register Steam callback updates on Unity's update loop
-            MonoBehaviourUtil.Instance.OnUpdateEvent += SteamManager.RunCallbacks;
+            // Register shutdown hook to leave lobby when server stops (but keep Steam running for restarts)
+            _serverManager.ServerShutdownEvent += SteamManager.LeaveLobby;
         }
 
         _uiManager.Initialize();
