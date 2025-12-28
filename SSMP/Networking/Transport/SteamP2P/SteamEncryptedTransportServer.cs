@@ -80,7 +80,7 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
 
         Logger.Info("Steam P2P: Server started, listening for connections");
 
-        SteamLoopbackChannel.RegisterServer(this);
+        SteamLoopbackChannel.GetOrCreate().RegisterServer(this);
 
         _receiveTokenSource = new CancellationTokenSource();
         _receiveThread = new Thread(ReceiveLoop) { IsBackground = true };
@@ -112,7 +112,8 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
             DisconnectClient(client);
         }
 
-        SteamLoopbackChannel.UnregisterServer();
+        SteamLoopbackChannel.GetOrCreate().UnregisterServer();
+        SteamLoopbackChannel.ReleaseIfEmpty();
 
         _clients.Clear();
         _sessionRequestCallback?.Dispose();
@@ -124,7 +125,7 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
     /// <inheritdoc />
     public void DisconnectClient(IEncryptedTransportClient client) {
         if (client is not SteamEncryptedTransportClient steamClient) return;
-        
+
         var steamId = new CSteamID(steamClient.SteamId);
         if (!_clients.TryRemove(steamId, out _)) return;
 
@@ -176,7 +177,7 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
                     Logger.Info("Steam P2P Server: Steam shut down, exiting receive loop");
                     break;
                 }
-                
+
                 ProcessIncomingPackets();
 
                 // Steam API does not provide a blocking receive or callback for P2P packets,

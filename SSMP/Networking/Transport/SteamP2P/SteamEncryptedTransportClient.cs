@@ -24,12 +24,21 @@ internal class SteamEncryptedTransportClient : IReliableTransportClient {
 
     /// <inheritdoc />
     public string ToDisplayString() => "SteamP2P";
-    
+
     /// <inheritdoc />
     public string GetUniqueIdentifier() => SteamId.ToString();
-    
+
     /// <inheritdoc />
     public IPEndPoint? EndPoint => null; // Steam doesn't need throttling
+
+    /// <inheritdoc />
+    public bool RequiresCongestionManagement => false;
+
+    /// <inheritdoc />
+    public bool RequiresReliability => false;
+
+    /// <inheritdoc />
+    public bool RequiresSequencing => false;
 
     /// <inheritdoc />
     public event Action<byte[], int>? DataReceivedEvent;
@@ -60,6 +69,7 @@ internal class SteamEncryptedTransportClient : IReliableTransportClient {
         if (sendType == EP2PSend.k_EP2PSendReliable) {
             Logger.Debug($"Steam P2P: Sending RELIABLE packet to {SteamId} of length {length}");
         }
+
         if (!SteamManager.IsInitialized) {
             Logger.Warn($"Steam P2P: Cannot send to client {SteamId}, Steam not initialized");
             return;
@@ -67,7 +77,7 @@ internal class SteamEncryptedTransportClient : IReliableTransportClient {
 
         // Check for loopback
         if (_steamIdStruct == SteamUser.GetSteamID()) {
-            SteamLoopbackChannel.SendToClient(buffer, offset, length);
+            SteamLoopbackChannel.GetOrCreate().SendToClient(buffer, offset, length);
             return;
         }
 

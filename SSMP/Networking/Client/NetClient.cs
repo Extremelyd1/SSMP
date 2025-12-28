@@ -141,35 +141,36 @@ internal class NetClient : INetClient {
 
         // Start a new thread for establishing the connection, otherwise Unity will hang
         new Thread(() => {
-            try {
-                _transport = transport;
-                _transport.DataReceivedEvent += OnReceiveData;
-                _transport.Connect(address, port);
+                try {
+                    _transport = transport;
+                    _transport.DataReceivedEvent += OnReceiveData;
+                    _transport.Connect(address, port);
 
-                UpdateManager.Transport = _transport;
-                UpdateManager.StartUpdates();
-                _chunkSender.Start();
+                    UpdateManager.Transport = _transport;
+                    UpdateManager.StartUpdates();
+                    _chunkSender.Start();
 
-                // Only UDP/HolePunch need timeout management (Steam has built-in connection tracking)
-                if (_transport.RequiresCongestionManagement) {
-                    UpdateManager.TimeoutEvent += OnConnectTimedOut;
+                    // Only UDP/HolePunch need timeout management (Steam has built-in connection tracking)
+                    if (_transport.RequiresCongestionManagement) {
+                        UpdateManager.TimeoutEvent += OnConnectTimedOut;
+                    }
+
+                    _connectionManager.StartConnection(username, authKey, addonData);
+                } catch (TlsTimeoutException) {
+                    Logger.Info("DTLS connection timed out");
+                    HandleConnectFailed(new ConnectionFailedResult { Reason = ConnectionFailedReason.TimedOut });
+                } catch (SocketException e) {
+                    Logger.Error($"Failed to connect due to SocketException:\n{e}");
+                    HandleConnectFailed(new ConnectionFailedResult { Reason = ConnectionFailedReason.SocketException });
+                } catch (Exception e) when (e is IOException) {
+                    Logger.Error($"Failed to connect due to IOException:\n{e}");
+                    HandleConnectFailed(new ConnectionFailedResult { Reason = ConnectionFailedReason.IOException });
+                } catch (Exception e) {
+                    Logger.Error($"Unexpected error during connection:\n{e}");
+                    HandleConnectFailed(new ConnectionFailedResult { Reason = ConnectionFailedReason.IOException });
                 }
-
-                _connectionManager.StartConnection(username, authKey, addonData, _transport);
-            } catch (TlsTimeoutException) {
-                Logger.Info("DTLS connection timed out");
-                HandleConnectFailed(new ConnectionFailedResult { Reason = ConnectionFailedReason.TimedOut });
-            } catch (SocketException e) {
-                Logger.Error($"Failed to connect due to SocketException:\n{e}");
-                HandleConnectFailed(new ConnectionFailedResult { Reason = ConnectionFailedReason.SocketException });
-            } catch (Exception e) when (e is IOException) {
-                Logger.Error($"Failed to connect due to IOException:\n{e}");
-                HandleConnectFailed(new ConnectionFailedResult { Reason = ConnectionFailedReason.IOException });
-            } catch (Exception e) {
-                Logger.Error($"Unexpected error during connection:\n{e}");
-                HandleConnectFailed(new ConnectionFailedResult { Reason = ConnectionFailedReason.IOException });
             }
-        }) { IsBackground = true }.Start();
+        ) { IsBackground = true }.Start();
     }
 
 
@@ -221,12 +222,13 @@ internal class NetClient : INetClient {
         // This provides a consistent notification for observers to clean up resources
         if (shouldFireEvent && wasConnectedOrConnecting) {
             ThreadUtil.RunActionOnMainThread(() => {
-                try {
-                    DisconnectEvent?.Invoke();
-                } catch (Exception e) {
-                    Logger.Error($"Error in DisconnectEvent: {e}");
+                    try {
+                        DisconnectEvent?.Invoke();
+                    } catch (Exception e) {
+                        Logger.Error($"Error in DisconnectEvent: {e}");
+                    }
                 }
-            });
+            );
         }
     }
 
@@ -293,12 +295,13 @@ internal class NetClient : INetClient {
             }
 
             ThreadUtil.RunActionOnMainThread(() => {
-                try {
-                    ConnectEvent?.Invoke(serverInfo);
-                } catch (Exception e) {
-                    Logger.Error($"Error in ConnectEvent: {e}");
+                    try {
+                        ConnectEvent?.Invoke(serverInfo);
+                    } catch (Exception e) {
+                        Logger.Error($"Error in ConnectEvent: {e}");
+                    }
                 }
-            });
+            );
             return;
         }
 
@@ -308,7 +311,7 @@ internal class NetClient : INetClient {
                 Reason = ConnectionFailedReason.InvalidAddons,
                 AddonData = serverInfo.AddonData
             }
-            : (ConnectionFailedResult)new ConnectionFailedMessageResult {
+            : (ConnectionFailedResult) new ConnectionFailedMessageResult {
                 Reason = ConnectionFailedReason.Other,
                 Message = serverInfo.ConnectionRejectedMessage
             };
@@ -319,9 +322,11 @@ internal class NetClient : INetClient {
     /// <summary>
     /// Callback method for when the client connection fails.
     /// </summary>
-    private void OnConnectTimedOut() => HandleConnectFailed(new ConnectionFailedResult {
-        Reason = ConnectionFailedReason.TimedOut
-    });
+    private void OnConnectTimedOut() => HandleConnectFailed(
+        new ConnectionFailedResult {
+            Reason = ConnectionFailedReason.TimedOut
+        }
+    );
 
     /// <summary>
     /// Callback method for when the client times out while connected.
@@ -352,7 +357,8 @@ internal class NetClient : INetClient {
         if (addon.NetworkSender != null) {
             if (!(addon.NetworkSender is IClientAddonNetworkSender<TPacketId> addonNetworkSender)) {
                 throw new InvalidOperationException(
-                    "Cannot request network senders with differing generic parameters");
+                    "Cannot request network senders with differing generic parameters"
+                );
             }
 
             return addonNetworkSender;
@@ -397,7 +403,8 @@ internal class NetClient : INetClient {
             addon.NetworkReceiver = networkReceiver;
         } else if (addon.NetworkReceiver is not IClientAddonNetworkReceiver<TPacketId>) {
             throw new InvalidOperationException(
-                "Cannot request network receivers with differing generic parameters");
+                "Cannot request network receivers with differing generic parameters"
+            );
         }
 
         networkReceiver?.AssignAddonPacketInfo(packetInstantiator);

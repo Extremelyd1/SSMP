@@ -15,7 +15,7 @@ internal class SteamEncryptedTransport : IReliableTransport {
     /// <summary>
     /// Maximum Steam P2P packet size.
     /// </summary>
-    private const int MaxPacketSize = 1200;
+    private const int SteamMaxPacketSize = 1200;
 
     /// <summary>
     /// Polling interval in milliseconds for Steam P2P packet receive loop.
@@ -28,6 +28,15 @@ internal class SteamEncryptedTransport : IReliableTransport {
 
     /// <inheritdoc />
     public bool RequiresCongestionManagement => false;
+
+    /// <inheritdoc />
+    public bool RequiresReliability => false;
+
+    /// <inheritdoc />
+    public bool RequiresSequencing => false;
+
+    /// <inheritdoc />
+    public int MaxPacketSize => SteamMaxPacketSize;
 
     /// <summary>
     /// The Steam ID of the remote peer we're connected to.
@@ -47,7 +56,7 @@ internal class SteamEncryptedTransport : IReliableTransport {
     /// <summary>
     /// Buffer for receiving P2P packets.
     /// </summary>
-    private readonly byte[] _receiveBuffer = new byte[MaxPacketSize];
+    private readonly byte[] _receiveBuffer = new byte[SteamMaxPacketSize];
 
     /// <summary>
     /// Token source for cancelling the receive loop.
@@ -85,7 +94,7 @@ internal class SteamEncryptedTransport : IReliableTransport {
 
         if (_remoteSteamId == _localSteamId) {
             Logger.Info("Steam P2P: Connecting to self, using loopback channel");
-            SteamLoopbackChannel.RegisterClient(this);
+            SteamLoopbackChannel.GetOrCreate().RegisterClient(this);
         }
 
         _receiveTokenSource = new CancellationTokenSource();
@@ -116,7 +125,7 @@ internal class SteamEncryptedTransport : IReliableTransport {
         }
 
         if (_remoteSteamId == _localSteamId) {
-            SteamLoopbackChannel.SendToServer(buffer, offset, length);
+            SteamLoopbackChannel.GetOrCreate().SendToServer(buffer, offset, length);
             return;
         }
 
@@ -131,11 +140,11 @@ internal class SteamEncryptedTransport : IReliableTransport {
         if (!SteamNetworking.IsP2PPacketAvailable(out var packetSize)) return;
 
         if (!SteamNetworking.ReadP2PPacket(
-            _receiveBuffer,
-            MaxPacketSize,
-            out packetSize,
-            out var remoteSteamId
-        )) {
+                _receiveBuffer,
+                SteamMaxPacketSize,
+                out packetSize,
+                out var remoteSteamId
+            )) {
             return;
         }
 
@@ -163,7 +172,8 @@ internal class SteamEncryptedTransport : IReliableTransport {
     public void Disconnect() {
         if (!_isConnected) return;
 
-        SteamLoopbackChannel.UnregisterClient();
+        SteamLoopbackChannel.GetOrCreate().UnregisterClient();
+        SteamLoopbackChannel.ReleaseIfEmpty();
 
         Logger.Info($"Steam P2P: Disconnecting from {_remoteSteamId}");
 
