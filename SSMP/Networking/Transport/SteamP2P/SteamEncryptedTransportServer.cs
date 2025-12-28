@@ -203,11 +203,11 @@ internal class SteamEncryptedTransportServer : IEncryptedTransportServer {
 
         while (SteamNetworking.IsP2PPacketAvailable(out var packetSize)) {
             if (!SteamNetworking.ReadP2PPacket(
-                    _receiveBuffer,
-                    MaxPacketSize,
-                    out packetSize,
-                    out var remoteSteamId
-                )) {
+                _receiveBuffer,
+                MaxPacketSize,
+                out packetSize,
+                out var remoteSteamId
+            )) {
                 continue;
             }
 

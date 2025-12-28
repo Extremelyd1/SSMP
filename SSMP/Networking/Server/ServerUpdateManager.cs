@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
 using SSMP.Game;
 using SSMP.Game.Client.Entity;
 using SSMP.Game.Settings;
@@ -64,8 +63,8 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
 
             // Search for existing packet data
             var dataInstances = packetDataCollection.DataInstances;
-            for (int i = 0; i < dataInstances.Count; i++) {
-                var existingData = (T) dataInstances[i];
+            foreach (var t in dataInstances) {
+                var existingData = (T) t;
                 if (findFunc(existingData)) {
                     return existingData;
                 }
@@ -339,8 +338,8 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
 
         // Search for existing entity update
         var dataInstances = entityUpdateCollection.DataInstances;
-        for (int i = 0; i < dataInstances.Count; i++) {
-            var existingUpdate = (T) dataInstances[i];
+        foreach (var t in dataInstances) {
+            var existingUpdate = (T) t;
             if (existingUpdate.Id == entityId) {
                 return existingUpdate;
             }
