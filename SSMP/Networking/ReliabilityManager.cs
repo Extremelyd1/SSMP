@@ -15,15 +15,6 @@ internal class ReliabilityManager<TOutgoing, TPacketId>(
 )
     where TOutgoing : UpdatePacket<TPacketId>, new()
     where TPacketId : Enum {
-    /// <summary>
-    /// Tracks a sent packet with its stopwatch and lost status.
-    /// </summary>
-    private class TrackedPacket {
-        public TOutgoing Packet { get; init; } = null!;
-        public Stopwatch Stopwatch { get; } = Stopwatch.StartNew();
-        public bool Lost { get; set; }
-    }
-
     private readonly ConcurrentDictionary<ushort, TrackedPacket> _sentPackets = new();
 
     /// <summary>
@@ -59,5 +50,14 @@ internal class ReliabilityManager<TOutgoing, TPacketId>(
                 updateManager.ResendReliableData(tracked.Packet);
             }
         }
+    }
+
+    /// <summary>
+    /// Tracks a sent packet with its stopwatch and lost status.
+    /// </summary>
+    private class TrackedPacket {
+        public TOutgoing Packet { get; init; } = null!;
+        public Stopwatch Stopwatch { get; } = Stopwatch.StartNew();
+        public bool Lost { get; set; }
     }
 }
