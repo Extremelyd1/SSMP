@@ -8,18 +8,39 @@ namespace SSMP.Networking;
 /// Provides adaptive RTT measurements for reliability and congestion management.
 /// </summary>
 internal sealed class RttTracker {
-    // RTT Bounds (milliseconds)
+    /// <summary>
+    /// Initial connection timeout in milliseconds before first ACK is received.
+    /// </summary>
     private const int InitialConnectionTimeout = 5000;
+
+    /// <summary>
+    /// Minimum RTT threshold in milliseconds.
+    /// </summary>
     private const int MinRttThreshold = 200;
+
+    /// <summary>
+    /// Maximum RTT threshold in milliseconds.
+    /// </summary>
     private const int MaxRttThreshold = 1000;
 
-    // EMA smoothing factor (0.1 = 10% of new sample, 90% of existing average)
+    /// <summary>
+    /// EMA smoothing factor (0.1 = 10% of new sample, 90% of existing average).
+    /// </summary>
     private const float RttSmoothingFactor = 0.1f;
 
-    // Loss detection multiplier (2x RTT)
+    /// <summary>
+    /// Loss detection multiplier (2x RTT).
+    /// </summary>
     private const int LossDetectionMultiplier = 2;
 
+    /// <summary>
+    /// Dictionary tracking packets by sequence number with their associated stopwatches.
+    /// </summary>
     private readonly ConcurrentDictionary<ushort, Stopwatch> _trackedPackets = new();
+
+    /// <summary>
+    /// Indicates whether the first acknowledgment has been received.
+    /// </summary>
     private bool _firstAckReceived;
 
     /// <summary>

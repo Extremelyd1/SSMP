@@ -76,19 +76,14 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     private readonly Timer _heartBeatTimer;
 
     /// <summary>
-    /// Object to lock asynchronous accesses.
-    /// </summary>
-    private readonly object _lock = new();
-
-    /// <summary>
     /// Cached capability: whether the transport requires application-level sequencing.
     /// </summary>
     private bool _requiresSequencing = true;
 
     /// <summary>
-    /// Cached capability: whether the transport requires application-level reliability.
+    /// Whether the transport requires application-level reliability.
     /// </summary>
-    private bool _requiresReliability = true;
+    protected bool RequiresReliability { get; private set; } = true;
 
     /// <summary>
     /// The last sent sequence number.
@@ -118,24 +113,14 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     private volatile object? _transportSender;
 
     /// <summary>
-    /// The current instance of the update packet.
+    /// The current update packet being assembled.
     /// </summary>
-    private TOutgoing _currentPacket;
-
-    /// <summary>
-    /// The current update packet being assembled. Protected for subclass access.
-    /// </summary>
-    protected TOutgoing CurrentUpdatePacket => _currentPacket;
+    protected TOutgoing CurrentUpdatePacket { get; private set; }
 
     /// <summary>
     /// Lock object for synchronizing packet assembly. Protected for subclass access.
     /// </summary>
-    protected object Lock => _lock;
-
-    /// <summary>
-    /// Whether the transport requires application-level reliability. Protected for subclass access.
-    /// </summary>
-    protected bool RequiresReliability => _requiresReliability;
+    protected object Lock { get; } = new();
 
     /// <summary>
     /// Gets or sets the transport for client-side communication.
@@ -147,7 +132,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
             if (value == null) return;
 
             _requiresSequencing = value.RequiresSequencing;
-            _requiresReliability = value.RequiresReliability;
+            RequiresReliability = value.RequiresReliability;
             InitializeManagersIfNeeded();
         }
     }
@@ -162,7 +147,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
             if (value == null) return;
 
             _requiresSequencing = value.RequiresSequencing;
-            _requiresReliability = value.RequiresReliability;
+            RequiresReliability = value.RequiresReliability;
             InitializeManagersIfNeeded();
         }
     }
@@ -178,7 +163,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
             _congestionManager ??= new CongestionManager<TOutgoing, TPacketId>(this, _rttTracker);
         }
 
-        if (_requiresReliability && _rttTracker != null) {
+        if (RequiresReliability && _rttTracker != null) {
             _reliabilityManager ??= new ReliabilityManager<TOutgoing, TPacketId>(this, _rttTracker);
         }
     }
@@ -203,7 +188,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// Construct the update manager with a UDP socket.
     /// </summary>
     protected UpdateManager() {
-        _currentPacket = new TOutgoing();
+        CurrentUpdatePacket = new TOutgoing();
 
         _sendTimer = new Timer {
             AutoReset = true,
@@ -281,6 +266,8 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         _congestionManager?.OnReceivePacket();
 
         var sequence = packet.Sequence;
+        // _receivedQueue is guaranteed non-null here:
+        // InitializeManagersIfNeeded() initializes it when _requiresSequencing is true
         _receivedQueue!.Enqueue(sequence);
 
         packet.DropDuplicateResendData(_receivedQueue.GetCopy());
@@ -300,16 +287,16 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         var rawPacket = new Packet.Packet();
         TOutgoing packetToSend;
 
-        lock (_lock) {
+        lock (Lock) {
             // Transports requiring sequencing: Configure sequence and ACK data
             if (_requiresSequencing) {
-                _currentPacket.Sequence = _localSequence;
-                _currentPacket.Ack = _remoteSequence;
+                CurrentUpdatePacket.Sequence = _localSequence;
+                CurrentUpdatePacket.Ack = _remoteSequence;
                 PopulateAckField();
             }
 
             try {
-                _currentPacket.CreatePacket(rawPacket);
+                CurrentUpdatePacket.CreatePacket(rawPacket);
             } catch (Exception e) {
                 Logger.Error($"Failed to create packet: {e}");
                 return;
@@ -317,14 +304,18 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
 
             // Reset the packet by creating a new instance,
             // but keep the original instance for reliability data re-sending
-            packetToSend = _currentPacket;
-            _currentPacket = new TOutgoing();
+            packetToSend = CurrentUpdatePacket;
+            CurrentUpdatePacket = new TOutgoing();
         }
 
         // Transports requiring sequencing: Track for RTT, reliability
         if (_requiresSequencing) {
+            // _rttTracker is guaranteed non-null here:
+            // InitializeManagersIfNeeded() initializes it when _requiresSequencing is true
             _rttTracker!.OnSendPacket(_localSequence);
-            if (_requiresReliability) {
+            if (RequiresReliability) {
+                // _reliabilityManager is guaranteed non-null here: InitializeManagersIfNeeded() initializes it
+                // when RequiresReliability is true and _rttTracker is non-null (which it is per above)
                 _reliabilityManager!.OnSendPacket(_localSequence, packetToSend);
             }
 
@@ -340,8 +331,10 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// Only used for UDP/HolePunch transports.
     /// </summary>
     private void PopulateAckField() {
+        // _receivedQueue is guaranteed non-null here: this method is only called inside _requiresSequencing blocks,
+        // and InitializeManagersIfNeeded() initializes _receivedQueue when _requiresSequencing is true
         var receivedQueue = _receivedQueue!.GetCopy();
-        var ackField = _currentPacket.AckField;
+        var ackField = CurrentUpdatePacket.AckField;
 
         for (ushort i = 0; i < ConnectionManager.AckSize; i++) {
             var pastSequence = (ushort) (_remoteSequence - i - 1);
@@ -369,8 +362,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
             var chunkSize = System.Math.Min(remaining, PacketMtu);
             var fragment = new byte[chunkSize];
 
-            // Use Buffer.BlockCopy for better performance with byte arrays
-            Buffer.BlockCopy(data, offset, fragment, 0, chunkSize);
+            Array.Copy(data, offset, fragment, 0, chunkSize);
 
             // Fragmented packets are only reliable if the original packet was, and we only 
             // set reliability for the first fragment or all? 
@@ -467,7 +459,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         byte packetIdSize,
         IPacketData packetData
     ) {
-        lock (_lock) {
+        lock (Lock) {
             var addonPacketData = GetOrCreateAddonPacketData(addonId, packetIdSize);
             addonPacketData.PacketData[packetId] = packetData;
         }
@@ -488,7 +480,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         byte packetIdSize,
         TPacketData packetData
     ) where TPacketData : IPacketData, new() {
-        lock (_lock) {
+        lock (Lock) {
             var addonPacketData = GetOrCreateAddonPacketData(addonId, packetIdSize);
 
             if (!addonPacketData.PacketData.TryGetValue(packetId, out var existingPacketData)) {
@@ -515,9 +507,9 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// <param name="packetIdSize">The size of the packet ID space.</param>
     /// <returns>The addon packet data instance.</returns>
     private AddonPacketData GetOrCreateAddonPacketData(byte addonId, byte packetIdSize) {
-        if (!_currentPacket.TryGetSendingAddonPacketData(addonId, out var addonPacketData)) {
+        if (!CurrentUpdatePacket.TryGetSendingAddonPacketData(addonId, out var addonPacketData)) {
             addonPacketData = new AddonPacketData(packetIdSize);
-            _currentPacket.SetSendingAddonPacketData(addonId, addonPacketData);
+            CurrentUpdatePacket.SetSendingAddonPacketData(addonId, addonPacketData);
         }
 
         return addonPacketData;
