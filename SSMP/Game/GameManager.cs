@@ -77,12 +77,16 @@ internal class GameManager {
 
         // Initialize Steam if available
         if (SteamManager.Initialize()) {
-            // Register shutdown hook to leave lobby when server stops (but keep Steam running for restarts)
-            _serverManager.ServerShutdownEvent += SteamManager.LeaveLobby;
+            // Hook lobby cleanup to UI's stop request (explicit user action), NOT ServerShutdownEvent
+            // ServerShutdownEvent fires on server restarts too, which would prematurely clean up lobbies
+            _uiManager.RequestServerStopHostEvent += () => {
+                SteamManager.LeaveLobby();
+                // Also close MMS lobby registration if any (for public Steam lobbies)
+                _uiManager.ConnectInterface.MmsClient.CloseLobby();
+            };
         }
 
         _uiManager.Initialize();
-        
         _serverManager.Initialize();
         _clientManager.Initialize(_serverManager);
     }

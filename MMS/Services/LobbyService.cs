@@ -30,12 +30,19 @@ public class LobbyService {
         string? hostLanIp = null
     ) {
         var hostToken = GenerateToken(32);
-        var lobbyCode = GenerateLobbyCode();
+        
+        // Only generate lobby codes for matchmaking lobbies
+        // Steam lobbies use Steam's native join flow (no MMS invite codes)
+        var lobbyCode = lobbyType == "steam" ? "" : GenerateLobbyCode();
         var lobby = new Lobby(connectionData, hostToken, lobbyCode, lobbyName, lobbyType, hostLanIp);
 
         _lobbies[connectionData] = lobby;
         _tokenToConnectionData[hostToken] = connectionData;
-        _codeToConnectionData[lobbyCode] = connectionData;
+        
+        // Only register code if we generated one
+        if (!string.IsNullOrEmpty(lobbyCode)) {
+            _codeToConnectionData[lobbyCode] = connectionData;
+        }
 
         return lobby;
     }

@@ -372,6 +372,7 @@ internal class ClientManager : IClientManager {
     private void RegisterCommands() {
         _commandManager.RegisterCommand(new AddonCommand(_addonManager, _netClient));
         _commandManager.RegisterCommand(new DebugCommand());
+        _commandManager.RegisterCommand(new InviteCommand());
     }
 
     /// <summary>

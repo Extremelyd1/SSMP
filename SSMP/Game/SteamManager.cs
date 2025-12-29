@@ -34,7 +34,7 @@ public static class SteamManager {
     /// <summary>
     /// Whether we are currently hosting a Steam lobby.
     /// </summary>
-    private static bool IsHostingLobby { get; set; }
+    public static bool IsHostingLobby { get; private set; }
 
     /// <summary>
     /// Whether we are currently in a Steam lobby (hosting or client).
@@ -63,6 +63,12 @@ public static class SteamManager {
     /// Stored username for lobby creation callback.
     /// </summary>
     private static string? _pendingLobbyUsername;
+
+    /// <summary>
+    /// Stored lobby type for lobby creation callback.
+    /// Used to determine if Rich Presence should be set (not set for private lobbies).
+    /// </summary>
+    private static ELobbyType _pendingLobbyType;
 
     /// <summary>
     /// Callback timer interval in milliseconds (~60Hz).
@@ -163,8 +169,9 @@ public static class SteamManager {
 
         // Use Interlocked for atomic write (faster than lock for simple assignments)
         Volatile.Write(ref _pendingLobbyUsername, username);
+        _pendingLobbyType = lobbyType;
         
-        Logger.Info($"Creating Steam lobby for {maxPlayers} players...");
+        Logger.Info($"Creating Steam lobby for {maxPlayers} players (type: {lobbyType})...");
 
         // Create lobby and register callback (reuse pre-allocated callback)
         var apiCall = SteamMatchmaking.CreateLobby(lobbyType, maxPlayers);
@@ -218,8 +225,30 @@ public static class SteamManager {
         CurrentLobbyId = NilLobbyId;
         IsHostingLobby = false;
 
+        // Clear Rich Presence so friends no longer see "Join Game" option
+        SteamFriends.ClearRichPresence();
+
         Logger.Info($"Leaving Steam lobby: {lobbyToLeave}");
         SteamMatchmaking.LeaveLobby(lobbyToLeave);
+    }
+
+    /// <summary>
+    /// Opens the Steam overlay invite dialog to invite friends to the current lobby.
+    /// Works for all lobby types (Public, Friends Only, Private).
+    /// </summary>
+    public static void OpenInviteDialog() {
+        if (!IsInitialized) {
+            Logger.Warn("Cannot open invite dialog: Steam is not initialized");
+            return;
+        }
+
+        if (CurrentLobbyId == NilLobbyId) {
+            Logger.Warn("Cannot open invite dialog: Not in a lobby");
+            return;
+        }
+
+        Logger.Info($"Opening Steam invite dialog for lobby: {CurrentLobbyId}");
+        SteamFriends.ActivateGameOverlayInviteDialog(CurrentLobbyId);
     }
 
     /// <summary>
@@ -324,6 +353,19 @@ public static class SteamManager {
         var steamName = SteamFriends.GetPersonaName();
         SteamMatchmaking.SetLobbyData(lobbyId, LobbyKeyName, $"{steamName}'s Lobby");
         SteamMatchmaking.SetLobbyData(lobbyId, LobbyKeyVersion, UnityEngine.Application.version);
+
+        // Set Rich Presence based on lobby type
+        // Private lobbies: NO connect key (truly invite-only, no "Join Game" button)
+        // Public/Friends: Set connect key so friends can "Join Game" from Steam
+        if (_pendingLobbyType != ELobbyType.k_ELobbyTypePrivate) {
+            SteamFriends.SetRichPresence("connect", lobbyId.m_SteamID.ToString());
+            SteamFriends.SetRichPresence("status", "In Lobby");
+            Logger.Info($"Rich Presence set with connect={lobbyId.m_SteamID}");
+        } else {
+            // Private lobby: set status only, use /invite command to send invites
+            SteamFriends.SetRichPresence("status", "In Private Lobby");
+            Logger.Info("Private lobby - use /invite to send Steam invites");
+        }
 
         // Fire event for listeners
         LobbyCreatedEvent?.Invoke(lobbyId, username ?? "Unknown");
