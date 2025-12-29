@@ -12,20 +12,46 @@ namespace SSMP.Ui.Component;
 /// Includes Back and Refresh buttons at the bottom.
 /// </summary>
 internal class LobbyBrowserPanel : IComponent {
+    /// <summary>The root GameObject for this panel.</summary>
     private GameObject GameObject { get; }
+
+    /// <summary>Content container for the scrollable lobby list.</summary>
     private readonly RectTransform _content;
+
+    /// <summary>Text displayed when no lobbies are available.</summary>
     private readonly Text _emptyText;
+
+    /// <summary>List of instantiated lobby entry GameObjects.</summary>
     private readonly List<GameObject> _lobbyEntries = [];
+
+    /// <summary>Callback invoked when a lobby is selected.</summary>
     private Action<PublicLobbyInfo>? _onLobbySelected;
+
+    /// <summary>Callback invoked when Back is pressed.</summary>
     private Action? _onBack;
+
+    /// <summary>Callback invoked when Refresh is pressed.</summary>
     private Action? _onRefresh;
+
+    /// <summary>Tracks the panel's own active state.</summary>
     private bool _activeSelf;
+
+    /// <summary>Parent component group for visibility management.</summary>
     private readonly ComponentGroup _componentGroup;
 
+    /// <summary>Height of each lobby entry row.</summary>
     private const float EntryHeight = 50f;
+
+    /// <summary>Vertical spacing between lobby entries.</summary>
     private const float EntrySpacing = 8f;
+
+    /// <summary>Padding around panel edges.</summary>
     private const float Padding = 15f;
+
+    /// <summary>Height of the header text.</summary>
     private const float HeaderHeight = 35f;
+
+    /// <summary>Height of the bottom button area.</summary>
     private const float ButtonAreaHeight = 60f;
 
     public LobbyBrowserPanel(ComponentGroup parent, Vector2 position, Vector2 size) {
@@ -165,10 +191,28 @@ internal class LobbyBrowserPanel : IComponent {
         Object.DontDestroyOnLoad(btnObj);
     }
 
+    /// <summary>
+    /// Sets the callback invoked when a lobby is selected for joining.
+    /// </summary>
+    /// <param name="callback">Callback receiving the selected lobby info.</param>
     public void SetOnLobbySelected(Action<PublicLobbyInfo> callback) => _onLobbySelected = callback;
+
+    /// <summary>
+    /// Sets the callback invoked when the Back button is pressed.
+    /// </summary>
+    /// <param name="callback">Callback to invoke on back.</param>
     public void SetOnBack(Action callback) => _onBack = callback;
+
+    /// <summary>
+    /// Sets the callback invoked when the Refresh button is pressed.
+    /// </summary>
+    /// <param name="callback">Callback to invoke on refresh.</param>
     public void SetOnRefresh(Action callback) => _onRefresh = callback;
 
+    /// <summary>
+    /// Populates the panel with the given list of public lobbies.
+    /// </summary>
+    /// <param name="lobbies">List of lobbies to display, or null/empty to show the empty message.</param>
     public void SetLobbies(List<PublicLobbyInfo>? lobbies) {
         foreach (var entry in _lobbyEntries) {
             Object.Destroy(entry);
@@ -270,30 +314,46 @@ internal class LobbyBrowserPanel : IComponent {
         return entry;
     }
 
+    /// <summary>
+    /// Shows the panel.
+    /// </summary>
     public void Show() => GameObject.SetActive(true);
+
+    /// <summary>
+    /// Hides the panel.
+    /// </summary>
     public void Hide() => GameObject.SetActive(false);
+
+    /// <summary>
+    /// Gets whether the panel is currently visible.
+    /// </summary>
     public bool IsVisible => GameObject.activeSelf;
 
+    /// <inheritdoc />
     public void SetGroupActive(bool groupActive) {
         if (GameObject == null) return;
         GameObject.SetActive(_activeSelf && groupActive);
     }
 
+    /// <inheritdoc />
     public void SetActive(bool active) {
         _activeSelf = active;
         GameObject.SetActive(_activeSelf && _componentGroup.IsActive());
     }
 
+    /// <inheritdoc />
     public Vector2 GetPosition() {
         var rectTransform = GameObject.GetComponent<RectTransform>();
         var position = rectTransform.anchorMin;
         return new Vector2(position.x * 1920f, position.y * 1080f);
     }
 
+    /// <inheritdoc />
     public void SetPosition(Vector2 position) {
         var rectTransform = GameObject.GetComponent<RectTransform>();
         rectTransform.anchorMin = rectTransform.anchorMax = new Vector2(position.x / 1920f, position.y / 1080f);
     }
 
+    /// <inheritdoc />
     public Vector2 GetSize() => GameObject.GetComponent<RectTransform>().sizeDelta;
 }

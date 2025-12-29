@@ -20,15 +20,31 @@ public class Lobby(
     string lobbyType = "matchmaking",
     string? hostLanIp = null
 ) {
+    /// <summary>Connection data: Steam lobby ID for Steam, IP:Port for matchmaking.</summary>
     public string ConnectionData { get; } = connectionData;
+
+    /// <summary>Secret token for host authentication.</summary>
     public string HostToken { get; } = hostToken;
+
+    /// <summary>Human-readable 6-character invite code.</summary>
     public string LobbyCode { get; } = lobbyCode;
+
+    /// <summary>Display name of the lobby.</summary>
     public string LobbyName { get; } = lobbyName;
+
+    /// <summary>Lobby type: "steam" or "matchmaking".</summary>
     public string LobbyType { get; } = lobbyType;
+
+    /// <summary>Optional LAN IP for local network discovery.</summary>
     public string? HostLanIp { get; } = hostLanIp;
 
+    /// <summary>Timestamp of the last heartbeat from the host.</summary>
     public DateTime LastHeartbeat { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Queue of clients waiting for NAT hole-punch.</summary>
     public ConcurrentQueue<PendingClient> PendingClients { get; } = new();
+
+    /// <summary>True if no heartbeat received in the last 60 seconds.</summary>
     public bool IsDead => DateTime.UtcNow - LastHeartbeat > TimeSpan.FromSeconds(60);
 
     /// <summary>

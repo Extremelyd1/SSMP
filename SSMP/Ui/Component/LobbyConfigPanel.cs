@@ -11,20 +11,46 @@ namespace SSMP.Ui.Component;
 /// Shows lobby name, max players, visibility toggle, and create/cancel buttons.
 /// </summary>
 internal class LobbyConfigPanel : IComponent {
+    /// <summary>The root GameObject for this panel.</summary>
     private GameObject GameObject { get; }
+
+    /// <summary>Input field for the lobby name.</summary>
     private readonly InputField _nameInput;
+
+    /// <summary>Text displaying the current visibility option (Steam only).</summary>
     private readonly Text _visibilityText = null!;
+
+    /// <summary>Currently selected lobby visibility.</summary>
     private LobbyVisibility _visibility = LobbyVisibility.Public;
+
+    /// <summary>Callback invoked when Create is pressed.</summary>
     private Action<string, LobbyVisibility>? _onCreate;
+
+    /// <summary>Callback invoked when Cancel is pressed.</summary>
     private Action? _onCancel;
+
+    /// <summary>Tracks the panel's own active state.</summary>
     private bool _activeSelf;
+
+    /// <summary>Parent component group for visibility management.</summary>
     private readonly ComponentGroup _componentGroup;
+
+    /// <summary>The lobby type: "steam" or "matchmaking".</summary>
     private readonly string _lobbyType;
 
+    /// <summary>Height of the header text.</summary>
     private const float HeaderHeight = 35f;
+
+    /// <summary>Height of each configuration row.</summary>
     private const float RowHeight = 40f;
+
+    /// <summary>Vertical spacing between rows.</summary>
     private const float RowSpacing = 12f;
+
+    /// <summary>Height of action buttons.</summary>
     private const float ButtonHeight = 45f;
+
+    /// <summary>Padding around panel edges.</summary>
     private const float Padding = 15f;
 
     /// <summary>
@@ -155,17 +181,45 @@ internal class LobbyConfigPanel : IComponent {
 
     #region Public API
 
+    /// <summary>
+    /// Sets the default lobby name in the input field.
+    /// </summary>
+    /// <param name="name">Default name to display.</param>
     public void SetDefaultName(string name) => _nameInput.text = name;
+
+    /// <summary>
+    /// Sets the callback invoked when the Create button is pressed.
+    /// </summary>
+    /// <param name="callback">Callback receiving the lobby name and visibility.</param>
     public void SetOnCreate(Action<string, LobbyVisibility> callback) => _onCreate = callback;
+
+    /// <summary>
+    /// Sets the callback invoked when the Cancel button is pressed.
+    /// </summary>
+    /// <param name="callback">Callback to invoke on cancel.</param>
     public void SetOnCancel(Action callback) => _onCancel = callback;
+
+    /// <summary>
+    /// Gets the lobby type ("steam" or "matchmaking").
+    /// </summary>
     public string LobbyType => _lobbyType;
+
+    /// <summary>
+    /// Gets whether the panel is currently visible.
+    /// </summary>
     public bool IsVisible => _activeSelf;
 
+    /// <summary>
+    /// Shows the panel.
+    /// </summary>
     public void Show() {
         GameObject.SetActive(true);
         _activeSelf = true;
     }
 
+    /// <summary>
+    /// Hides the panel.
+    /// </summary>
     public void Hide() {
         GameObject.SetActive(false);
         _activeSelf = false;

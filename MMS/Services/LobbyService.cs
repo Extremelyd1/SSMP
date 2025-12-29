@@ -8,16 +8,25 @@ namespace MMS.Services;
 /// Lobbies are keyed by ConnectionData (Steam ID or IP:Port).
 /// </summary>
 public class LobbyService {
+    /// <summary>Thread-safe dictionary of lobbies keyed by ConnectionData.</summary>
     private readonly ConcurrentDictionary<string, Lobby> _lobbies = new();
+
+    /// <summary>Maps host tokens to ConnectionData for quick lookup.</summary>
     private readonly ConcurrentDictionary<string, string> _tokenToConnectionData = new();
+
+    /// <summary>Maps lobby codes to ConnectionData for quick lookup.</summary>
     private readonly ConcurrentDictionary<string, string> _codeToConnectionData = new();
+
+    /// <summary>Random number generator for token and code generation.</summary>
     private static readonly Random Random = new();
 
-    // Token chars for host authentication (all alphanumeric lowercase)
+    /// <summary>Characters used for host authentication tokens (lowercase alphanumeric).</summary>
     private const string TokenChars = "abcdefghijklmnopqrstuvwxyz0123456789";
 
-    // Lobby code chars - uppercase alphanumeric
+    /// <summary>Characters used for lobby codes (uppercase alphanumeric).</summary>
     private const string LobbyCodeChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+    /// <summary>Length of generated lobby codes.</summary>
     private const int LobbyCodeLength = 6;
 
     /// <summary>
@@ -119,6 +128,11 @@ public class LobbyService {
         return dead.Count;
     }
 
+    /// <summary>
+    /// Removes a lobby by its ConnectionData and cleans up token/code mappings.
+    /// </summary>
+    /// <param name="connectionData">The ConnectionData of the lobby to remove.</param>
+    /// <returns>True if the lobby was found and removed; otherwise, false.</returns>
     private bool RemoveLobby(string connectionData) {
         if (!_lobbies.TryRemove(connectionData, out var lobby)) return false;
         _tokenToConnectionData.TryRemove(lobby.HostToken, out _);
@@ -126,10 +140,19 @@ public class LobbyService {
         return true;
     }
 
+    /// <summary>
+    /// Generates a random token of the specified length.
+    /// </summary>
+    /// <param name="length">Length of the token to generate.</param>
+    /// <returns>A random alphanumeric token string.</returns>
     private static string GenerateToken(int length) {
         return new string(Enumerable.Range(0, length).Select(_ => TokenChars[Random.Next(TokenChars.Length)]).ToArray());
     }
 
+    /// <summary>
+    /// Generates a unique lobby code, retrying on collision.
+    /// </summary>
+    /// <returns>A unique 6-character uppercase alphanumeric code.</returns>
     private string GenerateLobbyCode() {
         // Generate unique code, retry if collision (extremely rare with 30^6 = 729M combinations)
         string code;

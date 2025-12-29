@@ -257,6 +257,48 @@ internal class UiManager : IUiManager {
         SetupUi();
         
         MonoBehaviourUtil.Instance.OnUpdateEvent += CheckKeyBinds;
+        
+        // Hook to make sure that after game completion cutscenes we do not head to the main menu, but stay hosting/
+        // connected to the server. Otherwise, if the host would go to the main menu, every other player would be
+        // disconnected
+        // On.CutsceneHelper.DoSceneLoad += (orig, self) => {
+        //     if (!_netClient.IsConnected) {
+        //         orig(self);
+        //         return;
+        //     }
+        //
+        //     var sceneName = self.gameObject.scene.name;
+        //     
+        //     Logger.Debug($"DoSceneLoad of CutsceneHelper for next scene type: {self.nextSceneType}, scene name: {sceneName}");
+        //
+        //     var toMainMenu = self.nextSceneType.Equals(CutsceneHelper.NextScene.MainMenu) 
+        //                      || self.nextSceneType.Equals(CutsceneHelper.NextScene.MainMenuNoSave);
+        //     if (self.nextSceneType.Equals(CutsceneHelper.NextScene.PermaDeathUnlock)) {
+        //         toMainMenu |= GM.GetStatusRecordInt("RecPermadeathMode") != 0;
+        //     }
+        //
+        //     if (toMainMenu) {
+        //         if (PlayerData.instance.GetInt("permadeathMode") != 0) {
+        //             // We are running Steel Soul mode, so we disconnect and go to main menu instead of reloading to
+        //             // the last save point
+        //             Logger.Debug("  NextSceneType is main menu, disconnecting because of Steel Soul");
+        //             
+        //             RequestClientDisconnectEvent?.Invoke();
+        //             RequestServerStopHostEvent?.Invoke();
+        //             
+        //             orig(self);
+        //             return;
+        //         }
+        //         
+        //         Logger.Debug("  NextSceneType is main menu, transitioning to last save point instead");
+        //         
+        //         GameManager.instance.ContinueGame();
+        //         return;
+        //     }
+        //
+        //     orig(self);
+        // };
+        
     }
 
     /// <summary>
@@ -300,13 +342,8 @@ internal class UiManager : IUiManager {
     /// Handles UI state changes to show/hide in-game UI elements.
     /// </summary>
     private void OnUiStateChanged(object _, UIState state) {
-        if (state == UIState.PAUSED) {
-            _inGameGroup?.SetActive(false);
-        } else {
-            var sceneName = SceneUtil.GetCurrentSceneName();
-            var shouldShow = !SceneUtil.IsNonGameplayScene(sceneName);
-            _inGameGroup?.SetActive(shouldShow);
-        }
+        var shouldShow = state != UIState.PAUSED && !SceneUtil.IsNonGameplayScene(SceneUtil.GetCurrentSceneName());
+        _inGameGroup?.SetActive(shouldShow);
     }
 
     /// <summary>
@@ -325,22 +362,20 @@ internal class UiManager : IUiManager {
     /// <summary>
     /// Handles language system queries for custom text keys.
     /// </summary>
-    private bool? OnLanguageHas(string key, string sheet) {
-        if (key == MultiplayerButtonKey && sheet == MainMenuSheet) {
-            return true;
-        }
-        return null;
-    }
+    private bool? OnLanguageHas(string key, string sheet) =>
+        IsMultiplayerButtonKey(key, sheet) ? true : null;
 
     /// <summary>
     /// Provides localized text for custom UI elements.
     /// </summary>
-    private string? OnLanguageGet(string key, string sheet) {
-        if (key == MultiplayerButtonKey && sheet == MainMenuSheet) {
-            return "Start Multiplayer";
-        }
-        return null;
-    }
+    private string? OnLanguageGet(string key, string sheet) =>
+        IsMultiplayerButtonKey(key, sheet) ? "Start Multiplayer" : null;
+
+    /// <summary>
+    /// Checks if the provided key and sheet match the multiplayer button localization.
+    /// </summary>
+    private static bool IsMultiplayerButtonKey(string key, string sheet) =>
+        key == MultiplayerButtonKey && sheet == MainMenuSheet;
 
     /// <summary>
     /// Handles return to main menu by disconnecting from server.
@@ -447,9 +482,7 @@ internal class UiManager : IUiManager {
     /// </summary>
     private void OnStartHostRequested(string address, int port, string username, TransportType transportType) {
         OpenSaveSlotSelection(saveSelected => {
-            if (!saveSelected) {
-                return;
-            }
+            if (!saveSelected) return;
 
             RequestServerStartHostEvent?.Invoke(address, port, username, transportType);
             RequestClientConnectEvent?.Invoke(LocalhostAddress, port, username, transportType, true);
@@ -459,9 +492,8 @@ internal class UiManager : IUiManager {
     /// <summary>
     /// Handles connect button press.
     /// </summary>
-    private void OnConnectRequested(string address, int port, string username, TransportType transportType) {
+    private void OnConnectRequested(string address, int port, string username, TransportType transportType) =>
         RequestClientConnectEvent?.Invoke(address, port, username, transportType, false);
-    }
 
     #endregion
 
@@ -475,14 +507,13 @@ internal class UiManager : IUiManager {
     public void EnterGameFromMultiplayerMenu(bool newGame) {
         IH.StopUIInput();
         _connectGroup.SetActive(false);
-
         PlayMenuTransitionAudio();
 
+        Logger.Debug($"Entering game from MP menu for {(newGame ? "new" : "continued")} game");
+        
         if (newGame) {
-            Logger.Debug("Entering game from MP menu for new game");
             GM.StartCoroutine(GM.RunStartNewGame());
         } else {
-            Logger.Debug("Entering game from MP menu for a continued game");
             GM.ContinueGame();
         }
     }
@@ -492,9 +523,7 @@ internal class UiManager : IUiManager {
     /// </summary>
     private void PlayMenuTransitionAudio() {
         UM.uiAudioPlayer.PlayStartGame();
-        if (MenuStyles.Instance) {
-            MenuStyles.Instance.StopAudio();
-        }
+        MenuStyles.Instance?.StopAudio();
     }
 
     /// <summary>
@@ -502,9 +531,8 @@ internal class UiManager : IUiManager {
     /// Used when player disconnects from the current server.
     /// </summary>
     /// <param name="save">Whether to save the game before returning to menu</param>
-    public void ReturnToMainMenuFromGame(bool save = true) {
+    public void ReturnToMainMenuFromGame(bool save = true) =>
         GM.StartCoroutine(GM.ReturnToMainMenu(save));
-    }
 
     /// <summary>
     /// Callback invoked when client successfully connects to a server.
@@ -520,9 +548,8 @@ internal class UiManager : IUiManager {
     /// Updates UI to show error message based on failure reason.
     /// </summary>
     /// <param name="result">The reason for connection failure</param>
-    public void OnFailedConnect(ConnectionFailedResult result) {
+    public void OnFailedConnect(ConnectionFailedResult result) =>
         _connectInterface.OnFailedConnect(result);
-    }
 
     /// <summary>
     /// Callback invoked when client disconnects from the server.
@@ -547,10 +574,7 @@ internal class UiManager : IUiManager {
     /// </param>
     public void OpenSaveSlotSelection(Action<bool>? callback = null) {
         _saveSlotSelectedAction = CreateSaveSlotCallback(callback);
-
-        EventHooks.GameManagerStartNewGame += OnStartNewGame;
-        EventHooks.GameManagerContinueGame += OnContinueGame;
-
+        RegisterSaveSlotHooks();
         UM.StartCoroutine(GoToSaveMenu());
     }
 
@@ -560,31 +584,30 @@ internal class UiManager : IUiManager {
     private Action<bool> CreateSaveSlotCallback(Action<bool>? callback) {
         return saveSelected => {
             callback?.Invoke(saveSelected);
-            CleanupSaveSlotHooks();
+            UnregisterSaveSlotHooks();
         };
+    }
+
+    /// <summary>
+    /// Registers event hooks for save slot selection.
+    /// </summary>
+    private void RegisterSaveSlotHooks() {
+        EventHooks.GameManagerStartNewGame += OnSaveSlotSelected;
+        EventHooks.GameManagerContinueGame += OnSaveSlotSelected;
     }
 
     /// <summary>
     /// Removes save slot event hooks.
     /// </summary>
-    private void CleanupSaveSlotHooks() {
-        EventHooks.GameManagerStartNewGame -= OnStartNewGame;
-        EventHooks.GameManagerContinueGame -= OnContinueGame;
+    private void UnregisterSaveSlotHooks() {
+        EventHooks.GameManagerStartNewGame -= OnSaveSlotSelected;
+        EventHooks.GameManagerContinueGame -= OnSaveSlotSelected;
     }
 
     /// <summary>
-    /// Callback for when a new game is started from save selection.
+    /// Callback for when a save slot is selected (new game or continue).
     /// </summary>
-    private void OnStartNewGame() {
-        _saveSlotSelectedAction?.Invoke(true);
-    }
-
-    /// <summary>
-    /// Callback for when an existing save is continued from save selection.
-    /// </summary>
-    private void OnContinueGame() {
-        _saveSlotSelectedAction?.Invoke(true);
-    }
+    private void OnSaveSlotSelected() => _saveSlotSelectedAction?.Invoke(true);
 
     #endregion
 
@@ -595,9 +618,7 @@ internal class UiManager : IUiManager {
     /// Does nothing if button already exists.
     /// </summary>
     private void TryAddMultiplayerScreen() {
-        if (!ValidateMainMenuExists()) {
-            return;
-        }
+        if (!ValidateMainMenuExists()) return;
 
         var existingButton = FindMultiplayerButton();
         if (existingButton != null) {
@@ -612,11 +633,10 @@ internal class UiManager : IUiManager {
     /// Validates that the main menu exists and is accessible.
     /// </summary>
     private bool ValidateMainMenuExists() {
-        if (UM.mainMenuButtons?.gameObject == null) {
-            Logger.Info("Main menu not available yet");
-            return false;
-        }
-        return true;
+        if (UM.mainMenuButtons?.gameObject != null) return true;
+        
+        Logger.Info("Main menu not available yet");
+        return false;
     }
 
     /// <summary>
@@ -727,11 +747,8 @@ internal class UiManager : IUiManager {
     /// </summary>
     private IEnumerator GoToMultiplayerMenu() {
         IH.StopUIInput();
-        
         yield return FadeOutCurrentMenu();
-        
         IH.StartUIInput();
-
         ShowMultiplayerMenu();
     }
 
@@ -739,12 +756,16 @@ internal class UiManager : IUiManager {
     /// Fades out the current menu based on state.
     /// </summary>
     private IEnumerator FadeOutCurrentMenu() {
-        if (UM.menuState == MainMenuState.MAIN_MENU) {
-            UM.StartCoroutine(UM.FadeOutSprite(UM.gameTitle));
-            UM.subtitleFSM.SendEvent("FADE OUT");
-            yield return UM.StartCoroutine(UM.FadeOutCanvasGroup(UM.mainMenuScreen));
-        } else if (UM.menuState == MainMenuState.SAVE_PROFILES) {
-            yield return UM.StartCoroutine(UM.HideSaveProfileMenu(false));
+        switch (UM.menuState) {
+            case MainMenuState.MAIN_MENU:
+                UM.StartCoroutine(UM.FadeOutSprite(UM.gameTitle));
+                UM.subtitleFSM.SendEvent("FADE OUT");
+                yield return UM.StartCoroutine(UM.FadeOutCanvasGroup(UM.mainMenuScreen));
+                break;
+            
+            case MainMenuState.SAVE_PROFILES:
+                yield return UM.StartCoroutine(UM.HideSaveProfileMenu(false));
+                break;
         }
     }
 
@@ -757,18 +778,6 @@ internal class UiManager : IUiManager {
     }
 
     /// <summary>
-    /// Coroutine to transition from multiplayer menu to save selection screen.
-    /// </summary>
-    private IEnumerator GoToSaveMenu() {
-        HideMultiplayerMenu();
-
-        yield return UM.HideCurrentMenu();
-        yield return UM.GoToProfileMenu();
-        
-        OverrideSaveMenuBackButton();
-    }
-
-    /// <summary>
     /// Hides the multiplayer connection interface.
     /// </summary>
     private void HideMultiplayerMenu() {
@@ -777,14 +786,21 @@ internal class UiManager : IUiManager {
     }
 
     /// <summary>
+    /// Coroutine to transition from multiplayer menu to save selection screen.
+    /// </summary>
+    private IEnumerator GoToSaveMenu() {
+        HideMultiplayerMenu();
+        yield return UM.HideCurrentMenu();
+        yield return UM.GoToProfileMenu();
+        OverrideSaveMenuBackButton();
+    }
+
+    /// <summary>
     /// Overrides the save menu back button to return to multiplayer menu.
     /// </summary>
     private void OverrideSaveMenuBackButton() {
-        var backButton = UM.saveProfileControls?.gameObject.FindGameObjectInChildren(BackButtonName);
-        if (backButton == null) {
-            Logger.Info("Save profiles back button not found");
-            return;
-        }
+        var backButton = FindSaveMenuBackButton();
+        if (backButton == null) return;
 
         var eventTrigger = backButton.GetComponent<EventTrigger>();
         if (eventTrigger == null) return;
@@ -796,10 +812,21 @@ internal class UiManager : IUiManager {
     }
 
     /// <summary>
+    /// Finds the back button in the save profile menu.
+    /// </summary>
+    private GameObject? FindSaveMenuBackButton() {
+        var backButton = UM.saveProfileControls?.gameObject.FindGameObjectInChildren(BackButtonName);
+        if (backButton == null) {
+            Logger.Info("Save profiles back button not found");
+        }
+        return backButton;
+    }
+
+    /// <summary>
     /// Handles back button press in save menu.
     /// </summary>
     private void OnSaveMenuBackPressed() {
-        CleanupSaveSlotHooks();
+        UnregisterSaveSlotHooks();
         _saveSlotSelectedAction?.Invoke(false);
         
         UM.StartCoroutine(GoToMultiplayerMenu());
@@ -810,7 +837,7 @@ internal class UiManager : IUiManager {
     /// Restores original back button behavior for save menu.
     /// </summary>
     private void RestoreSaveMenuBackButton() {
-        var backButton = UM.saveProfileControls?.gameObject.FindGameObjectInChildren(BackButtonName);
+        var backButton = FindSaveMenuBackButton();
         var eventTrigger = backButton?.GetComponent<EventTrigger>();
         if (eventTrigger != null) {
             eventTrigger.triggers = _originalBackTriggers;
@@ -843,11 +870,7 @@ internal class UiManager : IUiManager {
     /// Called every frame by Unity's update system.
     /// </summary>
     private void CheckKeyBinds() {
-        if (!_connectGroup.IsActive()) {
-            return;
-        }
-
-        if (InputHandler.Instance.inputActions.Pause.IsPressed) {
+        if (_connectGroup.IsActive() && InputHandler.Instance.inputActions.Pause.IsPressed) {
             HandlePauseKey();
         }
     }
