@@ -38,12 +38,12 @@ internal class NetServerClient {
     /// <summary>
     /// The chunk sender instance for sending large amounts of data.
     /// </summary>
-    public ServerChunkSender ChunkSender { get; }
+    public ChunkSender ChunkSender { get; }
 
     /// <summary>
     /// The chunk receiver instance for receiving large amounts of data.
     /// </summary>
-    public ServerChunkReceiver ChunkReceiver { get; }
+    public ChunkReceiver ChunkReceiver { get; }
 
     /// <summary>
     /// The connection manager for the client.
@@ -68,8 +68,9 @@ internal class NetServerClient {
         UpdateManager = new ServerUpdateManager {
             TransportClient = transportClient
         };
-        ChunkSender = new ServerChunkSender(UpdateManager);
-        ChunkReceiver = new ServerChunkReceiver(UpdateManager);
+        // Create chunk sender/receiver with delegates to the update manager
+        ChunkSender = new ChunkSender(UpdateManager.SetSliceData);
+        ChunkReceiver = new ChunkReceiver(UpdateManager.SetSliceAckData);
         ConnectionManager = new ServerConnectionManager(packetManager, ChunkSender, ChunkReceiver, Id);
     }
 

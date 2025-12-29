@@ -34,9 +34,9 @@ internal sealed class RttTracker {
     private const int LossDetectionMultiplier = 2;
 
     /// <summary>
-    /// Dictionary tracking packets by sequence number with their associated stopwatches.
+    /// Dictionary tracking packets by sequence number with their send timestamp (from Stopwatch.GetTimestamp()).
     /// </summary>
-    private readonly ConcurrentDictionary<ushort, Stopwatch> _trackedPackets = new();
+    private readonly ConcurrentDictionary<ushort, long> _trackedPackets = new();
 
     /// <summary>
     /// Indicates whether the first acknowledgment has been received.
@@ -66,22 +66,41 @@ internal sealed class RttTracker {
     }
 
     /// <summary>
+    /// Maximum number of packets to track before starting cleanup.
+    /// Cleanup removes the oldest expected sequence on each send.
+    /// </summary>
+    private const int MaxTrackedPackets = 128;
+
+    /// <summary>
     /// Begins tracking round-trip time for a packet with the given sequence number.
     /// </summary>
     /// <param name="sequence">The packet sequence number to track.</param>
-    public void OnSendPacket(ushort sequence) => _trackedPackets[sequence] = Stopwatch.StartNew();
+    public void OnSendPacket(ushort sequence) {
+        _trackedPackets[sequence] = Stopwatch.GetTimestamp();
 
+        // O(1) cleanup: Remove the oldest expected sequence if dictionary is getting too large
+        // This runs once per send, removing at most 1 entry, preventing unbounded growth
+        // while avoiding expensive iteration over all keys
+        if (_trackedPackets.Count > MaxTrackedPackets) {
+            var oldestSequence = (ushort)(sequence - MaxTrackedPackets);
+            _trackedPackets.TryRemove(oldestSequence, out _);
+        }
+    }
 
     /// <summary>
     /// Records acknowledgment receipt and updates RTT statistics.
     /// </summary>
     /// <param name="sequence">The acknowledged packet sequence number.</param>
     public void OnAckReceived(ushort sequence) {
-        if (!_trackedPackets.TryRemove(sequence, out Stopwatch? stopwatch))
+        if (!_trackedPackets.TryRemove(sequence, out long timestamp))
             return;
 
         _firstAckReceived = true;
-        UpdateAverageRtt(stopwatch.ElapsedMilliseconds);
+        
+        long elapsedTicks = Stopwatch.GetTimestamp() - timestamp;
+        long elapsedMs = elapsedTicks * 1000 / Stopwatch.Frequency;
+        
+        UpdateAverageRtt(elapsedMs);
     }
 
     /// <summary>

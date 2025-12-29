@@ -10,15 +10,31 @@ internal class Packet : IPacket {
     /// <summary>
     /// A list of bytes that are contained in this packet.
     /// </summary>
-    private readonly List<byte> _buffer;
+    /// <summary>
+    /// A list of bytes that are contained in this packet.
+    /// Null if the packet is in read-only View Mode.
+    /// </summary>
+    private readonly List<byte>? _buffer;
 
     /// <summary>
     /// Byte array used as a readable buffer.
+    /// In View Mode, this wraps the external array directly.
     /// </summary>
     private readonly byte[] _readableBuffer;
 
     /// <summary>
+    /// The offset in the readable buffer where the packet data starts.
+    /// </summary>
+    private readonly int _offset;
+
+    /// <summary>
+    /// The length of the packet data in the readable buffer.
+    /// </summary>
+    private readonly int _length;
+
+    /// <summary>
     /// The current position in the buffer to read.
+    /// Relative to the _offset start.
     /// </summary>
     private int _readPos;
 
@@ -30,7 +46,7 @@ internal class Packet : IPacket {
     public int ReadPosition {
         get => _readPos;
         set {
-            if (value < 0 || value > _buffer.Count) {
+            if (value < 0 || value > _length) {
                 throw new ArgumentOutOfRangeException(nameof(value), "ReadPosition must be within the buffer bounds");
             }
             _readPos = value;
@@ -40,34 +56,56 @@ internal class Packet : IPacket {
     /// <summary>
     /// The length of the packet content.
     /// </summary>
-    public int Length => _buffer.Count;
+    public int Length => _length;
 
     /// <summary>
-    /// Creates a packet with the given byte array of data. Used when receiving packets to read data from.
+    /// Creates a packet with the given byte array of data.
+    /// Used when receiving packets to read data from.
+    /// COPIES the data to a new internal list.
     /// </summary>
-    /// <param name="data"></param>
+    /// <param name="data">The data to copy.</param>
     public Packet(byte[] data) {
-        _buffer = [];
+        _buffer = new List<byte>(data.Length);
         _buffer.AddRange(data);
         _readableBuffer = _buffer.ToArray();
+        _offset = 0;
+        _length = data.Length;
+    }
+
+    /// <summary>
+    /// Creates a packet in View Mode that wraps the given array without copying.
+    /// The packet will be Read-Only.
+    /// </summary>
+    /// <param name="data">The array to wrap.</param>
+    /// <param name="offset">The offset in the array.</param>
+    /// <param name="length">The length of the view.</param>
+    public Packet(byte[] data, int offset, int length) {
+        _buffer = null;
+        _readableBuffer = data;
+        _offset = offset;
+        _length = length;
+        _readPos = 0;
     }
 
     /// <summary>
     /// Creates an empty packet to write data into.
     /// </summary>
     public Packet() {
-        _buffer = [];
-        _readableBuffer = [];
+        _buffer = new List<byte>();
+        _readableBuffer = Array.Empty<byte>();
+        _offset = 0;
+        _length = 0;
     }
 
     /// <summary>
     /// Inserts the length of the packet's content at the start of the buffer.
+    /// Zero-allocation: uses direct byte manipulation instead of BitConverter.
     /// </summary>
     public void WriteLength() {
-        _buffer.InsertRange(
-            0,
-            BitConverter.GetBytes((ushort) _buffer.Count)
-        );
+        if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
+        var length = (ushort)_buffer.Count;
+        _buffer.Insert(0, (byte)(length >> 8));
+        _buffer.Insert(0, (byte)length);
     }
 
     /// <summary>
@@ -75,14 +113,47 @@ internal class Packet : IPacket {
     /// </summary>
     /// <returns>A byte array representing the packet content.</returns>
     public byte[] ToArray() {
-        return _buffer.ToArray();
+        if (_buffer != null) return _buffer.ToArray();
+        // Return a copy of the view
+        var copy = new byte[_length];
+        Buffer.BlockCopy(_readableBuffer, _offset, copy, 0, _length);
+        return copy;
     }
+
+    /// <summary>
+    /// Copies the packet's content to the provided buffer.
+    /// Avoids allocation when caller provides pre-allocated or pooled buffer.
+    /// </summary>
+    /// <param name="destination">The destination buffer to copy to.</param>
+    /// <param name="destinationOffset">The offset in the destination buffer to start copying.</param>
+    /// <param name="sourceOffset">The offset in the packet buffer to start copying from.</param>
+    /// <param name="count">The number of bytes to copy.</param>
+    public void CopyTo(byte[] destination, int destinationOffset, int sourceOffset, int count) {
+        // Use the readable buffer if available (View Mode or after receive)
+        // Note: For View Mode, sourceOffset is relative to _offset
+        if (_readableBuffer.Length > 0) {
+            Buffer.BlockCopy(_readableBuffer, _offset + sourceOffset, destination, destinationOffset, count);
+        } else if (_buffer != null) {
+            // Fallback for write-mode packets (List backing)
+            for (var i = 0; i < count; i++) {
+                destination[destinationOffset + i] = _buffer[sourceOffset + i];
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets a byte at the specified index without advancing read position.
+    /// </summary>
+    /// <param name="index">The index to read from.</param>
+    /// <returns>The byte at the specified index.</returns>
+    public byte this[int index] => _buffer != null ? _buffer[index] : _readableBuffer[_offset + index];
 
     /// <summary>
     /// Write an array of bytes to the packet.
     /// </summary>
     /// <param name="values">A byte array of values to write.</param>
     public void Write(byte[] values) {
+        if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
         _buffer.AddRange(values);
     }
 
@@ -97,9 +168,9 @@ internal class Packet : IPacket {
         // Check whether there is enough bytes left to read
         if (_buffer.Count >= _readPos + length) {
             var bytes = new byte[length];
-            for (var i = 0; i < length; i++) {
-                bytes[i] = _readableBuffer[_readPos + i];
-            }
+            
+            // Use Buffer.BlockCopy for better performance with larger reads
+            Buffer.BlockCopy(_readableBuffer, _offset + _readPos, bytes, 0, length);
 
             // Increase the reading position in the buffer
             _readPos += length;
@@ -116,42 +187,78 @@ internal class Packet : IPacket {
 
     /// <inheritdoc />
     public void Write(byte value) {
+        if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
         _buffer.Add(value);
     }
 
     /// <inheritdoc />
+    /// Zero-allocation: uses direct byte manipulation instead of BitConverter.
     public void Write(ushort value) {
-        _buffer.AddRange(BitConverter.GetBytes(value));
+        if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
+        _buffer.Add((byte)value);
+        _buffer.Add((byte)(value >> 8));
     }
 
     /// <inheritdoc />
+    /// Zero-allocation: uses direct byte manipulation instead of BitConverter.
     public void Write(uint value) {
-        _buffer.AddRange(BitConverter.GetBytes(value));
+        if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
+        _buffer.Add((byte)value);
+        _buffer.Add((byte)(value >> 8));
+        _buffer.Add((byte)(value >> 16));
+        _buffer.Add((byte)(value >> 24));
     }
 
     /// <inheritdoc />
+    /// Zero-allocation: uses direct byte manipulation instead of BitConverter.
     public void Write(ulong value) {
-        _buffer.AddRange(BitConverter.GetBytes(value));
+        if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
+        _buffer.Add((byte)value);
+        _buffer.Add((byte)(value >> 8));
+        _buffer.Add((byte)(value >> 16));
+        _buffer.Add((byte)(value >> 24));
+        _buffer.Add((byte)(value >> 32));
+        _buffer.Add((byte)(value >> 40));
+        _buffer.Add((byte)(value >> 48));
+        _buffer.Add((byte)(value >> 56));
     }
 
     /// <inheritdoc />
     public void Write(sbyte value) {
-        _buffer.AddRange(BitConverter.GetBytes(value));
+        if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
+        _buffer.Add((byte)value);
     }
 
     /// <inheritdoc />
+    /// Zero-allocation: uses direct byte manipulation instead of BitConverter.
     public void Write(short value) {
-        _buffer.AddRange(BitConverter.GetBytes(value));
+        if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
+        _buffer.Add((byte)value);
+        _buffer.Add((byte)(value >> 8));
     }
 
     /// <inheritdoc />
+    /// Zero-allocation: uses direct byte manipulation instead of BitConverter.
     public void Write(int value) {
-        _buffer.AddRange(BitConverter.GetBytes(value));
+        if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
+        _buffer.Add((byte)value);
+        _buffer.Add((byte)(value >> 8));
+        _buffer.Add((byte)(value >> 16));
+        _buffer.Add((byte)(value >> 24));
     }
 
     /// <inheritdoc />
+    /// Zero-allocation: uses direct byte manipulation instead of BitConverter.
     public void Write(long value) {
-        _buffer.AddRange(BitConverter.GetBytes(value));
+        if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
+        _buffer.Add((byte)value);
+        _buffer.Add((byte)(value >> 8));
+        _buffer.Add((byte)(value >> 16));
+        _buffer.Add((byte)(value >> 24));
+        _buffer.Add((byte)(value >> 32));
+        _buffer.Add((byte)(value >> 40));
+        _buffer.Add((byte)(value >> 48));
+        _buffer.Add((byte)(value >> 56));
     }
 
     #endregion
@@ -159,13 +266,15 @@ internal class Packet : IPacket {
     #region Writing floating-point numeric types
 
     /// <inheritdoc />
-    public void Write(float value) {
-        _buffer.AddRange(BitConverter.GetBytes(value));
+    /// Zero-allocation: uses BitConverter.SingleToInt32Bits for conversion.
+    public unsafe void Write(float value) {
+        Write(*(int*)&value);
     }
 
     /// <inheritdoc />
-    public void Write(double value) {
-        _buffer.AddRange(BitConverter.GetBytes(value));
+    /// Zero-allocation: uses BitConverter.DoubleToInt64Bits for conversion.
+    public unsafe void Write(double value) {
+        Write(*(long*)&value);
     }
 
     #endregion
@@ -174,7 +283,8 @@ internal class Packet : IPacket {
 
     /// <inheritdoc />
     public void Write(bool value) {
-        _buffer.AddRange(BitConverter.GetBytes(value));
+        if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
+        _buffer.Add(value ? (byte)1 : (byte)0);
     }
 
     /// <inheritdoc />
@@ -239,8 +349,8 @@ internal class Packet : IPacket {
     /// <inheritdoc />
     public byte ReadByte() {
         // Check whether there is at least 1 byte left to read
-        if (_buffer.Count > _readPos) {
-            var value = _readableBuffer[_readPos];
+        if (_buffer != null ? _buffer.Count > _readPos : _length > _readPos) {
+            var value = _readableBuffer[_offset + _readPos];
 
             // Increase reading position in the buffer
             _readPos += 1;
@@ -254,8 +364,8 @@ internal class Packet : IPacket {
     /// <inheritdoc />
     public ushort ReadUShort() {
         // Check whether there are at least 2 bytes left to read
-        if (_buffer.Count > _readPos + 1) {
-            var value = BitConverter.ToUInt16(_readableBuffer, _readPos);
+        if (_buffer != null ? _buffer.Count > _readPos + 1 : _length > _readPos + 1) {
+            var value = BitConverter.ToUInt16(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
             _readPos += 2;
@@ -269,8 +379,8 @@ internal class Packet : IPacket {
     /// <inheritdoc />
     public uint ReadUInt() {
         // Check whether there are at least 4 bytes left to read
-        if (_buffer.Count > _readPos + 3) {
-            var value = BitConverter.ToUInt32(_readableBuffer, _readPos);
+        if (_buffer != null ? _buffer.Count > _readPos + 3 : _length > _readPos + 3) {
+            var value = BitConverter.ToUInt32(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
             _readPos += 4;
@@ -284,8 +394,8 @@ internal class Packet : IPacket {
     /// <inheritdoc />
     public ulong ReadULong() {
         // Check whether there are at least 8 bytes left to read
-        if (_buffer.Count > _readPos + 7) {
-            var value = BitConverter.ToUInt64(_readableBuffer, _readPos);
+        if (_buffer != null ? _buffer.Count > _readPos + 7 : _length > _readPos + 7) {
+            var value = BitConverter.ToUInt64(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
             _readPos += 8;
@@ -299,8 +409,8 @@ internal class Packet : IPacket {
     /// <inheritdoc />
     public sbyte ReadSByte() {
         // Check whether there are at least 1 byte left to read
-        if (_buffer.Count > _readPos) {
-            var value = (sbyte) _readableBuffer[_readPos];
+        if (_buffer != null ? _buffer.Count > _readPos : _length > _readPos) {
+            var value = (sbyte) _readableBuffer[_offset + _readPos];
 
             // Increase the reading position in the buffer
             _readPos += 1;
@@ -314,8 +424,8 @@ internal class Packet : IPacket {
     /// <inheritdoc />
     public short ReadShort() {
         // Check whether there are at least 2 bytes left to read
-        if (_buffer.Count > _readPos + 1) {
-            var value = BitConverter.ToInt16(_readableBuffer, _readPos);
+        if (_buffer != null ? _buffer.Count > _readPos + 1 : _length > _readPos + 1) {
+            var value = BitConverter.ToInt16(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
             _readPos += 2;
@@ -329,8 +439,8 @@ internal class Packet : IPacket {
     /// <inheritdoc />
     public int ReadInt() {
         // Check whether there are at least 4 bytes left to read
-        if (_buffer.Count > _readPos + 3) {
-            var value = BitConverter.ToInt32(_readableBuffer, _readPos);
+        if (_buffer != null ? _buffer.Count > _readPos + 3 : _length > _readPos + 3) {
+            var value = BitConverter.ToInt32(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
             _readPos += 4;
@@ -344,8 +454,8 @@ internal class Packet : IPacket {
     /// <inheritdoc />
     public long ReadLong() {
         // Check whether there are at least 8 bytes left to read
-        if (_buffer.Count > _readPos + 7) {
-            var value = BitConverter.ToInt64(_readableBuffer, _readPos);
+        if (_buffer != null ? _buffer.Count > _readPos + 7 : _length > _readPos + 7) {
+            var value = BitConverter.ToInt64(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
             _readPos += 8;
@@ -363,8 +473,8 @@ internal class Packet : IPacket {
     /// <inheritdoc />
     public float ReadFloat() {
         // Check whether there are at least 4 bytes left to read
-        if (_buffer.Count > _readPos + 3) {
-            var value = BitConverter.ToSingle(_readableBuffer, _readPos);
+        if (_buffer != null ? _buffer.Count > _readPos + 3 : _length > _readPos + 3) {
+            var value = BitConverter.ToSingle(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
             _readPos += 4;
@@ -378,8 +488,8 @@ internal class Packet : IPacket {
     /// <inheritdoc />
     public double ReadDouble() {
         // Check whether there are at least 8 bytes left to read
-        if (_buffer.Count > _readPos + 7) {
-            var value = BitConverter.ToDouble(_readableBuffer, _readPos);
+        if (_buffer != null ? _buffer.Count > _readPos + 7 : _length > _readPos + 7) {
+            var value = BitConverter.ToDouble(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
             _readPos += 8;
@@ -397,8 +507,8 @@ internal class Packet : IPacket {
     /// <inheritdoc />
     public bool ReadBool() {
         // Check whether there is at least 1 byte left to read
-        if (_buffer.Count > _readPos) {
-            var value = BitConverter.ToBoolean(_readableBuffer, _readPos);
+        if (_buffer != null ? _buffer.Count > _readPos : _length > _readPos) {
+            var value = BitConverter.ToBoolean(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
             _readPos += 1;
@@ -421,12 +531,12 @@ internal class Packet : IPacket {
         }
 
         // Now we check whether there are at least as many bytes left to read as the length of the string
-        if (_buffer.Count < _readPos + length) {
+        if ((_buffer != null ? _buffer.Count : _length) < _readPos + length) {
             throw new Exception("Could not read value of type 'string'!");
         }
 
         // Now we read and decode the string
-        var value = Encoding.UTF8.GetString(_readableBuffer, _readPos, length);
+        var value = Encoding.UTF8.GetString(_readableBuffer, _offset + _readPos, length);
 
         // Increase the reading position in the buffer
         _readPos += length;

@@ -67,12 +67,12 @@ internal class NetClient : INetClient {
     /// <summary>
     /// Chunk sender instance for sending large amounts of data.
     /// </summary>
-    private readonly ClientChunkSender _chunkSender;
+    private readonly ChunkSender _chunkSender;
 
     /// <summary>
     /// Chunk receiver instance for receiving large amounts of data.
     /// </summary>
-    private readonly ClientChunkReceiver _chunkReceiver;
+    private readonly ChunkReceiver _chunkReceiver;
 
     /// <summary>
     /// The client connection manager responsible for handling sending and receiving connection data.
@@ -99,8 +99,9 @@ internal class NetClient : INetClient {
         // Create initial update manager with default settings (will be recreated if needed in Connect)
         UpdateManager = new ClientUpdateManager();
 
-        _chunkSender = new ClientChunkSender(UpdateManager);
-        _chunkReceiver = new ClientChunkReceiver(UpdateManager);
+        // Create chunk sender/receiver with delegates to the update manager
+        _chunkSender = new ChunkSender(UpdateManager.SetSliceData);
+        _chunkReceiver = new ChunkReceiver(UpdateManager.SetSliceAckData);
         _connectionManager = new ClientConnectionManager(_packetManager, _chunkSender, _chunkReceiver);
 
         _connectionManager.ServerInfoReceivedEvent += OnServerInfoReceived;

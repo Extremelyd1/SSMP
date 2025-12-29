@@ -38,9 +38,13 @@ internal class ReliabilityManager<TOutgoing, TPacketId>(
     /// </summary>
     private void CheckForLostPackets() {
         var maxExpectedRtt = rttTracker.MaximumExpectedRtt;
+        long currentTimestamp = Stopwatch.GetTimestamp();
 
         foreach (var (key, tracked) in _sentPackets) {
-            if (tracked.Lost || tracked.Stopwatch.ElapsedMilliseconds <= maxExpectedRtt) {
+            long elapsedTicks = currentTimestamp - tracked.Timestamp;
+            long elapsedMs = elapsedTicks * 1000 / Stopwatch.Frequency;
+
+            if (tracked.Lost || elapsedMs <= maxExpectedRtt) {
                 continue;
             }
 
@@ -57,7 +61,7 @@ internal class ReliabilityManager<TOutgoing, TPacketId>(
     /// </summary>
     private class TrackedPacket {
         public TOutgoing Packet { get; init; } = null!;
-        public Stopwatch Stopwatch { get; } = Stopwatch.StartNew();
+        public long Timestamp { get; } = Stopwatch.GetTimestamp();
         public bool Lost { get; set; }
     }
 }

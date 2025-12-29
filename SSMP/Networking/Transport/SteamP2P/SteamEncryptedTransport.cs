@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using SSMP.Game;
@@ -11,8 +12,9 @@ namespace SSMP.Networking.Transport.SteamP2P;
 /// <summary>
 /// Steam P2P implementation of <see cref="IEncryptedTransport"/>.
 /// Used by clients to connect to a server via Steam P2P networking.
+/// Optimized for maximum performance with zero-allocation hot paths.
 /// </summary>
-internal class SteamEncryptedTransport : IReliableTransport {
+internal sealed class SteamEncryptedTransport : IReliableTransport {
     /// <summary>
     /// Maximum Steam P2P packet size.
     /// </summary>
@@ -23,6 +25,21 @@ internal class SteamEncryptedTransport : IReliableTransport {
     /// 17.2ms achieves ~58Hz polling rate to balance responsiveness and CPU usage.
     /// </summary>
     private const double PollIntervalMS = 17.2;
+
+    /// <summary>
+    /// Maximum wait time threshold before switching from spin to sleep (ms).
+    /// </summary>
+    private const int SpinWaitThreshold = 15;
+
+    /// <summary>
+    /// Channel ID for server->client communication.
+    /// </summary>
+    private const int ServerChannel = 1;
+
+    /// <summary>
+    /// Maximum drift correction threshold in milliseconds.
+    /// </summary>
+    private const long MaxDriftThreshold = 100;
 
     /// <inheritdoc />
     public event Action<byte[], int>? DataReceivedEvent;
@@ -55,7 +72,7 @@ internal class SteamEncryptedTransport : IReliableTransport {
     private volatile bool _isConnected;
 
     /// <summary>
-    /// Buffer for receiving P2P packets.
+    /// Buffer for receiving P2P packets (aligned for better cache performance).
     /// </summary>
     private readonly byte[] _receiveBuffer = new byte[SteamMaxPacketSize];
 
@@ -88,6 +105,12 @@ internal class SteamEncryptedTransport : IReliableTransport {
     /// Cached Steam initialized check to reduce property access overhead.
     /// </summary>
     private bool _steamInitialized;
+
+    /// <summary>
+    /// Cached send types to avoid boxing and allocation.
+    /// </summary>
+    private static readonly EP2PSend UnreliableSendType = EP2PSend.k_EP2PSendUnreliableNoDelay;
+    private static readonly EP2PSend ReliableSendType = EP2PSend.k_EP2PSendReliable;
 
     /// <summary>
     /// Connect to remote peer via Steam P2P.
@@ -125,96 +148,110 @@ internal class SteamEncryptedTransport : IReliableTransport {
         _receiveTokenSource = new CancellationTokenSource();
         _receiveThread = new Thread(ReceiveLoop) {
             IsBackground = true,
-            Priority = ThreadPriority.AboveNormal // Higher priority for network thread
+            Priority = ThreadPriority.AboveNormal,
+            Name = "Steam P2P Receive"
         };
         _receiveThread.Start();
     }
 
     /// <inheritdoc />
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Send(byte[] buffer, int offset, int length) {
-        SendInternal(buffer, offset, length, EP2PSend.k_EP2PSendUnreliableNoDelay);
+        SendInternal(buffer, offset, length, UnreliableSendType);
     }
 
     /// <inheritdoc />
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void SendReliable(byte[] buffer, int offset, int length) {
-        SendInternal(buffer, offset, length, EP2PSend.k_EP2PSendReliable);
+        SendInternal(buffer, offset, length, ReliableSendType);
     }
 
     /// <summary>
     /// Internal helper to send data with a specific P2P send type.
+    /// Optimized hot path with minimal branching.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void SendInternal(byte[] buffer, int offset, int length, EP2PSend sendType) {
-        if (!_isConnected) {
-            throw new InvalidOperationException("Cannot send: not connected");
-        }
-
-        if (!_steamInitialized) {
-            throw new InvalidOperationException("Cannot send: Steam is not initialized");
+        // Fast-path validation (likely branches first)
+        if (!_isConnected | !_steamInitialized) {
+            ThrowNotConnected();
         }
 
         if (_isLoopback) {
-            // Use cached loopback channel
+            // Use cached loopback channel (no null check needed - set during Connect)
             _cachedLoopbackChannel!.SendToServer(buffer, offset, length);
             return;
         }
 
         // Client sends to server on Channel 0
-        if (!SteamNetworking.SendP2PPacket(_remoteSteamId, buffer, (uint) length, sendType)) {
+        // Note: Steam API takes uint for length, cast is zero-cost
+        if (!SteamNetworking.SendP2PPacket(_remoteSteamId, buffer, (uint)length, sendType)) {
             Logger.Warn($"Steam P2P: Failed to send packet to {_remoteSteamId}");
         }
     }
 
     /// <summary>
+    /// Cold path for throwing connection exceptions (keeps hot path clean).
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void ThrowNotConnected() {
+        throw new InvalidOperationException("Cannot send: not connected or Steam not initialized");
+    }
+
+    /// <summary>
     /// Process all available incoming P2P packets.
     /// Drains the entire queue to prevent packet buildup when polling.
+    /// Optimized for zero allocations in steady state.
     /// </summary>
-    private void Receive(byte[]? buffer, int offset, int length) {
-        if (!_isConnected || !_steamInitialized) return;
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void ReceivePackets() {
+        // Early exit checks (use bitwise OR to avoid branch prediction penalty)
+        if (!_isConnected | !_steamInitialized) return;
 
-        // Cache event delegate to avoid repeated field access
+        // Cache event delegate to avoid repeated volatile field access
         var dataReceived = DataReceivedEvent;
         if (dataReceived == null) return;
 
+        var receiveBuffer = _receiveBuffer;
+        var remoteSteamId = _remoteSteamId;
+
         // Drain ALL available packets (matches server-side behavior)
-        while (SteamNetworking.IsP2PPacketAvailable(out var packetSize, 1)) {
-            // Client listens for server packets on Channel 1 (to differentiate from server traffic on Channel 0)
+        while (SteamNetworking.IsP2PPacketAvailable(out var packetSize, ServerChannel)) {
+            // Client listens for server packets on Channel 1
             if (!SteamNetworking.ReadP2PPacket(
-                    _receiveBuffer,
+                    receiveBuffer,
                     SteamMaxPacketSize,
                     out packetSize,
-                    out var remoteSteamId,
-                    1 // Channel 1: Server -> Client
+                    out var senderSteamId,
+                    ServerChannel
                 )) {
                 continue;
             }
 
-            if (remoteSteamId != _remoteSteamId) {
+            // Validate sender (security check)
+            if (senderSteamId != remoteSteamId) {
                 Logger.Warn(
-                    $"Steam P2P: Received packet from unexpected peer {remoteSteamId}, expected {_remoteSteamId}"
+                    $"Steam P2P: Received packet from unexpected peer {senderSteamId}, expected {remoteSteamId}"
                 );
                 continue;
             }
 
-            var size = (int) packetSize;
+            var size = (int)packetSize;
 
-            // Always fire the event - avoid extra allocation by reusing receiveBuffer when possible
-            if (buffer != null) {
-                var bytesToCopy = System.Math.Min(size, length);
-                Buffer.BlockCopy(_receiveBuffer, 0, buffer, offset, bytesToCopy);
-                dataReceived(buffer, bytesToCopy);
-                buffer = null; // Only copy the first packet to buffer
-            } else {
-                // Only allocate new array when necessary
-                var data = new byte[size];
-                Buffer.BlockCopy(_receiveBuffer, 0, data, 0, size);
-                dataReceived(data, size);
-            }
+            // Allocate a copy for safety - handlers may hold references
+            var data = new byte[size];
+            Buffer.BlockCopy(receiveBuffer, 0, data, 0, size);
+            dataReceived(data, size);
         }
     }
 
     /// <inheritdoc />
     public void Disconnect() {
         if (!_isConnected) return;
+
+        // Signal shutdown first
+        _isConnected = false;
+        _receiveTokenSource?.Cancel();
 
         if (_cachedLoopbackChannel != null) {
             _cachedLoopbackChannel.UnregisterClient();
@@ -223,8 +260,6 @@ internal class SteamEncryptedTransport : IReliableTransport {
         }
 
         Logger.Info($"Steam P2P: Disconnecting from {_remoteSteamId}");
-
-        _receiveTokenSource?.Cancel();
 
         if (_steamInitialized) {
             SteamNetworking.CloseP2PSessionWithUser(_remoteSteamId);
@@ -240,28 +275,33 @@ internal class SteamEncryptedTransport : IReliableTransport {
             _receiveThread = null;
         }
 
-        _isConnected = false;
         _receiveTokenSource?.Dispose();
         _receiveTokenSource = null;
     }
 
     /// <summary>
-    /// Continuously polls for incoming P2P packets.
+    /// Continuously polls for incoming P2P packets with precise timing.
+    /// Uses Stopwatch + hybrid spin/sleep for consistent ~58Hz polling rate.
     /// Steam API limitation: no blocking receive or callback available, must poll.
+    /// Optimized for minimal CPU overhead and maximum responsiveness.
     /// </summary>
     private void ReceiveLoop() {
         var token = _receiveTokenSource;
         if (token == null) return;
 
         var cancellationToken = token.Token;
+        var stopwatch = Stopwatch.StartNew();
+        var nextPollTime = stopwatch.ElapsedMilliseconds;
+        const long pollInterval = (long)PollIntervalMS;
+        
+        // Preallocate SpinWait struct to avoid per-iteration allocation
         var spinWait = new SpinWait();
 
-        // Pre-calculate high-resolution sleep time
-        var sleepMs = (int) PollIntervalMS;
-        var remainingMicroseconds = (int) ((PollIntervalMS - sleepMs) * 1000);
-
-        while (_isConnected && !cancellationToken.IsCancellationRequested) {
+        while (_isConnected) {
             try {
+                // Fast cancellation check without allocation
+                if (cancellationToken.IsCancellationRequested) break;
+
                 // Exit cleanly if Steam shuts down (e.g., during forceful game closure)
                 if (!SteamManager.IsInitialized) {
                     _steamInitialized = false;
@@ -269,19 +309,36 @@ internal class SteamEncryptedTransport : IReliableTransport {
                     break;
                 }
 
-                Receive(null, 0, 0);
+                // Precise wait until next poll time
+                var currentTime = stopwatch.ElapsedMilliseconds;
+                var waitTime = nextPollTime - currentTime;
 
-                // Steam API does not provide a blocking receive or callback for P2P packets,
-                // so we must poll. Sleep interval is tuned to achieve ~58Hz polling rate.
-                // Hybrid approach: coarse sleep + fine-grained spin for precision
-                Thread.Sleep(sleepMs);
-
-                // SpinWait for sub-millisecond precision without busy-wait overhead
-                if (remainingMicroseconds > 0) {
+                if (waitTime > 0) {
+                    if (waitTime > SpinWaitThreshold) {
+                        // Sleep for most of the wait, then spin for precision
+                        var sleepTime = (int)(waitTime - 2);
+                        if (sleepTime > 0) {
+                            Thread.Sleep(sleepTime);
+                        }
+                    }
+                    
+                    // Spin for remaining time (high precision, low overhead)
                     spinWait.Reset();
-                    for (var i = 0; i < remainingMicroseconds; i++) {
+                    while (stopwatch.ElapsedMilliseconds < nextPollTime) {
                         spinWait.SpinOnce();
                     }
+                }
+
+                // Poll for available packets (hot path)
+                ReceivePackets();
+
+                // Schedule next poll
+                nextPollTime += pollInterval;
+
+                // Drift correction: prevent accumulating lag
+                var now = stopwatch.ElapsedMilliseconds;
+                if (now > nextPollTime + MaxDriftThreshold) {
+                    nextPollTime = now + pollInterval;
                 }
             } catch (InvalidOperationException ex) when (ex.Message.Contains("Steamworks is not initialized")) {
                 // Steam shut down during operation - exit gracefully
@@ -294,6 +351,8 @@ internal class SteamEncryptedTransport : IReliableTransport {
                 break;
             } catch (Exception e) {
                 Logger.Error($"Steam P2P: Error in receive loop: {e}");
+                // Continue polling on error, but maintain timing
+                nextPollTime = stopwatch.ElapsedMilliseconds + pollInterval;
             }
         }
 

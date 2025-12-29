@@ -324,26 +324,42 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
 
     /// <summary>
     /// Drops resend data that is duplicate, i.e. that we already received in an earlier packet.
+    /// Optimized to avoid List allocation by collecting keys to remove first.
     /// </summary>
-    /// <param name="receivedSequenceNumbers">A queue containing sequence numbers that were already
-    /// received.</param>
-    public void DropDuplicateResendData(Queue<ushort> receivedSequenceNumbers) {
-        // For each key in the resend dictionary, we check whether it is contained in the
-        // queue of sequence numbers that we already received. If so, we remove it from the dictionary
-        // because it is duplicate data that we already handled
-        foreach (var resendSequence in new List<ushort>(_resendPacketData.Keys)) {
+    /// <param name="receivedSequenceNumbers">A collection containing sequence numbers that were already
+    /// received. Uses ICollection for O(1) Contains() with HashSet.</param>
+    public void DropDuplicateResendData(ICollection<ushort> receivedSequenceNumbers) {
+        // Collect keys to remove to avoid modifying dictionary during iteration
+        // Use a small buffer - resend data is typically small
+        Span<ushort> keysToRemove = stackalloc ushort[System.Math.Min(_resendPacketData.Count, 64)];
+        var removeCount = 0;
+        
+        foreach (var resendSequence in _resendPacketData.Keys) {
             if (receivedSequenceNumbers.Contains(resendSequence)) {
-                // Logger.Info("Dropping resent data due to duplication");
-                _resendPacketData.Remove(resendSequence);
+                if (removeCount < keysToRemove.Length) {
+                    keysToRemove[removeCount++] = resendSequence;
+                }
             }
+        }
+        
+        for (var i = 0; i < removeCount; i++) {
+            _resendPacketData.Remove(keysToRemove[i]);
         }
 
         // Do the same for addon data
-        foreach (var resendSequence in new List<ushort>(_resendAddonPacketData.Keys)) {
+        keysToRemove = stackalloc ushort[System.Math.Min(_resendAddonPacketData.Count, 64)];
+        removeCount = 0;
+        
+        foreach (var resendSequence in _resendAddonPacketData.Keys) {
             if (receivedSequenceNumbers.Contains(resendSequence)) {
-                // Logger.Info("Dropping resent data due to duplication");
-                _resendAddonPacketData.Remove(resendSequence);
+                if (removeCount < keysToRemove.Length) {
+                    keysToRemove[removeCount++] = resendSequence;
+                }
             }
+        }
+        
+        for (var i = 0; i < removeCount; i++) {
+            _resendAddonPacketData.Remove(keysToRemove[i]);
         }
     }
 }

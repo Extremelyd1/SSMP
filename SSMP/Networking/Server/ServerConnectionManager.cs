@@ -15,11 +15,11 @@ internal class ServerConnectionManager : ConnectionManager {
     /// <summary>
     /// Server-side chunk sender used to handle sending chunks.
     /// </summary>
-    private readonly ServerChunkSender _chunkSender;
+    private readonly ChunkSender _chunkSender;
     /// <summary>
     /// Server-side chunk received used to receive chunks.
     /// </summary>
-    private readonly ServerChunkReceiver _chunkReceiver;
+    private readonly ChunkReceiver _chunkReceiver;
 
     /// <summary>
     /// The ID of the client that this class manages.
@@ -42,8 +42,8 @@ internal class ServerConnectionManager : ConnectionManager {
 
     public ServerConnectionManager(
         PacketManager packetManager,
-        ServerChunkSender chunkSender,
-        ServerChunkReceiver chunkReceiver,
+        ChunkSender chunkSender,
+        ChunkReceiver chunkReceiver,
         ushort clientId
     ) : base(packetManager) {
         _chunkSender = chunkSender;

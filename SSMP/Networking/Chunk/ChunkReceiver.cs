@@ -4,10 +4,18 @@ using SSMP.Networking.Packet.Data;
 namespace SSMP.Networking.Chunk;
 
 /// <summary>
-/// Class that processes and manages chunks by receiving slices of those chunks and sending acknowledgements for those
-/// slices.
+/// Delegate for setting slice acknowledgement data in an update manager.
 /// </summary>
-internal abstract class ChunkReceiver {
+/// <param name="chunkId">The ID of the chunk.</param>
+/// <param name="numSlices">The number of slices in the chunk.</param>
+/// <param name="acked">The acknowledgement array.</param>
+internal delegate void SetSliceAckDataDelegate(byte chunkId, ushort numSlices, bool[] acked);
+
+/// <summary>
+/// Class that processes and manages chunks by receiving slices of those chunks and sending acknowledgements for those
+/// slices. Uses delegate injection instead of inheritance for flexibility.
+/// </summary>
+internal sealed class ChunkReceiver {
     /// <summary>
     /// Boolean array where each value indicates whether the slice of the same index was received.
     /// </summary>
@@ -47,9 +55,17 @@ internal abstract class ChunkReceiver {
     public event Action<Packet.Packet>? ChunkReceivedEvent;
 
     /// <summary>
-    /// Construct the chunk receiver by allocating the readonly arrays with their maximally used lengths.
+    /// Delegate for setting slice acknowledgement data in the update manager.
     /// </summary>
-    protected ChunkReceiver() {
+    private readonly SetSliceAckDataDelegate _setSliceAckData;
+
+    /// <summary>
+    /// Construct the chunk receiver with the delegate for setting slice acknowledgement data.
+    /// </summary>
+    /// <param name="setSliceAckData">Delegate to call when sending acknowledgement data.</param>
+    public ChunkReceiver(SetSliceAckDataDelegate setSliceAckData) {
+        _setSliceAckData = setSliceAckData ?? throw new ArgumentNullException(nameof(setSliceAckData));
+        
         _received = new bool[ConnectionManager.MaxSlicesPerChunk];
         _chunkData = new byte[ConnectionManager.MaxChunkSize];
     }
@@ -171,10 +187,12 @@ internal abstract class ChunkReceiver {
     }
 
     /// <summary>
-    /// Set the slice ack data in the corresponding update manager for sending.
+    /// Set the slice ack data using the injected delegate.
     /// </summary>
     /// <param name="chunkId">The ID of the chunk for this acknowledgement.</param>
     /// <param name="numSlices">The number of slices in this chunk.</param>
     /// <param name="acked">The boolean array containing acknowledgements of all slices.</param>
-    protected abstract void SetSliceAckData(byte chunkId, ushort numSlices, bool[] acked);
+    private void SetSliceAckData(byte chunkId, ushort numSlices, bool[] acked) {
+        _setSliceAckData(chunkId, numSlices, acked);
+    }
 }

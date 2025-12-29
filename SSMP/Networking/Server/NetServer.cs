@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -145,10 +146,16 @@ internal class NetServer : INetServer {
     /// </summary>
     private void OnClientConnected(IEncryptedTransportClient transportClient) {
         transportClient.DataReceivedEvent += (buffer, length) => {
+            // We MUST copy the data to a new buffer because the source 'buffer' is reused 
+            // immediately by the transport layer's receive loop.
+            // We use ArrayPool to minimize allocations, but we must own this new buffer.
+            var queueBuffer = ArrayPool<byte>.Shared.Rent(length);
+            Buffer.BlockCopy(buffer, 0, queueBuffer, 0, length);
+
             _receivedQueue.Enqueue(
                 new ReceivedData {
                     TransportClient = transportClient,
-                    Buffer = buffer,
+                    Buffer = queueBuffer,
                     NumReceived = length
                 }
             );
@@ -167,42 +174,47 @@ internal class NetServer : INetServer {
             WaitHandle.WaitAny(waitHandles);
 
             while (!token.IsCancellationRequested && _receivedQueue.TryDequeue(out var receivedData)) {
-                var packets = PacketManager.HandleReceivedData(
-                    receivedData.Buffer,
-                    receivedData.NumReceived,
-                    ref _leftoverData
-                );
-
-                var transportClient = receivedData.TransportClient;
-
-                // Try to find existing client by transport client reference
-                var client = _clientsById.Values.FirstOrDefault(c => c.TransportClient == transportClient);
-
-                if (client == null) {
-                    // Extract throttle key for throttling
-                    var throttleKey = transportClient.EndPoint;
-
-                    if (throttleKey != null && _throttledClients.TryGetValue(throttleKey, out var clientStopwatch)) {
-                        if (clientStopwatch.ElapsedMilliseconds < ThrottleTime) {
-                            // Reset stopwatch and ignore packets so the client times out
-                            clientStopwatch.Restart();
-                            continue;
-                        }
-
-                        // Stopwatch exceeds max throttle time so we remove the client from the dict
-                        _throttledClients.TryRemove(throttleKey, out _);
-                    }
-
-                    Logger.Info(
-                        $"Received packet from unknown client: {transportClient.ToDisplayString()}, creating new client"
+                try {
+                    var packets = PacketManager.HandleReceivedData(
+                        receivedData.Buffer,
+                        receivedData.NumReceived,
+                        ref _leftoverData
                     );
 
-                    // We didn't find a client with the given identifier, so we assume it is a new client
-                    // that wants to connect
-                    client = CreateNewClient(transportClient);
-                }
+                    var transportClient = receivedData.TransportClient;
 
-                HandleClientPackets(client, packets);
+                    // Try to find existing client by transport client reference
+                    var client = _clientsById.Values.FirstOrDefault(c => c.TransportClient == transportClient);
+
+                    if (client == null) {
+                        // Extract throttle key for throttling
+                        var throttleKey = transportClient.EndPoint;
+
+                        if (throttleKey != null && _throttledClients.TryGetValue(throttleKey, out var clientStopwatch)) {
+                            if (clientStopwatch.ElapsedMilliseconds < ThrottleTime) {
+                                // Reset stopwatch and ignore packets so the client times out
+                                clientStopwatch.Restart();
+                                continue;
+                            }
+
+                            // Stopwatch exceeds max throttle time so we remove the client from the dict
+                            _throttledClients.TryRemove(throttleKey, out _);
+                        }
+
+                        Logger.Info(
+                            $"Received packet from unknown client: {transportClient.ToDisplayString()}, creating new client"
+                        );
+
+                        // We didn't find a client with the given identifier, so we assume it is a new client
+                        // that wants to connect
+                        client = CreateNewClient(transportClient);
+                    }
+
+                    HandleClientPackets(client, packets);
+                } finally {
+                    // Return the buffer to the pool now that we are done with it
+                    ArrayPool<byte>.Shared.Return(receivedData.Buffer);
+                }
             }
         }
     }
