@@ -70,21 +70,4 @@
 
         <Copy SourceFiles="@(Binaries)" DestinationFolder="$(SilksongFolder)/BepInEx/plugins/$(TargetName)"/>
     </Target>
-
-    <!-- Copy to additional local installations (Development convenience) -->
-    <Target Name="CopyModToLocalInstalls" AfterTargets="PostBuildEvent" Condition="'$(Configuration)' == 'Debug'">
-        <PropertyGroup>
-            <InstallPath1>D:\Games\Hollow Knight - Silksong\BepInEx\plugins\SSMP</InstallPath1>
-            <InstallPath2>D:\SteamLibrary\steamapps\common\Hollow Knight Silksong\BepInEx\plugins\SSMP</InstallPath2>
-        </PropertyGroup>
-
-        <ItemGroup>
-            <ModFiles Include="$(TargetPath)"/>
-            <ModFiles Include="$(TargetDir)/$(TargetName).pdb"/>
-            <ModFiles Include="$(TargetDir)/*.dll"/>
-        </ItemGroup>
-
-        <Copy SourceFiles="@(ModFiles)" DestinationFolder="$(InstallPath1)" Condition="Exists('D:\Games\Hollow Knight - Silksong\BepInEx')"/>
-        <Copy SourceFiles="@(ModFiles)" DestinationFolder="$(InstallPath2)" Condition="Exists('D:\SteamLibrary\steamapps\common\Hollow Knight Silksong\BepInEx')"/>
-    </Target>
 </Project>
