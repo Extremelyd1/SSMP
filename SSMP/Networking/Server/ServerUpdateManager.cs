@@ -482,9 +482,11 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
                 playerSettingUpdate.Team = team.Value;
             }
 
-            if (!skinId.HasValue) return;
-            playerSettingUpdate!.UpdateTypes.Add(PlayerSettingUpdateType.Skin);
-            playerSettingUpdate.SkinId = skinId.Value;
+            if (!skinId.HasValue) {
+                playerSettingUpdate!.UpdateTypes.Add(PlayerSettingUpdateType.Skin);
+                playerSettingUpdate.SkinId = skinId.Value;
+            }
+            
         }
     }
 
