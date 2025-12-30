@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SSMP Local Props Template
+  ==========================
+  Copy this file to SSMP.local.props and customize the paths below.
+  This file is gitignored and should not be committed.
+-->
+<Project>
+    <!-- Copy to additional local installations (Development convenience) -->
+    <Target Name="CopyModToLocalInstalls" AfterTargets="PostBuildEvent" Condition="'$(Configuration)' == 'Debug'">
+        <PropertyGroup>
+            <!-- Customize these paths for your local installations -->
+            <InstallPath1>D:\Games\Hollow Knight - Silksong\BepInEx\plugins\SSMP</InstallPath1>
+            <InstallPath2>D:\SteamLibrary\steamapps\common\Hollow Knight Silksong\BepInEx\plugins\SSMP</InstallPath2>
+        </PropertyGroup>
+
+        <ItemGroup>
+            <ModFiles Include="$(TargetPath)"/>
+            <ModFiles Include="$(TargetDir)/$(TargetName).pdb"/>
+            <ModFiles Include="$(TargetDir)/*.dll"/>
+        </ItemGroup>
+
+        <Copy SourceFiles="@(ModFiles)" DestinationFolder="$(InstallPath1)" Condition="Exists('$(InstallPath1)\..\..')"/>
+        <Copy SourceFiles="@(ModFiles)" DestinationFolder="$(InstallPath2)" Condition="Exists('$(InstallPath2)\..\..')"/>
+    </Target>
+</Project>

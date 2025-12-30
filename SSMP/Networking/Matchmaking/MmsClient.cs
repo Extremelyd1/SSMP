@@ -122,6 +122,16 @@ internal class MmsClient {
     }
 
     /// <summary>
+    /// Static constructor to hook process exit and dispose the shared HttpClient.
+    /// Ensures that OS-level resources are released when the host process shuts down.
+    /// </summary>
+    static MmsClient() {
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => {
+            HttpClient.Dispose();
+        };
+    }
+
+    /// <summary>
     /// Initializes a new instance of the MmsClient.
     /// </summary>
     /// <param name="baseUrl">Base URL of the MMS server (default: "http://localhost:5000")</param>
@@ -559,8 +569,8 @@ internal class MmsClient {
     /// <returns>Response body as string</returns>
     private static async Task<string?> PostJsonAsync(string url, string json) {
         // StringContent handles UTF-8 encoding and sets Content-Type header
-        var content = new StringContent(json, Encoding.UTF8, "application/json");
-        var response = await HttpClient.PostAsync(url, content);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var response = await HttpClient.PostAsync(url, content);
         return await response.Content.ReadAsStringAsync();
     }
 
@@ -572,9 +582,9 @@ internal class MmsClient {
     /// <param name="jsonBytes">JSON bytes to send as request body</param>
     /// <returns>Response body as string</returns>
     private static async Task<string?> PostJsonBytesAsync(string url, byte[] jsonBytes) {
-        var content = new ByteArrayContent(jsonBytes);
+        using var content = new ByteArrayContent(jsonBytes);
         content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-        var response = await HttpClient.PostAsync(url, content);
+        using var response = await HttpClient.PostAsync(url, content);
         return await response.Content.ReadAsStringAsync();
     }
 
@@ -595,8 +605,8 @@ internal class MmsClient {
     /// <param name="json">JSON string to send as request body</param>
     /// <returns>Response body as string</returns>
     private static async Task<string?> PutJsonAsync(string url, string json) {
-        var content = new StringContent(json, Encoding.UTF8, "application/json");
-        var response = await HttpClient.PutAsync(url, content);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var response = await HttpClient.PutAsync(url, content);
         return await response.Content.ReadAsStringAsync();
     }
 
@@ -786,7 +796,7 @@ internal class MmsClient {
     #endregion
 
     /// <summary>
-    /// gets the local IP address of the machine.
+    /// Gets the local IP address of the machine.
     /// Uses a UDP socket to determine the routing to the internet to pick the correct interface.
     /// </summary>
     private static string? GetLocalIpAddress() {

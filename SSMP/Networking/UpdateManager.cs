@@ -238,25 +238,21 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     public void Reset() {
         lock (_lock) {
             _receivedQueue?.Clear();
-            _rttTracker?.Reset();
             
             _localSequence = 0;
             _remoteSequence = 0;
             _currentPacket = new TOutgoing();
             _lastSendRate = CurrentSendRate;
             
-            // RttTracker reset logic (assuming it has one or just make a new one if it's cheap)
-            if (_rttTracker != null) _rttTracker = new RttTracker();
+            // Reset managers by nullifying them - InitializeManagersIfNeeded will recreate them
+            // with proper transport properties
+            _rttTracker = null;
+            _reliabilityManager = null;
+            _congestionManager = null;
+            _receivedQueue = null;
             
-            // Similarly for others if needed, but RTT is key.
-            // ReliabilityManager buffers packets. It should be cleared.
-            if (_reliabilityManager != null && _rttTracker != null) {
-                 _reliabilityManager = new ReliabilityManager<TOutgoing, TPacketId>(this, _rttTracker);
-            }
-            
-            if (_congestionManager != null && _rttTracker != null) {
-                _congestionManager = new CongestionManager<TOutgoing, TPacketId>(this, _rttTracker);
-            }
+            // Reinitialize managers with transport properties set correctly
+            InitializeManagersIfNeeded();
         }
     }
 
