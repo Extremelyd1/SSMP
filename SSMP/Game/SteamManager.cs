@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using System.Threading;
 using Steamworks;
 using SSMP.Logging;
@@ -85,6 +86,11 @@ public static class SteamManager {
     /// </summary>
     private const string LobbyKeyName = "name";
     private const string LobbyKeyVersion = "version";
+
+    /// <summary>
+    /// Cached mod version string from assembly metadata.
+    /// </summary>
+    private static readonly string ModVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.0.0";
 
     /// <summary>
     /// Reusable callback instances to avoid GC allocations.
@@ -189,7 +195,7 @@ public static class SteamManager {
         // Add filters to only show lobbies with matching game version
         SteamMatchmaking.AddRequestLobbyListStringFilter(
             LobbyKeyVersion, 
-            UnityEngine.Application.version, 
+            ModVersion, 
             ELobbyComparison.k_ELobbyComparisonEqual
         );
         
@@ -352,7 +358,7 @@ public static class SteamManager {
         // Set lobby metadata using Steam persona name and game version
         var steamName = SteamFriends.GetPersonaName();
         SteamMatchmaking.SetLobbyData(lobbyId, LobbyKeyName, $"{steamName}'s Lobby");
-        SteamMatchmaking.SetLobbyData(lobbyId, LobbyKeyVersion, UnityEngine.Application.version);
+        SteamMatchmaking.SetLobbyData(lobbyId, LobbyKeyVersion, ModVersion);
 
         // Set Rich Presence based on lobby type
         // Private lobbies: NO connect key (truly invite-only, no "Join Game" button)
