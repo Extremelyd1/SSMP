@@ -143,10 +143,12 @@ static Created<CreateLobbyResponse> CreateLobby(
         connectionData,
         request.LobbyName ?? "Unnamed Lobby",
         lobbyType,
-        request.HostLanIp
+        request.HostLanIp,
+        request.IsPublic ?? true
     );
 
-    Console.WriteLine($"[LOBBY] Created: '{lobby.LobbyName}' [{lobby.LobbyType}] -> {lobby.ConnectionData} (Code: {lobby.LobbyCode})");
+    var visibility = lobby.IsPublic ? "Public" : "Private";
+    Console.WriteLine($"[LOBBY] Created: '{lobby.LobbyName}' [{lobby.LobbyType}] ({visibility}) -> {lobby.ConnectionData} (Code: {lobby.LobbyCode})");
     return TypedResults.Created($"/lobby/{lobby.ConnectionData}", new CreateLobbyResponse(lobby.ConnectionData, lobby.HostToken, lobby.LobbyCode));
 }
 
@@ -280,13 +282,16 @@ static async Task<Results<Ok<JoinResponse>, NotFound<ErrorResponse>>> JoinLobby(
 /// <param name="ConnectionData">Steam lobby ID (Steam only).</param>
 /// <param name="LobbyName">Display name for the lobby.</param>
 /// <param name="LobbyType">"steam" or "matchmaking" (default: matchmaking).</param>
+/// <param name="HostLanIp">Host LAN IP for local network discovery.</param>
+/// <param name="IsPublic">Whether lobby appears in browser (default: true).</param>
 record CreateLobbyRequest(
     string? HostIp,
     int? HostPort,
     string? ConnectionData,
     string? LobbyName,
     string? LobbyType,
-    string? HostLanIp
+    string? HostLanIp,
+    bool? IsPublic
 );
 
 /// <param name="ConnectionData">Connection identifier (IP:Port or Steam lobby ID).</param>

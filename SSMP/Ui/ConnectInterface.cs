@@ -1338,7 +1338,14 @@ internal class ConnectInterface {
         // Start polling for pending clients to punch back
         _mmsClient.StartPendingClientPolling();
 
-        ShowFeedback(Color.green, $"Lobby: {lobbyId}");
+        // For private lobbies, show invite code in ChatBox so it's easily shareable
+        if (visibility == LobbyVisibility.Private) {
+            UiManager.InternalChatBox.AddMessage($"<color=yellow>[Private Lobby]</color> Invite code: <color=lime>{lobbyId}</color>");
+            ShowFeedback(Color.green, "Private lobby created!");
+        } else {
+            ShowFeedback(Color.green, $"Lobby: {lobbyId}");
+        }
+        
         StartHostButtonPressed?.Invoke("0.0.0.0", 26960, username, TransportType.HolePunch);
     }
 

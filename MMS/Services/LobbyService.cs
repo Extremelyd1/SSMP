@@ -36,14 +36,15 @@ public class LobbyService {
         string connectionData,
         string lobbyName,
         string lobbyType = "matchmaking",
-        string? hostLanIp = null
+        string? hostLanIp = null,
+        bool isPublic = true
     ) {
         var hostToken = GenerateToken(32);
         
         // Only generate lobby codes for matchmaking lobbies
         // Steam lobbies use Steam's native join flow (no MMS invite codes)
         var lobbyCode = lobbyType == "steam" ? "" : GenerateLobbyCode();
-        var lobby = new Lobby(connectionData, hostToken, lobbyCode, lobbyName, lobbyType, hostLanIp);
+        var lobby = new Lobby(connectionData, hostToken, lobbyCode, lobbyName, lobbyType, hostLanIp, isPublic);
 
         _lobbies[connectionData] = lobby;
         _tokenToConnectionData[hostToken] = connectionData;
@@ -108,10 +109,11 @@ public class LobbyService {
     public IEnumerable<Lobby> GetAllLobbies() => _lobbies.Values.Where(l => !l.IsDead);
 
     /// <summary>
-    /// Returns active lobbies, optionally filtered by type ("steam" or "matchmaking").
+    /// Returns active PUBLIC lobbies, optionally filtered by type ("steam" or "matchmaking").
+    /// Private lobbies are excluded from browser listings.
     /// </summary>
     public IEnumerable<Lobby> GetLobbies(string? lobbyType = null) {
-        var lobbies = _lobbies.Values.Where(l => !l.IsDead);
+        var lobbies = _lobbies.Values.Where(l => !l.IsDead && l.IsPublic);
         return string.IsNullOrEmpty(lobbyType)
             ? lobbies
             : lobbies.Where(l => l.LobbyType.Equals(lobbyType, StringComparison.OrdinalIgnoreCase));
