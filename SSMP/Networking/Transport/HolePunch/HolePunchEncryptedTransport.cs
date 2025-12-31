@@ -4,8 +4,8 @@ using System.Net.Sockets;
 using System.Threading;
 using SSMP.Logging;
 using SSMP.Networking.Client;
-using SSMP.Networking.Matchmaking;
 using SSMP.Networking.Transport.Common;
+using SSMP.Ui;
 
 namespace SSMP.Networking.Transport.HolePunch;
 
@@ -20,7 +20,7 @@ namespace SSMP.Networking.Transport.HolePunch;
 /// </para>
 /// <para>
 /// NAT Hole Punching Process:
-/// 1. Client discovers its public endpoint via STUN
+/// 1. Client creates a socket and registers with MMS (which sees public endpoint)
 /// 2. Client sends "punch" packets to peer's public endpoint
 /// 3. These packets open a hole in the local NAT mapping
 /// 4. Peer's packets can now reach through the opened NAT hole
@@ -64,7 +64,7 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     private const string LocalhostAddress = "127.0.0.1";
 
     /// <summary>
-    /// Pre-allocated punch packet bytes containing "PUNCH" in ASCII.
+    /// Pre-allocated punch packet bytes containing "PUNCH" in UTF-8.
     /// Reused across all punch operations to avoid allocations.
     /// </summary>
     /// <remarks>
@@ -137,9 +137,9 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
             Logger.Debug($"HolePunch: Local/LAN connection detected ({address}), using direct DTLS");
 
             // We don't need the pre-bound socket for LAN, so clean it up
-            if (StunClient.PreBoundSocket != null) {
-                StunClient.PreBoundSocket.Close();
-                StunClient.PreBoundSocket = null;
+            if (ConnectInterface.HolePunchSocket != null) {
+                ConnectInterface.HolePunchSocket.Close();
+                ConnectInterface.HolePunchSocket = null;
             }
 
             // No hole-punching needed for localhost/LAN
@@ -214,15 +214,12 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     /// 5. Return socket for DTLS handshake
     /// </remarks>
     private static Socket PerformHolePunch(string address, int port) {
-        // Attempt to reuse the socket from STUN discovery
+        // Attempt to reuse the socket from ConnectInterface
         // This is important because the NAT mapping was created with this socket
-        var socket = StunClient.PreBoundSocket;
-        StunClient.PreBoundSocket = null;
+        var socket = ConnectInterface.HolePunchSocket;
+        ConnectInterface.HolePunchSocket = null;
 
         if (socket == null) {
-            // Create new socket as fallback
-            // Note: This won't work well with coordinated NAT traversal since
-            // the MMS has a different port mapping on record
             socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
             socket.Bind(new IPEndPoint(IPAddress.Any, 0));
             Logger.Warn("HolePunch: No pre-bound socket, creating new one (NAT traversal may fail)");

@@ -486,6 +486,12 @@ internal class ConnectInterface {
     /// </summary>
     public MmsClient MmsClient => _mmsClient;
 
+    /// <summary>
+    /// Pre-bound socket for NAT hole-punching.
+    /// Created by ConnectInterface when joining a lobby, consumed by HolePunchEncryptedTransport.
+    /// </summary>
+    public static System.Net.Sockets.Socket? HolePunchSocket { get; set; }
+
     #endregion
 
     #region Events
@@ -560,13 +566,13 @@ internal class ConnectInterface {
         _lobbyBrowserPanel.SetOnLobbySelected(lobby => {
                 _lobbyIdInput.SetInput(lobby.LobbyCode);
                 _lobbyBrowserPanel.Hide();
-                _matchmakingGroup.SetActive(true); 
+                _matchmakingGroup.SetActive(true);
                 ShowFeedback(Color.green, $"Selected lobby: {lobby.LobbyCode}");
             }
         );
         _lobbyBrowserPanel.SetOnBack(() => {
                 _lobbyBrowserPanel.Hide();
-                _matchmakingGroup.SetActive(true); 
+                _matchmakingGroup.SetActive(true);
             }
         );
         _lobbyBrowserPanel.SetOnRefresh(() => { MonoBehaviourUtil.Instance.StartCoroutine(FetchLobbiesCoroutine()); });
@@ -587,7 +593,7 @@ internal class ConnectInterface {
             _steamLobbyBrowserPanel.SetOnLobbySelected(lobby => {
                     _steamLobbyBrowserPanel.Hide();
                     _steamGroup.SetActive(true);
-                    
+
                     // Steam lobbies join via Steam ID (ConnectionData)
                     if (lobby.LobbyType == "steam") {
                         JoinSteamLobbyFromBrowser(lobby.ConnectionData);
@@ -1139,21 +1145,20 @@ internal class ConnectInterface {
     /// Coroutine to join a lobby, handling both Matchmaking and Steam types.
     /// </summary>
     private IEnumerator JoinLobbyCoroutine(string lobbyId, string username) {
-        ShowFeedback(Color.yellow, "Discovering endpoint...");
+        ShowFeedback(Color.yellow, "Joining lobby...");
 
-        // Discover our public endpoint and keep the socket for reuse (needed for Matchmaking)
-        var stunResult = StunClient.DiscoverPublicEndpointWithSocket();
-        if (stunResult == null) {
-            ShowFeedback(Color.red, "Failed to discover public endpoint");
-            yield break;
-        }
-
-        var (clientIp, clientPort, socket) = stunResult.Value;
+        // Create a socket for hole-punching - bind to any available port
+        // MMS will see our public IP from the HTTP connection
+        var socket = new System.Net.Sockets.Socket(
+            System.Net.Sockets.AddressFamily.InterNetwork,
+            System.Net.Sockets.SocketType.Dgram,
+            System.Net.Sockets.ProtocolType.Udp
+        );
+        socket.Bind(new System.Net.IPEndPoint(System.Net.IPAddress.Any, 0));
+        var clientPort = ((System.Net.IPEndPoint)socket.LocalEndPoint!).Port;
 
         // Store socket for HolePunchEncryptedTransport to use
-        StunClient.PreBoundSocket = socket;
-
-        ShowFeedback(Color.yellow, "Joining lobby...");
+        HolePunchSocket = socket;
 
         // Join lobby and register our endpoint for punch-back
         var task = _mmsClient.JoinLobbyAsync(lobbyId, clientPort);
@@ -1162,8 +1167,8 @@ internal class ConnectInterface {
         var result = task.Result;
 
         if (result == null) {
-            StunClient.PreBoundSocket?.Dispose();
-            StunClient.PreBoundSocket = null;
+            HolePunchSocket?.Dispose();
+            HolePunchSocket = null;
             ShowFeedback(Color.red, "Lobby not found, offline, or join failed");
             yield break;
         }
@@ -1171,10 +1176,9 @@ internal class ConnectInterface {
         var (connectionData, lobbyType) = result.Value;
 
         if (lobbyType == "steam") {
-            // Steam Connection
-            // We don't need the hole punch socket for Steam
-            StunClient.PreBoundSocket?.Dispose();
-            StunClient.PreBoundSocket = null;
+            // Steam Connection - we don't need the hole punch socket
+            HolePunchSocket?.Dispose();
+            HolePunchSocket = null;
 
             if (!SteamManager.IsInitialized) {
                 ShowFeedback(Color.red, "Steam is not initialized");
@@ -1184,18 +1188,17 @@ internal class ConnectInterface {
             ShowFeedback(Color.green, "Joining Steam lobby...");
             // Pass Steam Lobby ID as IP, Port 0, Transport SteamP2P
             ConnectButtonPressed?.Invoke(connectionData, 0, username, TransportType.Steam);
-        } 
-        else {
+        } else {
             // Matchmaking Connection (IP:Port)
             var parts = connectionData.Split(':');
             if (parts.Length != 2 || !int.TryParse(parts[1], out var hostPort)) {
                 ShowFeedback(Color.red, "Invalid connection data");
-                StunClient.PreBoundSocket?.Dispose();
-                StunClient.PreBoundSocket = null;
+                HolePunchSocket?.Dispose();
+                HolePunchSocket = null;
                 yield break;
             }
-            var hostIp = parts[0];
 
+            var hostIp = parts[0];
 
             ShowFeedback(Color.green, $"Connecting to {hostIp}:{hostPort}...");
             ConnectButtonPressed?.Invoke(hostIp, hostPort, username, TransportType.HolePunch);
@@ -1257,16 +1260,16 @@ internal class ConnectInterface {
         // Capture visibility for callback closure
         var isPublic = visibility == LobbyVisibility.Public;
 
-        SteamManager.LobbyCreatedEvent += OnSteamLobbyCreated;
+        SteamManager.LobbyCreatedEvent += OnLobbyCreatedCallback;
 
         // Create native Steam lobby (uses Steam's default max = 250)
         SteamManager.CreateLobby(username, lobbyType: steamLobbyType);
         return;
 
         // Subscribe to lobby created event (one-time)
-        void OnSteamLobbyCreated(CSteamID steamLobbyId, string hostName) {
+        void OnLobbyCreatedCallback(CSteamID steamLobbyId, string hostName) {
             // Unsubscribe immediately
-            SteamManager.LobbyCreatedEvent -= OnSteamLobbyCreated;
+            SteamManager.LobbyCreatedEvent -= OnLobbyCreatedCallback;
 
             // Only PUBLIC Steam lobbies register with MMS for browser visibility
             // Private and Friends-Only lobbies use Steam's native discovery only
@@ -1340,12 +1343,14 @@ internal class ConnectInterface {
 
         // For private lobbies, show invite code in ChatBox so it's easily shareable
         if (visibility == LobbyVisibility.Private) {
-            UiManager.InternalChatBox.AddMessage($"<color=yellow>[Private Lobby]</color> Invite code: <color=lime>{lobbyId}</color>");
+            UiManager.InternalChatBox.AddMessage(
+                $"<color=yellow>[Private Lobby]</color> Invite code: <color=lime>{lobbyId}</color>"
+            );
             ShowFeedback(Color.green, "Private lobby created!");
         } else {
             ShowFeedback(Color.green, $"Lobby: {lobbyId}");
         }
-        
+
         StartHostButtonPressed?.Invoke("0.0.0.0", 26960, username, TransportType.HolePunch);
     }
 

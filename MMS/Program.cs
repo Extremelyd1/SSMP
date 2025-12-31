@@ -1,5 +1,6 @@
 ﻿#pragma warning disable CS1587 // XML comment is not placed on a valid language element
 
+using System.Net;
 using System.Net.WebSockets;
 using System.Text;
 using JetBrains.Annotations;
@@ -128,7 +129,14 @@ static Created<CreateLobbyResponse> CreateLobby(
 
         connectionData = request.ConnectionData;
     } else {
-        var hostIp = request.HostIp ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var rawHostIp = request.HostIp ?? context.Connection.RemoteIpAddress?.ToString();
+        if (string.IsNullOrEmpty(rawHostIp) || !IPAddress.TryParse(rawHostIp, out var parsedHostIp)) {
+            return TypedResults.Created(
+                "/lobby/invalid",
+                new CreateLobbyResponse("error", "Invalid IP address", "")
+            );
+        }
+        var hostIp = parsedHostIp.ToString();
         if (request.HostPort is null or <= 0 or > 65535) {
             return TypedResults.Created(
                 "/lobby/invalid",
@@ -236,7 +244,11 @@ static async Task<Results<Ok<JoinResponse>, NotFound<ErrorResponse>>> JoinLobby(
         return TypedResults.NotFound(new ErrorResponse("Lobby not found"));
     }
 
-    var clientIp = request.ClientIp ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+    var rawClientIp = request.ClientIp ?? context.Connection.RemoteIpAddress?.ToString();
+    if (string.IsNullOrEmpty(rawClientIp) || !IPAddress.TryParse(rawClientIp, out var parsedIp)) {
+        return TypedResults.NotFound(new ErrorResponse("Invalid IP address"));
+    }
+    var clientIp = parsedIp.ToString();
 
     if (request.ClientPort is <= 0 or > 65535) {
         return TypedResults.NotFound(new ErrorResponse("Invalid port"));
@@ -284,7 +296,7 @@ static async Task<Results<Ok<JoinResponse>, NotFound<ErrorResponse>>> JoinLobby(
 /// <param name="LobbyType">"steam" or "matchmaking" (default: matchmaking).</param>
 /// <param name="HostLanIp">Host LAN IP for local network discovery.</param>
 /// <param name="IsPublic">Whether lobby appears in browser (default: true).</param>
-record CreateLobbyRequest(
+internal abstract record CreateLobbyRequest(
     string? HostIp,
     int? HostPort,
     string? ConnectionData,
@@ -297,13 +309,13 @@ record CreateLobbyRequest(
 /// <param name="ConnectionData">Connection identifier (IP:Port or Steam lobby ID).</param>
 /// <param name="HostToken">Secret token for host operations.</param>
 /// <param name="LobbyCode">Human-readable invite code.</param>
-record CreateLobbyResponse([UsedImplicitly] string ConnectionData, string HostToken, string LobbyCode);
+internal record CreateLobbyResponse([UsedImplicitly] string ConnectionData, string HostToken, string LobbyCode);
 
 /// <param name="ConnectionData">Connection identifier (IP:Port or Steam lobby ID).</param>
 /// <param name="Name">Display name.</param>
 /// <param name="LobbyType">"steam" or "matchmaking".</param>
 /// <param name="LobbyCode">Human-readable invite code.</param>
-record LobbyResponse(
+internal record LobbyResponse(
     [UsedImplicitly] string ConnectionData,
     string Name,
     string LobbyType,
@@ -312,22 +324,22 @@ record LobbyResponse(
 
 /// <param name="ClientIp">Client IP (optional - uses connection IP if null).</param>
 /// <param name="ClientPort">Client's local port for hole-punching.</param>
-record JoinLobbyRequest([UsedImplicitly] string? ClientIp, int ClientPort);
+internal record JoinLobbyRequest([UsedImplicitly] string? ClientIp, int ClientPort);
 
 /// <param name="ConnectionData">Host connection data (IP:Port or Steam lobby ID).</param>
 /// <param name="LobbyType">"steam" or "matchmaking".</param>
 /// <param name="ClientIp">Client's public IP as seen by MMS.</param>
 /// <param name="ClientPort">Client's public port.</param>
-record JoinResponse([UsedImplicitly] string ConnectionData, string LobbyType, string ClientIp, int ClientPort);
+internal record JoinResponse([UsedImplicitly] string ConnectionData, string LobbyType, string ClientIp, int ClientPort);
 
 /// <param name="ClientIp">Pending client's IP.</param>
 /// <param name="ClientPort">Pending client's port.</param>
-record PendingClientResponse([UsedImplicitly] string ClientIp, int ClientPort);
+internal record PendingClientResponse([UsedImplicitly] string ClientIp, int ClientPort);
 
 /// <param name="Error">Error message.</param>
-record ErrorResponse([UsedImplicitly] string Error);
+internal record ErrorResponse([UsedImplicitly] string Error);
 
 /// <param name="Status">Status message.</param>
-record StatusResponse([UsedImplicitly] string Status);
+internal record StatusResponse([UsedImplicitly] string Status);
 
 #endregion
