@@ -22,6 +22,7 @@ using SSMP.Networking.Packet.Data;
 using SSMP.Networking.Packet.Update;
 using SSMP.Networking.Server;
 using SSMP.Networking.Transport.Common;
+// ReSharper disable InconsistentlySynchronizedField
 
 namespace SSMP.Game.Server;
 

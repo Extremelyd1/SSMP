@@ -1,6 +1,5 @@
 using System;
 using System.Collections;
-using System.Diagnostics.CodeAnalysis;
 using SSMP.Game;
 using SSMP.Game.Settings;
 using SSMP.Networking.Client;
@@ -16,14 +15,12 @@ using Logger = SSMP.Logging.Logger;
 // ReSharper disable ObjectCreationAsStatement
 // ReSharper disable HeuristicUnreachableCode
 // ReSharper disable UnusedMember.Local
-#pragma warning disable CS0162 // Unreachable code detected
 
 namespace SSMP.Ui;
 
 /// <summary>
 /// Manages the multiplayer connection interface with tabbed navigation for Matchmaking, Steam, and Direct IP connections.
 /// </summary>
-[SuppressMessage("Compiler", "CS0162:Unreachable code detected")]
 internal class ConnectInterface {
     #region Layout Constants
 
