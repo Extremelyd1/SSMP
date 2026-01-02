@@ -137,9 +137,9 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
             Logger.Debug($"HolePunch: Local/LAN connection detected ({address}), using direct DTLS");
 
             // We don't need the pre-bound socket for LAN, so clean it up
-            if (ConnectInterface.HolePunchSocket != null) {
-                ConnectInterface.HolePunchSocket.Close();
-                ConnectInterface.HolePunchSocket = null;
+            if (HolePunchSocket != null) {
+                HolePunchSocket.Close();
+                HolePunchSocket = null;
             }
 
             // No hole-punching needed for localhost/LAN
@@ -198,6 +198,12 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     }
 
     /// <summary>
+    /// Pre-bound socket for NAT hole-punching.
+    /// Created by ConnectInterface when joining a lobby, consumed by HolePunchEncryptedTransport.
+    /// </summary>
+    public static Socket? HolePunchSocket { get; set; }
+
+    /// <summary>
     /// Performs UDP hole punching to the specified endpoint.
     /// Opens NAT mapping by sending packets, then returns connected socket for DTLS.
     /// </summary>
@@ -214,10 +220,10 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     /// 5. Return socket for DTLS handshake
     /// </remarks>
     private static Socket PerformHolePunch(string address, int port) {
-        // Attempt to reuse the socket from ConnectInterface
+        // Attempt to reuse the socket passed from ConnectInterface
         // This is important because the NAT mapping was created with this socket
-        var socket = ConnectInterface.HolePunchSocket;
-        ConnectInterface.HolePunchSocket = null;
+        var socket = HolePunchSocket;
+        HolePunchSocket = null;
 
         if (socket == null) {
             socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);

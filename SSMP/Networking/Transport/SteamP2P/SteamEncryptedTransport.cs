@@ -237,7 +237,7 @@ internal sealed class SteamEncryptedTransport : IReliableTransport {
 
             // Allocate a copy for safety - handlers may hold references
             var data = new byte[size];
-            Buffer.BlockCopy(receiveBuffer, 0, data, 0, size);
+            Array.Copy(receiveBuffer, 0, data, 0, size);
             dataReceived(data, size);
         }
     }

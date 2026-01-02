@@ -313,7 +313,7 @@ internal sealed class SteamEncryptedTransportServer : IEncryptedTransportServer 
                 
                 // Allocate only for client delivery - unavoidable as client needs owned copy
                 var data = new byte[size];
-                Buffer.BlockCopy(receiveBuffer, 0, data, 0, size);
+                Array.Copy(receiveBuffer, 0, data, 0, size);
                 client.RaiseDataReceived(data, size);
             } else {
                 Logger.Warn($"Steam P2P: Received packet from unknown client {remoteSteamId}");

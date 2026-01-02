@@ -7,6 +7,7 @@ using SSMP.Networking.Matchmaking;
 using SSMP.Ui.Component;
 using Steamworks;
 using SSMP.Networking.Transport.Common;
+using SSMP.Networking.Transport.HolePunch;
 using SSMP.Ui.Util;
 using SSMP.Util;
 using UnityEngine;
@@ -483,11 +484,7 @@ internal class ConnectInterface {
     /// </summary>
     public MmsClient MmsClient => _mmsClient;
 
-    /// <summary>
-    /// Pre-bound socket for NAT hole-punching.
-    /// Created by ConnectInterface when joining a lobby, consumed by HolePunchEncryptedTransport.
-    /// </summary>
-    public static System.Net.Sockets.Socket? HolePunchSocket { get; set; }
+
 
     #endregion
 
@@ -1155,7 +1152,7 @@ internal class ConnectInterface {
         var clientPort = ((System.Net.IPEndPoint)socket.LocalEndPoint!).Port;
 
         // Store socket for HolePunchEncryptedTransport to use
-        HolePunchSocket = socket;
+        HolePunchEncryptedTransport.HolePunchSocket = socket;
 
         // Join lobby and register our endpoint for punch-back
         var task = _mmsClient.JoinLobbyAsync(lobbyId, clientPort);
@@ -1164,8 +1161,8 @@ internal class ConnectInterface {
         var result = task.Result;
 
         if (result == null) {
-            HolePunchSocket?.Dispose();
-            HolePunchSocket = null;
+            HolePunchEncryptedTransport.HolePunchSocket?.Dispose();
+            HolePunchEncryptedTransport.HolePunchSocket = null;
             ShowFeedback(Color.red, "Lobby not found, offline, or join failed");
             yield break;
         }
@@ -1174,8 +1171,8 @@ internal class ConnectInterface {
 
         if (lobbyType == "steam") {
             // Steam Connection - we don't need the hole punch socket
-            HolePunchSocket?.Dispose();
-            HolePunchSocket = null;
+            HolePunchEncryptedTransport.HolePunchSocket?.Dispose();
+            HolePunchEncryptedTransport.HolePunchSocket = null;
 
             if (!SteamManager.IsInitialized) {
                 ShowFeedback(Color.red, "Steam is not initialized");
@@ -1190,8 +1187,8 @@ internal class ConnectInterface {
             var parts = connectionData.Split(':');
             if (parts.Length != 2 || !int.TryParse(parts[1], out var hostPort)) {
                 ShowFeedback(Color.red, "Invalid connection data");
-                HolePunchSocket?.Dispose();
-                HolePunchSocket = null;
+                HolePunchEncryptedTransport.HolePunchSocket?.Dispose();
+                HolePunchEncryptedTransport.HolePunchSocket = null;
                 yield break;
             }
 
