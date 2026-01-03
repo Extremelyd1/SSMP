@@ -86,6 +86,7 @@ internal class Packet : IPacket {
         var length = (ushort) _buffer.Count;
         _buffer.Insert(0, (byte) length);
         _buffer.Insert(1, (byte) (length >> 8));
+        Length = _buffer.Count;
     }
 
     /// <summary>
@@ -151,6 +152,7 @@ internal class Packet : IPacket {
     public void Write(byte[] values) {
         if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
         _buffer.AddRange(values);
+        Length = _buffer.Count;
     }
 
     /// <summary>
@@ -162,7 +164,7 @@ internal class Packet : IPacket {
     /// <exception cref="Exception">Thrown if there are not enough bytes of content left to read.</exception>
     public byte[] ReadBytes(int length) {
         // Check whether there is enough bytes left to read
-        if (_buffer != null && _buffer.Count >= _readPos + length) {
+        if ((_buffer?.Count ?? Length) >= _readPos + length) {
             var bytes = new byte[length];
 
             Array.Copy(_readableBuffer, _offset + _readPos, bytes, 0, length);
@@ -184,6 +186,7 @@ internal class Packet : IPacket {
     public void Write(byte value) {
         if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
         _buffer.Add(value);
+        Length = _buffer.Count;
     }
 
     /// <inheritdoc />
@@ -192,6 +195,7 @@ internal class Packet : IPacket {
         if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
         _buffer.Add((byte) value);
         _buffer.Add((byte) (value >> 8));
+        Length = _buffer.Count;
     }
 
     /// <inheritdoc />
@@ -202,6 +206,7 @@ internal class Packet : IPacket {
         _buffer.Add((byte) (value >> 8));
         _buffer.Add((byte) (value >> 16));
         _buffer.Add((byte) (value >> 24));
+        Length = _buffer.Count;
     }
 
     /// <inheritdoc />
@@ -216,12 +221,14 @@ internal class Packet : IPacket {
         _buffer.Add((byte) (value >> 40));
         _buffer.Add((byte) (value >> 48));
         _buffer.Add((byte) (value >> 56));
+        Length = _buffer.Count;
     }
 
     /// <inheritdoc />
     public void Write(sbyte value) {
         if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
         _buffer.Add((byte) value);
+        Length = _buffer.Count;
     }
 
     /// <inheritdoc />
@@ -230,6 +237,7 @@ internal class Packet : IPacket {
         if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
         _buffer.Add((byte) value);
         _buffer.Add((byte) (value >> 8));
+        Length = _buffer.Count;
     }
 
     /// <inheritdoc />
@@ -240,6 +248,7 @@ internal class Packet : IPacket {
         _buffer.Add((byte) (value >> 8));
         _buffer.Add((byte) (value >> 16));
         _buffer.Add((byte) (value >> 24));
+        Length = _buffer.Count;
     }
 
     /// <inheritdoc />
@@ -254,6 +263,7 @@ internal class Packet : IPacket {
         _buffer.Add((byte) (value >> 40));
         _buffer.Add((byte) (value >> 48));
         _buffer.Add((byte) (value >> 56));
+        Length = _buffer.Count;
     }
 
     #endregion
@@ -282,6 +292,7 @@ internal class Packet : IPacket {
     public void Write(bool value) {
         if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
         _buffer.Add(value ? (byte) 1 : (byte) 0);
+        Length = _buffer.Count;
     }
 
     /// <inheritdoc />

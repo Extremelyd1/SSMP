@@ -201,6 +201,12 @@ internal class UiManager : IUiManager {
     /// </summary>
     private Action<bool>? _saveSlotSelectedAction;
 
+    /// <summary>
+    /// Whether the save slot selection menu is currently active/opening.
+    /// Prevents re-entrancy and duplicate hook registration.
+    /// </summary>
+    private bool _isSlotSelectionActive;
+
     #endregion
 
     #region Properties
@@ -576,8 +582,18 @@ internal class UiManager : IUiManager {
     /// Boolean parameter: true if save selected, false if back pressed.
     /// </param>
     public void OpenSaveSlotSelection(Action<bool>? callback = null) {
+        if (_isSlotSelectionActive) {
+            Logger.Info("Save slot selection already active, ignoring request");
+            return;
+        }
+
+        _isSlotSelectionActive = true;
         _saveSlotSelectedAction = CreateSaveSlotCallback(callback);
+        
+        // Ensure we don't have duplicate hooks
+        UnregisterSaveSlotHooks();
         RegisterSaveSlotHooks();
+        
         UM.StartCoroutine(GoToSaveMenu());
     }
 
@@ -588,6 +604,12 @@ internal class UiManager : IUiManager {
         return saveSelected => {
             callback?.Invoke(saveSelected);
             UnregisterSaveSlotHooks();
+            // Note: _isSlotSelectionActive is NOT reset here because if save is selected, 
+            // the game loads and we don't want to allow reopening the menu.
+            // It will be reset if Back is pressed.
+            if (!saveSelected) {
+                _isSlotSelectionActive = false;
+            }
         };
     }
 
@@ -794,8 +816,15 @@ internal class UiManager : IUiManager {
     private IEnumerator GoToSaveMenu() {
         HideMultiplayerMenu();
         yield return UM.HideCurrentMenu();
-        yield return UM.GoToProfileMenu();
-        OverrideSaveMenuBackButton();
+        
+        // Safety check before verifying game UI state
+        if (UM != null) {
+             yield return UM.GoToProfileMenu();
+             OverrideSaveMenuBackButton();
+        } else {
+             Logger.Error("UIManager instance is null, cannot go to profile menu");
+             _isSlotSelectionActive = false;
+        }
     }
 
     /// <summary>
@@ -830,6 +859,7 @@ internal class UiManager : IUiManager {
     /// </summary>
     private void OnSaveMenuBackPressed() {
         UnregisterSaveSlotHooks();
+        _isSlotSelectionActive = false;
         _saveSlotSelectedAction?.Invoke(false);
         
         UM.StartCoroutine(GoToMultiplayerMenu());

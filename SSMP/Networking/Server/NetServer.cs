@@ -148,8 +148,9 @@ internal class NetServer : INetServer {
         transportClient.DataReceivedEvent += (buffer, length) => {
             // We MUST copy the data to a new buffer because the source 'buffer' is reused 
             // immediately by the transport layer's receive loop.
-            // We use ArrayPool to minimize allocations, but we must own this new buffer.
-            var queueBuffer = ArrayPool<byte>.Shared.Rent(length);
+            // Allocate a new buffer of the exact required length so that the buffer size
+            // always matches the amount of data copied and later processed.
+            var queueBuffer = new byte[length];
             Array.Copy(buffer, 0, queueBuffer, 0, length);
 
             _receivedQueue.Enqueue(
@@ -173,48 +174,38 @@ internal class NetServer : INetServer {
         while (!token.IsCancellationRequested) {
             WaitHandle.WaitAny(waitHandles);
 
-            while (!token.IsCancellationRequested && _receivedQueue.TryDequeue(out var receivedData)) {
-                try {
-                    var packets = PacketManager.HandleReceivedData(
-                        receivedData.Buffer,
-                        receivedData.NumReceived,
-                        ref _leftoverData
-                    );
+            // Process all available items in one go
+            while (_receivedQueue.TryDequeue(out var receivedData)) {
+                if (token.IsCancellationRequested) break;
 
-                    var transportClient = receivedData.TransportClient;
+                var packets = PacketManager.HandleReceivedData(
+                    receivedData.Buffer,
+                    receivedData.NumReceived,
+                    ref _leftoverData
+                );
 
-                    // Try to find existing client by transport client reference
-                    var client = _clientsById.Values.FirstOrDefault(c => c.TransportClient == transportClient);
+                var transportClient = receivedData.TransportClient;
+                var client = _clientsById.Values.FirstOrDefault(c => c.TransportClient == transportClient);
 
-                    if (client == null) {
-                        // Extract throttle key for throttling
-                        var throttleKey = transportClient.EndPoint;
+                if (client == null) {
+                    var throttleKey = transportClient.EndPoint;
 
-                        if (throttleKey != null && _throttledClients.TryGetValue(throttleKey, out var clientStopwatch)) {
-                            if (clientStopwatch.ElapsedMilliseconds < ThrottleTime) {
-                                // Reset stopwatch and ignore packets so the client times out
-                                clientStopwatch.Restart();
-                                continue;
-                            }
-
-                            // Stopwatch exceeds max throttle time so we remove the client from the dict
-                            _throttledClients.TryRemove(throttleKey, out _);
+                    if (throttleKey != null && _throttledClients.TryGetValue(throttleKey, out var clientStopwatch)) {
+                        if (clientStopwatch.ElapsedMilliseconds < ThrottleTime) {
+                            clientStopwatch.Restart();
+                            continue;
                         }
 
-                        Logger.Info(
-                            $"Received packet from unknown client: {transportClient.ToDisplayString()}, creating new client"
-                        );
-
-                        // We didn't find a client with the given identifier, so we assume it is a new client
-                        // that wants to connect
-                        client = CreateNewClient(transportClient);
+                        _throttledClients.TryRemove(throttleKey, out _);
                     }
 
-                    HandleClientPackets(client, packets);
-                } finally {
-                    // Return the buffer to the pool now that we are done with it
-                    ArrayPool<byte>.Shared.Return(receivedData.Buffer);
+                    Logger.Info(
+                        $"Received packet from unknown client: {transportClient.ToDisplayString()}, creating new client"
+                    );
+                    client = CreateNewClient(transportClient);
                 }
+
+                HandleClientPackets(client, packets);
             }
         }
     }

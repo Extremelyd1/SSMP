@@ -244,7 +244,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         _lastReceiveTime = DateTime.UtcNow;
 
         // For Steam (no sequencing): Estimate RTT by completing the round-trip for last sent sequence.
-        // Note: _localSequence is post-incremented after OnSendPacket (line 323), so the last sequence
+        // Note: _localSequence is post-incremented after OnSendPacket (line 324), so the last sequence
         // that was tracked via OnSendPacket is (_localSequence - 1).
         if (!_requiresSequencing) {
             _rttTracker?.OnAckReceived((ushort) (_localSequence - 1));
@@ -468,6 +468,8 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
                     TimeoutEvent?.Invoke();
                     // We don't break immediately, we might want to let the user decide via the event (e.g. disconnect)
                     // usually the event handler will call Disconnect() which stops updates.
+                    // However, we must stop checking to avoid spamming the event in this loop.
+                    break;
                 }
 
                 // Send Packet

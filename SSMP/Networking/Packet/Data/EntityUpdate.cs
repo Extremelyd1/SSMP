@@ -161,7 +161,7 @@ internal class EntityUpdate : BaseEntityUpdate, IPoolable {
         /// <summary>
         /// Whether this instance originates from a client. This influences how to write certain data.
         /// </summary>
-        public bool origin { private get; init; }
+        public bool origin { get; set; }
         
         /// <summary>
         /// Whether the x of the scale is defined.
@@ -408,8 +408,8 @@ internal class EntityUpdate : BaseEntityUpdate, IPoolable {
             xPos = false;
             yPos = false;
             zPos = false;
-            // 'origin' (public bool origin { private get; init; }) is init-only and cannot be reset here.
-            // Pooled ScaleData instances therefore retain their original origin value; callers must not reuse them across differing origins.
+            zPos = false;
+            origin = false;
         }
 
         /// <inheritdoc />
@@ -595,7 +595,8 @@ internal class EntityNetworkData : IPoolable {
     /// <inheritdoc />
     public void Reset() {
         Type = default;
-        Packet.Clear();
+        // Reinitialize Packet with a new instance instead of calling Clear() on a potentially non-clearable packet.
+        Packet = new Packet();
     }
 
     /// <inheritdoc cref="IPacketData.WriteData" />
@@ -627,7 +628,7 @@ internal class EntityNetworkData : IPoolable {
             data[i] = packet.ReadByte();
         }
 
-        Packet = new Packet(data);
+        Packet = new Packet(data, 0, length);
     }
 }
 
