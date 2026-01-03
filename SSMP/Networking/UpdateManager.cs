@@ -79,7 +79,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
 
     /// <summary>
     /// The timestamp of the last received packet.
-    /// used to check for connection timeouts.
+    /// Used to check for connection timeouts.
     /// </summary>
     private DateTime _lastReceiveTime;
 
@@ -224,8 +224,8 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         Logger.Debug("Stopping UDP updates, sending last packet");
         CreateAndSendPacket();
         _cancellationTokenSource?.Cancel();
-        // Wait briefly for thread to finish
-        _sendThread?.Join(200);
+        // Wait for thread to finish before disposing shared resources
+        _sendThread?.Join();
         _sendThread = null;
         _cancellationTokenSource?.Dispose();
         _cancellationTokenSource = null;
@@ -320,7 +320,9 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         }
 
         // For Steam: increment sequence for RTT tracking purposes only
-        _localSequence++;
+        lock (Lock) {
+            _localSequence++;
+        }
 
         SendWithFragmentation(rawPacket, packetToSend.ContainsReliableData);
     }
@@ -433,7 +435,11 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         var stopwatch = Stopwatch.StartNew();
         var nextSendTime = stopwatch.ElapsedMilliseconds;
         using var waitHandle = new ManualResetEventSlim(false);
-        var token = _cancellationTokenSource!.Token;
+        var cts = _cancellationTokenSource;
+        if (cts == null) {
+            return;
+        }
+        var token = cts.Token;
 
         // Safety constant: how many ms can we fall behind before giving up?
         const long maxLagMS = 500;

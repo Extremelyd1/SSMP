@@ -357,10 +357,12 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
         Span<ushort> stackBuffer = stackalloc ushort[stackAllocLimit];
         List<ushort>? listBuffer = null;
 
-        // Identify keys to remove first (materialize via ToList) to avoid modification during enumeration
-        var initialKeys = dictionary.Keys.Where(receivedSequenceNumbers.Contains).ToList();
+        // Iterate dictionary keys directly, collecting matches without intermediate materialization
+        foreach (var key in dictionary.Keys) {
+            if (!receivedSequenceNumbers.Contains(key)) {
+                continue;
+            }
 
-        foreach (var key in initialKeys) {
             if (keysToRemoveCount < stackAllocLimit) {
                 stackBuffer[keysToRemoveCount] = key;
             } else {

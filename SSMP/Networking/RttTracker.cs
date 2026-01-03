@@ -78,9 +78,9 @@ internal sealed class RttTracker {
     public void OnSendPacket(ushort sequence) {
         _trackedPackets[sequence] = Stopwatch.GetTimestamp();
 
-        // O(1) cleanup: Remove an arbitrary tracked sequence if dictionary is getting too large.
-        // This runs once per send, removing at most 1 entry, preventing unbounded growth
-        // while avoiding expensive iteration over all keys.
+        // Remove an arbitrary tracked sequence if the dictionary is getting too large.
+        // This runs once per send and removes at most one entry, preventing unbounded growth
+        // while keeping the amount of cleanup work per send bounded.
         if (_trackedPackets.Count > MaxTrackedPackets) {
             foreach (var key in _trackedPackets.Keys) {
                 _trackedPackets.TryRemove(key, out _);

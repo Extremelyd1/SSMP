@@ -101,16 +101,23 @@ internal class Packet : IPacket {
     }
 
     /// <summary>
-    /// Clears the packet buffer, allowing reuse.
+    /// Clears the packet buffer, allowing reuse for write-mode packets.
     /// Resets length and read position to 0.
     /// </summary>
+    /// <remarks>
+    /// Clear() is only supported for packets created with the parameterless constructor (write-mode).
+    /// It cannot be used on packets created from existing data or in read-only view mode.
+    /// </remarks>
     public void Clear() {
         if (_buffer == null) throw new InvalidOperationException("Cannot clear Read-Only Packet");
+        // In write-mode, the default constructor initializes _readableBuffer to an empty array.
+        // If _readableBuffer is non-empty, this packet was created from existing data and should not be cleared.
+        if (_readableBuffer.Length != 0)
+            throw new InvalidOperationException("Clear() can only be used on write-mode packets created with the default constructor.");
+            
         _buffer.Clear();
         // Readable buffer assumes it mirrors _buffer in write mode, but usually _readableBuffer is a copy or view.
         // In Write Mode (constructor Packet()), _readableBuffer is initialized to empty array.
-        // We should ensure consistency if _readableBuffer was modified (it isn't in write mode).
-        // Actually, _readableBuffer is only set in constructors.
         // For writing, we operate on _buffer.
         Length = 0;
         _readPos = 0;

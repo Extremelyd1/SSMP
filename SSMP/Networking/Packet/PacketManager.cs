@@ -4,7 +4,6 @@ using SSMP.Logging;
 using SSMP.Networking.Packet.Connection;
 using SSMP.Networking.Packet.Data;
 using SSMP.Networking.Packet.Update;
-using SSMP.Util;
 
 namespace SSMP.Networking.Packet;
 
@@ -434,14 +433,11 @@ internal class PacketManager {
 
             // Read packet length (ushort) from little-endian encoded stream
             // Use explicit little-endian conversion to avoid dependence on system endianness.
-            ushort packetLengthValue;
-            if (BitConverter.IsLittleEndian) {
-                packetLengthValue = BitConverter.ToUInt16(data, readPosition);
-            } else {
+            var packetLengthValue = BitConverter.IsLittleEndian
+                ? BitConverter.ToUInt16(data, readPosition)
                 // Manual little-endian decode: low byte first, then high byte
-                packetLengthValue = (ushort)(data[readPosition] | (data[readPosition + 1] << 8));
-            }
-            int packetLength = packetLengthValue;
+                : (ushort) (data[readPosition] | (data[readPosition + 1] << 8));
+            var packetLength = (int) packetLengthValue;
 
             // Sanity check against allocation attacks or corruption.
             // If the length reads as invalid, we imply that protocol framing is lost (e.g. we are reading garbage as length).
@@ -461,7 +457,7 @@ internal class PacketManager {
             // We have a full packet. 
             // Copy data to ensure packet owns its buffer and is safe from reuse
             var packetData = new byte[packetLength];
-            Array.Copy(data, readPosition + 2, packetData, 0, packetLength);
+            Buffer.BlockCopy(data, readPosition + 2, packetData, 0, packetLength);
             packets.Add(new Packet(packetData, 0, packetLength));
 
             readPosition += 2 + packetLength;

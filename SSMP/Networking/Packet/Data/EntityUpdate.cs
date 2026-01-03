@@ -77,7 +77,7 @@ internal class EntityUpdate : BaseEntityUpdate, IPoolable {
     public void Reset() {
         Id = 0;
         UpdateTypes.Clear();
-        Position = default;
+        Position = null!;
         Scale.Reset();
         AnimationId = 0;
         AnimationWrapMode = 0;
@@ -590,16 +590,12 @@ internal class EntityNetworkData : IPoolable {
     /// <summary>
     /// Packet instance containing the data for easy reading and writing of data.
     /// </summary>
-    public Packet Packet { get; set; }
-
-    public EntityNetworkData() {
-        Packet = new Packet();
-    }
+    public Packet Packet { get; set; } = new();
 
     /// <inheritdoc />
     public void Reset() {
         Type = default;
-        Packet = new Packet();
+        Packet.Clear();
     }
 
     /// <inheritdoc cref="IPacketData.WriteData" />
@@ -644,8 +640,8 @@ internal class EntityHostFsmData : IPoolable {
     /// <summary>
     /// The types of content that is in this data class.
     /// </summary>
-    public HashSet<Type> Types { get; }
-    
+    public HashSet<Type> Types { get; } = [];
+
     /// <summary>
     /// The index of the current (or last) state of the FSM.
     /// </summary>
@@ -654,38 +650,32 @@ internal class EntityHostFsmData : IPoolable {
     /// <summary>
     /// Dictionary containing indices of float variables to their respective values.
     /// </summary>
-    public Dictionary<byte, float> Floats { get; }
+    public Dictionary<byte, float> Floats { get; } = new();
+
     /// <summary>
     /// Dictionary containing indices of int variables to their respective values.
     /// </summary>
-    public Dictionary<byte, int> Ints { get; }
+    public Dictionary<byte, int> Ints { get; } = new();
+
     /// <summary>
     /// Dictionary containing indices of bool variables to their respective values.
     /// </summary>
-    public Dictionary<byte, bool> Bools { get; }
+    public Dictionary<byte, bool> Bools { get; } = new();
+
     /// <summary>
     /// Dictionary containing indices of string variables to their respective values.
     /// </summary>
-    public Dictionary<byte, string> Strings { get; }
+    public Dictionary<byte, string> Strings { get; } = new();
+
     /// <summary>
     /// Dictionary containing indices of vector2 variables to their respective values.
     /// </summary>
-    public Dictionary<byte, Vector2> Vec2s { get; }
+    public Dictionary<byte, Vector2> Vec2s { get; } = new();
+
     /// <summary>
     /// Dictionary containing indices of vector3 variables to their respective values.
     /// </summary>
-    public Dictionary<byte, Vector3> Vec3s { get; }
-
-    public EntityHostFsmData() {
-        Types = new HashSet<Type>();
-
-        Floats = new Dictionary<byte, float>();
-        Ints = new Dictionary<byte, int>();
-        Bools = new Dictionary<byte, bool>();
-        Strings = new Dictionary<byte, string>();
-        Vec2s = new Dictionary<byte, Vector2>();
-        Vec3s = new Dictionary<byte, Vector3>();
-    }
+    public Dictionary<byte, Vector3> Vec3s { get; } = new();
 
     /// <inheritdoc />
     public void Reset() {
@@ -783,6 +773,14 @@ internal class EntityHostFsmData : IPoolable {
             packet.Write(CurrentState);
         }
 
+        WriteVarDict(Type.Floats, Floats, packet.Write);
+        WriteVarDict(Type.Ints, Ints, packet.Write);
+        WriteVarDict(Type.Bools, Bools, packet.Write);
+        WriteVarDict(Type.Strings, Strings, packet.Write);
+        WriteVarDict(Type.Vector2s, Vec2s, packet.Write);
+        WriteVarDict(Type.Vector3s, Vec3s, packet.Write);
+        return;
+
         void WriteVarDict<T>(Type type, Dictionary<byte, T> dict, Action<T> writeValue) {
             if (Types.Contains(type)) {
                 var length = (byte) dict.Count;
@@ -794,13 +792,6 @@ internal class EntityHostFsmData : IPoolable {
                 }
             }
         }
-
-        WriteVarDict(Type.Floats, Floats, packet.Write);
-        WriteVarDict(Type.Ints, Ints, packet.Write);
-        WriteVarDict(Type.Bools, Bools, packet.Write);
-        WriteVarDict(Type.Strings, Strings, packet.Write);
-        WriteVarDict(Type.Vector2s, Vec2s, packet.Write);
-        WriteVarDict(Type.Vector3s, Vec3s, packet.Write);
     }
 
     /// <inheritdoc cref="IPacketData.ReadData" />
