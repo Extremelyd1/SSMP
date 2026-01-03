@@ -40,61 +40,51 @@ public delegate void GenericServerPacketHandler<in TPacketData>(ushort id, TPack
 /// Manages packets that are received by the given NetClient.
 /// </summary>
 internal class PacketManager {
+    // --- Constants ---
+
+    /// <summary>
+    /// Maximum allowed packet size (10MB).
+    /// Used to prevent allocation attacks or processing of corrupted large packets.
+    /// </summary>
+    private const int MaxPacketSize = 10 * 1024 * 1024;
+    
     // --- Standard Packet Registries ---
 
-    private readonly PacketHandlerRegistry<ClientUpdatePacketId, ClientPacketHandler> _clientUpdateRegistry;
-    private readonly PacketHandlerRegistry<ClientConnectionPacketId, ClientPacketHandler> _clientConnectionRegistry;
-    private readonly PacketHandlerRegistry<ServerUpdatePacketId, ServerPacketHandler> _serverUpdateRegistry;
-    private readonly PacketHandlerRegistry<ServerConnectionPacketId, ServerPacketHandler> _serverConnectionRegistry;
+    private readonly PacketHandlerRegistry<ClientUpdatePacketId, ClientPacketHandler> _clientUpdateRegistry = new(
+        "client update", true
+    );
+    private readonly PacketHandlerRegistry<ClientConnectionPacketId, ClientPacketHandler> _clientConnectionRegistry = new(
+        "client connection", true
+    );
+    private readonly PacketHandlerRegistry<ServerUpdatePacketId, ServerPacketHandler> _serverUpdateRegistry = new(
+        "server update", false
+    );
+    private readonly PacketHandlerRegistry<ServerConnectionPacketId, ServerPacketHandler> _serverConnectionRegistry = new(
+        "server connection", false
+    );
 
     // --- Addon Packet Registries (Nested Dictionaries) ---
 
-    // Note: We keep the top-level Dictionary<byte, ...> for addons, but the inner dictionary could 
-    // potentially be wrapped if we wanted to go further. For now, we will adapt the existing logic 
-    // to keep addon structure but perhaps simplify the handler execution if possible. 
-    // Given the complexity of double-dictionary, keeping manual management for addons might be safer 
-    // to avoid over-engineering the Registry class for strictly nested cases, 
-    // OR we can make a lightweight registry for the inner part.
-    // 
-    // Decision: Keep addon dictionaries as is for this pass to avoid breaking the nested structure 
-    // requiring 2 keys (addonId + packetId), but verify loop logic.
-    // Actually, we can use the Registry for the INNER part! 
-    // Dictionary<byte, PacketHandlerRegistry<byte, ClientPacketHandler>> would work well.
+    // Addon packet handlers are organized as a two-level structure:
+    //  - The outer Dictionary is keyed by addonId (byte).
+    //  - For each addonId, a PacketHandlerRegistry<byte, ...> is used as the inner registry,
+    //    keyed by the addon-specific packetId (byte).
+    // This preserves the (addonId, packetId) addressing model while reusing PacketHandlerRegistry
+    // for handler management within each addon.
 
-    private readonly Dictionary<byte, PacketHandlerRegistry<byte, ClientPacketHandler>> _clientAddonUpdateRegistries;
+    private readonly Dictionary<byte, PacketHandlerRegistry<byte, ClientPacketHandler>> _clientAddonUpdateRegistries = new();
 
     private readonly Dictionary<byte, PacketHandlerRegistry<byte, ClientPacketHandler>>
-        _clientAddonConnectionRegistries;
+        _clientAddonConnectionRegistries = new();
 
-    private readonly Dictionary<byte, PacketHandlerRegistry<byte, ServerPacketHandler>> _serverAddonUpdateRegistries;
+    private readonly Dictionary<byte, PacketHandlerRegistry<byte, ServerPacketHandler>> _serverAddonUpdateRegistries = new();
 
     private readonly Dictionary<byte, PacketHandlerRegistry<byte, ServerPacketHandler>>
-        _serverAddonConnectionRegistries;
+        _serverAddonConnectionRegistries = new();
 
-    public PacketManager() {
-        // Initialize Registries
-        // Client handlers dispatch to main thread (true)
-        // Server handlers run on unknown threads (false)
-
-        _clientUpdateRegistry = new PacketHandlerRegistry<ClientUpdatePacketId, ClientPacketHandler>(
-            "client update", true
-        );
-        _clientConnectionRegistry = new PacketHandlerRegistry<ClientConnectionPacketId, ClientPacketHandler>(
-            "client connection", true
-        );
-        _serverUpdateRegistry = new PacketHandlerRegistry<ServerUpdatePacketId, ServerPacketHandler>(
-            "server update", false
-        );
-        _serverConnectionRegistry = new PacketHandlerRegistry<ServerConnectionPacketId, ServerPacketHandler>(
-            "server connection", false
-        );
-
-        _clientAddonUpdateRegistries = new Dictionary<byte, PacketHandlerRegistry<byte, ClientPacketHandler>>();
-        _clientAddonConnectionRegistries = new Dictionary<byte, PacketHandlerRegistry<byte, ClientPacketHandler>>();
-
-        _serverAddonUpdateRegistries = new Dictionary<byte, PacketHandlerRegistry<byte, ServerPacketHandler>>();
-        _serverAddonConnectionRegistries = new Dictionary<byte, PacketHandlerRegistry<byte, ServerPacketHandler>>();
-    }
+    // Initialize Registries
+    // Client handlers dispatch to main thread (true)
+    // Server handlers run on unknown threads (false)
 
     #region Packet Unpacking Helper
 
@@ -140,7 +130,7 @@ internal class PacketManager {
         }
     }
 
-    public void RegisterClientUpdatePacketHandler(ClientUpdatePacketId packetId, ClientPacketHandler handler) =>
+    private void RegisterClientUpdatePacketHandler(ClientUpdatePacketId packetId, ClientPacketHandler handler) =>
         _clientUpdateRegistry.Register(packetId, handler);
 
     public void RegisterClientUpdatePacketHandler(ClientUpdatePacketId packetId, Action handler) =>
@@ -172,7 +162,7 @@ internal class PacketManager {
         }
     }
 
-    public void RegisterClientConnectionPacketHandler(ClientConnectionPacketId packetId, ClientPacketHandler handler) =>
+    private void RegisterClientConnectionPacketHandler(ClientConnectionPacketId packetId, ClientPacketHandler handler) =>
         _clientConnectionRegistry.Register(packetId, handler);
 
     public void RegisterClientConnectionPacketHandler(ClientConnectionPacketId packetId, Action handler) =>
@@ -204,7 +194,7 @@ internal class PacketManager {
         }
     }
 
-    public void RegisterServerUpdatePacketHandler(ServerUpdatePacketId packetId, ServerPacketHandler handler) =>
+    private void RegisterServerUpdatePacketHandler(ServerUpdatePacketId packetId, ServerPacketHandler handler) =>
         _serverUpdateRegistry.Register(packetId, handler);
 
     public void RegisterServerUpdatePacketHandler(ServerUpdatePacketId packetId, EmptyServerPacketHandler handler) =>
@@ -236,7 +226,7 @@ internal class PacketManager {
         }
     }
 
-    public void RegisterServerConnectionPacketHandler(ServerConnectionPacketId packetId, ServerPacketHandler handler) =>
+    private void RegisterServerConnectionPacketHandler(ServerConnectionPacketId packetId, ServerPacketHandler handler) =>
         _serverConnectionRegistry.Register(packetId, handler);
 
     public void RegisterServerConnectionPacketHandler(
@@ -259,7 +249,7 @@ internal class PacketManager {
 
     #region Client Addon Helpers
 
-    private void HandleClientAddonPacket(
+    private static void HandleClientAddonPacket(
         byte addonId,
         Dictionary<byte, IPacketData> packetDataDict,
         Dictionary<byte, PacketHandlerRegistry<byte, ClientPacketHandler>> registryDict,
@@ -411,24 +401,15 @@ internal class PacketManager {
     /// <param name="leftoverData">Reference to leftover data buffer.</param>
     /// <returns>List of parsed packets.</returns>
     public static List<Packet> HandleReceivedData(byte[] data, int length, ref byte[]? leftoverData) {
-        // This method was likely static and not shown in the previous 1-800 view if it was at the end, 
-        // OR it was just missed. 
-        // Re-implementing it based on standard practice or previous knowledge would be risky if I don't see it.
-        // HOWEVER, I see `UnpackPacketDataDict` usage in the original code, but not `HandleReceivedData` definition in
-        // the 1-800 lines.
-        // It must be effectively static utility.
-
-        // STOP. I should not overwrite the *entire* file if I haven't seen the whole file.
-        // Accessing lines 800+ first.
         return ByteArrayToPackets(data, length, ref leftoverData);
     }
 
     /// <summary>
     /// Converts a byte array into a list of Packets, handling fragmentation/leftovers.
     /// </summary>
-    public static List<Packet> ByteArrayToPackets(byte[] data, int length, ref byte[]? leftoverData) {
+    private static List<Packet> ByteArrayToPackets(byte[] data, int length, ref byte[]? leftoverData) {
         var packets = new List<Packet>();
-        int readPosition = 0;
+        var readPosition = 0;
 
         // Prepend leftover data if any
         if (leftoverData != null) {
@@ -453,10 +434,14 @@ internal class PacketManager {
 
             // Read packet length (ushort)
             // We can Peek without advancing yet
-            int packetLength = BitConverter.ToUInt16(data, readPosition); // Only safe if system is same endian, typically LittleEndian in Unity
+            // Only safe if system is same endian, typically LittleEndian in Unity
+            int packetLength = BitConverter.ToUInt16(data, readPosition); 
 
-            if (packetLength <= 0 || packetLength > 10 * 1024 * 1024) { // Sanity check (e.g. 10MB limit)
-                 Logger.Warn($"Invalid packet length read: {packetLength}. Discarding buffer.");
+            // Sanity check against allocation attacks or corruption.
+            // If the length reads as invalid, we imply that protocol framing is lost (e.g. we are reading garbage as length).
+            // In this case, we cannot safely find the next packet in the stream, so we must discard the rest of the buffer.
+            if (packetLength <= 0 || packetLength > MaxPacketSize) { 
+                 Logger.Warn($"Invalid packet length read: {packetLength}. Discarding buffer to prevent processing garbage.");
                  break; 
             }
 
@@ -468,9 +453,10 @@ internal class PacketManager {
             }
 
             // We have a full packet. 
-            // Create a View Mode packet to avoid copy!
-            // data is the buffer, offset is readPosition + 2 (skip length), length is packetLength
-            packets.Add(new Packet(data, readPosition + 2, packetLength));
+            // Copy data to ensure packet owns its buffer and is safe from reuse
+            var packetData = new byte[packetLength];
+            Array.Copy(data, readPosition + 2, packetData, 0, packetLength);
+            packets.Add(new Packet(packetData, 0, packetLength));
 
             readPosition += 2 + packetLength;
         }

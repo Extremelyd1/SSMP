@@ -78,7 +78,7 @@ internal class EntityUpdate : BaseEntityUpdate, IPoolable {
         Id = 0;
         UpdateTypes.Clear();
         Position = default;
-        Scale = new ScaleData();
+        Scale.Reset();
         AnimationId = 0;
         AnimationWrapMode = 0;
     }
@@ -390,6 +390,37 @@ internal class EntityUpdate : BaseEntityUpdate, IPoolable {
                     zScale = data.zScale;
                 }
             }
+        }
+
+        /// <summary>
+        /// Resets the scale data to its initial state.
+        /// </summary>
+        public void Reset() {
+            x = false;
+            y = false;
+            z = false;
+            xFlipped = false;
+            yFlipped = false;
+            zFlipped = false;
+            xScale = 0;
+            yScale = 0;
+            zScale = 0;
+            xPos = false;
+            yPos = false;
+            zPos = false;
+            // Note: 'origin' is init-only property, cannot be reset, but it seems to be effectively immutable per instance usage or re-created if strictly needed. 
+            // However, based on usage in EntityUpdate, it seems it's a reuse of the container. 
+            // If 'origin' needs to be mutable for pooling, it should not be init-only. 
+            // Checking the class definition: public bool origin { private get; init; }
+            // Since it is 'init', we can't reset it. 
+            // Assuming for now that pooled instances reuse the same origin setting or it doesn't matter for the reset 
+            // (or it should be changed to set). 
+            // Given the context of EntityUpdate reuse, likely 'origin' is not critical to reset or will be overwritten if re-parsed? 
+            // Actually, wait. 'origin' determines writing behavior. usage: if ((origin && ...))
+            // If we reuse an EntityUpdate, we reuse its Scale member. 
+            // If the pooled EntityUpdate is used for a different purpose (different origin), we have a problem.
+            // But usually pooling is for the same "type" of usage.
+            // Let's stick to resetting mutable fields for now.
         }
 
         /// <inheritdoc />

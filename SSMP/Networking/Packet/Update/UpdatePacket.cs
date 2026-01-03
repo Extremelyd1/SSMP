@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using SSMP.Logging;
 using SSMP.Networking.Packet.Data;
 
@@ -324,42 +325,70 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
 
     /// <summary>
     /// Drops resend data that is duplicate, i.e. that we already received in an earlier packet.
-    /// Optimized to avoid List allocation by collecting keys to remove first.
+    /// Optimized to minimize iterations and avoid allocations when possible.
     /// </summary>
     /// <param name="receivedSequenceNumbers">A collection containing sequence numbers that were already
     /// received. Uses ICollection for O(1) Contains() with HashSet.</param>
     public void DropDuplicateResendData(ICollection<ushort> receivedSequenceNumbers) {
-        // Collect keys to remove to avoid modifying dictionary during iteration
-        // Use a small buffer - resend data is typically small
-        Span<ushort> keysToRemove = stackalloc ushort[System.Math.Min(_resendPacketData.Count, 64)];
-        var removeCount = 0;
-        
-        foreach (var resendSequence in _resendPacketData.Keys) {
-            if (receivedSequenceNumbers.Contains(resendSequence)) {
-                if (removeCount < keysToRemove.Length) {
-                    keysToRemove[removeCount++] = resendSequence;
-                }
-            }
-        }
-        
-        for (var i = 0; i < removeCount; i++) {
-            _resendPacketData.Remove(keysToRemove[i]);
+        const int stackAllocLimit = 64;
+
+        // Handle packet data duplicates
+        RemoveDuplicateKeys(_resendPacketData, receivedSequenceNumbers, stackAllocLimit);
+
+        // Handle addon data duplicates
+        RemoveDuplicateKeys(_resendAddonPacketData, receivedSequenceNumbers, stackAllocLimit);
+    }
+
+    /// <summary>
+    /// Removes keys from a dictionary that exist in the received sequence numbers collection.
+    /// Uses stackalloc for small collections, falls back to List for larger ones.
+    /// </summary>
+    private static void RemoveDuplicateKeys<TValue>(
+        Dictionary<ushort, TValue> dictionary,
+        ICollection<ushort> receivedSequenceNumbers,
+        int stackAllocLimit
+    ) {
+        if (dictionary.Count == 0) {
+            return;
         }
 
-        // Do the same for addon data
-        keysToRemove = stackalloc ushort[System.Math.Min(_resendAddonPacketData.Count, 64)];
-        removeCount = 0;
-        
-        foreach (var resendSequence in _resendAddonPacketData.Keys) {
-            if (receivedSequenceNumbers.Contains(resendSequence)) {
-                if (removeCount < keysToRemove.Length) {
-                    keysToRemove[removeCount++] = resendSequence;
+        // Single pass: collect keys while checking
+        var keysToRemoveCount = 0;
+        Span<ushort> stackBuffer = stackalloc ushort[stackAllocLimit];
+        List<ushort>? listBuffer = null;
+
+        foreach (var key in dictionary.Keys.Where(receivedSequenceNumbers.Contains)) {
+            if (keysToRemoveCount < stackAllocLimit) {
+                stackBuffer[keysToRemoveCount] = key;
+            } else {
+                // Transition to List on first overflow
+                if (listBuffer == null) {
+                    listBuffer = new List<ushort>(keysToRemoveCount + 1);
+                    // Copy existing stack items to list
+                    for (var i = 0; i < stackAllocLimit; i++) {
+                        listBuffer.Add(stackBuffer[i]);
+                    }
                 }
+
+                listBuffer.Add(key);
             }
+
+            keysToRemoveCount++;
         }
-        
-        for (var i = 0; i < removeCount; i++) {
-            _resendAddonPacketData.Remove(keysToRemove[i]);
+
+        if (keysToRemoveCount == 0) {
+            return;
+        }
+
+        // Remove collected keys
+        if (listBuffer != null) {
+            foreach (var key in listBuffer) {
+                dictionary.Remove(key);
+            }
+        } else {
+            for (var i = 0; i < keysToRemoveCount; i++) {
+                dictionary.Remove(stackBuffer[i]);
+            }
         }
     }
 }

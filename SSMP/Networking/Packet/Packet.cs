@@ -28,35 +28,15 @@ internal class Packet : IPacket {
     private readonly int _offset;
 
     /// <summary>
-    /// The length of the packet data in the readable buffer.
-    /// </summary>
-    private readonly int _length;
-
-    /// <summary>
     /// The current position in the buffer to read.
     /// Relative to the _offset start.
     /// </summary>
     private int _readPos;
 
     /// <summary>
-    /// Gets or sets the current read position within the packet buffer.
-    /// This allows callers to save and restore the read cursor to safely
-    /// attempt different parsing strategies without allocating a clone.
-    /// </summary>
-    public int ReadPosition {
-        get => _readPos;
-        set {
-            if (value < 0 || value > _length) {
-                throw new ArgumentOutOfRangeException(nameof(value), "ReadPosition must be within the buffer bounds");
-            }
-            _readPos = value;
-        }
-    }
-
-    /// <summary>
     /// The length of the packet content.
     /// </summary>
-    public int Length => _length;
+    public int Length { get; }
 
     /// <summary>
     /// Creates a packet with the given byte array of data.
@@ -69,7 +49,7 @@ internal class Packet : IPacket {
         _buffer.AddRange(data);
         _readableBuffer = _buffer.ToArray();
         _offset = 0;
-        _length = data.Length;
+        Length = data.Length;
     }
 
     /// <summary>
@@ -83,7 +63,7 @@ internal class Packet : IPacket {
         _buffer = null;
         _readableBuffer = data;
         _offset = offset;
-        _length = length;
+        Length = length;
         _readPos = 0;
     }
 
@@ -91,10 +71,10 @@ internal class Packet : IPacket {
     /// Creates an empty packet to write data into.
     /// </summary>
     public Packet() {
-        _buffer = new List<byte>();
-        _readableBuffer = Array.Empty<byte>();
+        _buffer = [];
+        _readableBuffer = [];
         _offset = 0;
-        _length = 0;
+        Length = 0;
     }
 
     /// <summary>
@@ -103,9 +83,9 @@ internal class Packet : IPacket {
     /// </summary>
     public void WriteLength() {
         if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
-        var length = (ushort)_buffer.Count;
-        _buffer.Insert(0, (byte)(length >> 8));
-        _buffer.Insert(0, (byte)length);
+        var length = (ushort) _buffer.Count;
+        _buffer.Insert(0, (byte) length);
+        _buffer.Insert(1, (byte) (length >> 8));
     }
 
     /// <summary>
@@ -115,8 +95,8 @@ internal class Packet : IPacket {
     public byte[] ToArray() {
         if (_buffer != null) return _buffer.ToArray();
         // Return a copy of the view
-        var copy = new byte[_length];
-        Array.Copy(_readableBuffer, _offset, copy, 0, _length);
+        var copy = new byte[Length];
+        Array.Copy(_readableBuffer, _offset, copy, 0, Length);
         return copy;
     }
 
@@ -161,7 +141,7 @@ internal class Packet : IPacket {
         // Check whether there is enough bytes left to read
         if (_buffer != null && _buffer.Count >= _readPos + length) {
             var bytes = new byte[length];
-            
+
             Array.Copy(_readableBuffer, _offset + _readPos, bytes, 0, length);
 
             // Increase the reading position in the buffer
@@ -187,70 +167,70 @@ internal class Packet : IPacket {
     /// Zero-allocation: uses direct byte manipulation instead of BitConverter.
     public void Write(ushort value) {
         if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
-        _buffer.Add((byte)value);
-        _buffer.Add((byte)(value >> 8));
+        _buffer.Add((byte) value);
+        _buffer.Add((byte) (value >> 8));
     }
 
     /// <inheritdoc />
     /// Zero-allocation: uses direct byte manipulation instead of BitConverter.
     public void Write(uint value) {
         if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
-        _buffer.Add((byte)value);
-        _buffer.Add((byte)(value >> 8));
-        _buffer.Add((byte)(value >> 16));
-        _buffer.Add((byte)(value >> 24));
+        _buffer.Add((byte) value);
+        _buffer.Add((byte) (value >> 8));
+        _buffer.Add((byte) (value >> 16));
+        _buffer.Add((byte) (value >> 24));
     }
 
     /// <inheritdoc />
     /// Zero-allocation: uses direct byte manipulation instead of BitConverter.
     public void Write(ulong value) {
         if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
-        _buffer.Add((byte)value);
-        _buffer.Add((byte)(value >> 8));
-        _buffer.Add((byte)(value >> 16));
-        _buffer.Add((byte)(value >> 24));
-        _buffer.Add((byte)(value >> 32));
-        _buffer.Add((byte)(value >> 40));
-        _buffer.Add((byte)(value >> 48));
-        _buffer.Add((byte)(value >> 56));
+        _buffer.Add((byte) value);
+        _buffer.Add((byte) (value >> 8));
+        _buffer.Add((byte) (value >> 16));
+        _buffer.Add((byte) (value >> 24));
+        _buffer.Add((byte) (value >> 32));
+        _buffer.Add((byte) (value >> 40));
+        _buffer.Add((byte) (value >> 48));
+        _buffer.Add((byte) (value >> 56));
     }
 
     /// <inheritdoc />
     public void Write(sbyte value) {
         if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
-        _buffer.Add((byte)value);
+        _buffer.Add((byte) value);
     }
 
     /// <inheritdoc />
     /// Zero-allocation: uses direct byte manipulation instead of BitConverter.
     public void Write(short value) {
         if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
-        _buffer.Add((byte)value);
-        _buffer.Add((byte)(value >> 8));
+        _buffer.Add((byte) value);
+        _buffer.Add((byte) (value >> 8));
     }
 
     /// <inheritdoc />
     /// Zero-allocation: uses direct byte manipulation instead of BitConverter.
     public void Write(int value) {
         if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
-        _buffer.Add((byte)value);
-        _buffer.Add((byte)(value >> 8));
-        _buffer.Add((byte)(value >> 16));
-        _buffer.Add((byte)(value >> 24));
+        _buffer.Add((byte) value);
+        _buffer.Add((byte) (value >> 8));
+        _buffer.Add((byte) (value >> 16));
+        _buffer.Add((byte) (value >> 24));
     }
 
     /// <inheritdoc />
     /// Zero-allocation: uses direct byte manipulation instead of BitConverter.
     public void Write(long value) {
         if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
-        _buffer.Add((byte)value);
-        _buffer.Add((byte)(value >> 8));
-        _buffer.Add((byte)(value >> 16));
-        _buffer.Add((byte)(value >> 24));
-        _buffer.Add((byte)(value >> 32));
-        _buffer.Add((byte)(value >> 40));
-        _buffer.Add((byte)(value >> 48));
-        _buffer.Add((byte)(value >> 56));
+        _buffer.Add((byte) value);
+        _buffer.Add((byte) (value >> 8));
+        _buffer.Add((byte) (value >> 16));
+        _buffer.Add((byte) (value >> 24));
+        _buffer.Add((byte) (value >> 32));
+        _buffer.Add((byte) (value >> 40));
+        _buffer.Add((byte) (value >> 48));
+        _buffer.Add((byte) (value >> 56));
     }
 
     #endregion
@@ -258,15 +238,17 @@ internal class Packet : IPacket {
     #region Writing floating-point numeric types
 
     /// <inheritdoc />
-    /// Zero-allocation: uses BitConverter.SingleToInt32Bits for conversion.
+    /// Zero-allocation: uses unsafe pointer casting to reinterpret bits as int.
+    /// This avoids BitConverter.GetBytes() allocation.
     public unsafe void Write(float value) {
-        Write(*(int*)&value);
+        Write(*(int*) &value);
     }
 
     /// <inheritdoc />
-    /// Zero-allocation: uses BitConverter.DoubleToInt64Bits for conversion.
+    /// Zero-allocation: uses unsafe pointer casting to reinterpret bits as long.
+    /// This avoids BitConverter.GetBytes() allocation.
     public unsafe void Write(double value) {
-        Write(*(long*)&value);
+        Write(*(long*) &value);
     }
 
     #endregion
@@ -276,7 +258,7 @@ internal class Packet : IPacket {
     /// <inheritdoc />
     public void Write(bool value) {
         if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
-        _buffer.Add(value ? (byte)1 : (byte)0);
+        _buffer.Add(value ? (byte) 1 : (byte) 0);
     }
 
     /// <inheritdoc />
@@ -299,7 +281,7 @@ internal class Packet : IPacket {
         Write(value.X);
         Write(value.Y);
     }
-    
+
     /// <inheritdoc />
     public void Write(Vector3 value) {
         Write(value.X);
@@ -311,7 +293,7 @@ internal class Packet : IPacket {
     public void WriteBitFlag<TEnum>(ISet<TEnum> set) where TEnum : Enum {
         var enumTypes = Enum.GetValues(typeof(TEnum));
         var enumLength = enumTypes.Length;
-        
+
         ulong flag = 0;
         ulong currentValue = 1;
 
@@ -323,14 +305,19 @@ internal class Packet : IPacket {
             currentValue *= 2;
         }
 
-        if (enumLength <= 8) {
-            Write((byte) flag);
-        } else if (enumLength <= 16) {
-            Write((ushort) flag);
-        } else if (enumLength <= 32) {
-            Write((uint) flag);
-        } else if (enumLength <= 64) {
-            Write(flag);
+        switch (enumLength) {
+            case <= 8:
+                Write((byte) flag);
+                break;
+            case <= 16:
+                Write((ushort) flag);
+                break;
+            case <= 32:
+                Write((uint) flag);
+                break;
+            case <= 64:
+                Write(flag);
+                break;
         }
     }
 
@@ -341,7 +328,7 @@ internal class Packet : IPacket {
     /// <inheritdoc />
     public byte ReadByte() {
         // Check whether there is at least 1 byte left to read
-        if (_buffer != null ? _buffer.Count > _readPos : _length > _readPos) {
+        if (_buffer != null ? _buffer.Count > _readPos : Length > _readPos) {
             var value = _readableBuffer[_offset + _readPos];
 
             // Increase reading position in the buffer
@@ -356,7 +343,7 @@ internal class Packet : IPacket {
     /// <inheritdoc />
     public ushort ReadUShort() {
         // Check whether there are at least 2 bytes left to read
-        if (_buffer != null ? _buffer.Count > _readPos + 1 : _length > _readPos + 1) {
+        if (_buffer != null ? _buffer.Count > _readPos + 1 : Length > _readPos + 1) {
             var value = BitConverter.ToUInt16(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
@@ -371,7 +358,7 @@ internal class Packet : IPacket {
     /// <inheritdoc />
     public uint ReadUInt() {
         // Check whether there are at least 4 bytes left to read
-        if (_buffer != null ? _buffer.Count > _readPos + 3 : _length > _readPos + 3) {
+        if (_buffer != null ? _buffer.Count > _readPos + 3 : Length > _readPos + 3) {
             var value = BitConverter.ToUInt32(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
@@ -386,7 +373,7 @@ internal class Packet : IPacket {
     /// <inheritdoc />
     public ulong ReadULong() {
         // Check whether there are at least 8 bytes left to read
-        if (_buffer != null ? _buffer.Count > _readPos + 7 : _length > _readPos + 7) {
+        if (_buffer != null ? _buffer.Count > _readPos + 7 : Length > _readPos + 7) {
             var value = BitConverter.ToUInt64(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
@@ -401,7 +388,7 @@ internal class Packet : IPacket {
     /// <inheritdoc />
     public sbyte ReadSByte() {
         // Check whether there are at least 1 byte left to read
-        if (_buffer != null ? _buffer.Count > _readPos : _length > _readPos) {
+        if (_buffer != null ? _buffer.Count > _readPos : Length > _readPos) {
             var value = (sbyte) _readableBuffer[_offset + _readPos];
 
             // Increase the reading position in the buffer
@@ -416,7 +403,7 @@ internal class Packet : IPacket {
     /// <inheritdoc />
     public short ReadShort() {
         // Check whether there are at least 2 bytes left to read
-        if (_buffer != null ? _buffer.Count > _readPos + 1 : _length > _readPos + 1) {
+        if (_buffer != null ? _buffer.Count > _readPos + 1 : Length > _readPos + 1) {
             var value = BitConverter.ToInt16(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
@@ -431,7 +418,7 @@ internal class Packet : IPacket {
     /// <inheritdoc />
     public int ReadInt() {
         // Check whether there are at least 4 bytes left to read
-        if (_buffer != null ? _buffer.Count > _readPos + 3 : _length > _readPos + 3) {
+        if (_buffer != null ? _buffer.Count > _readPos + 3 : Length > _readPos + 3) {
             var value = BitConverter.ToInt32(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
@@ -446,7 +433,7 @@ internal class Packet : IPacket {
     /// <inheritdoc />
     public long ReadLong() {
         // Check whether there are at least 8 bytes left to read
-        if (_buffer != null ? _buffer.Count > _readPos + 7 : _length > _readPos + 7) {
+        if (_buffer != null ? _buffer.Count > _readPos + 7 : Length > _readPos + 7) {
             var value = BitConverter.ToInt64(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
@@ -465,7 +452,7 @@ internal class Packet : IPacket {
     /// <inheritdoc />
     public float ReadFloat() {
         // Check whether there are at least 4 bytes left to read
-        if (_buffer != null ? _buffer.Count > _readPos + 3 : _length > _readPos + 3) {
+        if (_buffer != null ? _buffer.Count > _readPos + 3 : Length > _readPos + 3) {
             var value = BitConverter.ToSingle(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
@@ -480,7 +467,7 @@ internal class Packet : IPacket {
     /// <inheritdoc />
     public double ReadDouble() {
         // Check whether there are at least 8 bytes left to read
-        if (_buffer != null ? _buffer.Count > _readPos + 7 : _length > _readPos + 7) {
+        if (_buffer != null ? _buffer.Count > _readPos + 7 : Length > _readPos + 7) {
             var value = BitConverter.ToDouble(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
@@ -499,7 +486,7 @@ internal class Packet : IPacket {
     /// <inheritdoc />
     public bool ReadBool() {
         // Check whether there is at least 1 byte left to read
-        if (_buffer != null ? _buffer.Count > _readPos : _length > _readPos) {
+        if (_buffer != null ? _buffer.Count > _readPos : Length > _readPos) {
             var value = BitConverter.ToBoolean(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
@@ -523,7 +510,7 @@ internal class Packet : IPacket {
         }
 
         // Now we check whether there are at least as many bytes left to read as the length of the string
-        if ((_buffer != null ? _buffer.Count : _length) < _readPos + length) {
+        if ((_buffer?.Count ?? Length) < _readPos + length) {
             throw new Exception("Could not read value of type 'string'!");
         }
 
@@ -542,7 +529,7 @@ internal class Packet : IPacket {
         // check whether there are enough bytes left to read and throw exceptions if not
         return new Vector2(ReadFloat(), ReadFloat());
     }
-    
+
     /// <inheritdoc />
     public Vector3 ReadVector3() {
         // Simply construct the Vector3 by reading a float from the packet thrice, which should
@@ -554,17 +541,14 @@ internal class Packet : IPacket {
     public ISet<TEnum> ReadBitFlag<TEnum>() where TEnum : Enum {
         var enumTypes = Enum.GetValues(typeof(TEnum));
         var enumLength = enumTypes.Length;
-        
-        ulong flag = 0;
-        if (enumLength <= 8) {
-            flag = ReadByte();
-        } else if (enumLength <= 16) {
-            flag = ReadUShort();
-        } else if (enumLength <= 32) {
-            flag = ReadUInt();
-        } else if (enumLength <= 64) {
-            flag = ReadULong();
-        }
+
+        ulong flag = enumLength switch {
+            <= 8 => ReadByte(),
+            <= 16 => ReadUShort(),
+            <= 32 => ReadUInt(),
+            <= 64 => ReadULong(),
+            _ => 0
+        };
 
         ulong currentValue = 1;
         var set = new HashSet<TEnum>();

@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Concurrent;
 
 namespace SSMP.Networking.Packet.Data;
@@ -31,11 +30,12 @@ internal static class ObjectPool<T> where T : class, IPoolable, new() {
     /// <summary>
     /// Thread-safe bag of pooled objects.
     /// </summary>
-    private static readonly ConcurrentBag<T> Pool = new();
+    private static readonly ConcurrentBag<T> Pool = [];
 
     /// <summary>
     /// Current approximate count of pooled objects.
     /// </summary>
+    // ReSharper disable once StaticMemberInGenericType
     private static int _count;
 
     /// <summary>
@@ -47,6 +47,7 @@ internal static class ObjectPool<T> where T : class, IPoolable, new() {
             System.Threading.Interlocked.Decrement(ref _count);
             return item;
         }
+
         return new T();
     }
 
@@ -56,22 +57,17 @@ internal static class ObjectPool<T> where T : class, IPoolable, new() {
     /// </summary>
     /// <param name="item">The object to return to the pool.</param>
     public static void Return(T item) {
-        if (item == null) return;
-        
-        // Don't grow pool indefinitely
-        if (_count >= MaxPoolSize) return;
-        
+        // Atomically check and increment to prevent race conditions.
+        // Multiple threads could otherwise pass the size check simultaneously.
+        int currentCount;
+        int newCount;
+        do {
+            currentCount = _count;
+            if (currentCount >= MaxPoolSize) return;
+            newCount = currentCount + 1;
+        } while (System.Threading.Interlocked.CompareExchange(ref _count, newCount, currentCount) != currentCount);
+
         item.Reset();
         Pool.Add(item);
-        System.Threading.Interlocked.Increment(ref _count);
-    }
-
-    /// <summary>
-    /// Clears all objects from the pool.
-    /// Useful for cleanup or when memory pressure is high.
-    /// </summary>
-    public static void Clear() {
-        while (Pool.TryTake(out _)) { }
-        _count = 0;
     }
 }

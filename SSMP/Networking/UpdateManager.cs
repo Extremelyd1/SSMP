@@ -205,8 +205,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         _sendThread = new Thread(SendLoop) {
             IsBackground = true,
             Name = "SSMP Send Loop",
-            // Ensure network updates get priority
-            Priority = ThreadPriority.AboveNormal
+            Priority = ThreadPriority.Normal
         };
         _sendThread.Start();
         _isUpdating = true;
@@ -244,8 +243,9 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         // Reset the connection timeout timer
         _lastReceiveTime = DateTime.UtcNow;
 
-        // For Steam (no sequencing): Estimate RTT by completing the round-trip for last sent sequence
-        // Note: _localSequence has already been incremented after send, so we use -1 to get the tracked sequence
+        // For Steam (no sequencing): Estimate RTT by completing the round-trip for last sent sequence.
+        // Note: _localSequence is post-incremented after OnSendPacket (line 323), so the last sequence
+        // that was tracked via OnSendPacket is (_localSequence - 1).
         if (!_requiresSequencing) {
             _rttTracker?.OnAckReceived((ushort) (_localSequence - 1));
             return;
@@ -353,8 +353,8 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
 
             // Prune sequences outside the ACK window to prevent unbounded growth
             // Keep sequences within (remoteSequence - AckSize) to remoteSequence
-            if (_receivedSequences.Count > ReceiveQueueSize * 2) {
-                var threshold = (ushort) (_remoteSequence - ReceiveQueueSize);
+            if (_receivedSequences.Count > ConnectionManager.AckSize) {
+                var threshold = (ushort) (_remoteSequence - ConnectionManager.AckSize);
                 _receivedSequences.RemoveWhere(seq =>
                     !IsSequenceGreaterThan(seq, threshold) && seq != _remoteSequence
                 );
@@ -365,7 +365,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// <summary>
     /// Sends a packet, fragmenting it into smaller chunks if it exceeds the MTU size.
     /// Fragments are sent sequentially to ensure they can be reassembled by the receiver.
-    /// Optimized to avoid allocations by using direct buffer access.
+    /// Uses CopyTo to avoid an extra full-buffer ToArray() allocation when fragmenting.
     /// </summary>
     /// <param name="packet">The packet to send, which may be fragmented if too large.</param>
     /// <param name="isReliable">Whether the packet data needs to be delivered reliably.</param>
@@ -375,7 +375,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
             return;
         }
 
-        // Optimized: Copy directly from packet buffer without intermediate ToArray()
+        // Copy directly into fragment buffers, avoiding an intermediate ToArray() of the full packet
         var remaining = packet.Length;
         var offset = 0;
 
@@ -383,7 +383,6 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
             var chunkSize = System.Math.Min(remaining, PacketMtu);
             var fragment = new byte[chunkSize];
 
-            // Use CopyTo to avoid ToArray() allocation
             packet.CopyTo(fragment, 0, offset, chunkSize);
 
             SendPacket(new Packet.Packet(fragment), isReliable);
@@ -410,8 +409,6 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
 
         lock (Lock) {
             _receivedSequences?.Clear();
-            _rttTracker?.Reset();
-
             _localSequence = 0;
             _remoteSequence = 0;
             CurrentUpdatePacket = new TOutgoing();
