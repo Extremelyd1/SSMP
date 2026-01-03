@@ -116,7 +116,7 @@ internal class Packet : IPacket {
         if (_buffer != null) return _buffer.ToArray();
         // Return a copy of the view
         var copy = new byte[_length];
-        Buffer.BlockCopy(_readableBuffer, _offset, copy, 0, _length);
+        Array.Copy(_readableBuffer, _offset, copy, 0, _length);
         return copy;
     }
 
@@ -132,7 +132,7 @@ internal class Packet : IPacket {
         // Use the readable buffer if available (View Mode or after receive)
         // Note: For View Mode, sourceOffset is relative to _offset
         if (_readableBuffer.Length > 0) {
-            Buffer.BlockCopy(_readableBuffer, _offset + sourceOffset, destination, destinationOffset, count);
+            Array.Copy(_readableBuffer, _offset + sourceOffset, destination, destinationOffset, count);
         } else if (_buffer != null) {
             // Fallback for write-mode packets (List backing)
             for (var i = 0; i < count; i++) {
@@ -140,13 +140,6 @@ internal class Packet : IPacket {
             }
         }
     }
-
-    /// <summary>
-    /// Gets a byte at the specified index without advancing read position.
-    /// </summary>
-    /// <param name="index">The index to read from.</param>
-    /// <returns>The byte at the specified index.</returns>
-    public byte this[int index] => _buffer != null ? _buffer[index] : _readableBuffer[_offset + index];
 
     /// <summary>
     /// Write an array of bytes to the packet.
@@ -166,11 +159,10 @@ internal class Packet : IPacket {
     /// <exception cref="Exception">Thrown if there are not enough bytes of content left to read.</exception>
     public byte[] ReadBytes(int length) {
         // Check whether there is enough bytes left to read
-        if (_buffer.Count >= _readPos + length) {
+        if (_buffer != null && _buffer.Count >= _readPos + length) {
             var bytes = new byte[length];
             
-            // Use Buffer.BlockCopy for better performance with larger reads
-            Buffer.BlockCopy(_readableBuffer, _offset + _readPos, bytes, 0, length);
+            Array.Copy(_readableBuffer, _offset + _readPos, bytes, 0, length);
 
             // Increase the reading position in the buffer
             _readPos += length;

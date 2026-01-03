@@ -150,7 +150,7 @@ internal class NetServer : INetServer {
             // immediately by the transport layer's receive loop.
             // We use ArrayPool to minimize allocations, but we must own this new buffer.
             var queueBuffer = ArrayPool<byte>.Shared.Rent(length);
-            Buffer.BlockCopy(buffer, 0, queueBuffer, 0, length);
+            Array.Copy(buffer, 0, queueBuffer, 0, length);
 
             _receivedQueue.Enqueue(
                 new ReceivedData {
