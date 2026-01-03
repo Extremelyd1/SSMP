@@ -36,8 +36,6 @@ internal sealed class SteamEncryptedTransport : IReliableTransport {
     /// </summary>
     private const int ServerChannel = 1;
 
-
-
     /// <inheritdoc />
     public event Action<byte[], int>? DataReceivedEvent;
 

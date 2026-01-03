@@ -101,14 +101,4 @@ internal sealed class RttTracker {
             ? measuredRtt
             : AverageRtt + (measuredRtt - AverageRtt) * RttSmoothingFactor;
     }
-    
-    /// <summary>
-    /// Resets the RTT tracker to its initial state.
-    /// Clears all tracked packets and resets RTT statistics.
-    /// </summary>
-    public void Reset() {
-        _trackedPackets.Clear();
-        _firstAckReceived = false;
-        AverageRtt = 0;
-    }
 }

@@ -9,7 +9,7 @@ namespace SSMP.Game;
 /// <summary>
 /// Manages Steam API initialization and availability checks.
 /// Handles graceful fallback when Steam is not available (multi-platform support).
-/// OPTIMIZED VERSION - Enhanced performance through caching, reduced allocations, and lock optimization.
+/// Enhanced performance through caching, reduced allocations, and lock optimization.
 /// </summary>
 public static class SteamManager {
     /// <summary>
@@ -314,7 +314,8 @@ public static class SteamManager {
 
         // Prevent concurrent callback execution (lock-free)
         if (Interlocked.CompareExchange(ref _isRunningCallbacks, 1, 0) != 0) {
-            return; // Already running, skip this tick
+            // Already running, skip this tick
+            return;
         }
 
         try {

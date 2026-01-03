@@ -380,7 +380,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         while (remaining > 0) {
             var chunkSize = System.Math.Min(remaining, PacketMtu);
             var fragment = new byte[chunkSize];
-            
+
             Array.Copy(data, offset, fragment, 0, chunkSize);
 
             // Fragmented packets are only reliable if the original packet was, and we only 

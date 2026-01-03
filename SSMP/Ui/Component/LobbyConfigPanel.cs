@@ -1,5 +1,4 @@
 using System;
-using SSMP.Game;
 using UnityEngine;
 using UnityEngine.UI;
 using Object = UnityEngine.Object;
@@ -18,7 +17,7 @@ internal class LobbyConfigPanel : IComponent {
     private readonly InputField _nameInput;
 
     /// <summary>Text displaying the current visibility option (Steam only).</summary>
-    private readonly Text _visibilityText = null!;
+    private readonly Text _visibilityText;
 
     /// <summary>Currently selected lobby visibility.</summary>
     private LobbyVisibility _visibility = LobbyVisibility.Public;

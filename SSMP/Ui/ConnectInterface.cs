@@ -12,10 +12,7 @@ using SSMP.Ui.Util;
 using SSMP.Util;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
-
 // ReSharper disable ObjectCreationAsStatement
-// ReSharper disable HeuristicUnreachableCode
-// ReSharper disable UnusedMember.Local
 
 namespace SSMP.Ui;
 
@@ -1161,7 +1158,7 @@ internal class ConnectInterface {
         var result = task.Result;
 
         if (result == null) {
-            HolePunchEncryptedTransport.HolePunchSocket?.Dispose();
+            HolePunchEncryptedTransport.HolePunchSocket.Dispose();
             HolePunchEncryptedTransport.HolePunchSocket = null;
             ShowFeedback(Color.red, "Lobby not found, offline, or join failed");
             yield break;
@@ -1171,7 +1168,7 @@ internal class ConnectInterface {
 
         if (lobbyType == "steam") {
             // Steam Connection - we don't need the hole punch socket
-            HolePunchEncryptedTransport.HolePunchSocket?.Dispose();
+            HolePunchEncryptedTransport.HolePunchSocket.Dispose();
             HolePunchEncryptedTransport.HolePunchSocket = null;
 
             if (!SteamManager.IsInitialized) {
@@ -1187,7 +1184,7 @@ internal class ConnectInterface {
             var parts = connectionData.Split(':');
             if (parts.Length != 2 || !int.TryParse(parts[1], out var hostPort)) {
                 ShowFeedback(Color.red, "Invalid connection data");
-                HolePunchEncryptedTransport.HolePunchSocket?.Dispose();
+                HolePunchEncryptedTransport.HolePunchSocket.Dispose();
                 HolePunchEncryptedTransport.HolePunchSocket = null;
                 yield break;
             }
@@ -1345,34 +1342,6 @@ internal class ConnectInterface {
             ShowFeedback(Color.green, $"Lobby: {lobbyId}");
         }
 
-        StartHostButtonPressed?.Invoke("0.0.0.0", 26960, username, TransportType.HolePunch);
-    }
-
-    /// <summary>
-    /// Legacy coroutine for async lobby creation (without config panel).
-    /// </summary>
-    private IEnumerator CreateLobbyCoroutine(string username) {
-        var lobbyName = $"{username}'s Lobby";
-        var task = _mmsClient.CreateLobbyAsync(
-            hostPort: 26960,
-            lobbyName: lobbyName,
-            isPublic: true,
-            gameVersion: Application.version
-        );
-
-        // Wait for async operation without blocking main thread
-        yield return new WaitUntil(() => task.IsCompleted);
-
-        var lobbyId = task.Result;
-        if (lobbyId == null) {
-            ShowFeedback(Color.red, "Failed to create lobby. Is MMS running?");
-            yield break;
-        }
-
-        // Start polling for pending clients to punch back
-        _mmsClient.StartPendingClientPolling();
-
-        ShowFeedback(Color.green, $"Lobby: {lobbyId}");
         StartHostButtonPressed?.Invoke("0.0.0.0", 26960, username, TransportType.HolePunch);
     }
 

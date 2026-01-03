@@ -5,7 +5,6 @@ using System.Threading;
 using SSMP.Logging;
 using SSMP.Networking.Client;
 using SSMP.Networking.Transport.Common;
-using SSMP.Ui;
 
 namespace SSMP.Networking.Transport.HolePunch;
 

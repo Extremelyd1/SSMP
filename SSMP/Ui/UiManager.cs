@@ -77,18 +77,21 @@ internal class UiManager : IUiManager {
     /// <summary>
     /// Shorthand accessor for the GameManager singleton instance.
     /// </summary>
+    // ReSharper disable once InconsistentNaming
     private static GameManager GM => GameManager.instance;
     
     /// <summary>
     /// Shorthand accessor for the UIManager singleton instance.
     /// Hollow Knight's built-in UI manager for menu navigation.
     /// </summary>
+    // ReSharper disable once InconsistentNaming
     private static UIManager UM => UIManager.instance;
     
     /// <summary>
     /// Shorthand accessor for the InputHandler singleton instance.
     /// Handles keyboard/controller input for Hollow Knight.
     /// </summary>
+    // ReSharper disable once InconsistentNaming
     private static InputHandler IH => InputHandler.Instance;
 
     #endregion

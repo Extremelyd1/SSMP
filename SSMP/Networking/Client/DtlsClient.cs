@@ -127,7 +127,7 @@ internal class DtlsClient {
         _handshakeThread.Start();
 
         // Wait for handshake to complete or timeout
-        // Increase timeout to 20s for hole punching
+        // Time-out of 20s for hole punching
         if (!_handshakeThread.Join(20000)) {
             // Handshake timed out - close socket to force handshake thread to abort
             Logger.Error($"DTLS handshake timed out after 20000ms");
