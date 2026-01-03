@@ -36,7 +36,7 @@ internal class Packet : IPacket {
     /// <summary>
     /// The length of the packet content.
     /// </summary>
-    public int Length { get; }
+    public int Length { get; private set; }
 
     /// <summary>
     /// Creates a packet with the given byte array of data.
@@ -98,6 +98,22 @@ internal class Packet : IPacket {
         var copy = new byte[Length];
         Array.Copy(_readableBuffer, _offset, copy, 0, Length);
         return copy;
+    }
+
+    /// <summary>
+    /// Clears the packet buffer, allowing reuse.
+    /// Resets length and read position to 0.
+    /// </summary>
+    public void Clear() {
+        if (_buffer == null) throw new InvalidOperationException("Cannot clear Read-Only Packet");
+        _buffer.Clear();
+        // Readable buffer assumes it mirrors _buffer in write mode, but usually _readableBuffer is a copy or view.
+        // In Write Mode (constructor Packet()), _readableBuffer is initialized to empty array.
+        // We should ensure consistency if _readableBuffer was modified (it isn't in write mode).
+        // Actually, _readableBuffer is only set in constructors.
+        // For writing, we operate on _buffer.
+        Length = 0;
+        _readPos = 0;
     }
 
     /// <summary>

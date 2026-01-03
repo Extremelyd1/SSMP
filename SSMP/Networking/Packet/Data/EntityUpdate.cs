@@ -408,19 +408,8 @@ internal class EntityUpdate : BaseEntityUpdate, IPoolable {
             xPos = false;
             yPos = false;
             zPos = false;
-            // Note: 'origin' is init-only property, cannot be reset, but it seems to be effectively immutable per instance usage or re-created if strictly needed. 
-            // However, based on usage in EntityUpdate, it seems it's a reuse of the container. 
-            // If 'origin' needs to be mutable for pooling, it should not be init-only. 
-            // Checking the class definition: public bool origin { private get; init; }
-            // Since it is 'init', we can't reset it. 
-            // Assuming for now that pooled instances reuse the same origin setting or it doesn't matter for the reset 
-            // (or it should be changed to set). 
-            // Given the context of EntityUpdate reuse, likely 'origin' is not critical to reset or will be overwritten if re-parsed? 
-            // Actually, wait. 'origin' determines writing behavior. usage: if ((origin && ...))
-            // If we reuse an EntityUpdate, we reuse its Scale member. 
-            // If the pooled EntityUpdate is used for a different purpose (different origin), we have a problem.
-            // But usually pooling is for the same "type" of usage.
-            // Let's stick to resetting mutable fields for now.
+            // 'origin' (public bool origin { private get; init; }) is init-only and cannot be reset here.
+            // Pooled ScaleData instances therefore retain their original origin value; callers must not reuse them across differing origins.
         }
 
         /// <inheritdoc />

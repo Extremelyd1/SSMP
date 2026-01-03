@@ -432,10 +432,16 @@ internal class PacketManager {
                 break;
             }
 
-            // Read packet length (ushort)
-            // We can Peek without advancing yet
-            // Only safe if system is same endian, typically LittleEndian in Unity
-            int packetLength = BitConverter.ToUInt16(data, readPosition); 
+            // Read packet length (ushort) from little-endian encoded stream
+            // Use explicit little-endian conversion to avoid dependence on system endianness.
+            ushort packetLengthValue;
+            if (BitConverter.IsLittleEndian) {
+                packetLengthValue = BitConverter.ToUInt16(data, readPosition);
+            } else {
+                // Manual little-endian decode: low byte first, then high byte
+                packetLengthValue = (ushort)(data[readPosition] | (data[readPosition + 1] << 8));
+            }
+            int packetLength = packetLengthValue;
 
             // Sanity check against allocation attacks or corruption.
             // If the length reads as invalid, we imply that protocol framing is lost (e.g. we are reading garbage as length).
