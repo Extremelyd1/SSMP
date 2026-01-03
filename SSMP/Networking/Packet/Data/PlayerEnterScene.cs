@@ -182,8 +182,8 @@ internal class ClientPlayerAlreadyInScene : IPacketData {
 
         length = packet.ReadUShort();
         for (var i = 0; i < length; i++) {
-            // Create new instance of entity update
-            var instance = new EntityUpdate();
+            // Get pooled instance of entity update
+            var instance = ObjectPool<EntityUpdate>.Get();
 
             // Read the packet data into the instance
             instance.ReadData(packet);
@@ -194,8 +194,8 @@ internal class ClientPlayerAlreadyInScene : IPacketData {
         
         length = packet.ReadUShort();
         for (var i = 0; i < length; i++) {
-            // Create new instance of reliable entity update
-            var instance = new ReliableEntityUpdate();
+            // Get pooled instance of reliable entity update
+            var instance = ObjectPool<ReliableEntityUpdate>.Get();
 
             // Read the packet data into the instance
             instance.ReadData(packet);
