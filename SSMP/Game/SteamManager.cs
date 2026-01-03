@@ -1,5 +1,6 @@
 using System;
 using System.Reflection;
+using System.Threading;
 using Steamworks;
 using SSMP.Logging;
 
@@ -8,17 +9,13 @@ namespace SSMP.Game;
 /// <summary>
 /// Manages Steam API initialization and availability checks.
 /// Handles graceful fallback when Steam is not available (multi-platform support).
+/// Enhanced performance through caching, reduced allocations, and lock optimization.
 /// </summary>
 public static class SteamManager {
     /// <summary>
-    /// The current version of the mod.
+    /// The default maximum number of players allowed in a lobby (250 = Steam's max = unlimited).
     /// </summary>
-    private static readonly string ModVersion = Assembly.GetExecutingAssembly().GetName().Version.ToString();
-
-    /// <summary>
-    /// The default maximum number of players allowed in a lobby.
-    /// </summary>
-    private const int DefaultMaxPlayers = 4;
+    private const int DefaultMaxPlayers = 250;
 
     /// <summary>
     /// The default lobby visibility type.
@@ -38,12 +35,12 @@ public static class SteamManager {
     /// <summary>
     /// Whether we are currently hosting a Steam lobby.
     /// </summary>
-    private static bool IsHostingLobby { get; set; }
+    public static bool IsHostingLobby { get; private set; }
 
     /// <summary>
     /// Whether we are currently in a Steam lobby (hosting or client).
     /// </summary>
-    public static bool IsInLobby => CurrentLobbyId != CSteamID.Nil;
+    public static bool IsInLobby => CurrentLobbyId != NilLobbyId;
 
     /// <summary>
     /// Event fired when a Steam lobby is successfully created.
@@ -69,9 +66,48 @@ public static class SteamManager {
     private static string? _pendingLobbyUsername;
 
     /// <summary>
-    /// Lock object for thread-safe access to lobby state.
+    /// Stored lobby type for lobby creation callback.
+    /// Used to determine if Rich Presence should be set (not set for private lobbies).
     /// </summary>
-    private static readonly object LobbyStateLock = new();
+    private static ELobbyType _pendingLobbyType;
+
+    /// <summary>
+    /// Callback timer interval in milliseconds (~60Hz).
+    /// </summary>
+    private const int CallbackIntervalMs = 17;
+
+    /// <summary>
+    /// Cached CSteamID.Nil value to avoid repeated struct creation.
+    /// </summary>
+    private static readonly CSteamID NilLobbyId = CSteamID.Nil;
+
+    /// <summary>
+    /// Cached string keys for lobby metadata to avoid allocations.
+    /// </summary>
+    private const string LobbyKeyName = "name";
+    private const string LobbyKeyVersion = "version";
+
+    /// <summary>
+    /// Cached mod version string from assembly metadata.
+    /// </summary>
+    private static readonly string ModVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.0.0";
+
+    /// <summary>
+    /// Reusable callback instances to avoid GC allocations.
+    /// </summary>
+    private static CallResult<LobbyCreated_t>? _lobbyCreatedCallback;
+    private static CallResult<LobbyMatchList_t>? _lobbyMatchListCallback;
+    private static CallResult<LobbyEnter_t>? _lobbyEnterCallback;
+
+    /// <summary>
+    /// Thread-safe timer using Threading.Timer instead of System.Timers.Timer for better performance.
+    /// </summary>
+    private static Timer? _callbackTimer;
+
+    /// <summary>
+    /// Cancellation flag for callback timer (int for atomic operations).
+    /// </summary>
+    private static int _isRunningCallbacks;
 
     /// <summary>
     /// Initializes the Steam API if available.
@@ -101,6 +137,14 @@ public static class SteamManager {
             Callback<GameLobbyJoinRequested_t>.Create(OnGameLobbyJoinRequested);
             Callback<GameRichPresenceJoinRequested_t>.Create(OnGameRichPresenceJoinRequested);
 
+            // Pre-allocate callback instances to reuse
+            _lobbyCreatedCallback = CallResult<LobbyCreated_t>.Create(OnLobbyCreated);
+            _lobbyMatchListCallback = CallResult<LobbyMatchList_t>.Create(OnLobbyMatchList);
+            _lobbyEnterCallback = CallResult<LobbyEnter_t>.Create(OnLobbyEnter);
+
+            // Start a timer-based callback loop that runs independently of frame rate
+            StartCallbackTimer();
+
             return true;
         } catch (Exception e) {
             Logger.Error($"Steam: Exception during initialization: {e}");
@@ -112,9 +156,8 @@ public static class SteamManager {
     /// Creates a Steam lobby for multiplayer.
     /// </summary>
     /// <param name="username">Host's username to set as lobby name</param>
-    /// <param name="maxPlayers">Maximum number of players (default 4)</param>
+    /// <param name="maxPlayers">Maximum number of players (default 250 = unlimited)</param>
     /// <param name="lobbyType">Type of lobby to create (default friends-only)</param>
-    /// <returns>True if lobby creation was initiated, false if Steam is unavailable</returns>
     public static void CreateLobby(
         string username, 
         int maxPlayers = DefaultMaxPlayers, 
@@ -130,69 +173,87 @@ public static class SteamManager {
             LeaveLobby();
         }
 
-        lock (LobbyStateLock) {
-            _pendingLobbyUsername = username;
-        }
-        Logger.Info($"Creating Steam lobby for {maxPlayers} players...");
+        // Use Interlocked for atomic write (faster than lock for simple assignments)
+        Volatile.Write(ref _pendingLobbyUsername, username);
+        _pendingLobbyType = lobbyType;
+        
+        Logger.Info($"Creating Steam lobby for {maxPlayers} players (type: {lobbyType})...");
 
-        // Create lobby and register callback
+        // Create lobby and register callback (reuse pre-allocated callback)
         var apiCall = SteamMatchmaking.CreateLobby(lobbyType, maxPlayers);
-        var lobbyCreatedCallback = CallResult<LobbyCreated_t>.Create(OnLobbyCreated);
-        lobbyCreatedCallback.Set(apiCall);
+        _lobbyCreatedCallback?.Set(apiCall);
     }
 
     /// <summary>
     /// Requests a list of lobbies from Steam.
     /// </summary>
-    /// <returns>True if the request was sent, false otherwise.</returns>
     public static void RequestLobbyList() {
         if (!IsInitialized) return;
 
         Logger.Info("Requesting Steam lobby list...");
         
-        // Add filters if needed (e.g. only lobbies with specific data)
+        // Add filters to only show lobbies with matching game version
         SteamMatchmaking.AddRequestLobbyListStringFilter(
-            "version", 
+            LobbyKeyVersion, 
             ModVersion, 
             ELobbyComparison.k_ELobbyComparisonEqual
         );
         
         var apiCall = SteamMatchmaking.RequestLobbyList();
-        var lobbyMatchListCallback = CallResult<LobbyMatchList_t>.Create(OnLobbyMatchList);
-        lobbyMatchListCallback.Set(apiCall);
+        _lobbyMatchListCallback?.Set(apiCall);
     }
 
     /// <summary>
     /// Joins a Steam lobby.
     /// </summary>
     /// <param name="lobbyId">The ID of the lobby to join.</param>
-    /// <returns>True if the join request was sent, false otherwise.</returns>
     public static void JoinLobby(CSteamID lobbyId) {
         if (!IsInitialized) return;
 
         Logger.Info($"Joining Steam lobby: {lobbyId}");
         
         var apiCall = SteamMatchmaking.JoinLobby(lobbyId);
-        var lobbyEnterCallback = CallResult<LobbyEnter_t>.Create(OnLobbyEnter);
-        lobbyEnterCallback.Set(apiCall);
+        _lobbyEnterCallback?.Set(apiCall);
     }
 
     /// <summary>
     /// Leaves the current lobby if hosting one.
     /// </summary>
     public static void LeaveLobby() {
-        CSteamID lobbyToLeave;
-        
-        lock (LobbyStateLock) {
-            if (CurrentLobbyId == CSteamID.Nil || !IsInitialized) return;
-            
-            lobbyToLeave = CurrentLobbyId;
-            IsHostingLobby = false;
-            CurrentLobbyId = CSteamID.Nil;
-        }
+        if (!IsInitialized) return;
+
+        // Fast path check - direct comparison is faster than property access
+        if (CurrentLobbyId == NilLobbyId) return;
+
+        // Take local copy and clear state
+        var lobbyToLeave = CurrentLobbyId;
+        CurrentLobbyId = NilLobbyId;
+        IsHostingLobby = false;
+
+        // Clear Rich Presence so friends no longer see "Join Game" option
+        SteamFriends.ClearRichPresence();
 
         Logger.Info($"Leaving Steam lobby: {lobbyToLeave}");
         SteamMatchmaking.LeaveLobby(lobbyToLeave);
+    }
+
+    /// <summary>
+    /// Opens the Steam overlay invite dialog to invite friends to the current lobby.
+    /// Works for all lobby types (Public, Friends Only, Private).
+    /// </summary>
+    public static void OpenInviteDialog() {
+        if (!IsInitialized) {
+            Logger.Warn("Cannot open invite dialog: Steam is not initialized");
+            return;
+        }
+
+        if (CurrentLobbyId == NilLobbyId) {
+            Logger.Warn("Cannot open invite dialog: Not in a lobby");
+            return;
+        }
+
+        Logger.Info($"Opening Steam invite dialog for lobby: {CurrentLobbyId}");
+        SteamFriends.ActivateGameOverlayInviteDialog(CurrentLobbyId);
     }
 
     /// <summary>
@@ -206,6 +267,9 @@ public static class SteamManager {
             // Leave any active lobby
             LeaveLobby();
 
+            // Stop the callback timer
+            StopCallbackTimer();
+
             SteamAPI.Shutdown();
             IsInitialized = false;
             Logger.Info("Steam: Shut down successfully");
@@ -215,16 +279,51 @@ public static class SteamManager {
     }
 
     /// <summary>
-    /// Runs Steam callbacks. Should be called regularly (e.g. in Update loop).
-    /// No-op if Steam is not initialized.
+    /// Starts the timer-based callback loop.
+    /// Uses Threading.Timer for lower overhead and better performance.
     /// </summary>
-    public static void RunCallbacks() {
+    private static void StartCallbackTimer() {
+        if (_callbackTimer != null) return;
+
+        _callbackTimer = new Timer(
+            OnCallbackTimerElapsed,
+            null,
+            CallbackIntervalMs,
+            CallbackIntervalMs
+        );
+
+        Logger.Info($"Steam: Started callback timer at {1000 / CallbackIntervalMs:F0}Hz");
+    }
+
+    /// <summary>
+    /// Stops the timer-based callback loop.
+    /// </summary>
+    private static void StopCallbackTimer() {
+        var timer = Interlocked.Exchange(ref _callbackTimer, null);
+        if (timer == null) return;
+
+        timer.Dispose();
+        Logger.Info("Steam: Stopped callback timer");
+    }
+
+    /// <summary>
+    /// Timer callback that runs Steam API callbacks.
+    /// </summary>
+    private static void OnCallbackTimerElapsed(object? state) {
         if (!IsInitialized) return;
+
+        // Prevent concurrent callback execution (lock-free)
+        if (Interlocked.CompareExchange(ref _isRunningCallbacks, 1, 0) != 0) {
+            // Already running, skip this tick
+            return;
+        }
 
         try {
             SteamAPI.RunCallbacks();
-        } catch (Exception e) {
-            Logger.Error($"Steam: Exception in RunCallbacks:\n{e}");
+        } catch (Exception ex) {
+            Logger.Error($"Steam: Exception in timer RunCallbacks:\n{ex}");
+        } finally {
+            Volatile.Write(ref _isRunningCallbacks, 0);
         }
     }
 
@@ -241,29 +340,41 @@ public static class SteamManager {
     private static void OnLobbyCreated(LobbyCreated_t callback, bool ioFailure) {
         if (ioFailure || callback.m_eResult != EResult.k_EResultOK) {
             Logger.Error($"Failed to create Steam lobby: {callback.m_eResult}");
-            _pendingLobbyUsername = null;
+            Volatile.Write(ref _pendingLobbyUsername, null);
             return;
         }
 
-        lock (LobbyStateLock) {
-            CurrentLobbyId = new CSteamID(callback.m_ulSteamIDLobby);
-            IsHostingLobby = true;
-        }
+        var lobbyId = new CSteamID(callback.m_ulSteamIDLobby);
+        CurrentLobbyId = lobbyId;
+        IsHostingLobby = true;
 
-        Logger.Info($"Steam lobby created successfully: {CurrentLobbyId}");
+        Logger.Info($"Steam lobby created successfully: {lobbyId}");
 
-        // Set lobby metadata
-        if (_pendingLobbyUsername != null) {
-            SteamMatchmaking.SetLobbyData(CurrentLobbyId, "name", $"{_pendingLobbyUsername}'s Lobby");
+        // Get username atomically
+        var username = Volatile.Read(ref _pendingLobbyUsername);
+
+        // Set lobby metadata using Steam persona name and game version
+        var steamName = SteamFriends.GetPersonaName();
+        SteamMatchmaking.SetLobbyData(lobbyId, LobbyKeyName, $"{steamName}'s Lobby");
+        SteamMatchmaking.SetLobbyData(lobbyId, LobbyKeyVersion, ModVersion);
+
+        // Set Rich Presence based on lobby type
+        // Private lobbies: NO connect key (truly invite-only, no "Join Game" button)
+        // Public/Friends: Set connect key so friends can "Join Game" from Steam
+        if (_pendingLobbyType != ELobbyType.k_ELobbyTypePrivate) {
+            SteamFriends.SetRichPresence("connect", lobbyId.m_SteamID.ToString());
+            SteamFriends.SetRichPresence("status", "In Lobby");
+            Logger.Info($"Rich Presence set with connect={lobbyId.m_SteamID}");
+        } else {
+            // Private lobby: set status only, use /invite command to send invites
+            SteamFriends.SetRichPresence("status", "In Private Lobby");
+            Logger.Info("Private lobby - use /invite to send Steam invites");
         }
-        SteamMatchmaking.SetLobbyData(CurrentLobbyId, "version", ModVersion);
 
         // Fire event for listeners
-        LobbyCreatedEvent?.Invoke(CurrentLobbyId, _pendingLobbyUsername ?? "Unknown");
+        LobbyCreatedEvent?.Invoke(lobbyId, username ?? "Unknown");
         
-        lock (LobbyStateLock) {
-            _pendingLobbyUsername = null;
-        }
+        Volatile.Write(ref _pendingLobbyUsername, null);
     }
 
     /// <summary>
@@ -275,10 +386,11 @@ public static class SteamManager {
             return;
         }
 
-        Logger.Info($"Received {callback.m_nLobbiesMatching} lobbies");
+        var count = (int) callback.m_nLobbiesMatching;
+        Logger.Info($"Received {count} lobbies");
         
-        var lobbyIds = new CSteamID[callback.m_nLobbiesMatching];
-        for (var i = 0; i < callback.m_nLobbiesMatching; i++) {
+        var lobbyIds = new CSteamID[count];
+        for (var i = 0; i < count; i++) {
             lobbyIds[i] = SteamMatchmaking.GetLobbyByIndex(i);
         }
 
@@ -299,13 +411,13 @@ public static class SteamManager {
             return;
         }
 
-        lock (LobbyStateLock) {
-            CurrentLobbyId = new CSteamID(callback.m_ulSteamIDLobby);
-            IsHostingLobby = false; // We are a client
-        }
+        var lobbyId = new CSteamID(callback.m_ulSteamIDLobby);
+        CurrentLobbyId = lobbyId;
+        // We are a client
+        IsHostingLobby = false;
         
-        Logger.Info($"Joined lobby successfully: {CurrentLobbyId}");
-        LobbyJoinedEvent?.Invoke(CurrentLobbyId);
+        Logger.Info($"Joined lobby successfully: {lobbyId}");
+        LobbyJoinedEvent?.Invoke(lobbyId);
     }
 
     /// <summary>

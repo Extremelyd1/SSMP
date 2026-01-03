@@ -23,6 +23,10 @@
         <PackageLicenseExpression>LGPL-2.1-or-later</PackageLicenseExpression>
         <!-- Place build output under parent folder bin instead of nested SSMP/SSMP/bin -->
         <BaseOutputPath>..\bin\</BaseOutputPath>
+
+        <!-- Ensure PDBs are generated for profiling -->
+        <DebugSymbols>true</DebugSymbols>
+        <DebugType>portable</DebugType>
     </PropertyGroup>
 
     <PropertyGroup>

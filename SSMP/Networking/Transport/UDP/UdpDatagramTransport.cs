@@ -13,20 +13,14 @@ internal abstract class UdpDatagramTransport : DatagramTransport {
     /// <summary>
     /// Token source for cancelling the blocking call on the received data collection.
     /// </summary>
-    private readonly CancellationTokenSource _cancellationTokenSource;
+    private readonly CancellationTokenSource _cancellationTokenSource = new();
     
     /// <summary>
     /// A thread-safe blocking collection storing received data that is used to handle the "Receive" calls from the
     /// DTLS transport.
     /// </summary>
-    public BlockingCollection<ReceivedData> ReceivedDataCollection { get; }
+    public BlockingCollection<ReceivedData> ReceivedDataCollection { get; } = new();
 
-    protected UdpDatagramTransport() {
-        _cancellationTokenSource = new CancellationTokenSource();
-
-        ReceivedDataCollection = new BlockingCollection<ReceivedData>();
-    }
-    
     /// <summary>
     /// This method is called whenever the corresponding DtlsTransport's Receive is called. The implementation
     /// obtains data from the blocking collection and store it in the given buffer. If no data is present in the
@@ -139,10 +133,10 @@ internal abstract class UdpDatagramTransport : DatagramTransport {
         /// <summary>
         /// Byte array containing the data.
         /// </summary>
-        public required byte[] Buffer { get; set; }
+        public required byte[] Buffer { get; init; }
         /// <summary>
         /// The number of bytes in the buffer.
         /// </summary>
-        public required int Length { get; set; }
+        public required int Length { get; init; }
     }
 }

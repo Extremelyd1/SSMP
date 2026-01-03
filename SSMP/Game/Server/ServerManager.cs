@@ -22,6 +22,7 @@ using SSMP.Networking.Packet.Data;
 using SSMP.Networking.Packet.Update;
 using SSMP.Networking.Server;
 using SSMP.Networking.Transport.Common;
+// ReSharper disable InconsistentlySynchronizedField
 
 namespace SSMP.Game.Server;
 
@@ -78,6 +79,11 @@ internal abstract class ServerManager : IServerManager {
     /// The server settings.
     /// </summary>
     public readonly ServerSettings InternalServerSettings;
+
+    /// <summary>
+    /// Lock to synchronize Start/Stop operations, ensuring cleanup completes before restart.
+    /// </summary>
+    private readonly object _serverStateLock = new();
 
     /// <summary>
     /// The server command manager instance.
@@ -367,37 +373,51 @@ internal abstract class ServerManager : IServerManager {
     /// <param name="fullSynchronisation">Whether full synchronisation should be enabled.</param>
     /// <param name="transportServer">The transport server to use.</param>
     public virtual void Start(int port, bool fullSynchronisation, IEncryptedTransportServer transportServer) {
-        // Stop existing server
-        if (_netServer.IsStarted) {
-            Logger.Info("Server was running, shutting it down before starting");
-            _netServer.Stop();
+        lock (_serverStateLock) {
+            // Stop existing server (including deregistering commands)
+            if (_netServer.IsStarted) {
+                Logger.Info("Server was running, shutting it down before starting");
+                StopInternal();
+            }
+
+            FullSynchronisation = fullSynchronisation;
+            
+            RegisterCommands();
+            RegisterPacketHandlers();
+
+            // Start server again with given port
+            _netServer.Start(port, transportServer);
         }
-
-        FullSynchronisation = fullSynchronisation;
-        
-        RegisterCommands();
-        RegisterPacketHandlers();
-
-        // Start server again with given port
-        _netServer.Start(port, transportServer);
     }
 
     /// <summary>
     /// Stops the currently running server.
     /// </summary>
     public void Stop() {
-        if (_netServer.IsStarted) {
-            // Before shutting down, send TCP packets to all clients indicating
-            // that the server is shutting down
-            _netServer.SetDataForAllClients(updateManager => {
-                updateManager.SetDisconnect(DisconnectReason.Shutdown);
-            });
-
-            _netServer.Stop();
-            
-            DeregisterCommands();
-            DeregisterPacketHandlers();
+        lock (_serverStateLock) {
+            StopInternal();
         }
+    }
+
+    /// <summary>
+    /// Internal stop logic without locking (called from Start and Stop).
+    /// </summary>
+    private void StopInternal() {
+        if (!_netServer.IsStarted) return;
+
+        // Before shutting down, send TCP packets to all clients indicating
+        // that the server is shutting down
+        _netServer.SetDataForAllClients(updateManager => {
+            updateManager.SetDisconnect(DisconnectReason.Shutdown);
+        });
+
+        _netServer.Stop();
+
+        DeregisterCommands();
+        DeregisterPacketHandlers();
+
+        _playerData.Clear();
+        _entityData.Clear();
     }
 
     /// <summary>

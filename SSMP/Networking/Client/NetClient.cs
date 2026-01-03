@@ -147,6 +147,7 @@ internal class NetClient : INetClient {
                     _transport.Connect(address, port);
 
                     UpdateManager.Transport = _transport;
+                    UpdateManager.Reset();
                     UpdateManager.StartUpdates();
                     _chunkSender.Start();
 

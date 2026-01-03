@@ -12,5 +12,10 @@ public enum TransportType {
     /// <summary>
     /// Steam P2P transport (Lobby).
     /// </summary>
-    Steam
+    Steam,
+
+    /// <summary>
+    /// UDP Hole Punch transport (NAT traversal).
+    /// </summary>
+    HolePunch
 }

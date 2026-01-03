@@ -4,6 +4,7 @@ using SSMP.Game.Settings;
 using SSMP.Networking.Packet;
 using SSMP.Networking.Server;
 using SSMP.Networking.Transport.Common;
+using SSMP.Networking.Transport.HolePunch;
 using SSMP.Networking.Transport.SteamP2P;
 using SSMP.Networking.Transport.UDP;
 using SSMP.Ui;
@@ -24,7 +25,7 @@ internal class ModServerManager : ServerManager {
     /// hosting a server.
     /// </summary>
     private readonly ModSettings _modSettings;
-    
+
     /// <summary>
     /// The settings command.
     /// </summary>
@@ -91,10 +92,18 @@ internal class ModServerManager : ServerManager {
         IEncryptedTransportServer transportServer = transportType switch {
             TransportType.Udp => new UdpEncryptedTransportServer(),
             TransportType.Steam => new SteamEncryptedTransportServer(),
+            TransportType.HolePunch => CreateHolePunchServer(),
             _ => throw new ArgumentOutOfRangeException(nameof(transportType), transportType, null)
         };
 
         Start(port, fullSynchronisation, transportServer);
+    }
+
+    /// <summary>
+    /// Creates a HolePunch server with the MmsClient for lobby cleanup on shutdown.
+    /// </summary>
+    private HolePunchEncryptedTransportServer CreateHolePunchServer() {
+        return new HolePunchEncryptedTransportServer(_uiManager.ConnectInterface.MmsClient);
     }
 
     /// <inheritdoc />

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using SSMP.Game;
 using SSMP.Game.Client.Entity;
 using SSMP.Game.Settings;
@@ -63,11 +64,8 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
 
             // Search for existing packet data
             var dataInstances = packetDataCollection.DataInstances;
-            foreach (var t in dataInstances) {
-                var existingData = (T) t;
-                if (findFunc(existingData)) {
-                    return existingData;
-                }
+            foreach (var existingData in dataInstances.Cast<T>().Where(findFunc)) {
+                return existingData;
             }
         } else {
             // Create new collection if it doesn't exist
@@ -332,17 +330,15 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     /// <typeparam name="T">The type of the entity update. Either <see cref="EntityUpdate"/> or
     /// <see cref="ReliableEntityUpdate"/>.</typeparam>
     /// <returns>An instance of the entity update in the packet.</returns>
-    private T FindOrCreateEntityUpdate<T>(ushort entityId, ClientUpdatePacketId packetId)
+    private T? FindOrCreateEntityUpdate<T>(ushort entityId, ClientUpdatePacketId packetId)
         where T : BaseEntityUpdate, new() {
         var entityUpdateCollection = GetOrCreateCollection<T>(packetId);
 
         // Search for existing entity update
         var dataInstances = entityUpdateCollection.DataInstances;
-        foreach (var t in dataInstances) {
-            var existingUpdate = (T) t;
-            if (existingUpdate.Id == entityId) {
-                return existingUpdate;
-            }
+        foreach (var existingUpdate in
+                 dataInstances.Cast<T?>().Where(existingUpdate => existingUpdate!.Id == entityId)) {
+            return existingUpdate;
         }
 
         // Create new entity update
@@ -359,7 +355,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     public void UpdateEntityPosition(ushort entityId, Vector2 position) {
         lock (Lock) {
             var entityUpdate = FindOrCreateEntityUpdate<EntityUpdate>(entityId, ClientUpdatePacketId.EntityUpdate);
-            entityUpdate.UpdateTypes.Add(EntityUpdateType.Position);
+            entityUpdate!.UpdateTypes.Add(EntityUpdateType.Position);
             entityUpdate.Position = position;
         }
     }
@@ -372,7 +368,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     public void UpdateEntityScale(ushort entityId, EntityUpdate.ScaleData scale) {
         lock (Lock) {
             var entityUpdate = FindOrCreateEntityUpdate<EntityUpdate>(entityId, ClientUpdatePacketId.EntityUpdate);
-            entityUpdate.UpdateTypes.Add(EntityUpdateType.Scale);
+            entityUpdate!.UpdateTypes.Add(EntityUpdateType.Scale);
             entityUpdate.Scale = scale;
         }
     }
@@ -386,7 +382,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     public void UpdateEntityAnimation(ushort entityId, byte animationId, byte animationWrapMode) {
         lock (Lock) {
             var entityUpdate = FindOrCreateEntityUpdate<EntityUpdate>(entityId, ClientUpdatePacketId.EntityUpdate);
-            entityUpdate.UpdateTypes.Add(EntityUpdateType.Animation);
+            entityUpdate!.UpdateTypes.Add(EntityUpdateType.Animation);
             entityUpdate.AnimationId = animationId;
             entityUpdate.AnimationWrapMode = animationWrapMode;
         }
@@ -401,7 +397,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
         lock (Lock) {
             var entityUpdate =
                 FindOrCreateEntityUpdate<ReliableEntityUpdate>(entityId, ClientUpdatePacketId.ReliableEntityUpdate);
-            entityUpdate.UpdateTypes.Add(EntityUpdateType.Active);
+            entityUpdate!.UpdateTypes.Add(EntityUpdateType.Active);
             entityUpdate.IsActive = isActive;
         }
     }
@@ -415,7 +411,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
         lock (Lock) {
             var entityUpdate =
                 FindOrCreateEntityUpdate<ReliableEntityUpdate>(entityId, ClientUpdatePacketId.ReliableEntityUpdate);
-            entityUpdate.UpdateTypes.Add(EntityUpdateType.Data);
+            entityUpdate!.UpdateTypes.Add(EntityUpdateType.Data);
             entityUpdate.GenericData.AddRange(data);
         }
     }
@@ -430,7 +426,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
         lock (Lock) {
             var entityUpdate =
                 FindOrCreateEntityUpdate<ReliableEntityUpdate>(entityId, ClientUpdatePacketId.ReliableEntityUpdate);
-            entityUpdate.UpdateTypes.Add(EntityUpdateType.HostFsm);
+            entityUpdate!.UpdateTypes.Add(EntityUpdateType.HostFsm);
 
             if (entityUpdate.HostFsmData.TryGetValue(fsmIndex, out var existingData)) {
                 existingData.MergeData(data);
@@ -490,6 +486,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
                 playerSettingUpdate.UpdateTypes.Add(PlayerSettingUpdateType.Skin);
                 playerSettingUpdate.SkinId = skinId.Value;
             }
+            
         }
     }
 

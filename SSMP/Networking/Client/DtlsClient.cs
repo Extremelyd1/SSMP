@@ -69,15 +69,17 @@ internal class DtlsClient {
     /// </summary>
     /// <param name="address">The address of the server.</param>
     /// <param name="port">The port of the server.</param>
+    /// <param name="boundSocket">Optional pre-bound socket for hole punch scenarios.</param>
     /// <exception cref="SocketException">Thrown when the underlying socket fails to connect to the server.</exception>
     /// <exception cref="IOException">Thrown when the DTLS protocol fails to connect to the server.</exception>
-    public void Connect(string address, int port) {
+    public void Connect(string address, int port, Socket? boundSocket = null) {
         // Clean up any existing connection first
         if (_receiveTaskTokenSource != null) {
             InternalDisconnect();
         }
 
-        _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        // Use provided socket or create new one
+        _socket = boundSocket ?? new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 
         // Prevent UDP WSAECONNRESET (10054) from surfacing as exceptions on Windows when the remote endpoint closes
         try {
@@ -87,11 +89,14 @@ internal class DtlsClient {
             Logger.Debug($"IOControl SioUDPConnReset not supported: {e.Message}");
         }
 
-        try {
-            _socket.Connect(address, port);
-        } catch (SocketException e) {
-            Logger.Error($"Failed to connect socket to {address}:{port}");
-            CleanupAndThrow(e);
+        // Only connect if we created the socket (hole punch sockets are already "connected")
+        if (boundSocket == null) {
+            try {
+                _socket.Connect(address, port);
+            } catch (SocketException e) {
+                Logger.Error($"Failed to connect socket to {address}:{port}");
+                CleanupAndThrow(e);
+            }
         }
 
         var clientProtocol = new DtlsClientProtocol();
@@ -122,9 +127,10 @@ internal class DtlsClient {
         _handshakeThread.Start();
 
         // Wait for handshake to complete or timeout
-        if (!_handshakeThread.Join(DtlsHandshakeTimeoutMillis)) {
+        // Time-out of 20s for hole punching
+        if (!_handshakeThread.Join(20000)) {
             // Handshake timed out - close socket to force handshake thread to abort
-            Logger.Error($"DTLS handshake timed out after {DtlsHandshakeTimeoutMillis}ms");
+            Logger.Error($"DTLS handshake timed out after 20000ms");
             _socket?.Close();
             
             // Give handshake thread a brief moment to exit after socket closure
@@ -135,7 +141,7 @@ internal class DtlsClient {
 
         // Handshake completed - check if it succeeded or threw an exception
         if (handshakeException != null) {
-            Logger.Error($"DTLS handshake failed with exception");
+            Logger.Error($"DTLS handshake failed with exception: {handshakeException}");
             CleanupAndThrow(handshakeException is IOException ? handshakeException : new IOException("DTLS handshake failed", handshakeException));
         }
 

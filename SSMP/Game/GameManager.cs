@@ -77,12 +77,16 @@ internal class GameManager {
 
         // Initialize Steam if available
         if (SteamManager.Initialize()) {
-            // Register Steam callback updates on Unity's update loop
-            MonoBehaviourUtil.Instance.OnUpdateEvent += SteamManager.RunCallbacks;
+            // Hook lobby cleanup to UI's stop request (explicit user action), NOT ServerShutdownEvent
+            // ServerShutdownEvent fires on server restarts too, which would prematurely clean up lobbies
+            _uiManager.RequestServerStopHostEvent += () => {
+                SteamManager.LeaveLobby();
+                // Also close MMS lobby registration if any (for public Steam lobbies)
+                _uiManager.ConnectInterface.MmsClient.CloseLobby();
+            };
         }
 
         _uiManager.Initialize();
-        
         _serverManager.Initialize();
         _clientManager.Initialize(_serverManager);
     }

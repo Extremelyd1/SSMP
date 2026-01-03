@@ -81,11 +81,6 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     private bool _requiresSequencing = true;
 
     /// <summary>
-    /// Whether the transport requires application-level reliability.
-    /// </summary>
-    protected bool RequiresReliability { get; private set; } = true;
-
-    /// <summary>
     /// The last sent sequence number.
     /// </summary>
     private ushort _localSequence;
@@ -113,7 +108,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     private volatile object? _transportSender;
 
     /// <summary>
-    /// The current update packet being assembled.
+    /// The current update packet being assembled. Protected for subclass access.
     /// </summary>
     protected TOutgoing CurrentUpdatePacket { get; private set; }
 
@@ -121,6 +116,11 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// Lock object for synchronizing packet assembly. Protected for subclass access.
     /// </summary>
     protected object Lock { get; } = new();
+
+    /// <summary>
+    /// Whether the transport requires application-level reliability. Protected for subclass access.
+    /// </summary>
+    protected bool RequiresReliability { get; private set; } = true;
 
     /// <summary>
     /// Gets or sets the transport for client-side communication.
@@ -217,6 +217,33 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// <summary>
     /// Stop sending the periodic UDP update packets after sending the current one.
     /// </summary>
+    /// <summary>
+    /// Resets the update manager state, clearing queues and sequences.
+    /// </summary>
+    public void Reset() {
+        lock (Lock) {
+            _receivedQueue?.Clear();
+            
+            _localSequence = 0;
+            _remoteSequence = 0;
+            CurrentUpdatePacket = new TOutgoing();
+            _lastSendRate = CurrentSendRate;
+            
+            // Reset managers by nullifying them - InitializeManagersIfNeeded will recreate them
+            // with proper transport properties
+            _rttTracker = null;
+            _reliabilityManager = null;
+            _congestionManager = null;
+            _receivedQueue = null;
+            
+            // Reinitialize managers with transport properties set correctly
+            InitializeManagersIfNeeded();
+        }
+    }
+
+    /// <summary>
+    /// Stop sending the periodic UDP update packets after sending the current one.
+    /// </summary>
     public void StopUpdates() {
         if (!_isUpdating) {
             return;
@@ -266,8 +293,6 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         _congestionManager?.OnReceivePacket();
 
         var sequence = packet.Sequence;
-        // _receivedQueue is guaranteed non-null here:
-        // InitializeManagersIfNeeded() initializes it when _requiresSequencing is true
         _receivedQueue!.Enqueue(sequence);
 
         packet.DropDuplicateResendData(_receivedQueue.GetCopy());
@@ -310,12 +335,8 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
 
         // Transports requiring sequencing: Track for RTT, reliability
         if (_requiresSequencing) {
-            // _rttTracker is guaranteed non-null here:
-            // InitializeManagersIfNeeded() initializes it when _requiresSequencing is true
             _rttTracker!.OnSendPacket(_localSequence);
             if (RequiresReliability) {
-                // _reliabilityManager is guaranteed non-null here: InitializeManagersIfNeeded() initializes it
-                // when RequiresReliability is true and _rttTracker is non-null (which it is per above)
                 _reliabilityManager!.OnSendPacket(_localSequence, packetToSend);
             }
 
@@ -330,9 +351,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// Each bit indicates whether a packet with that sequence number was received.
     /// Only used for UDP/HolePunch transports.
     /// </summary>
-    private void PopulateAckField() {
-        // _receivedQueue is guaranteed non-null here: this method is only called inside _requiresSequencing blocks,
-        // and InitializeManagersIfNeeded() initializes _receivedQueue when _requiresSequencing is true
+    private void PopulateAckField() {           
         var receivedQueue = _receivedQueue!.GetCopy();
         var ackField = CurrentUpdatePacket.AckField;
 

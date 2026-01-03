@@ -101,11 +101,6 @@ internal class NetServer : INetServer {
         _receivedQueue = new ConcurrentQueue<ReceivedData>();
 
         _processingWaitHandle = new AutoResetEvent(false);
-
-        _packetManager.RegisterServerConnectionPacketHandler<ClientInfo>(
-            ServerConnectionPacketId.ClientInfo,
-            OnClientInfoReceived
-        );
     }
 
     /// <summary>
@@ -123,6 +118,12 @@ internal class NetServer : INetServer {
         }
 
         Logger.Info($"Starting NetServer on port {port}");
+
+        _packetManager.RegisterServerConnectionPacketHandler<ClientInfo>(
+            ServerConnectionPacketId.ClientInfo,
+            OnClientInfoReceived
+        );
+
         IsStarted = true;
 
         _transportServer = transportServer;
@@ -381,7 +382,7 @@ internal class NetServer : INetServer {
         _taskTokenSource?.Cancel();
 
         // Wait for processing thread to exit gracefully (with timeout)
-        if (_processingThread != null && _processingThread.IsAlive) {
+        if (_processingThread is { IsAlive: true }) {
             if (!_processingThread.Join(1000)) {
                 Logger.Warn("Processing thread did not exit within timeout");
             }
@@ -402,12 +403,18 @@ internal class NetServer : INetServer {
         // Clear leftover data
         _leftoverData = null;
 
+        // Deregister the client info handler to prevent leaks when restarting the server
+        _packetManager.DeregisterServerConnectionPacketHandler(ServerConnectionPacketId.ClientInfo);
+
         // Clean up existing clients
         foreach (var client in _clientsById.Values) {
             client.Disconnect();
         }
 
         _clientsById.Clear();
+
+        // Reset client IDs so the next session starts from 0
+        NetServerClient.ResetIds();
 
         // Clean up throttled clients
         _throttledClients.Clear();

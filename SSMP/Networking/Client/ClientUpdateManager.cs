@@ -1,3 +1,4 @@
+using System.Linq;
 using SSMP.Animation;
 using SSMP.Game;
 using SSMP.Game.Client.Entity;
@@ -201,11 +202,9 @@ internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpd
 
         // Search for existing entity update
         var dataInstances = entityUpdateCollection.DataInstances;
-        foreach (var t in dataInstances) {
-            var existingUpdate = (T) t;
-            if (existingUpdate.Id == entityId) {
-                return existingUpdate;
-            }
+        foreach (var existingUpdate in
+                 dataInstances.Cast<T?>().Where(existingUpdate => existingUpdate!.Id == entityId)) {
+            return existingUpdate!;
         }
 
         // Create new entity update
