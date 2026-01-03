@@ -27,19 +27,14 @@ internal sealed class SteamEncryptedTransport : IReliableTransport {
     private const double PollIntervalMS = 17.2;
 
     /// <summary>
-    /// Maximum wait time threshold before switching from spin to sleep (ms).
+    /// Maximum lag threshold before resetting timing to prevent spiral-of-death (ms).
     /// </summary>
-    private const int SpinWaitThreshold = 15;
+    private const long MaxLagMS = 500;
 
     /// <summary>
     /// Channel ID for server->client communication.
     /// </summary>
     private const int ServerChannel = 1;
-
-    /// <summary>
-    /// Maximum drift correction threshold in milliseconds.
-    /// </summary>
-    private const long MaxDriftThreshold = 100;
 
     /// <inheritdoc />
     public event Action<byte[], int>? DataReceivedEvent;
@@ -168,7 +163,6 @@ internal sealed class SteamEncryptedTransport : IReliableTransport {
 
     /// <summary>
     /// Internal helper to send data with a specific P2P send type.
-    /// Optimized hot path with minimal branching.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void SendInternal(byte[] buffer, int offset, int length, EP2PSend sendType) {
@@ -184,7 +178,6 @@ internal sealed class SteamEncryptedTransport : IReliableTransport {
         }
 
         // Client sends to server on Channel 0
-        // Note: Steam API takes uint for length, cast is zero-cost
         if (!SteamNetworking.SendP2PPacket(_remoteSteamId, buffer, (uint)length, sendType)) {
             Logger.Warn($"Steam P2P: Failed to send packet to {_remoteSteamId}");
         }
@@ -201,7 +194,6 @@ internal sealed class SteamEncryptedTransport : IReliableTransport {
     /// <summary>
     /// Process all available incoming P2P packets.
     /// Drains the entire queue to prevent packet buildup when polling.
-    /// Optimized for zero allocations in steady state.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void ReceivePackets() {
@@ -240,7 +232,7 @@ internal sealed class SteamEncryptedTransport : IReliableTransport {
 
             // Allocate a copy for safety - handlers may hold references
             var data = new byte[size];
-            Buffer.BlockCopy(receiveBuffer, 0, data, 0, size);
+            Array.Copy(receiveBuffer, 0, data, 0, size);
             dataReceived(data, size);
         }
     }
@@ -283,7 +275,6 @@ internal sealed class SteamEncryptedTransport : IReliableTransport {
     /// Continuously polls for incoming P2P packets with precise timing.
     /// Uses Stopwatch + hybrid spin/sleep for consistent ~58Hz polling rate.
     /// Steam API limitation: no blocking receive or callback available, must poll.
-    /// Optimized for minimal CPU overhead and maximum responsiveness.
     /// </summary>
     private void ReceiveLoop() {
         var token = _receiveTokenSource;
@@ -293,9 +284,8 @@ internal sealed class SteamEncryptedTransport : IReliableTransport {
         var stopwatch = Stopwatch.StartNew();
         var nextPollTime = stopwatch.ElapsedMilliseconds;
         const long pollInterval = (long)PollIntervalMS;
-        
-        // Preallocate SpinWait struct to avoid per-iteration allocation
-        var spinWait = new SpinWait();
+
+        using var waitHandle = new ManualResetEventSlim(false);
 
         while (_isConnected) {
             try {
@@ -309,23 +299,19 @@ internal sealed class SteamEncryptedTransport : IReliableTransport {
                     break;
                 }
 
-                // Precise wait until next poll time
                 var currentTime = stopwatch.ElapsedMilliseconds;
-                var waitTime = nextPollTime - currentTime;
 
+                // Lag spike recovery: if we're too far behind, reset to prevent spiral-of-death
+                if (currentTime > nextPollTime + MaxLagMS) {
+                    nextPollTime = currentTime;
+                }
+
+                var waitTime = nextPollTime - currentTime;
                 if (waitTime > 0) {
-                    if (waitTime > SpinWaitThreshold) {
-                        // Sleep for most of the wait, then spin for precision
-                        var sleepTime = (int)(waitTime - 2);
-                        if (sleepTime > 0) {
-                            Thread.Sleep(sleepTime);
-                        }
-                    }
-                    
-                    // Spin for remaining time (high precision, low overhead)
-                    spinWait.Reset();
-                    while (stopwatch.ElapsedMilliseconds < nextPollTime) {
-                        spinWait.SpinOnce();
+                    try {
+                        waitHandle.Wait((int)waitTime, cancellationToken);
+                    } catch (OperationCanceledException) {
+                        break;
                     }
                 }
 
@@ -334,12 +320,6 @@ internal sealed class SteamEncryptedTransport : IReliableTransport {
 
                 // Schedule next poll
                 nextPollTime += pollInterval;
-
-                // Drift correction: prevent accumulating lag
-                var now = stopwatch.ElapsedMilliseconds;
-                if (now > nextPollTime + MaxDriftThreshold) {
-                    nextPollTime = now + pollInterval;
-                }
             } catch (InvalidOperationException ex) when (ex.Message.Contains("Steamworks is not initialized")) {
                 // Steam shut down during operation - exit gracefully
                 _steamInitialized = false;
@@ -351,7 +331,7 @@ internal sealed class SteamEncryptedTransport : IReliableTransport {
                 break;
             } catch (Exception e) {
                 Logger.Error($"Steam P2P: Error in receive loop: {e}");
-                // Continue polling on error, but maintain timing
+                // Continue polling on error, reset timing
                 nextPollTime = stopwatch.ElapsedMilliseconds + pollInterval;
             }
         }

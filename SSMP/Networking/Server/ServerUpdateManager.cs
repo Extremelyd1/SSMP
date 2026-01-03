@@ -35,7 +35,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     /// <param name="packetId">The ID of the packet data.</param>
     /// <typeparam name="T">The type of the generic client packet data.</typeparam>
     /// <returns>An instance of the packet data in the packet.</returns>
-    private T? FindOrCreatePacketData<T>(ushort id, ClientUpdatePacketId packetId) where T : GenericClientData, new() {
+    private T FindOrCreatePacketData<T>(ushort id, ClientUpdatePacketId packetId) where T : GenericClientData, new() {
         return FindOrCreatePacketData(
             packetId,
             packetData => packetData.Id == id,
@@ -51,7 +51,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     /// <param name="constructFunc">The function to construct the packet data if it does not exist.</param>
     /// <typeparam name="T">The type of the generic client packet data.</typeparam>
     /// <returns>An instance of the packet data in the packet.</returns>
-    private T? FindOrCreatePacketData<T>(
+    private T FindOrCreatePacketData<T>(
         ClientUpdatePacketId packetId,
         Func<T, bool> findFunc,
         Func<T> constructFunc
@@ -64,7 +64,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
 
             // Search for existing packet data
             var dataInstances = packetDataCollection.DataInstances;
-            foreach (var existingData in dataInstances.Cast<T?>().Where(existingData => findFunc(existingData!))) {
+            foreach (var existingData in dataInstances.Cast<T>().Where(findFunc)) {
                 return existingData;
             }
         } else {
@@ -140,7 +140,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     public void AddPlayerConnectData(ushort id, string username) {
         lock (Lock) {
             var playerConnect = FindOrCreatePacketData<PlayerConnect>(id, ClientUpdatePacketId.PlayerConnect);
-            playerConnect!.Username = username;
+            playerConnect.Username = username;
         }
     }
 
@@ -154,7 +154,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
         lock (Lock) {
             var playerDisconnect =
                 FindOrCreatePacketData<ClientPlayerDisconnect>(id, ClientUpdatePacketId.PlayerDisconnect);
-            playerDisconnect!.Username = username;
+            playerDisconnect.Username = username;
             playerDisconnect.TimedOut = timedOut;
         }
     }
@@ -181,7 +181,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
         lock (Lock) {
             var playerEnterScene =
                 FindOrCreatePacketData<ClientPlayerEnterScene>(id, ClientUpdatePacketId.PlayerEnterScene);
-            playerEnterScene!.Username = username;
+            playerEnterScene.Username = username;
             playerEnterScene.Position = position;
             playerEnterScene.Scale = scale;
             playerEnterScene.Team = team;
@@ -227,7 +227,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
         lock (Lock) {
             var playerLeaveScene =
                 FindOrCreatePacketData<ClientPlayerLeaveScene>(id, ClientUpdatePacketId.PlayerLeaveScene);
-            playerLeaveScene!.SceneName = sceneName;
+            playerLeaveScene.SceneName = sceneName;
         }
     }
 
@@ -239,7 +239,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     public void UpdatePlayerPosition(ushort id, Vector2 position) {
         lock (Lock) {
             var playerUpdate = FindOrCreatePacketData<PlayerUpdate>(id, ClientUpdatePacketId.PlayerUpdate);
-            playerUpdate!.UpdateTypes.Add(PlayerUpdateType.Position);
+            playerUpdate.UpdateTypes.Add(PlayerUpdateType.Position);
             playerUpdate.Position = position;
         }
     }
@@ -252,7 +252,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     public void UpdatePlayerScale(ushort id, bool scale) {
         lock (Lock) {
             var playerUpdate = FindOrCreatePacketData<PlayerUpdate>(id, ClientUpdatePacketId.PlayerUpdate);
-            playerUpdate!.UpdateTypes.Add(PlayerUpdateType.Scale);
+            playerUpdate.UpdateTypes.Add(PlayerUpdateType.Scale);
             playerUpdate.Scale = scale;
         }
     }
@@ -265,7 +265,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     public void UpdatePlayerMapPosition(ushort id, Vector2 mapPosition) {
         lock (Lock) {
             var playerUpdate = FindOrCreatePacketData<PlayerUpdate>(id, ClientUpdatePacketId.PlayerUpdate);
-            playerUpdate!.UpdateTypes.Add(PlayerUpdateType.MapPosition);
+            playerUpdate.UpdateTypes.Add(PlayerUpdateType.MapPosition);
             playerUpdate.MapPosition = mapPosition;
         }
     }
@@ -278,7 +278,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     public void UpdatePlayerMapIcon(ushort id, bool hasIcon) {
         lock (Lock) {
             var playerMapUpdate = FindOrCreatePacketData<PlayerMapUpdate>(id, ClientUpdatePacketId.PlayerMapUpdate);
-            playerMapUpdate!.HasIcon = hasIcon;
+            playerMapUpdate.HasIcon = hasIcon;
         }
     }
 
@@ -292,7 +292,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     public void UpdatePlayerAnimation(ushort id, ushort clipId, byte frame, byte[]? effectInfo) {
         lock (Lock) {
             var playerUpdate = FindOrCreatePacketData<PlayerUpdate>(id, ClientUpdatePacketId.PlayerUpdate);
-            playerUpdate!.UpdateTypes.Add(PlayerUpdateType.Animation);
+            playerUpdate.UpdateTypes.Add(PlayerUpdateType.Animation);
             playerUpdate.AnimationInfos.Add(
                 new AnimationInfo {
                     ClipId = clipId,
@@ -478,13 +478,15 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
             );
 
             if (team.HasValue) {
-                playerSettingUpdate!.UpdateTypes.Add(PlayerSettingUpdateType.Team);
+                playerSettingUpdate.UpdateTypes.Add(PlayerSettingUpdateType.Team);
                 playerSettingUpdate.Team = team.Value;
             }
 
-            if (!skinId.HasValue) return;
-            playerSettingUpdate!.UpdateTypes.Add(PlayerSettingUpdateType.Skin);
-            playerSettingUpdate.SkinId = skinId.Value;
+            if (skinId.HasValue) {
+                playerSettingUpdate.UpdateTypes.Add(PlayerSettingUpdateType.Skin);
+                playerSettingUpdate.SkinId = skinId.Value;
+            }
+            
         }
     }
 
@@ -515,17 +517,17 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
             );
 
             if (team.HasValue) {
-                playerSettingUpdate!.UpdateTypes.Add(PlayerSettingUpdateType.Team);
+                playerSettingUpdate.UpdateTypes.Add(PlayerSettingUpdateType.Team);
                 playerSettingUpdate.Team = team.Value;
             }
 
             if (skinId.HasValue) {
-                playerSettingUpdate!.UpdateTypes.Add(PlayerSettingUpdateType.Skin);
+                playerSettingUpdate.UpdateTypes.Add(PlayerSettingUpdateType.Skin);
                 playerSettingUpdate.SkinId = skinId.Value;
             }
 
             if (crestType.HasValue) {
-                playerSettingUpdate!.UpdateTypes.Add(PlayerSettingUpdateType.Crest);
+                playerSettingUpdate.UpdateTypes.Add(PlayerSettingUpdateType.Crest);
                 playerSettingUpdate.CrestType = crestType.Value;
             }
         }

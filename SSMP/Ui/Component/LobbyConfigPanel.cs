@@ -1,5 +1,4 @@
 using System;
-using SSMP.Game;
 using UnityEngine;
 using UnityEngine.UI;
 using Object = UnityEngine.Object;
@@ -18,7 +17,7 @@ internal class LobbyConfigPanel : IComponent {
     private readonly InputField _nameInput;
 
     /// <summary>Text displaying the current visibility option (Steam only).</summary>
-    private readonly Text _visibilityText = null!;
+    private readonly Text _visibilityText;
 
     /// <summary>Currently selected lobby visibility.</summary>
     private LobbyVisibility _visibility = LobbyVisibility.Public;
@@ -108,46 +107,40 @@ internal class LobbyConfigPanel : IComponent {
 
         currentY -= RowSpacing;
 
-        // Visibility row (Steam only - matchmaking is always public)
-        if (_lobbyType == "steam") {
-            var visLabel = CreateText(
-                "Visibility:",
-                new Vector2(-size.x / 4f - 10f, currentY),
-                size.x / 2f - 20f,
-                RowHeight,
-                14,
-                Color.white,
-                TextAnchor.MiddleLeft
-            );
-            visLabel.transform.SetParent(GameObject.transform, false);
+        // Visibility row (for all lobby types)
+        var visLabel = CreateText(
+            "Visibility:",
+            new Vector2(-size.x / 4f - 10f, currentY),
+            size.x / 2f - 20f,
+            RowHeight,
+            14,
+            Color.white,
+            TextAnchor.MiddleLeft
+        );
+        visLabel.transform.SetParent(GameObject.transform, false);
 
-            var visSelector = new GameObject("VisibilitySelector");
-            var vRect = visSelector.AddComponent<RectTransform>();
-            vRect.anchorMin = vRect.anchorMax = new Vector2(0.5f, 1f);
-            vRect.pivot = new Vector2(0.5f, 0.5f);
-            vRect.anchoredPosition = new Vector2(size.x / 4f - 10f, currentY - RowHeight / 2f);
-            vRect.sizeDelta = new Vector2(size.x / 2f, RowHeight);
+        var visSelector = new GameObject("VisibilitySelector");
+        var vRect = visSelector.AddComponent<RectTransform>();
+        vRect.anchorMin = vRect.anchorMax = new Vector2(0.5f, 1f);
+        vRect.pivot = new Vector2(0.5f, 0.5f);
+        vRect.anchoredPosition = new Vector2(size.x / 4f - 10f, currentY - RowHeight / 2f);
+        vRect.sizeDelta = new Vector2(size.x / 2f, RowHeight);
 
-            // < button
-            var prevVisBtn = CreateButton("<", new Vector2(-70f, 0f), new Vector2(30f, 30f), OnPrevVisibility);
-            prevVisBtn.transform.SetParent(visSelector.transform, false);
+        // < button
+        var prevVisBtn = CreateButton("<", new Vector2(-70f, 0f), new Vector2(30f, 30f), OnPrevVisibility);
+        prevVisBtn.transform.SetParent(visSelector.transform, false);
 
-            // Visibility text
-            var visTextGo = CreateText("Public", Vector2.zero, 100f, RowHeight, 14, new Color(0.5f, 1f, 0.5f, 1f));
-            visTextGo.transform.SetParent(visSelector.transform, false);
-            _visibilityText = visTextGo.GetComponent<Text>();
+        // Visibility text
+        var visTextGo = CreateText("Public", Vector2.zero, 100f, RowHeight, 14, new Color(0.5f, 1f, 0.5f, 1f));
+        visTextGo.transform.SetParent(visSelector.transform, false);
+        _visibilityText = visTextGo.GetComponent<Text>();
 
-            // > button
-            var nextVisBtn = CreateButton(">", new Vector2(70f, 0f), new Vector2(30f, 30f), OnNextVisibility);
-            nextVisBtn.transform.SetParent(visSelector.transform, false);
+        // > button
+        var nextVisBtn = CreateButton(">", new Vector2(70f, 0f), new Vector2(30f, 30f), OnNextVisibility);
+        nextVisBtn.transform.SetParent(visSelector.transform, false);
 
-            visSelector.transform.SetParent(GameObject.transform, false);
-            currentY -= RowHeight + RowSpacing * 2;
-        } else {
-            // Matchmaking is always public
-            _visibility = LobbyVisibility.Public;
-            currentY -= RowSpacing;
-        }
+        visSelector.transform.SetParent(GameObject.transform, false);
+        currentY -= RowHeight + RowSpacing * 2;
 
         // Buttons row
         var buttonWidth = (size.x - Padding * 3) / 2f;
@@ -269,21 +262,35 @@ internal class LobbyConfigPanel : IComponent {
     }
 
     private void OnPrevVisibility() {
-        _visibility = _visibility switch {
-            LobbyVisibility.Public => LobbyVisibility.Private,
-            LobbyVisibility.FriendsOnly => LobbyVisibility.Public,
-            LobbyVisibility.Private => LobbyVisibility.FriendsOnly,
-            _ => LobbyVisibility.Public
-        };
+        // For matchmaking, skip FriendsOnly (Steam-specific)
+        if (_lobbyType == "matchmaking") {
+            _visibility = _visibility == LobbyVisibility.Public 
+                ? LobbyVisibility.Private 
+                : LobbyVisibility.Public;
+        } else {
+            _visibility = _visibility switch {
+                LobbyVisibility.Public => LobbyVisibility.Private,
+                LobbyVisibility.FriendsOnly => LobbyVisibility.Public,
+                LobbyVisibility.Private => LobbyVisibility.FriendsOnly,
+                _ => LobbyVisibility.Public
+            };
+        }
         UpdateVisibilityText();
     }
 
     private void OnNextVisibility() {
-        _visibility = _visibility switch {
-            LobbyVisibility.Public => LobbyVisibility.FriendsOnly,
-            LobbyVisibility.FriendsOnly => LobbyVisibility.Private,
-            _ => LobbyVisibility.Public
-        };
+        // For matchmaking, skip FriendsOnly (Steam-specific)
+        if (_lobbyType == "matchmaking") {
+            _visibility = _visibility == LobbyVisibility.Public 
+                ? LobbyVisibility.Private 
+                : LobbyVisibility.Public;
+        } else {
+            _visibility = _visibility switch {
+                LobbyVisibility.Public => LobbyVisibility.FriendsOnly,
+                LobbyVisibility.FriendsOnly => LobbyVisibility.Private,
+                _ => LobbyVisibility.Public
+            };
+        }
         UpdateVisibilityText();
     }
 

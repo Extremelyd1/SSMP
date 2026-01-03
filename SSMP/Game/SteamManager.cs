@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using System.Threading;
 using Steamworks;
 using SSMP.Logging;
@@ -8,7 +9,7 @@ namespace SSMP.Game;
 /// <summary>
 /// Manages Steam API initialization and availability checks.
 /// Handles graceful fallback when Steam is not available (multi-platform support).
-/// OPTIMIZED VERSION - Enhanced performance through caching, reduced allocations, and lock optimization.
+/// Enhanced performance through caching, reduced allocations, and lock optimization.
 /// </summary>
 public static class SteamManager {
     /// <summary>
@@ -85,6 +86,11 @@ public static class SteamManager {
     /// </summary>
     private const string LobbyKeyName = "name";
     private const string LobbyKeyVersion = "version";
+
+    /// <summary>
+    /// Cached mod version string from assembly metadata.
+    /// </summary>
+    private static readonly string ModVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.0.0";
 
     /// <summary>
     /// Reusable callback instances to avoid GC allocations.
@@ -189,7 +195,7 @@ public static class SteamManager {
         // Add filters to only show lobbies with matching game version
         SteamMatchmaking.AddRequestLobbyListStringFilter(
             LobbyKeyVersion, 
-            UnityEngine.Application.version, 
+            ModVersion, 
             ELobbyComparison.k_ELobbyComparisonEqual
         );
         
@@ -212,7 +218,6 @@ public static class SteamManager {
 
     /// <summary>
     /// Leaves the current lobby if hosting one.
-    /// Optimized: Reduced allocation and streamlined logic.
     /// </summary>
     public static void LeaveLobby() {
         if (!IsInitialized) return;
@@ -275,7 +280,7 @@ public static class SteamManager {
 
     /// <summary>
     /// Starts the timer-based callback loop.
-    /// Optimized: Uses Threading.Timer for lower overhead and better performance.
+    /// Uses Threading.Timer for lower overhead and better performance.
     /// </summary>
     private static void StartCallbackTimer() {
         if (_callbackTimer != null) return;
@@ -303,14 +308,14 @@ public static class SteamManager {
 
     /// <summary>
     /// Timer callback that runs Steam API callbacks.
-    /// Optimized: Uses atomic flag to prevent concurrent execution.
     /// </summary>
     private static void OnCallbackTimerElapsed(object? state) {
         if (!IsInitialized) return;
 
         // Prevent concurrent callback execution (lock-free)
         if (Interlocked.CompareExchange(ref _isRunningCallbacks, 1, 0) != 0) {
-            return; // Already running, skip this tick
+            // Already running, skip this tick
+            return;
         }
 
         try {
@@ -331,7 +336,6 @@ public static class SteamManager {
 
     /// <summary>
     /// Callback invoked when a Steam lobby is created.
-    /// Optimized: Reduced allocations and lock contention.
     /// </summary>
     private static void OnLobbyCreated(LobbyCreated_t callback, bool ioFailure) {
         if (ioFailure || callback.m_eResult != EResult.k_EResultOK) {
@@ -352,7 +356,7 @@ public static class SteamManager {
         // Set lobby metadata using Steam persona name and game version
         var steamName = SteamFriends.GetPersonaName();
         SteamMatchmaking.SetLobbyData(lobbyId, LobbyKeyName, $"{steamName}'s Lobby");
-        SteamMatchmaking.SetLobbyData(lobbyId, LobbyKeyVersion, UnityEngine.Application.version);
+        SteamMatchmaking.SetLobbyData(lobbyId, LobbyKeyVersion, ModVersion);
 
         // Set Rich Presence based on lobby type
         // Private lobbies: NO connect key (truly invite-only, no "Join Game" button)
@@ -375,7 +379,6 @@ public static class SteamManager {
 
     /// <summary>
     /// Callback invoked when a list of lobbies is received.
-    /// Optimized: Pre-allocated array size, single loop.
     /// </summary>
     private static void OnLobbyMatchList(LobbyMatchList_t callback, bool ioFailure) {
         if (ioFailure) {
@@ -383,7 +386,7 @@ public static class SteamManager {
             return;
         }
 
-        var count = (int)callback.m_nLobbiesMatching;
+        var count = (int) callback.m_nLobbiesMatching;
         Logger.Info($"Received {count} lobbies");
         
         var lobbyIds = new CSteamID[count];
@@ -396,7 +399,6 @@ public static class SteamManager {
 
     /// <summary>
     /// Callback invoked when a lobby is entered.
-    /// Optimized: Reduced lock scope.
     /// </summary>
     private static void OnLobbyEnter(LobbyEnter_t callback, bool ioFailure) {
         if (ioFailure) {
@@ -404,14 +406,15 @@ public static class SteamManager {
             return;
         }
 
-        if (callback.m_EChatRoomEnterResponse != (uint)EChatRoomEnterResponse.k_EChatRoomEnterResponseSuccess) {
-            Logger.Error($"Failed to join lobby: {(EChatRoomEnterResponse)callback.m_EChatRoomEnterResponse}");
+        if (callback.m_EChatRoomEnterResponse != (uint) EChatRoomEnterResponse.k_EChatRoomEnterResponseSuccess) {
+            Logger.Error($"Failed to join lobby: {(EChatRoomEnterResponse) callback.m_EChatRoomEnterResponse}");
             return;
         }
 
         var lobbyId = new CSteamID(callback.m_ulSteamIDLobby);
         CurrentLobbyId = lobbyId;
-        IsHostingLobby = false; // We are a client
+        // We are a client
+        IsHostingLobby = false;
         
         Logger.Info($"Joined lobby successfully: {lobbyId}");
         LobbyJoinedEvent?.Invoke(lobbyId);
@@ -427,7 +430,6 @@ public static class SteamManager {
 
     /// <summary>
     /// Callback for when the user joins a friend's game via Steam Friends list.
-    /// Optimized: Direct ulong parsing without intermediate variable.
     /// </summary>
     private static void OnGameRichPresenceJoinRequested(GameRichPresenceJoinRequested_t callback) {
         Logger.Info($"Joining friend's game via Rich Presence: {callback.m_rgchConnect}");

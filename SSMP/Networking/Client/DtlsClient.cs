@@ -1,5 +1,4 @@
 using System;
-using System.Buffers;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -128,7 +127,7 @@ internal class DtlsClient {
         _handshakeThread.Start();
 
         // Wait for handshake to complete or timeout
-        // Increase timeout to 20s for hole punching
+        // Time-out of 20s for hole punching
         if (!_handshakeThread.Join(20000)) {
             // Handshake timed out - close socket to force handshake thread to abort
             Logger.Error($"DTLS handshake timed out after 20000ms");
@@ -204,61 +203,56 @@ internal class DtlsClient {
     /// </summary>
     /// <param name="cancellationToken">The cancellation token to cancel the loop.</param>
     private void SocketReceiveLoop(CancellationToken cancellationToken) {
-        // Use pooled buffer to reduce GC pressure in hot path
-        var buffer = ArrayPool<byte>.Shared.Rent(MaxPacketSize);
-        try {
-            while (!cancellationToken.IsCancellationRequested) {
-                if (_socket == null) {
-                    Logger.Error("Socket was null during receive call");
-                    break;
-                }
-
-                EndPoint endPoint = new IPEndPoint(IPAddress.Any, 0);
-
-                int numReceived;
-
-                try {
-                    numReceived = _socket.ReceiveFrom(
-                        buffer,
-                        SocketFlags.None,
-                        ref endPoint
-                    );
-                } catch (SocketException e) when (e.SocketErrorCode == SocketError.Interrupted ||
-                                                  e.SocketErrorCode == SocketError.ConnectionReset) {
-                    break;
-                } catch (SocketException e) when (e.SocketErrorCode == SocketError.TimedOut) {
-                    continue;
-                } catch (ObjectDisposedException) {
-                    break;
-                }
-
-                if (_clientDatagramTransport == null) {
-                    break;
-                }
-
-                // Create a copy of the buffer for this specific packet. The pooled buffer will be reused.
-                var packetBuffer = new byte[numReceived];
-                Buffer.BlockCopy(buffer, 0, packetBuffer, 0, numReceived);
-
-                var added = false;
-                try {
-                    // Use the copy, not the pooled buffer
-                    _clientDatagramTransport.ReceivedDataCollection.Add(new UdpDatagramTransport.ReceivedData {
-                        Buffer = packetBuffer,
-                        Length = numReceived
-                    }, cancellationToken);
-                    added = true;
-                } catch (OperationCanceledException) {
-                    // Expected during disconnect
-                } catch (InvalidOperationException) {
-                    // Collection might be marked as complete for adding
-                }
-
-                // Collection disposed, completed, or cancelled
-                if (!added) break;
+        while (!cancellationToken.IsCancellationRequested) {
+            if (_socket == null) {
+                Logger.Error("Socket was null during receive call");
+                break;
             }
-        } finally {
-            ArrayPool<byte>.Shared.Return(buffer);
+
+            EndPoint endPoint = new IPEndPoint(IPAddress.Any, 0);
+
+            int numReceived;
+            var buffer = new byte[MaxPacketSize];
+
+            try {
+                numReceived = _socket.ReceiveFrom(
+                    buffer,
+                    SocketFlags.None,
+                    ref endPoint
+                );
+            } catch (SocketException e) when (e.SocketErrorCode == SocketError.Interrupted ||
+                                              e.SocketErrorCode == SocketError.ConnectionReset) {
+                break;
+            } catch (SocketException e) when (e.SocketErrorCode == SocketError.TimedOut) {
+                continue;
+            } catch (ObjectDisposedException) {
+                break;
+            }
+
+            if (_clientDatagramTransport == null) {
+                break;
+            }
+
+            // Create a copy of the buffer for this specific packet. The original buffer will be reused in the next iteration
+            var packetBuffer = new byte[numReceived];
+            Array.Copy(buffer, 0, packetBuffer, 0, numReceived);
+
+            var added = false;
+            try {
+                // Use the copy, not the original buffer
+                _clientDatagramTransport.ReceivedDataCollection.Add(new UdpDatagramTransport.ReceivedData {
+                    Buffer = packetBuffer,
+                    Length = numReceived
+                }, cancellationToken);
+                added = true;
+            } catch (OperationCanceledException) {
+                // Expected during disconnect
+            } catch (InvalidOperationException) {
+                // Collection might be marked as complete for adding
+            }
+
+            // Collection disposed, completed, or cancelled
+            if (!added) break;
         }
     }
 
@@ -266,17 +260,12 @@ internal class DtlsClient {
     /// Continuously tries to receive data from the DTLS transport until cancellation is requested.
     /// </summary>
     private void DtlsReceiveLoop(CancellationToken cancellationToken) {
-        // Use pooled buffer to reduce GC pressure in hot path
-        var buffer = ArrayPool<byte>.Shared.Rent(MaxPacketSize);
-        try {
-            while (!cancellationToken.IsCancellationRequested && DtlsTransport != null) {
-                var length = DtlsTransport.Receive(buffer, 0, MaxPacketSize, 5);
-                if (length >= 0) {
-                    DataReceivedEvent?.Invoke(buffer, length);
-                }
+        while (!cancellationToken.IsCancellationRequested && DtlsTransport != null) {
+            var buffer = new byte[MaxPacketSize];
+            var length = DtlsTransport.Receive(buffer, 0, buffer.Length, 5);
+            if (length >= 0) {
+                DataReceivedEvent?.Invoke(buffer, length);
             }
-        } finally {
-            ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 }

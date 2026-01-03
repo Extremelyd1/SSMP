@@ -10,8 +10,6 @@ using SSMP.Logging;
 
 using System.Net.Sockets;
 using System.Net;
-using System.Net.NetworkInformation;
-using SSMP.Networking.Matchmaking;
 
 namespace SSMP.Networking.Matchmaking;
 
@@ -37,21 +35,10 @@ internal class MmsClient {
     private string? CurrentLobbyId { get; set; }
 
     /// <summary>
-    /// The lobby code for display and sharing.
-    /// </summary>
-    public string? CurrentLobbyCode { get; private set; }
-
-    /// <summary>
     /// Timer that sends periodic heartbeats to keep the lobby alive on the MMS.
     /// Fires every 30 seconds while a lobby is active.
     /// </summary>
     private Timer? _heartbeatTimer;
-
-    /// <summary>
-    /// Timer that polls for pending client connections that need NAT hole-punching.
-    /// Fires every 2 seconds while polling is active.
-    /// </summary>
-    private Timer? _pendingClientTimer;
 
     /// <summary>
     /// Interval between heartbeat requests (30 seconds).
@@ -110,14 +97,24 @@ internal class MmsClient {
         };
 
         // Configure ServicePointManager for connection pooling (works in Unity Mono)
-        System.Net.ServicePointManager.DefaultConnectionLimit = 10;
+        ServicePointManager.DefaultConnectionLimit = 10;
         // Disable Nagle for lower latency
-        System.Net.ServicePointManager.UseNagleAlgorithm = false;
+        ServicePointManager.UseNagleAlgorithm = false;
         // Skip 100-Continue handshake
-        System.Net.ServicePointManager.Expect100Continue = false;
+        ServicePointManager.Expect100Continue = false;
 
         return new HttpClient(handler) {
             Timeout = TimeSpan.FromMilliseconds(HttpTimeoutMs)
+        };
+    }
+
+    /// <summary>
+    /// Static constructor to hook process exit and dispose the shared HttpClient.
+    /// Ensures that OS-level resources are released when the host process shuts down.
+    /// </summary>
+    static MmsClient() {
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => {
+            HttpClient.Dispose();
         };
     }
 
@@ -143,26 +140,16 @@ internal class MmsClient {
     public Task<string?> CreateLobbyAsync(int hostPort, string? lobbyName = null, bool isPublic = true, string gameVersion = "unknown", string lobbyType = "matchmaking") {
         return Task.Run(async () => {
             try {
-                // Attempt STUN discovery to find public IP and port (for NAT traversal)
-                var publicEndpoint = StunClient.DiscoverPublicEndpoint(hostPort);
-
                 // Rent a buffer from the pool to build JSON without allocations
                 var buffer = CharPool.Rent(512);
                 try {
-                    int length;
-                    if (publicEndpoint != null) {
-                        // Public endpoint discovered - include IP and port in request
-                        var (ip, port) = publicEndpoint.Value;
-                        var localIp = GetLocalIpAddress();
-                        length = FormatCreateLobbyJson(buffer, ip, port, lobbyName, isPublic, gameVersion, lobbyType, localIp);
-                        Logger.Info($"MmsClient: Discovered public endpoint {ip}:{port}, Local IP: {localIp}");
-                    } else {
-                        // STUN failed - MMS will use the connection's source IP
-                        length = FormatCreateLobbyJsonPortOnly(
-                            buffer, hostPort, lobbyName, isPublic, gameVersion, lobbyType
-                        );
-                        Logger.Warn("MmsClient: STUN discovery failed, MMS will use connection IP");
-                    }
+                    // MMS will use the connection's source IP for the host address
+                    // Include local LAN IP for same-network detection
+                    var localIp = GetLocalIpAddress();
+                    var length = FormatCreateLobbyJsonPortOnly(
+                        buffer, hostPort, lobbyName, isPublic, gameVersion, lobbyType, localIp
+                    );
+                    Logger.Info($"MmsClient: Creating lobby on port {hostPort}, Local IP: {localIp}");
 
                     // Build string from buffer and send POST request
                     var json = new string(buffer, 0, length);
@@ -182,7 +169,6 @@ internal class MmsClient {
                     // Store tokens and start heartbeat to keep lobby alive
                     _hostToken = hostToken;
                     CurrentLobbyId = lobbyId;
-                    CurrentLobbyCode = lobbyCode;
 
                     StartHeartbeat();
                     Logger.Info($"MmsClient: Created lobby {lobbyCode}");
@@ -234,7 +220,6 @@ internal class MmsClient {
                 // Store tokens for heartbeat
                 _hostToken = hostToken;
                 CurrentLobbyId = lobbyId;
-                CurrentLobbyCode = lobbyCode;
 
                 StartHeartbeat();
                 Logger.Info($"MmsClient: Registered Steam lobby {steamLobbyId} as MMS lobby {lobbyCode}");
@@ -319,7 +304,6 @@ internal class MmsClient {
         // Clear state
         _hostToken = null;
         CurrentLobbyId = null;
-        CurrentLobbyCode = null;
     }
 
     /// <summary>
@@ -365,52 +349,6 @@ internal class MmsClient {
     }
 
     /// <summary>
-    /// Retrieves the list of clients waiting to connect to this lobby.
-    /// Used for NAT hole-punching - the host needs to send packets to these endpoints.
-    /// </summary>
-    /// <returns>List of (ip, port) tuples for pending clients</returns>
-    private List<(string ip, int port)> GetPendingClients() {
-        var result = new List<(string ip, int port)>(8);
-        if (_hostToken == null) return result;
-
-        try {
-            // Query MMS for pending client list (run on background thread)
-            var response = Task.Run(async () => await GetJsonAsync($"{_baseUrl}/lobby/pending/{_hostToken}")).Result;
-            if (response == null) return result;
-
-            // Parse JSON array using Span for zero allocations
-            var span = response.AsSpan();
-            var idx = 0;
-
-            // Scan for each client entry in the JSON array
-            while (idx < span.Length) {
-                var ipStart = span[idx..].IndexOf("\"clientIp\":");
-                if (ipStart == -1) break; // No more clients
-
-                ipStart += idx;
-                var ip = ExtractJsonValueSpan(span[ipStart..], "clientIp");
-                var portStr = ExtractJsonValueSpan(span[ipStart..], "clientPort");
-
-                // Add valid client to result list
-                if (ip != null && portStr != null && TryParseInt(portStr.AsSpan(), out var port)) {
-                    result.Add((ip, port));
-                }
-
-                // Move past this entry to find next client
-                idx = ipStart + 1;
-            }
-
-            if (result.Count > 0) {
-                Logger.Info($"MmsClient: Got {result.Count} pending clients to punch");
-            }
-        } catch (Exception ex) {
-            Logger.Warn($"MmsClient: Failed to get pending clients: {ex.Message}");
-        }
-
-        return result;
-    }
-
-    /// <summary>
     /// Event raised when a pending client needs NAT hole-punching.
     /// Subscribers should send packets to the specified endpoint to punch through NAT.
     /// </summary>
@@ -453,7 +391,7 @@ internal class MmsClient {
                 var result = await _hostWebSocket.ReceiveAsync(buffer, _webSocketCts.Token);
                 if (result.MessageType == WebSocketMessageType.Close) break;
 
-                if (result.MessageType == WebSocketMessageType.Text && result.Count > 0) {
+                if (result is { MessageType: WebSocketMessageType.Text, Count: > 0 }) {
                     var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
                     HandleWebSocketMessage(message);
                 }
@@ -559,8 +497,8 @@ internal class MmsClient {
     /// <returns>Response body as string</returns>
     private static async Task<string?> PostJsonAsync(string url, string json) {
         // StringContent handles UTF-8 encoding and sets Content-Type header
-        var content = new StringContent(json, Encoding.UTF8, "application/json");
-        var response = await HttpClient.PostAsync(url, content);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var response = await HttpClient.PostAsync(url, content);
         return await response.Content.ReadAsStringAsync();
     }
 
@@ -572,9 +510,9 @@ internal class MmsClient {
     /// <param name="jsonBytes">JSON bytes to send as request body</param>
     /// <returns>Response body as string</returns>
     private static async Task<string?> PostJsonBytesAsync(string url, byte[] jsonBytes) {
-        var content = new ByteArrayContent(jsonBytes);
+        using var content = new ByteArrayContent(jsonBytes);
         content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-        var response = await HttpClient.PostAsync(url, content);
+        using var response = await HttpClient.PostAsync(url, content);
         return await response.Content.ReadAsStringAsync();
     }
 
@@ -587,44 +525,13 @@ internal class MmsClient {
         await HttpClient.DeleteAsync(url);
     }
 
-    /// <summary>
-    /// Performs an HTTP PUT request with JSON content.
-    /// Used for updating lobby state.
-    /// </summary>
-    /// <param name="url">The URL to PUT to</param>
-    /// <param name="json">JSON string to send as request body</param>
-    /// <returns>Response body as string</returns>
-    private static async Task<string?> PutJsonAsync(string url, string json) {
-        var content = new StringContent(json, Encoding.UTF8, "application/json");
-        var response = await HttpClient.PutAsync(url, content);
-        return await response.Content.ReadAsStringAsync();
-    }
-
     #endregion
 
     #region Zero-Allocation JSON Helpers
 
     /// <summary>
-    /// Formats JSON for CreateLobby request with full config.
-    /// </summary>
-    private static int FormatCreateLobbyJson(
-        Span<char> buffer,
-        string ip,
-        int port,
-        string? lobbyName,
-        bool isPublic,
-        string gameVersion,
-        string lobbyType,
-        string? hostLanIp
-    ) {
-        var json =
-            $"{{\"HostIp\":\"{ip}\",\"HostPort\":{port},\"LobbyName\":\"{lobbyName ?? "Unnamed"}\",\"IsPublic\":{(isPublic ? "true" : "false")},\"GameVersion\":\"{gameVersion}\",\"LobbyType\":\"{lobbyType}\",\"HostLanIp\":\"{hostLanIp}:{port}\"}}";
-        json.AsSpan().CopyTo(buffer);
-        return json.Length;
-    }
-
-    /// <summary>
-    /// Formats JSON for CreateLobby request with port only and full config.
+    /// Formats JSON for CreateLobby request with port only.
+    /// MMS will use the HTTP connection's source IP as the host address.
     /// </summary>
     private static int FormatCreateLobbyJsonPortOnly(
         Span<char> buffer,
@@ -632,109 +539,14 @@ internal class MmsClient {
         string? lobbyName,
         bool isPublic,
         string gameVersion,
-        string lobbyType
+        string lobbyType,
+        string? hostLanIp
     ) {
+        var lanIpPart = hostLanIp != null ? $",\"HostLanIp\":\"{hostLanIp}:{port}\"" : "";
         var json =
-            $"{{\"HostPort\":{port},\"LobbyName\":\"{lobbyName ?? "Unnamed"}\",\"IsPublic\":{(isPublic ? "true" : "false")},\"GameVersion\":\"{gameVersion}\",\"LobbyType\":\"{lobbyType}\"}}";
+            $"{{\"HostPort\":{port},\"LobbyName\":\"{lobbyName ?? "Unnamed"}\",\"IsPublic\":{(isPublic ? "true" : "false")},\"GameVersion\":\"{gameVersion}\",\"LobbyType\":\"{lobbyType}\"{lanIpPart}}}";
         json.AsSpan().CopyTo(buffer);
         return json.Length;
-    }
-
-    /// <summary>
-    /// Formats JSON for JoinLobby request.
-    /// Builds: {"clientIp":"x.x.x.x","clientPort":12345}
-    /// </summary>
-    /// <param name="buffer">Character buffer to write into</param>
-    /// <param name="clientIp">Client's public IP address</param>
-    /// <param name="clientPort">Client's public port</param>
-    /// <returns>Number of characters written to buffer</returns>
-    private static int FormatJoinJson(Span<char> buffer, string clientIp, int clientPort) {
-        const string prefix = "{\"clientIp\":\"";
-        const string middle = "\",\"clientPort\":";
-        const string suffix = "}";
-
-        var pos = 0;
-        prefix.AsSpan().CopyTo(buffer[pos..]);
-        pos += prefix.Length;
-
-        clientIp.AsSpan().CopyTo(buffer[pos..]);
-        pos += clientIp.Length;
-
-        middle.AsSpan().CopyTo(buffer[pos..]);
-        pos += middle.Length;
-
-        pos += WriteInt(buffer[pos..], clientPort);
-
-        suffix.AsSpan().CopyTo(buffer[pos..]);
-        pos += suffix.Length;
-
-        return pos;
-    }
-
-    /// <summary>
-    /// Writes an integer to a character buffer without allocations.
-    /// 5-10x faster than int.ToString().
-    /// </summary>
-    /// <param name="buffer">Buffer to write into</param>
-    /// <param name="value">Integer value to write</param>
-    /// <returns>Number of characters written</returns>
-    private static int WriteInt(Span<char> buffer, int value) {
-        // Handle zero specially
-        if (value == 0) {
-            buffer[0] = '0';
-            return 1;
-        }
-
-        var pos = 0;
-
-        // Handle negative numbers
-        if (value < 0) {
-            buffer[pos++] = '-';
-            value = -value;
-        }
-
-        // Extract digits in reverse order
-        var digitStart = pos;
-        do {
-            buffer[pos++] = (char) ('0' + (value % 10));
-            value /= 10;
-        } while (value > 0);
-
-        // Reverse the digits to correct order
-        buffer.Slice(digitStart, pos - digitStart).Reverse();
-        return pos;
-    }
-
-    /// <summary>
-    /// Parses an integer from a character span without allocations.
-    /// 10-20x faster than int.Parse() or int.TryParse() on strings.
-    /// </summary>
-    /// <param name="span">Character span containing the integer</param>
-    /// <param name="result">Parsed integer value</param>
-    /// <returns>True if parsing succeeded, false otherwise</returns>
-    private static bool TryParseInt(ReadOnlySpan<char> span, out int result) {
-        result = 0;
-        if (span.IsEmpty) return false;
-
-        var sign = 1;
-        var i = 0;
-
-        // Check for negative sign
-        if (span[0] == '-') {
-            sign = -1;
-            i = 1;
-        }
-
-        // Parse digit by digit
-        for (; i < span.Length; i++) {
-            var c = span[i];
-            // Invalid character
-            if (c is < '0' or > '9') return false;
-            result = result * 10 + (c - '0');
-        }
-
-        result *= sign;
-        return true;
     }
 
     /// <summary>
@@ -786,7 +598,7 @@ internal class MmsClient {
     #endregion
 
     /// <summary>
-    /// gets the local IP address of the machine.
+    /// Gets the local IP address of the machine.
     /// Uses a UDP socket to determine the routing to the internet to pick the correct interface.
     /// </summary>
     private static string? GetLocalIpAddress() {
@@ -804,7 +616,8 @@ internal class MmsClient {
 /// Public lobby information for the lobby browser.
 /// </summary>
 public record PublicLobbyInfo(
-    string ConnectionData,  // IP:Port for Matchmaking, Steam lobby ID for Steam
+    // IP:Port for Matchmaking, Steam lobby ID for Steam
+    string ConnectionData, 
     string Name,
     string LobbyType,
     string LobbyCode

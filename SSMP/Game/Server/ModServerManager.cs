@@ -25,9 +25,7 @@ internal class ModServerManager : ServerManager {
     /// hosting a server.
     /// </summary>
     private readonly ModSettings _modSettings;
-    
 
-   
     /// <summary>
     /// The settings command.
     /// </summary>
@@ -45,7 +43,7 @@ internal class ModServerManager : ServerManager {
         ServerSettings serverSettings,
         UiManager uiManager,
         ModSettings modSettings
-   ) : base(netServer, packetManager, serverSettings) {
+    ) : base(netServer, packetManager, serverSettings) {
         _uiManager = uiManager;
         _modSettings = modSettings;
         _settingsCommand = new SettingsCommand(this, InternalServerSettings);

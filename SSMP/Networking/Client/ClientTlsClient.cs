@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text;
 using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Security;
@@ -78,8 +79,7 @@ internal class ClientTlsClient(TlsCrypto crypto) : AbstractTlsClient(crypto) {
             var chain = serverCertificate.Certificate.GetCertificateList();
 
             Logger.Info("Server certificate fingerprint(s):");
-            foreach (var t in chain) {
-                var entry = X509CertificateStructure.GetInstance(t.GetEncoded());
+            foreach (var entry in chain.Select(t => X509CertificateStructure.GetInstance(t.GetEncoded()))) {
                 Logger.Info($"  fingerprint:SHA256 {Fingerprint(entry)} ({entry.Subject})");
             }
         }

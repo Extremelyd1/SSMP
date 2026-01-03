@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Threading;
+using System.Threading.Tasks;
 using SSMP.Logging;
 using SSMP.Networking.Matchmaking;
 using SSMP.Networking.Server;
@@ -108,14 +109,17 @@ internal class HolePunchEncryptedTransportServer : IEncryptedTransportServer {
     /// </summary>
     /// <param name="clientEndpoint">The client's public endpoint.</param>
     private void PunchToClient(IPEndPoint clientEndpoint) {
-        Logger.Debug($"HolePunch Server: Punching to client at {clientEndpoint}");
-        
-        for (var i = 0; i < PunchPacketCount; i++) {
-            _dtlsServer.SendRaw(PunchPacket, clientEndpoint);
-            Thread.Sleep(PunchPacketDelayMs);
-        }
-        
-        Logger.Info($"HolePunch Server: Punch packets sent to {clientEndpoint}");
+        // Run on background thread to avoid blocking the calling thread for 5 seconds
+        Task.Run(() => {
+            Logger.Debug($"HolePunch Server: Punching to client at {clientEndpoint}");
+            
+            for (var i = 0; i < PunchPacketCount; i++) {
+                _dtlsServer.SendRaw(PunchPacket, clientEndpoint);
+                Thread.Sleep(PunchPacketDelayMs);
+            }
+            
+            Logger.Info($"HolePunch Server: Punch packets sent to {clientEndpoint}");
+        });
     }
 
     /// <summary>

@@ -18,7 +18,8 @@ public class Lobby(
     string lobbyCode,
     string lobbyName,
     string lobbyType = "matchmaking",
-    string? hostLanIp = null
+    string? hostLanIp = null,
+    bool isPublic = true
 ) {
     /// <summary>Connection data: Steam lobby ID for Steam, IP:Port for matchmaking.</summary>
     public string ConnectionData { get; } = connectionData;
@@ -37,6 +38,9 @@ public class Lobby(
 
     /// <summary>Optional LAN IP for local network discovery.</summary>
     public string? HostLanIp { get; } = hostLanIp;
+
+    /// <summary>Whether the lobby should appear in public browser listings.</summary>
+    public bool IsPublic { get; } = isPublic;
 
     /// <summary>Timestamp of the last heartbeat from the host.</summary>
     public DateTime LastHeartbeat { get; set; } = DateTime.UtcNow;
