@@ -408,7 +408,6 @@ internal class EntityUpdate : BaseEntityUpdate, IPoolable {
             xPos = false;
             yPos = false;
             zPos = false;
-            zPos = false;
             origin = false;
         }
 
@@ -595,8 +594,8 @@ internal class EntityNetworkData : IPoolable {
     /// <inheritdoc />
     public void Reset() {
         Type = default;
-        // Reinitialize Packet with a new instance instead of calling Clear() on a potentially non-clearable packet.
-        Packet = new Packet();
+        // Reuse the existing Packet instance to preserve pooling benefits.
+        Packet.Clear();
     }
 
     /// <inheritdoc cref="IPacketData.WriteData" />
@@ -628,7 +627,11 @@ internal class EntityNetworkData : IPoolable {
             data[i] = packet.ReadByte();
         }
 
-        Packet = new Packet(data, 0, length);
+        // Use a writable Packet instance instead of the read-only view-mode constructor
+        Packet = new Packet();
+        for (var i = 0; i < length; i++) {
+            Packet.Write(data[i]);
+        }
     }
 }
 

@@ -244,7 +244,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         _lastReceiveTime = DateTime.UtcNow;
 
         // For Steam (no sequencing): Estimate RTT by completing the round-trip for last sent sequence.
-        // Note: _localSequence is post-incremented after OnSendPacket (line 324), so the last sequence
+        // Note: _localSequence is post-incremented after OnSendPacket, so the last sequence
         // that was tracked via OnSendPacket is (_localSequence - 1).
         if (!_requiresSequencing) {
             _rttTracker?.OnAckReceived((ushort) (_localSequence - 1));

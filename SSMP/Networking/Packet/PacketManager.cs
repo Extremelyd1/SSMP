@@ -442,9 +442,9 @@ internal class PacketManager {
             // Sanity check against allocation attacks or corruption.
             // If the length reads as invalid, we imply that protocol framing is lost (e.g. we are reading garbage as length).
             // In this case, we cannot safely find the next packet in the stream, so we must discard the rest of the buffer.
-            if (packetLength <= 0 || packetLength > MaxPacketSize) { 
-                 Logger.Warn($"Invalid packet length read: {packetLength}. Discarding buffer to prevent processing garbage.");
-                 break; 
+            if (packetLength <= 0 || packetLength > MaxPacketSize) {
+                Logger.Warn($"Invalid packet length read: {packetLength}. Discarding buffer to prevent processing garbage.");
+                break;
             }
 
             if (length - readPosition < 2 + packetLength) {
