@@ -621,16 +621,11 @@ internal class EntityNetworkData : IPoolable {
         Type = (EntityComponentType) packet.ReadUShort();
 
         var length = packet.ReadUShort();
-        var data = new byte[length];
         
+        // Clear and reuse existing Packet instance to avoid allocations
+        Packet.Clear();
         for (var i = 0; i < length; i++) {
-            data[i] = packet.ReadByte();
-        }
-
-        // Use a writable Packet instance instead of the read-only view-mode constructor
-        Packet = new Packet();
-        for (var i = 0; i < length; i++) {
-            Packet.Write(data[i]);
+            Packet.Write(packet.ReadByte());
         }
     }
 }
