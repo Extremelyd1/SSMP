@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using SSMP.Logging;
 using SSMP.Networking.Packet.Data;
 
@@ -327,72 +326,20 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
     /// Drops resend data that is duplicate, i.e. that we already received in an earlier packet.
     /// Optimized to minimize iterations and avoid allocations when possible.
     /// </summary>
-    /// <param name="receivedSequenceNumbers">A collection containing sequence numbers that were already
-    /// received. Uses ICollection for O(1) Contains() with HashSet.</param>
-    public void DropDuplicateResendData(ICollection<ushort> receivedSequenceNumbers) {
-        const int stackAllocLimit = 64;
-
+    /// <param name="receivedSequenceNumbers">A list containing sequence numbers that were already
+    /// received. Uses List for efficient linear iteration.</param>
+    public void DropDuplicateResendData(List<ushort> receivedSequenceNumbers) {
         // Handle packet data duplicates
-        RemoveDuplicateKeys(_resendPacketData, receivedSequenceNumbers, stackAllocLimit);
+        if (_resendPacketData.Count > 0) {
+            foreach (var seq in receivedSequenceNumbers) {
+                _resendPacketData.Remove(seq);
+            }
+        }
 
         // Handle addon data duplicates
-        RemoveDuplicateKeys(_resendAddonPacketData, receivedSequenceNumbers, stackAllocLimit);
-    }
-
-    /// <summary>
-    /// Removes keys from a dictionary that exist in the received sequence numbers collection.
-    /// Uses stackalloc for small collections, falls back to List for larger ones.
-    /// </summary>
-    private static void RemoveDuplicateKeys<TValue>(
-        Dictionary<ushort, TValue> dictionary,
-        ICollection<ushort> receivedSequenceNumbers,
-        int stackAllocLimit
-    ) {
-        if (dictionary.Count == 0) {
-            return;
-        }
-
-        // Single pass: collect keys while checking
-        var keysToRemoveCount = 0;
-        Span<ushort> stackBuffer = stackalloc ushort[stackAllocLimit];
-        List<ushort>? listBuffer = null;
-
-        // Iterate dictionary keys directly, collecting matches without intermediate materialization
-        foreach (var key in dictionary.Keys) {
-            if (!receivedSequenceNumbers.Contains(key)) {
-                continue;
-            }
-
-            if (keysToRemoveCount < stackAllocLimit) {
-                stackBuffer[keysToRemoveCount] = key;
-            } else {
-                // Transition to List on first overflow
-                if (listBuffer == null) {
-                    listBuffer = new List<ushort>(keysToRemoveCount + 1);
-                    // Copy existing stack items to list
-                    for (var i = 0; i < stackAllocLimit; i++) {
-                        listBuffer.Add(stackBuffer[i]);
-                    }
-                }
-
-                listBuffer.Add(key);
-            }
-
-            keysToRemoveCount++;
-        }
-
-        if (keysToRemoveCount == 0) {
-            return;
-        }
-
-        // Remove collected keys
-        if (listBuffer != null) {
-            foreach (var key in listBuffer) {
-                dictionary.Remove(key);
-            }
-        } else {
-            for (var i = 0; i < keysToRemoveCount; i++) {
-                dictionary.Remove(stackBuffer[i]);
+        if (_resendAddonPacketData.Count > 0) {
+            foreach (var seq in receivedSequenceNumbers) {
+                _resendAddonPacketData.Remove(seq);
             }
         }
     }

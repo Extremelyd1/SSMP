@@ -31,12 +31,6 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     private const int PacketMtu = 1200;
 
     /// <summary>
-    /// The number of sequence numbers to store in the received queue to construct ack fields with and
-    /// to check against resent data.
-    /// </summary>
-    private const int ReceiveQueueSize = ConnectionManager.AckSize;
-
-    /// <summary>
     /// Threshold for sequence number wrap-around detection.
     /// </summary>
     private const ushort SequenceWrapThreshold = 32768;
@@ -60,11 +54,11 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     private CongestionManager<TOutgoing, TPacketId>? _congestionManager;
 
     /// <summary>
-    /// HashSet containing sequence numbers that have been received within the ACK window.
-    /// Provides O(1) lookups for ACK field population and duplicate detection.
+    /// List containing sequence numbers that have been received within the ACK window.
+    /// Uses linear lookups which is faster than HashSet for small collections (N=64).
     /// Lazily initialized only when transport requires sequencing.
     /// </summary>
-    private HashSet<ushort>? _receivedSequences;
+    private List<ushort>? _receivedSequences;
 
     /// <summary>
     /// Thread for running the precise send loop.
@@ -331,7 +325,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// Populates the ACK field with acknowledgment bits for recently received packets.
     /// Each bit indicates whether a packet with that sequence number was received.
     /// Only used for UDP/HolePunch transports.
-    /// Uses O(1) HashSet lookups instead of O(n) queue searches.
+    /// Uses linear search (Contains) which is efficient for small size (N=64).
     /// </summary>
     private void PopulateAckField() {
         var ackField = CurrentUpdatePacket.AckField;
@@ -357,7 +351,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
             // Keep sequences within (remoteSequence - AckSize) to remoteSequence
             if (_receivedSequences.Count > ConnectionManager.AckSize) {
                 var threshold = (ushort) (_remoteSequence - ConnectionManager.AckSize);
-                _receivedSequences.RemoveWhere(seq =>
+                _receivedSequences.RemoveAll(seq =>
                     !IsSequenceGreaterThan(seq, threshold) && seq != _remoteSequence
                 );
             }

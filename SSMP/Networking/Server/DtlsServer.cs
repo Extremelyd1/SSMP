@@ -108,7 +108,7 @@ internal class DtlsServer {
         _socket = null;
 
         // Wait for the socket receive thread to exit (short timeout to prevent freezing)
-        if (_socketReceiveThread != null && _socketReceiveThread.IsAlive) {
+        if (_socketReceiveThread is { IsAlive: true }) {
             if (!_socketReceiveThread.Join(500)) {
                 Logger.Warn("Socket receive thread did not exit within timeout, abandoning");
             }
@@ -183,7 +183,7 @@ internal class DtlsServer {
             }
         }
 
-        if (receiveThread != null && receiveThread.IsAlive) {
+        if (receiveThread is { IsAlive: true }) {
             receiveThread.Join(TimeSpan.FromSeconds(2));
         }
 
@@ -201,7 +201,6 @@ internal class DtlsServer {
         // Use pooled buffer to reduce GC pressure in hot path
         var buffer = ArrayPool<byte>.Shared.Rent(MaxPacketSize);
 
-        try {
             while (!cancellationToken.IsCancellationRequested) {
                 if (_socket == null) {
                     Logger.Error("Socket was null during receive call.");
@@ -241,9 +240,8 @@ internal class DtlsServer {
 
                 ProcessReceivedPacket(ipEndPoint, packetBuffer, numReceived, cancellationToken);
             }
-        } finally {
+
             ArrayPool<byte>.Shared.Return(buffer);
-        }
 
         Logger.Info("SocketReceiveLoop exited");
     }
@@ -295,7 +293,7 @@ internal class DtlsServer {
             
             _connections.TryRemove(ipEndPoint, out _);
             if (clientToDisconnect != null) {
-                Task.Run(() => InternalDisconnectClient(clientToDisconnect));
+                Task.Run(() => InternalDisconnectClient(clientToDisconnect), cancellationToken);
             }
             
             // Fall through: We removed the bad connection, now treat this as a new connection attempt
@@ -484,8 +482,12 @@ internal class DtlsServer {
 
                 if (numReceived <= 0) continue;
 
+                // Create a precise copy of the buffer for this packet (required for async processing of the event)
+                var packetBuffer = new byte[numReceived];
+                Array.Copy(buffer, 0, packetBuffer, 0, numReceived);
+
                 try {
-                    DataReceivedEvent?.Invoke(dtlsServerClient, buffer, numReceived);
+                    DataReceivedEvent?.Invoke(dtlsServerClient, packetBuffer, numReceived);
                 } catch (Exception e) {
                     Logger.Error($"Error in DtlsServer.DataReceivedEvent: {e}");
                 }

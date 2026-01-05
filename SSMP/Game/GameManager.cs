@@ -23,12 +23,12 @@ internal class GameManager {
     /// <summary>
     /// The client manager instance for the mod.
     /// </summary>
-    public ClientManager ClientManager { get; }
+    private readonly ClientManager _clientManager;
 
     /// <summary>
     /// The server manager instance for the mod.
     /// </summary>
-    public ModServerManager ServerManager { get; }
+    private readonly ModServerManager _serverManager;
     
     /// <summary>
     /// Constructs this GameManager instance by instantiating all other necessary classes.
@@ -53,7 +53,7 @@ internal class GameManager {
             netClient
         );
 
-        ServerManager = new ModServerManager(
+        _serverManager = new ModServerManager(
             netServer,
             packetManager,
             serverServerSettings,
@@ -61,7 +61,7 @@ internal class GameManager {
             modSettings
         );
 
-        ClientManager = new ClientManager(
+        _clientManager = new ClientManager(
             netClient,
             packetManager,
             _uiManager,
@@ -90,21 +90,21 @@ internal class GameManager {
         }
 
         _uiManager.Initialize();
-        ServerManager.Initialize();
-        ClientManager.Initialize(ServerManager);
+        _serverManager.Initialize();
+        _clientManager.Initialize(_serverManager);
     }
 
     /// <summary>
     /// Shuts down the game manager and all its subsystems.
     /// </summary>
     public void Shutdown() {
-        SSMP.Logging.Logger.Info("GameManager: Shutting down...");
+        Logging.Logger.Info("GameManager: Shutting down...");
 
         // Stop client first to disconnect from any server
-        ClientManager.Disconnect();
+        _clientManager.Disconnect();
 
         // Stop server if hosting
-        ServerManager.Stop();
+        _serverManager.Stop();
         
         // Clean up Steam if initialized
         if (SteamManager.IsInitialized) {

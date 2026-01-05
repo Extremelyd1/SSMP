@@ -260,8 +260,7 @@ internal class NetClient : INetClient {
                 // Route all transports through UpdateManager for sequence/ACK tracking
                 // UpdateManager will skip UDP-specific logic for Steam transports
                 UpdateManager.OnReceivePacket<ClientUpdatePacket, ClientUpdatePacketId>(clientUpdatePacket);
-
-
+                
                 // First check for slice or slice ack data and handle it separately by passing it onto either the chunk 
                 // sender or chunk receiver
                 var packetData = clientUpdatePacket.GetPacketData();

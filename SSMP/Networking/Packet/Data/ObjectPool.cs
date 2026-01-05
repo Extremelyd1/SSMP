@@ -43,12 +43,12 @@ internal static class ObjectPool<T> where T : class, IPoolable, new() {
     /// </summary>
     /// <returns>A reset object ready for use.</returns>
     public static T Get() {
-        if (Pool.TryTake(out var item)) {
-            System.Threading.Interlocked.Decrement(ref _count);
-            return item;
+        if (!Pool.TryTake(out var item)) {
+            return new T();
         }
 
-        return new T();
+        System.Threading.Interlocked.Decrement(ref _count);
+        return item;
     }
 
     /// <summary>

@@ -39,15 +39,8 @@ public delegate void GenericServerPacketHandler<in TPacketData>(ushort id, TPack
 /// Manages packets that are received by the given NetClient.
 /// </summary>
 internal class PacketManager {
-    // --- Constants ---
-
-    /// <summary>
-    /// Maximum allowed packet size (10MB).
-    /// Used to prevent allocation attacks or processing of corrupted large packets.
-    /// </summary>
-    private const int MaxPacketSize = 10 * 1024 * 1024;
     
-    // --- Standard Packet Registries ---
+    #region Standard Packet Registries
 
     private readonly PacketHandlerRegistry<ClientUpdatePacketId, ClientPacketHandler> _clientUpdateRegistry = new(
         "client update", true
@@ -61,8 +54,10 @@ internal class PacketManager {
     private readonly PacketHandlerRegistry<ServerConnectionPacketId, ServerPacketHandler> _serverConnectionRegistry = new(
         "server connection", false
     );
+    
+    #endregion
 
-    // --- Addon Packet Registries (Nested Dictionaries) ---
+    #region Addon Packet Registries (Nested Dictionaries)
 
     // Addon packet handlers are organized as a two-level structure:
     //  - The outer Dictionary is keyed by addonId (byte).
@@ -80,10 +75,9 @@ internal class PacketManager {
 
     private readonly Dictionary<byte, PacketHandlerRegistry<byte, ServerPacketHandler>>
         _serverAddonConnectionRegistries = new();
-
-    // Initialize Registries
-    // Client handlers dispatch to main thread (true)
-    // Server handlers run on unknown threads (false)
+    
+    #endregion
+    
 
     #region Packet Unpacking Helper
 
@@ -415,8 +409,8 @@ internal class PacketManager {
             // Create a new buffer combining leftover + new data
             // This is unavoidable allocation for stream reassembly
             var combined = new byte[leftoverData.Length + length];
-            Buffer.BlockCopy(leftoverData, 0, combined, 0, leftoverData.Length);
-            Buffer.BlockCopy(data, 0, combined, leftoverData.Length, length);
+            Array.Copy(leftoverData, 0, combined, 0, leftoverData.Length);
+            Array.Copy(data, 0, combined, leftoverData.Length, length);
 
             data = combined;
             length = combined.Length;
@@ -427,7 +421,7 @@ internal class PacketManager {
             // We need at least 2 bytes for the length
             if (length - readPosition < 2) {
                 leftoverData = new byte[length - readPosition];
-                Buffer.BlockCopy(data, readPosition, leftoverData, 0, leftoverData.Length);
+                Array.Copy(data, readPosition, leftoverData, 0, leftoverData.Length);
                 break;
             }
 
@@ -442,7 +436,7 @@ internal class PacketManager {
             // Sanity check against allocation attacks or corruption.
             // If the length reads as invalid, we imply that protocol framing is lost (e.g. we are reading garbage as length).
             // In this case, we cannot safely find the next packet in the stream, so we must discard the rest of the buffer.
-            if (packetLength <= 0 || packetLength > MaxPacketSize) {
+            if (packetLength == 0) {
                 Logger.Warn($"Invalid packet length read: {packetLength}. Discarding buffer to prevent processing garbage.");
                 break;
             }
@@ -450,14 +444,14 @@ internal class PacketManager {
             if (length - readPosition < 2 + packetLength) {
                 // Incomplete packet
                 leftoverData = new byte[length - readPosition];
-                Buffer.BlockCopy(data, readPosition, leftoverData, 0, leftoverData.Length);
+                Array.Copy(data, readPosition, leftoverData, 0, leftoverData.Length);
                 break;
             }
 
             // We have a full packet. 
             // Copy data to ensure packet owns its buffer and is safe from reuse
             var packetData = new byte[packetLength];
-            Buffer.BlockCopy(data, readPosition + 2, packetData, 0, packetLength);
+            Array.Copy(data, readPosition + 2, packetData, 0, packetLength);
             packets.Add(new Packet(packetData, 0, packetLength));
 
             readPosition += 2 + packetLength;
