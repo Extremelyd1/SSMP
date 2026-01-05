@@ -166,7 +166,10 @@ internal class NetServer : INetServer {
         while (!token.IsCancellationRequested) {
             WaitHandle.WaitAny(waitHandles);
 
-            while (!token.IsCancellationRequested && _receivedQueue.TryDequeue(out var receivedData)) {
+            // Process all available items in one go
+            while (_receivedQueue.TryDequeue(out var receivedData)) {
+                if (token.IsCancellationRequested) break;
+
                 var packets = PacketManager.HandleReceivedData(
                     receivedData.Buffer,
                     receivedData.NumReceived,

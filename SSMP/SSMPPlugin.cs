@@ -37,4 +37,8 @@ public partial class SSMPPlugin : BaseUnityPlugin {
         
         new Game.GameManager().Initialize();
     }
+
+    private void OnApplicationQuit() {
+        Game.GameManager.Instance?.Shutdown();
+    }
 }

@@ -14,6 +14,7 @@ namespace SSMP.Game;
 /// Instantiates all necessary classes to start multiplayer activities.
 /// </summary>
 internal class GameManager {
+    public static GameManager Instance { get; private set; } = null!;
     /// <summary>
     /// The UI manager instance for the mod.
     /// </summary>
@@ -23,6 +24,7 @@ internal class GameManager {
     /// The client manager instance for the mod.
     /// </summary>
     private readonly ClientManager _clientManager;
+
     /// <summary>
     /// The server manager instance for the mod.
     /// </summary>
@@ -32,6 +34,7 @@ internal class GameManager {
     /// Constructs this GameManager instance by instantiating all other necessary classes.
     /// </summary>
     public GameManager() {
+        Instance = this;
         var modSettings = ModSettings.Load();
 
         var packetManager = new PacketManager();
@@ -89,5 +92,23 @@ internal class GameManager {
         _uiManager.Initialize();
         _serverManager.Initialize();
         _clientManager.Initialize(_serverManager);
+    }
+
+    /// <summary>
+    /// Shuts down the game manager and all its subsystems.
+    /// </summary>
+    public void Shutdown() {
+        Logging.Logger.Info("GameManager: Shutting down...");
+
+        // Stop client first to disconnect from any server
+        _clientManager.Disconnect();
+
+        // Stop server if hosting
+        _serverManager.Stop();
+        
+        // Clean up Steam if initialized
+        if (SteamManager.IsInitialized) {
+            SteamManager.Shutdown();
+        }
     }
 }

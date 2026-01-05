@@ -1,12 +1,12 @@
 using System;
-using System.Timers;
-using SSMP.Concurrency;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Threading;
 using SSMP.Logging;
 using SSMP.Networking.Packet;
 using SSMP.Networking.Packet.Data;
 using SSMP.Networking.Packet.Update;
 using SSMP.Networking.Transport.Common;
-using Timer = System.Timers.Timer;
 
 namespace SSMP.Networking;
 
@@ -29,12 +29,6 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// This size is lower than the limit for DTLS packets, since there is a slight DTLS overhead for packets.
     /// </summary>
     private const int PacketMtu = 1200;
-
-    /// <summary>
-    /// The number of sequence numbers to store in the received queue to construct ack fields with and
-    /// to check against resent data.
-    /// </summary>
-    private const int ReceiveQueueSize = ConnectionManager.AckSize;
 
     /// <summary>
     /// Threshold for sequence number wrap-around detection.
@@ -60,20 +54,28 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     private CongestionManager<TOutgoing, TPacketId>? _congestionManager;
 
     /// <summary>
-    /// Fixed-size queue containing sequence numbers that have been received.
+    /// List containing sequence numbers that have been received within the ACK window.
+    /// Uses linear lookups which is faster than HashSet for small collections (N=64).
     /// Lazily initialized only when transport requires sequencing.
     /// </summary>
-    private ConcurrentFixedSizeQueue<ushort>? _receivedQueue;
+    private List<ushort>? _receivedSequences;
 
     /// <summary>
-    /// Timer for keeping track of when to send an update packet.
+    /// Thread for running the precise send loop.
+    /// Replaces System.Timers.Timer for better consistency and reduced jitter.
     /// </summary>
-    private readonly Timer _sendTimer;
+    private Thread? _sendThread;
 
     /// <summary>
-    /// Timer for keeping track of the connection timing out.
+    /// Cancellation token source to stop the send loop safely.
     /// </summary>
-    private readonly Timer _heartBeatTimer;
+    private CancellationTokenSource? _cancellationTokenSource;
+
+    /// <summary>
+    /// The timestamp of the last received packet.
+    /// Used to check for connection timeouts.
+    /// </summary>
+    private DateTime _lastReceiveTime;
 
     /// <summary>
     /// Cached capability: whether the transport requires application-level sequencing.
@@ -89,12 +91,6 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// The last received sequence number.
     /// </summary>
     private ushort _remoteSequence;
-
-    /// <summary>
-    /// The last used send rate for the send timer. Used to check whether the interval of the timers needs to be
-    /// updated.
-    /// </summary>
-    private int _lastSendRate;
 
     /// <summary>
     /// Whether this update manager is actually updating and sending packets.
@@ -154,16 +150,18 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
 
     /// <summary>
     /// Lazily initializes managers only when the transport requires them.
-    /// This saves memory for Steam connections that don't need sequencing/reliability/congestion managers.
+    /// RttTracker is always initialized for ping display, even for Steam.
     /// </summary>
     private void InitializeManagersIfNeeded() {
+        // Always initialize RTT tracker for ping display (all transports)
+        _rttTracker ??= new RttTracker();
+
         if (_requiresSequencing) {
-            _rttTracker ??= new RttTracker();
-            _receivedQueue ??= new ConcurrentFixedSizeQueue<ushort>(ReceiveQueueSize);
+            _receivedSequences ??= [];
             _congestionManager ??= new CongestionManager<TOutgoing, TPacketId>(this, _rttTracker);
         }
 
-        if (RequiresReliability && _rttTracker != null) {
+        if (RequiresReliability) {
             _reliabilityManager ??= new ReliabilityManager<TOutgoing, TPacketId>(this, _rttTracker);
         }
     }
@@ -175,7 +173,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
 
     /// <summary>
     /// Moving average of round trip time (RTT) between sending and receiving a packet.
-    /// Uses RttTracker when available, returns 0 if not initialized (e.g., Steam transport).
+    /// Works for all transports including Steam.
     /// </summary>
     public int AverageRtt => _rttTracker != null ? (int) System.Math.Round(_rttTracker.AverageRtt) : 0;
 
@@ -189,56 +187,22 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// </summary>
     protected UpdateManager() {
         CurrentUpdatePacket = new TOutgoing();
-
-        _sendTimer = new Timer {
-            AutoReset = true,
-            Interval = CurrentSendRate
-        };
-        _sendTimer.Elapsed += OnSendTimerElapsed;
-
-        _heartBeatTimer = new Timer {
-            AutoReset = false,
-            Interval = ConnectionTimeout
-        };
-        _heartBeatTimer.Elapsed += (_, _) => TimeoutEvent?.Invoke();
     }
 
     /// <summary>
-    /// Start the update manager. This will start the send and heartbeat timers, which will respectively trigger
-    /// sending update packets and trigger on connection timing out.
+    /// Start the update manager. This will start the send thread and heartbeat timer.
     /// </summary>
     public void StartUpdates() {
-        _lastSendRate = CurrentSendRate;
-        _sendTimer.Start();
-        _heartBeatTimer.Start();
-        _isUpdating = true;
-    }
+        _lastReceiveTime = DateTime.UtcNow;
 
-    /// <summary>
-    /// Stop sending the periodic UDP update packets after sending the current one.
-    /// </summary>
-    /// <summary>
-    /// Resets the update manager state, clearing queues and sequences.
-    /// </summary>
-    public void Reset() {
-        lock (Lock) {
-            _receivedQueue?.Clear();
-            
-            _localSequence = 0;
-            _remoteSequence = 0;
-            CurrentUpdatePacket = new TOutgoing();
-            _lastSendRate = CurrentSendRate;
-            
-            // Reset managers by nullifying them - InitializeManagersIfNeeded will recreate them
-            // with proper transport properties
-            _rttTracker = null;
-            _reliabilityManager = null;
-            _congestionManager = null;
-            _receivedQueue = null;
-            
-            // Reinitialize managers with transport properties set correctly
-            InitializeManagersIfNeeded();
-        }
+        _cancellationTokenSource = new CancellationTokenSource();
+        _sendThread = new Thread(SendLoop) {
+            IsBackground = true,
+            Name = "SSMP Send Loop",
+            Priority = ThreadPriority.Normal
+        };
+        _sendThread.Start();
+        _isUpdating = true;
     }
 
     /// <summary>
@@ -252,11 +216,13 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         _isUpdating = false;
 
         Logger.Debug("Stopping UDP updates, sending last packet");
-
         CreateAndSendPacket();
-
-        _sendTimer.Stop();
-        _heartBeatTimer.Stop();
+        _cancellationTokenSource?.Cancel();
+        // Wait for thread to finish before disposing shared resources
+        _sendThread?.Join();
+        _sendThread = null;
+        _cancellationTokenSource?.Dispose();
+        _cancellationTokenSource = null;
     }
 
     /// <summary>
@@ -269,11 +235,13 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         where TIncoming : UpdatePacket<TOtherPacketId>
         where TOtherPacketId : Enum {
         // Reset the connection timeout timer
-        _heartBeatTimer.Stop();
-        _heartBeatTimer.Start();
+        _lastReceiveTime = DateTime.UtcNow;
 
-        // Transports with built-in sequencing (e.g., Steam P2P) bypass app-level sequence/ACK/congestion logic
+        // For Steam (no sequencing): Estimate RTT by completing the round-trip for last sent sequence.
+        // Note: _localSequence is post-incremented after OnSendPacket, so the last sequence
+        // that was tracked via OnSendPacket is (_localSequence - 1).
         if (!_requiresSequencing) {
+            _rttTracker?.OnAckReceived((ushort) (_localSequence - 1));
             return;
         }
 
@@ -291,11 +259,13 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         }
 
         _congestionManager?.OnReceivePacket();
-
         var sequence = packet.Sequence;
-        _receivedQueue!.Enqueue(sequence);
 
-        packet.DropDuplicateResendData(_receivedQueue.GetCopy());
+        // Add sequence to received set and manage window size
+        AddReceivedSequence(sequence);
+
+        // Check for duplicate resend data using O(1) HashSet lookup
+        packet.DropDuplicateResendData(_receivedSequences!);
 
         if (IsSequenceGreaterThan(sequence, _remoteSequence)) {
             _remoteSequence = sequence;
@@ -333,13 +303,18 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
             CurrentUpdatePacket = new TOutgoing();
         }
 
-        // Transports requiring sequencing: Track for RTT, reliability
+        // Track send time for RTT measurement (all transports)
+        _rttTracker?.OnSendPacket(_localSequence);
+
+        // Transports requiring sequencing: reliability and sequence increment
         if (_requiresSequencing) {
-            _rttTracker!.OnSendPacket(_localSequence);
             if (RequiresReliability) {
                 _reliabilityManager!.OnSendPacket(_localSequence, packetToSend);
             }
+        }
 
+        // For Steam: increment sequence for RTT tracking purposes only
+        lock (Lock) {
             _localSequence++;
         }
 
@@ -350,20 +325,43 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// Populates the ACK field with acknowledgment bits for recently received packets.
     /// Each bit indicates whether a packet with that sequence number was received.
     /// Only used for UDP/HolePunch transports.
+    /// Uses linear search (Contains) which is efficient for small size (N=64).
     /// </summary>
-    private void PopulateAckField() {           
-        var receivedQueue = _receivedQueue!.GetCopy();
+    private void PopulateAckField() {
         var ackField = CurrentUpdatePacket.AckField;
 
-        for (ushort i = 0; i < ConnectionManager.AckSize; i++) {
-            var pastSequence = (ushort) (_remoteSequence - i - 1);
-            ackField[i] = receivedQueue.Contains(pastSequence);
+        lock (Lock) {
+            for (ushort i = 0; i < ConnectionManager.AckSize; i++) {
+                var pastSequence = (ushort) (_remoteSequence - i - 1);
+                ackField[i] = _receivedSequences!.Contains(pastSequence);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Adds a received sequence number to the tracking set and maintains window size.
+    /// Removes sequences outside the ACK window to prevent unbounded growth.
+    /// </summary>
+    /// <param name="sequence">The sequence number to add.</param>
+    private void AddReceivedSequence(ushort sequence) {
+        lock (Lock) {
+            _receivedSequences!.Add(sequence);
+
+            // Prune sequences outside the ACK window to prevent unbounded growth
+            // Keep sequences within (remoteSequence - AckSize) to remoteSequence
+            if (_receivedSequences.Count > ConnectionManager.AckSize) {
+                var threshold = (ushort) (_remoteSequence - ConnectionManager.AckSize);
+                _receivedSequences.RemoveAll(seq =>
+                    !IsSequenceGreaterThan(seq, threshold) && seq != _remoteSequence
+                );
+            }
         }
     }
 
     /// <summary>
     /// Sends a packet, fragmenting it into smaller chunks if it exceeds the MTU size.
     /// Fragments are sent sequentially to ensure they can be reassembled by the receiver.
+    /// Uses CopyTo to avoid an extra full-buffer ToArray() allocation when fragmenting.
     /// </summary>
     /// <param name="packet">The packet to send, which may be fragmented if too large.</param>
     /// <param name="isReliable">Whether the packet data needs to be delivered reliably.</param>
@@ -373,21 +371,16 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
             return;
         }
 
-        var data = packet.ToArray();
-        var remaining = data.Length;
+        // Copy directly into fragment buffers, avoiding an intermediate ToArray() of the full packet
+        var remaining = packet.Length;
         var offset = 0;
 
         while (remaining > 0) {
             var chunkSize = System.Math.Min(remaining, PacketMtu);
             var fragment = new byte[chunkSize];
 
-            Array.Copy(data, offset, fragment, 0, chunkSize);
+            packet.CopyTo(fragment, 0, offset, chunkSize);
 
-            // Fragmented packets are only reliable if the original packet was, and we only 
-            // set reliability for the first fragment or all? 
-            // In this implementation logic, it seems we treated the whole packet as reliable or not.
-            // However, typical fragmentation reliability depends on transport. 
-            // Assuming for now that if the main packet is reliable, we want to try and send fragments reliably too.
             SendPacket(new Packet.Packet(fragment), isReliable);
 
             offset += chunkSize;
@@ -405,15 +398,85 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     }
 
     /// <summary>
-    /// Callback method for when the send timer elapses. Will create and send a new update packet and update the
-    /// timer interval in case the send rate changes.
+    /// Resets the update manager state, clearing queues and sequences.
     /// </summary>
-    private void OnSendTimerElapsed(object sender, ElapsedEventArgs elapsedEventArgs) {
-        CreateAndSendPacket();
+    public void Reset() {
+        StopUpdates();
 
-        if (_lastSendRate != CurrentSendRate) {
-            _sendTimer.Interval = CurrentSendRate;
-            _lastSendRate = CurrentSendRate;
+        lock (Lock) {
+            _receivedSequences?.Clear();
+            _localSequence = 0;
+            _remoteSequence = 0;
+            CurrentUpdatePacket = new TOutgoing();
+
+            _rttTracker?.Reset();
+
+            if (RequiresReliability && _rttTracker != null) {
+                _reliabilityManager = new ReliabilityManager<TOutgoing, TPacketId>(this, _rttTracker);
+            }
+
+            if (_requiresSequencing && _rttTracker != null) {
+                _congestionManager = new CongestionManager<TOutgoing, TPacketId>(this, _rttTracker);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Precision loop running on a dedicated thread to send updates at regular intervals.
+    /// Uses ManualResetEventSlim for efficient waiting with cancellation support.
+    /// </summary>
+    private void SendLoop() {
+        var stopwatch = Stopwatch.StartNew();
+        var nextSendTime = stopwatch.ElapsedMilliseconds;
+        using var waitHandle = new ManualResetEventSlim(false);
+        var cts = _cancellationTokenSource;
+        if (cts == null) {
+            return;
+        }
+        var token = cts.Token;
+
+        // Safety constant: how many ms can we fall behind before giving up?
+        const long maxLagMS = 500;
+
+        while (!token.IsCancellationRequested) {
+            try {
+                var currentTime = stopwatch.ElapsedMilliseconds;
+
+                // Drift correction: if we fell too far behind (e.g. system freeze), reset to now
+                if (currentTime > nextSendTime + maxLagMS) {
+                    nextSendTime = currentTime;
+                }
+
+                var waitTime = nextSendTime - currentTime;
+                if (waitTime > 0) {
+                    try {
+                        waitHandle.Wait((int) waitTime, token);
+                    } catch (OperationCanceledException) {
+                        break;
+                    }
+                }
+
+                // Check for connection timeout
+                // We use DateTime.UtcNow which is consistent with _lastReceiveTime
+                if ((DateTime.UtcNow - _lastReceiveTime).TotalMilliseconds > ConnectionTimeout) {
+                    TimeoutEvent?.Invoke();
+                    // We don't break immediately, we might want to let the user decide via the event (e.g. disconnect)
+                    // usually the event handler will call Disconnect() which stops updates.
+                    // However, we must stop checking to avoid spamming the event in this loop.
+                    break;
+                }
+
+                // Send Packet
+                CreateAndSendPacket();
+
+                // Calculate next target time
+                // Add CurrentSendRate to preserve cadence and avoid drift
+                nextSendTime += CurrentSendRate;
+            } catch (Exception e) {
+                Logger.Error($"Critical error in SendLoop: {e}");
+                // If an error occurs, we still advance the target time to maintain cadence.
+                nextSendTime += CurrentSendRate;
+            }
         }
     }
 
@@ -526,11 +589,12 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     /// <param name="packetIdSize">The size of the packet ID space.</param>
     /// <returns>The addon packet data instance.</returns>
     private AddonPacketData GetOrCreateAddonPacketData(byte addonId, byte packetIdSize) {
-        if (!CurrentUpdatePacket.TryGetSendingAddonPacketData(addonId, out var addonPacketData)) {
-            addonPacketData = new AddonPacketData(packetIdSize);
-            CurrentUpdatePacket.SetSendingAddonPacketData(addonId, addonPacketData);
+        if (CurrentUpdatePacket.TryGetSendingAddonPacketData(addonId, out var addonPacketData)) {
+            return addonPacketData;
         }
 
+        addonPacketData = new AddonPacketData(packetIdSize);
+        CurrentUpdatePacket.SetSendingAddonPacketData(addonId, addonPacketData);
         return addonPacketData;
     }
 }

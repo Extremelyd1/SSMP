@@ -67,12 +67,12 @@ internal class NetClient : INetClient {
     /// <summary>
     /// Chunk sender instance for sending large amounts of data.
     /// </summary>
-    private readonly ClientChunkSender _chunkSender;
+    private readonly ChunkSender _chunkSender;
 
     /// <summary>
     /// Chunk receiver instance for receiving large amounts of data.
     /// </summary>
-    private readonly ClientChunkReceiver _chunkReceiver;
+    private readonly ChunkReceiver _chunkReceiver;
 
     /// <summary>
     /// The client connection manager responsible for handling sending and receiving connection data.
@@ -99,8 +99,9 @@ internal class NetClient : INetClient {
         // Create initial update manager with default settings (will be recreated if needed in Connect)
         UpdateManager = new ClientUpdateManager();
 
-        _chunkSender = new ClientChunkSender(UpdateManager);
-        _chunkReceiver = new ClientChunkReceiver(UpdateManager);
+        // Create chunk sender/receiver with delegates to the update manager
+        _chunkSender = new ChunkSender(UpdateManager.SetSliceData);
+        _chunkReceiver = new ChunkReceiver(UpdateManager.SetSliceAckData);
         _connectionManager = new ClientConnectionManager(_packetManager, _chunkSender, _chunkReceiver);
 
         _connectionManager.ServerInfoReceivedEvent += OnServerInfoReceived;
@@ -259,7 +260,7 @@ internal class NetClient : INetClient {
                 // Route all transports through UpdateManager for sequence/ACK tracking
                 // UpdateManager will skip UDP-specific logic for Steam transports
                 UpdateManager.OnReceivePacket<ClientUpdatePacket, ClientUpdatePacketId>(clientUpdatePacket);
-
+                
                 // First check for slice or slice ack data and handle it separately by passing it onto either the chunk 
                 // sender or chunk receiver
                 var packetData = clientUpdatePacket.GetPacketData();
