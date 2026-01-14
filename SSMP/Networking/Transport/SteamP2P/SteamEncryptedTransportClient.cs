@@ -38,7 +38,7 @@ internal class SteamEncryptedTransportClient : IReliableTransportClient {
     public bool RequiresReliability => false;
 
     /// <inheritdoc />
-    public bool RequiresSequencing => false;
+    public bool RequiresSequencing => true;
 
     /// <inheritdoc />
     public event Action<byte[], int>? DataReceivedEvent;

@@ -393,12 +393,6 @@ internal class NetServer : INetServer {
             _processingThread = null;
         }
 
-        // Unregister event handler before stopping transport
-        if (_transportServer != null) {
-            _transportServer.ClientConnectedEvent -= OnClientConnected;
-            _transportServer.Stop();
-        }
-
         // Dispose and clear task token source
         _taskTokenSource?.Dispose();
         _taskTokenSource = null;
@@ -415,6 +409,12 @@ internal class NetServer : INetServer {
         }
 
         _clientsById.Clear();
+
+        // Stop transport AFTER disconnecting clients to ensure we can send disconnect packets
+        if (_transportServer != null) {
+            _transportServer.ClientConnectedEvent -= OnClientConnected;
+            _transportServer.Stop();
+        }
 
         // Reset client IDs so the next session starts from 0
         NetServerClient.ResetIds();

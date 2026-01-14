@@ -567,6 +567,7 @@ internal class UiManager : IUiManager {
     public void OnClientDisconnect() {
         _connectInterface.OnClientDisconnect();
         _pingInterface.SetEnabled(false);
+        _isSlotSelectionActive = false;
     }
 
     #endregion
