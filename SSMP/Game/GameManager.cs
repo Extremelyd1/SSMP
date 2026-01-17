@@ -14,7 +14,6 @@ namespace SSMP.Game;
 /// Instantiates all necessary classes to start multiplayer activities.
 /// </summary>
 internal class GameManager {
-    public static GameManager Instance { get; private set; } = null!;
     /// <summary>
     /// The UI manager instance for the mod.
     /// </summary>
@@ -34,7 +33,6 @@ internal class GameManager {
     /// Constructs this GameManager instance by instantiating all other necessary classes.
     /// </summary>
     public GameManager() {
-        Instance = this;
         var modSettings = ModSettings.Load();
 
         var packetManager = new PacketManager();

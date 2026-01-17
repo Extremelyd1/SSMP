@@ -122,7 +122,7 @@ internal class DtlsServer {
         foreach (var kvp in _connections) {
             var connInfo = kvp.Value;
             lock (connInfo) {
-                if (connInfo.State == ConnectionState.Connected && connInfo.Client != null) {
+                if (connInfo is { State: ConnectionState.Connected, Client: not null }) {
                     // Signal cancellation but don't join
                     connInfo.Client.ReceiveLoopTokenSource.Cancel();
                     connInfo.Client.DtlsTransport.Close();
@@ -201,47 +201,47 @@ internal class DtlsServer {
         // Use pooled buffer to reduce GC pressure in hot path
         var buffer = ArrayPool<byte>.Shared.Rent(MaxPacketSize);
 
-            while (!cancellationToken.IsCancellationRequested) {
-                if (_socket == null) {
-                    Logger.Error("Socket was null during receive call.");
-                    break;
-                }
-
-                EndPoint endPoint = new IPEndPoint(IPAddress.Any, 0);
-                int numReceived;
-
-                try {
-                    numReceived = _socket.ReceiveFrom(buffer, SocketFlags.None, ref endPoint);
-                } catch (SocketException e) when (e.SocketErrorCode == SocketError.ConnectionReset) {
-                    // ICMP Port Unreachable, safe to ignore for UDP server
-                    continue;
-                } catch (SocketException e) when (e.SocketErrorCode == SocketError.Interrupted) {
-                    break;
-                } catch (ObjectDisposedException) {
-                    break;
-                } catch (ThreadAbortException) {
-                    // Thread is being forcefully terminated during shutdown - exit gracefully
-                    Logger.Info("SocketReceiveLoop: Thread aborted during shutdown");
-                    break;
-                } catch (Exception e) {
-                    Logger.Error($"Unexpected exception in SocketReceiveLoop:\n{e}");
-                    continue;
-                }
-
-                // Validate reception
-                if (numReceived < 0) break;
-                if (numReceived == 0 || cancellationToken.IsCancellationRequested) continue;
-
-                var ipEndPoint = (IPEndPoint)endPoint;
-
-                // Create a precise copy of the buffer for this packet (required for async processing)
-                var packetBuffer = new byte[numReceived];
-                Array.Copy(buffer, 0, packetBuffer, 0, numReceived);
-
-                ProcessReceivedPacket(ipEndPoint, packetBuffer, numReceived, cancellationToken);
+        while (!cancellationToken.IsCancellationRequested) {
+            if (_socket == null) {
+                Logger.Error("Socket was null during receive call.");
+                break;
             }
 
-            ArrayPool<byte>.Shared.Return(buffer);
+            EndPoint endPoint = new IPEndPoint(IPAddress.Any, 0);
+            int numReceived;
+
+            try {
+                numReceived = _socket.ReceiveFrom(buffer, SocketFlags.None, ref endPoint);
+            } catch (SocketException e) when (e.SocketErrorCode == SocketError.ConnectionReset) {
+                // ICMP Port Unreachable, safe to ignore for UDP server
+                continue;
+            } catch (SocketException e) when (e.SocketErrorCode == SocketError.Interrupted) {
+                break;
+            } catch (ObjectDisposedException) {
+                break;
+            } catch (ThreadAbortException) {
+                // Thread is being forcefully terminated during shutdown - exit gracefully
+                Logger.Info("SocketReceiveLoop: Thread aborted during shutdown");
+                break;
+            } catch (Exception e) {
+                Logger.Error($"Unexpected exception in SocketReceiveLoop:\n{e}");
+                continue;
+            }
+
+            // Validate reception
+            if (numReceived < 0) break;
+            if (numReceived == 0 || cancellationToken.IsCancellationRequested) continue;
+
+            var ipEndPoint = (IPEndPoint) endPoint;
+
+            // Create a precise copy of the buffer for this packet (required for async processing)
+            var packetBuffer = new byte[numReceived];
+            Array.Copy(buffer, 0, packetBuffer, 0, numReceived);
+
+            ProcessReceivedPacket(ipEndPoint, packetBuffer, numReceived, cancellationToken);
+        }
+
+        ArrayPool<byte>.Shared.Return(buffer);
 
         Logger.Info("SocketReceiveLoop exited");
     }

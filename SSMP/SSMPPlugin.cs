@@ -8,6 +8,11 @@ namespace SSMP;
 [BepInAutoPlugin(id: "ssmp")]
 public partial class SSMPPlugin : BaseUnityPlugin {
     /// <summary>
+    /// The game manager instance for the mod.
+    /// </summary>
+    private Game.GameManager? _gameManager;
+
+    /// <summary>
     /// Plugin constructor that initializes the static classes with hooks.
     /// </summary>
     public SSMPPlugin() {
@@ -35,10 +40,11 @@ public partial class SSMPPlugin : BaseUnityPlugin {
         // Add the MonoBehaviourUtil to the game object associated with this plugin
         gameObject.AddComponent<MonoBehaviourUtil>();
         
-        new Game.GameManager().Initialize();
+        _gameManager = new Game.GameManager();
+        _gameManager.Initialize();
     }
 
     private void OnApplicationQuit() {
-        Game.GameManager.Instance?.Shutdown();
+        _gameManager?.Shutdown();
     }
 }
