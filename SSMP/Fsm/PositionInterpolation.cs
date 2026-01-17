@@ -1,4 +1,4 @@
-using System.Collections;
+/*
 using UnityEngine;
 
 namespace SSMP.Fsm;
@@ -122,12 +122,4 @@ internal class PositionInterpolation : MonoBehaviour {
             _hasReachedTarget = false;
         }
     }
-
-    /// <summary>
-    /// Get the current interpolation velocity.
-    /// </summary>
-    /// <returns>The current velocity vector.</returns>
-    public Vector3 GetVelocity() {
-        return _currentVelocity;
-    }
-}
+}*/

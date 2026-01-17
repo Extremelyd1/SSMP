@@ -1193,6 +1193,9 @@ internal class ClientManager : IClientManager {
         if (!_netClient.IsConnected) {
             return;
         }
+
+        // Update all remote player interpolations in one centralized loop
+        _playerManager.UpdateInterpolations(Time.deltaTime);
     
         var heroTransform = HeroController.instance.transform;
 

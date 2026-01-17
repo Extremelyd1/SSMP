@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using SSMP.Fsm;
 using SSMP.Game.Client.Skin;
 using SSMP.Game.Settings;
@@ -101,6 +102,20 @@ internal class PlayerManager {
     }
 
     /// <summary>
+    /// Updates interpolation for all active players. Call this from a centralized update loop.
+    /// </summary>
+    /// <param name="dt">The delta time for this frame.</param>
+    public void UpdateInterpolations(float dt) {
+        foreach (var container in _activePlayers.Values.OfType<GameObject>())
+        {
+            // Cache component reference if accessed frequently
+            if (container.TryGetComponent<PredictiveInterpolation>(out var interpolation)) {
+                interpolation.ManualUpdate(dt);
+            }
+        }
+    }
+
+    /// <summary>
     /// Register the relevant hooks for player-related operations.
     /// </summary>
     public void RegisterHooks() {
@@ -136,7 +151,7 @@ internal class PlayerManager {
         // Create a player container prefab, used to spawn players
         _playerContainerPrefab = new GameObject(PlayerContainerPrefabName);
 
-        _playerContainerPrefab.AddComponent<PositionInterpolation>();
+        _playerContainerPrefab.AddComponent<PredictiveInterpolation>();
 
         var playerPrefab = new GameObject(PlayerObjectPrefabName,
             typeof(BoxCollider2D),
@@ -236,7 +251,7 @@ internal class PlayerManager {
         if (playerContainer) {
             var unityPosition = new Vector3(position.X, position.Y);
 
-            playerContainer.GetComponent<PositionInterpolation>().SetNewPosition(unityPosition);
+            playerContainer.GetComponent<PredictiveInterpolation>().SetNewPosition(unityPosition);
         }
     }
 
