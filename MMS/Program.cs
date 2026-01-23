@@ -320,7 +320,8 @@ public class Program {
     /// <param name="LobbyType">"steam" or "matchmaking" (default: matchmaking).</param>
     /// <param name="HostLanIp">Host LAN IP for local network discovery.</param>
     /// <param name="IsPublic">Whether lobby appears in browser (default: true).</param>
-    private abstract record CreateLobbyRequest(
+    [UsedImplicitly]
+    private record CreateLobbyRequest(
         string? HostIp,
         int? HostPort,
         string? ConnectionData,
