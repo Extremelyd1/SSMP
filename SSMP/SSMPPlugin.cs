@@ -5,6 +5,9 @@ using SSMP.Util;
 
 namespace SSMP;
 
+/// <summary>
+/// BepInEx Plugin class for SSMP.
+/// </summary>
 [BepInAutoPlugin(id: "ssmp")]
 public partial class SSMPPlugin : BaseUnityPlugin {
     /// <summary>

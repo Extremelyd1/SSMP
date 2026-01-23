@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using SSMP.Fsm;
 using SSMP.Game.Client.Skin;
 using SSMP.Game.Settings;
@@ -106,7 +105,7 @@ internal class PlayerManager {
     /// </summary>
     /// <param name="dt">The delta time for this frame.</param>
     public void UpdateInterpolations(float dt) {
-        foreach (var container in _activePlayers.Values.OfType<GameObject>()) {
+        foreach (var container in _activePlayers.Values) {
             // Cache component reference if accessed frequently
             if (container.TryGetComponent<PredictiveInterpolation>(out var interpolation)) {
                 interpolation.ManualUpdate(dt);
@@ -149,8 +148,6 @@ internal class PlayerManager {
 
         // Create a player container prefab, used to spawn players
         _playerContainerPrefab = new GameObject(PlayerContainerPrefabName);
-
-        _playerContainerPrefab.AddComponent<PredictiveInterpolation>();
 
         var playerPrefab = new GameObject(
             PlayerObjectPrefabName,
