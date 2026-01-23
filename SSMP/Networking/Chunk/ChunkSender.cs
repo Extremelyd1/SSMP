@@ -8,10 +8,19 @@ using SSMP.Networking.Packet.Data;
 namespace SSMP.Networking.Chunk;
 
 /// <summary>
-/// Class that processes and manages chunks by sending slices of those chunks and receiving acknowledgements for those
-/// slices.
+/// Delegate for setting slice data in an update manager.
 /// </summary>
-internal abstract class ChunkSender {
+/// <param name="chunkId">The ID of the chunk.</param>
+/// <param name="sliceId">The ID of the slice.</param>
+/// <param name="numSlices">The number of slices in the chunk.</param>
+/// <param name="data">The slice data.</param>
+internal delegate void SetSliceDataDelegate(byte chunkId, byte sliceId, byte numSlices, byte[] data);
+
+/// <summary>
+/// Class that processes and manages chunks by sending slices of those chunks and receiving acknowledgements for those
+/// slices. Uses delegate injection instead of inheritance for flexibility.
+/// </summary>
+internal sealed class ChunkSender {
     /// <summary>
     /// The number of milliseconds to wait between sending slices.
     /// </summary>
@@ -84,10 +93,17 @@ internal abstract class ChunkSender {
     private event Action? FinishSendingDataEvent;
 
     /// <summary>
-    /// Construct the chunk sender by initializing the blocking collection and manual reset event, and allocating the
-    /// arrays to their maximally used length. Individual stopwatch instances are lazily created as needed.
+    /// Delegate for setting slice data in the update manager.
     /// </summary>
-    protected ChunkSender() {
+    private readonly SetSliceDataDelegate _setSliceData;
+
+    /// <summary>
+    /// Construct the chunk sender with the delegate for setting slice data.
+    /// </summary>
+    /// <param name="setSliceData">Delegate to call when sending slice data.</param>
+    public ChunkSender(SetSliceDataDelegate setSliceData) {
+        _setSliceData = setSliceData ?? throw new ArgumentNullException(nameof(setSliceData));
+        
         _toSendPackets = new BlockingCollection<Packet.Packet>();
         
         _acked = new bool[ConnectionManager.MaxSlicesPerChunk];
@@ -353,11 +369,13 @@ internal abstract class ChunkSender {
     }
 
     /// <summary>
-    /// Set the slice data in the corresponding update manager for sending.
+    /// Send the given slice data using the injected delegate.
     /// </summary>
     /// <param name="chunkId">The ID of the chunk for this slice.</param>
     /// <param name="sliceId">The ID of the slice.</param>
     /// <param name="numSlices">The number of slices in this chunk.</param>
     /// <param name="data">The byte array containing the data of the slice.</param>
-    protected abstract void SetSliceData(byte chunkId, byte sliceId, byte numSlices, byte[] data);
+    private void SetSliceData(byte chunkId, byte sliceId, byte numSlices, byte[] data) {
+        _setSliceData(chunkId, sliceId, numSlices, data);
+    }
 }

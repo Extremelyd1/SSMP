@@ -842,11 +842,13 @@ internal class ClientManager : IClientManager {
             foreach (var entityUpdate in alreadyInScene.EntityUpdateList) {
                 Logger.Info($"Updating already in scene entity with ID: {entityUpdate.Id}");
                 _entityManager.HandleEntityUpdate(entityUpdate, true);
+                ObjectPool<EntityUpdate>.Return(entityUpdate);
             }
 
             foreach (var entityUpdate in alreadyInScene.ReliableEntityUpdateList) {
                 Logger.Info($"Updating already in scene reliable entity data with ID: {entityUpdate.Id}");
                 _entityManager.HandleReliableEntityUpdate(entityUpdate, true);
+                ObjectPool<ReliableEntityUpdate>.Return(entityUpdate);
             }
 
             // Whether there were players in the scene or not, we have now determined whether
@@ -1191,6 +1193,9 @@ internal class ClientManager : IClientManager {
         if (!_netClient.IsConnected) {
             return;
         }
+
+        // Update all remote player interpolations in one centralized loop
+        _playerManager.UpdateInterpolations(Time.deltaTime);
     
         var heroTransform = HeroController.instance.transform;
 

@@ -32,8 +32,9 @@ internal abstract class BaseEntityUpdate : IPacketData {
 
 /// <summary>
 /// Packet data for the non-reliable part of an entity update.
+/// Implements IPoolable for object pooling to reduce allocations.
 /// </summary>
-internal class EntityUpdate : BaseEntityUpdate {
+internal class EntityUpdate : BaseEntityUpdate, IPoolable {
     /// <inheritdoc />
     public override bool IsReliable => false;
 
@@ -70,6 +71,16 @@ internal class EntityUpdate : BaseEntityUpdate {
     public EntityUpdate() {
         UpdateTypes = new HashSet<EntityUpdateType>();
         Scale = new ScaleData();
+    }
+
+    /// <inheritdoc />
+    public void Reset() {
+        Id = 0;
+        UpdateTypes.Clear();
+        Position = null!;
+        Scale.Reset();
+        AnimationId = 0;
+        AnimationWrapMode = 0;
     }
 
     /// <inheritdoc />
@@ -150,7 +161,7 @@ internal class EntityUpdate : BaseEntityUpdate {
         /// <summary>
         /// Whether this instance originates from a client. This influences how to write certain data.
         /// </summary>
-        public bool origin { private get; init; }
+        public bool origin { get; set; }
         
         /// <summary>
         /// Whether the x of the scale is defined.
@@ -381,6 +392,25 @@ internal class EntityUpdate : BaseEntityUpdate {
             }
         }
 
+        /// <summary>
+        /// Resets the scale data to its initial state.
+        /// </summary>
+        public void Reset() {
+            x = false;
+            y = false;
+            z = false;
+            xFlipped = false;
+            yFlipped = false;
+            zFlipped = false;
+            xScale = 0;
+            yScale = 0;
+            zScale = 0;
+            xPos = false;
+            yPos = false;
+            zPos = false;
+            origin = false;
+        }
+
         /// <inheritdoc />
         public override string ToString() {
             return
@@ -391,8 +421,9 @@ internal class EntityUpdate : BaseEntityUpdate {
 
 /// <summary>
 /// Packet data for the reliable part of an entity update.
+/// Implements IPoolable for object pooling to reduce allocations.
 /// </summary>
-internal class ReliableEntityUpdate : BaseEntityUpdate {
+internal class ReliableEntityUpdate : BaseEntityUpdate, IPoolable {
     /// <inheritdoc />
     public override bool IsReliable => true;
 
@@ -426,6 +457,24 @@ internal class ReliableEntityUpdate : BaseEntityUpdate {
         UpdateTypes = new HashSet<EntityUpdateType>();
         GenericData = new List<EntityNetworkData>();
         HostFsmData = new Dictionary<byte, EntityHostFsmData>();
+    }
+
+    /// <inheritdoc />
+    public void Reset() {
+        Id = 0;
+        UpdateTypes.Clear();
+        IsActive = false;
+        
+        // Return pooled objects before clearing
+        foreach (var data in GenericData) {
+            ObjectPool<EntityNetworkData>.Return(data);
+        }
+        GenericData.Clear();
+        
+        foreach (var kvp in HostFsmData) {
+            ObjectPool<EntityHostFsmData>.Return(kvp.Value);
+        }
+        HostFsmData.Clear();
     }
 
     /// <inheritdoc />
@@ -506,7 +555,7 @@ internal class ReliableEntityUpdate : BaseEntityUpdate {
             var length = packet.ReadByte();
 
             for (var i = 0; i < length; i++) {
-                var entityNetworkData = new EntityNetworkData();
+                var entityNetworkData = ObjectPool<EntityNetworkData>.Get();
                 entityNetworkData.ReadData(packet);
                     
                 GenericData.Add(entityNetworkData);
@@ -519,7 +568,7 @@ internal class ReliableEntityUpdate : BaseEntityUpdate {
             for (var i = 0; i < length; i++) {
                 var key = packet.ReadByte();
 
-                var data = new EntityHostFsmData();
+                var data = ObjectPool<EntityHostFsmData>.Get();
                 data.ReadData(packet);
                 
                 HostFsmData.Add(key, data);
@@ -530,8 +579,9 @@ internal class ReliableEntityUpdate : BaseEntityUpdate {
 
 /// <summary>
 /// Generic data for a networked entity.
+/// Implements IPoolable for object pooling to reduce allocations.
 /// </summary>
-internal class EntityNetworkData {
+internal class EntityNetworkData : IPoolable {
     /// <summary>
     /// The type of the data.
     /// </summary>
@@ -539,10 +589,13 @@ internal class EntityNetworkData {
     /// <summary>
     /// Packet instance containing the data for easy reading and writing of data.
     /// </summary>
-    public Packet Packet { get; set; }
+    public Packet Packet { get; set; } = new();
 
-    public EntityNetworkData() {
-        Packet = new Packet();
+    /// <inheritdoc />
+    public void Reset() {
+        Type = default;
+        // Reuse the existing Packet instance to preserve pooling benefits.
+        Packet.Clear();
     }
 
     /// <inheritdoc cref="IPacketData.WriteData" />
@@ -568,26 +621,26 @@ internal class EntityNetworkData {
         Type = (EntityComponentType) packet.ReadUShort();
 
         var length = packet.ReadUShort();
-        var data = new byte[length];
         
+        // Clear and reuse existing Packet instance to avoid allocations
+        Packet.Clear();
         for (var i = 0; i < length; i++) {
-            data[i] = packet.ReadByte();
+            Packet.Write(packet.ReadByte());
         }
-
-        Packet = new Packet(data);
     }
 }
 
 /// <summary>
 /// Class containing data for host FSMs including state and FSM variables.
 /// Used to make host transfer easier since all clients receive updates on host FSM details.
+/// Implements IPoolable for object pooling to reduce allocations.
 /// </summary>
-internal class EntityHostFsmData {
+internal class EntityHostFsmData : IPoolable {
     /// <summary>
     /// The types of content that is in this data class.
     /// </summary>
-    public HashSet<Type> Types { get; }
-    
+    public HashSet<Type> Types { get; } = [];
+
     /// <summary>
     /// The index of the current (or last) state of the FSM.
     /// </summary>
@@ -596,37 +649,43 @@ internal class EntityHostFsmData {
     /// <summary>
     /// Dictionary containing indices of float variables to their respective values.
     /// </summary>
-    public Dictionary<byte, float> Floats { get; }
+    public Dictionary<byte, float> Floats { get; } = new();
+
     /// <summary>
     /// Dictionary containing indices of int variables to their respective values.
     /// </summary>
-    public Dictionary<byte, int> Ints { get; }
+    public Dictionary<byte, int> Ints { get; } = new();
+
     /// <summary>
     /// Dictionary containing indices of bool variables to their respective values.
     /// </summary>
-    public Dictionary<byte, bool> Bools { get; }
+    public Dictionary<byte, bool> Bools { get; } = new();
+
     /// <summary>
     /// Dictionary containing indices of string variables to their respective values.
     /// </summary>
-    public Dictionary<byte, string> Strings { get; }
+    public Dictionary<byte, string> Strings { get; } = new();
+
     /// <summary>
     /// Dictionary containing indices of vector2 variables to their respective values.
     /// </summary>
-    public Dictionary<byte, Vector2> Vec2s { get; }
+    public Dictionary<byte, Vector2> Vec2s { get; } = new();
+
     /// <summary>
     /// Dictionary containing indices of vector3 variables to their respective values.
     /// </summary>
-    public Dictionary<byte, Vector3> Vec3s { get; }
+    public Dictionary<byte, Vector3> Vec3s { get; } = new();
 
-    public EntityHostFsmData() {
-        Types = new HashSet<Type>();
-
-        Floats = new Dictionary<byte, float>();
-        Ints = new Dictionary<byte, int>();
-        Bools = new Dictionary<byte, bool>();
-        Strings = new Dictionary<byte, string>();
-        Vec2s = new Dictionary<byte, Vector2>();
-        Vec3s = new Dictionary<byte, Vector3>();
+    /// <inheritdoc />
+    public void Reset() {
+        Types.Clear();
+        CurrentState = 0;
+        Floats.Clear();
+        Ints.Clear();
+        Bools.Clear();
+        Strings.Clear();
+        Vec2s.Clear();
+        Vec3s.Clear();
     }
 
     /// <summary>
@@ -713,6 +772,14 @@ internal class EntityHostFsmData {
             packet.Write(CurrentState);
         }
 
+        WriteVarDict(Type.Floats, Floats, packet.Write);
+        WriteVarDict(Type.Ints, Ints, packet.Write);
+        WriteVarDict(Type.Bools, Bools, packet.Write);
+        WriteVarDict(Type.Strings, Strings, packet.Write);
+        WriteVarDict(Type.Vector2s, Vec2s, packet.Write);
+        WriteVarDict(Type.Vector3s, Vec3s, packet.Write);
+        return;
+
         void WriteVarDict<T>(Type type, Dictionary<byte, T> dict, Action<T> writeValue) {
             if (Types.Contains(type)) {
                 var length = (byte) dict.Count;
@@ -724,13 +791,6 @@ internal class EntityHostFsmData {
                 }
             }
         }
-
-        WriteVarDict(Type.Floats, Floats, packet.Write);
-        WriteVarDict(Type.Ints, Ints, packet.Write);
-        WriteVarDict(Type.Bools, Bools, packet.Write);
-        WriteVarDict(Type.Strings, Strings, packet.Write);
-        WriteVarDict(Type.Vector2s, Vec2s, packet.Write);
-        WriteVarDict(Type.Vector3s, Vec3s, packet.Write);
     }
 
     /// <inheritdoc cref="IPacketData.ReadData" />

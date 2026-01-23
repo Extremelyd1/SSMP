@@ -101,11 +101,24 @@ internal class PlayerManager {
     }
 
     /// <summary>
+    /// Updates interpolation for all active players.
+    /// </summary>
+    /// <param name="dt">The delta time for this frame.</param>
+    public void UpdateInterpolations(float dt) {
+        foreach (var container in _activePlayers.Values) {
+            // Cache component reference if accessed frequently
+            if (container.TryGetComponent<PredictiveInterpolation>(out var interpolation)) {
+                interpolation.ManualUpdate(dt);
+            }
+        }
+    }
+
+    /// <summary>
     /// Register the relevant hooks for player-related operations.
     /// </summary>
     public void RegisterHooks() {
         _skinManager.RegisterHooks();
-        
+
         CustomHooks.HeroControllerStartAction += HeroControllerOnStart;
     }
 
@@ -114,7 +127,7 @@ internal class PlayerManager {
     /// </summary>
     public void DeregisterHooks() {
         _skinManager.DeregisterHooks();
-        
+
         CustomHooks.HeroControllerStartAction -= HeroControllerOnStart;
     }
 
@@ -132,13 +145,12 @@ internal class PlayerManager {
         if (_playerContainerPrefab) {
             return;
         }
-        
+
         // Create a player container prefab, used to spawn players
         _playerContainerPrefab = new GameObject(PlayerContainerPrefabName);
 
-        _playerContainerPrefab.AddComponent<PositionInterpolation>();
-
-        var playerPrefab = new GameObject(PlayerObjectPrefabName,
+        var playerPrefab = new GameObject(
+            PlayerObjectPrefabName,
             typeof(BoxCollider2D),
             typeof(MeshFilter),
             typeof(MeshRenderer),
@@ -149,7 +161,7 @@ internal class PlayerManager {
         ) {
             layer = 9
         };
-        
+
         playerPrefab.transform.SetParent(_playerContainerPrefab.transform);
 
         // Now we need to copy over a lot of variables from the local player object
@@ -172,7 +184,7 @@ internal class PlayerManager {
         var localBounds = localColliderBounds;
         bounds.min = localBounds.min;
         bounds.max = localBounds.max;
-        
+
         // Set Rigidbody properties
         var rigidbody = playerPrefab.GetComponent<Rigidbody2D>();
         rigidbody.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
@@ -207,7 +219,7 @@ internal class PlayerManager {
         if (playerContainer == null) {
             throw new Exception("Could not create new player container, instantiation failed");
         }
-        
+
         Object.DontDestroyOnLoad(playerContainer);
         playerContainer.name = PlayerContainerName;
 
@@ -236,7 +248,7 @@ internal class PlayerManager {
         if (playerContainer) {
             var unityPosition = new Vector3(position.X, position.Y);
 
-            playerContainer.GetComponent<PositionInterpolation>().SetNewPosition(unityPosition);
+            playerContainer.GetComponent<PredictiveInterpolation>().SetNewPosition(unityPosition);
         }
     }
 
@@ -257,7 +269,7 @@ internal class PlayerManager {
             Logger.Warn("Could not update scale of player, because player object is null");
             return;
         }
-        
+
         SetPlayerObjectBoolScale(playerObject, scale);
     }
 
@@ -392,7 +404,8 @@ internal class PlayerManager {
                     // Remove all grandchildren from the player prefab's children; there should be none
                     foreach (Transform greatGrandChild in grandChild) {
                         Logger.Debug(
-                            $"Destroying child of {grandChild.name}: {greatGrandChild.name}, type: {greatGrandChild.GetType()}");
+                            $"Destroying child of {grandChild.name}: {greatGrandChild.name}, type: {greatGrandChild.GetType()}"
+                        );
                         Object.Destroy(greatGrandChild.gameObject);
                     }
                 }
@@ -531,7 +544,7 @@ internal class PlayerManager {
             UpdateLocalPlayerTeam(team);
             return;
         }
-        
+
         Logger.Debug($"Received PlayerTeamUpdate for ID: {playerId}, team: {Enum.GetName(typeof(Team), team)}");
 
         UpdatePlayerTeam(playerId, team);
@@ -571,7 +584,7 @@ internal class PlayerManager {
         if (nameObject == null) {
             throw new Exception("Name object could not be found in player container while updating player team");
         }
-        
+
         var textMeshObject = nameObject.GetComponent<TextMeshPro>();
 
         ChangeNameColor(textMeshObject, team);
@@ -586,7 +599,9 @@ internal class PlayerManager {
 
         var nameObject = HeroController.instance.gameObject.FindGameObjectInChildren(UsernameObjectName);
         if (nameObject == null) {
-            throw new Exception("Name object could not be found in hero controller object while updating local player team");
+            throw new Exception(
+                "Name object could not be found in hero controller object while updating local player team"
+            );
         }
 
         var textMeshObject = nameObject.GetComponent<TextMeshPro>();
@@ -629,11 +644,11 @@ internal class PlayerManager {
     public void OnPlayerSkinUpdate(bool self, byte skinId, ushort playerId = 0) {
         if (self) {
             Logger.Debug($"Received PlayerSkinUpdate for local player: {skinId}");
-            
+
             _skinManager.UpdateLocalPlayerSkin(skinId);
             return;
         }
-        
+
         Logger.Debug($"Received PlayerSkinUpdate for ID: {playerId}, skin ID: {skinId}");
 
         if (!_playerData.TryGetValue(playerId, out var playerData)) {
@@ -727,7 +742,7 @@ internal class PlayerManager {
                 if (playerData.PlayerContainer == null) {
                     continue;
                 }
-                
+
                 var nameObject = playerData.PlayerContainer.FindGameObjectInChildren(UsernameObjectName);
                 if (nameObject) {
                     nameObject.SetActive(_serverSettings.DisplayNames);
@@ -749,10 +764,11 @@ internal class PlayerManager {
     /// </summary>
     /// <param name="playerContainer">The player container to add the username object as a child of.</param>
     /// <returns>The new GameObject that was created for the username.</returns>
-    private GameObject CreateUsername(GameObject playerContainer) {
-        var nameObject = new GameObject(UsernameObjectName);
-
-        nameObject.transform.position = playerContainer.transform.position + Vector3.up * 1.5f;
+    private static GameObject CreateUsername(GameObject playerContainer) {
+        var nameObject = new GameObject(UsernameObjectName) {
+            transform = {
+                position = playerContainer.transform.position + Vector3.up * 1.5f
+            }};
         nameObject.transform.SetParent(playerContainer.transform);
         nameObject.transform.localScale = new Vector3(0.25f, 0.25f, nameObject.transform.localScale.z);
 

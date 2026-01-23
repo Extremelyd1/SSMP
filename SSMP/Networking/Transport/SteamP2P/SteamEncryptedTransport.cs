@@ -46,7 +46,7 @@ internal sealed class SteamEncryptedTransport : IReliableTransport {
     public bool RequiresReliability => false;
 
     /// <inheritdoc />
-    public bool RequiresSequencing => false;
+    public bool RequiresSequencing => true;
 
     /// <inheritdoc />
     public int MaxPacketSize => SteamMaxPacketSize;
@@ -104,8 +104,8 @@ internal sealed class SteamEncryptedTransport : IReliableTransport {
     /// <summary>
     /// Cached send types to avoid boxing and allocation.
     /// </summary>
-    private static readonly EP2PSend UnreliableSendType = EP2PSend.k_EP2PSendUnreliableNoDelay;
-    private static readonly EP2PSend ReliableSendType = EP2PSend.k_EP2PSendReliable;
+    private const EP2PSend UnreliableSendType = EP2PSend.k_EP2PSendUnreliable;
+    private const EP2PSend ReliableSendType = EP2PSend.k_EP2PSendReliable;
 
     /// <summary>
     /// Connect to remote peer via Steam P2P.

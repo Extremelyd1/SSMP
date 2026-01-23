@@ -63,6 +63,11 @@ internal sealed class SteamEncryptedTransportServer : IEncryptedTransportServer 
     private Callback<P2PSessionRequest_t>? _sessionRequestCallback;
 
     /// <summary>
+    /// Callback for P2P session connection failures.
+    /// </summary>
+    private Callback<P2PSessionConnectFail_t>? _sessionConnectFailCallback;
+
+    /// <summary>
     /// Token source for cancelling the receive loop.
     /// </summary>
     private CancellationTokenSource? _receiveTokenSource;
@@ -97,6 +102,7 @@ internal sealed class SteamEncryptedTransportServer : IEncryptedTransportServer 
         _isRunning = true;
 
         _sessionRequestCallback = Callback<P2PSessionRequest_t>.Create(OnP2PSessionRequest);
+        _sessionConnectFailCallback = Callback<P2PSessionConnectFail_t>.Create(OnP2PSessionConnectFail);
 
         SteamNetworking.AllowP2PPacketRelay(true);
 
@@ -151,6 +157,9 @@ internal sealed class SteamEncryptedTransportServer : IEncryptedTransportServer 
         _sessionRequestCallback?.Dispose();
         _sessionRequestCallback = null;
 
+        _sessionConnectFailCallback?.Dispose();
+        _sessionConnectFailCallback = null;
+
         Logger.Info("Steam P2P: Server stopped");
     }
 
@@ -187,13 +196,18 @@ internal sealed class SteamEncryptedTransportServer : IEncryptedTransportServer 
         var remoteSteamId = request.m_steamIDRemote;
         Logger.Info($"Steam P2P: Received session request from {remoteSteamId}");
 
+        // Check if we already have a connection for this user
+        if (_clients.TryGetValue(remoteSteamId, out var existingClient)) {
+            Logger.Warn($"Steam P2P: Received new session request from already connected client {remoteSteamId} - closing stale session and ignoring this request to force client retry");
+            DisconnectClientInternal(existingClient);
+            return;
+        }
+
+        // Accept the session (only if no stale session existed)
         if (!SteamNetworking.AcceptP2PSessionWithUser(remoteSteamId)) {
             Logger.Warn($"Steam P2P: Failed to accept session from {remoteSteamId}");
             return;
         }
-
-        // Fast path: check if already connected before creating new client
-        if (_clients.ContainsKey(remoteSteamId)) return;
 
         var client = new SteamEncryptedTransportClient(remoteSteamId.m_SteamID);
         
@@ -201,6 +215,23 @@ internal sealed class SteamEncryptedTransportServer : IEncryptedTransportServer 
         if (_clients.TryAdd(remoteSteamId, client)) {
             Logger.Info($"Steam P2P: New client connected: {remoteSteamId}");
             ClientConnectedEvent?.Invoke(client);
+        }
+    }
+
+    /// <summary>
+    /// Callback handler for P2P session connection failures (timeouts, closed sessions, etc.).
+    /// </summary>
+    private void OnP2PSessionConnectFail(P2PSessionConnectFail_t result) {
+        if (!_isRunning) return;
+
+        var remoteSteamId = result.m_steamIDRemote;
+        var error = (EP2PSessionError)result.m_eP2PSessionError;
+        
+        Logger.Info($"Steam P2P: Session connection failed for {remoteSteamId}: {error}");
+
+        // If we have a client for this Steam ID, disconnect them
+        if (_clients.TryGetValue(remoteSteamId, out var client)) {
+            DisconnectClientInternal(client);
         }
     }
 

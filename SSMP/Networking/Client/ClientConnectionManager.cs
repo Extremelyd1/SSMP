@@ -15,12 +15,12 @@ internal class ClientConnectionManager : ConnectionManager {
     /// <summary>
     ///     The client-side chunk sender used to handle sending chunks.
     /// </summary>
-    private readonly ClientChunkSender _chunkSender;
+    private readonly ChunkSender _chunkSender;
 
     /// <summary>
     ///     The client-side chunk received used to receive chunks.
     /// </summary>
-    private readonly ClientChunkReceiver _chunkReceiver;
+    private readonly ChunkReceiver _chunkReceiver;
 
     /// <summary>
     ///     Event that is called when server info is received from the server we are trying to connect to.
@@ -33,8 +33,8 @@ internal class ClientConnectionManager : ConnectionManager {
     /// </summary>
     public ClientConnectionManager(
         PacketManager packetManager,
-        ClientChunkSender chunkSender,
-        ClientChunkReceiver chunkReceiver
+        ChunkSender chunkSender,
+        ChunkReceiver chunkReceiver
     ) : base(packetManager) {
         _chunkSender = chunkSender;
         _chunkReceiver = chunkReceiver;

@@ -171,7 +171,7 @@ internal class Entity {
             $"Entity '{Object.Host.name}' was original active: {_originalIsActive}, last active: {_lastIsActive}");
 
         // Add a position interpolation component to the enemy so we can smooth out position updates
-        Object.Client.AddComponent<PositionInterpolation>();
+        Object.Client.AddComponent<PredictiveInterpolation>();
 
         // Register an update event to send position updates and check for certain value changes
         MonoBehaviourUtil.Instance.OnUpdateEvent += OnUpdate;
@@ -1097,7 +1097,7 @@ internal class Entity {
             _hasParent ? Object.Host.transform.localPosition.z : Object.Host.transform.position.z
         );
 
-        var positionInterpolation = Object.Client.GetComponent<PositionInterpolation>();
+        var positionInterpolation = Object.Client.GetComponent<PredictiveInterpolation>();
         if (positionInterpolation == null) {
             return;
         }
