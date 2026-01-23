@@ -47,11 +47,9 @@ internal class PacketHandlerRegistry<TPacketId, THandler>
     /// <param name="packetId">The packet ID to register the handler for.</param>
     /// <param name="handler">The handler delegate.</param>
     /// <returns>True if registration successful, false if handler already exists.</returns>
-    public bool Register(TPacketId packetId, THandler handler) {
-        if (_handlers.TryAdd(packetId, handler)) return true;
+    public void Register(TPacketId packetId, THandler handler) {
+        if (_handlers.TryAdd(packetId, handler)) return;
         Logger.Warn($"Tried to register already existing {_registryName} packet handler: {packetId}");
-        return false;
-
     }
 
     /// <summary>
@@ -68,25 +66,15 @@ internal class PacketHandlerRegistry<TPacketId, THandler>
     }
 
     /// <summary>
-    /// Tries to get the handler for the given packet ID.
-    /// </summary>
-    /// <param name="packetId">The packet ID to look up.</param>
-    /// <param name="handler">The handler if found.</param>
-    /// <returns>True if handler exists, false otherwise.</returns>
-    public bool TryGetHandler(TPacketId packetId, out THandler? handler) {
-        return _handlers.TryGetValue(packetId, out handler);
-    }
-
-    /// <summary>
     /// Executes a handler for a client packet (no client ID parameter).
     /// </summary>
     /// <param name="packetId">The packet ID.</param>
     /// <param name="invoker">Action that invokes the handler with appropriate parameters.</param>
     /// <returns>True if handler was found and invoked, false otherwise.</returns>
-    public bool Execute(TPacketId packetId, Action<THandler> invoker) {
+    public void Execute(TPacketId packetId, Action<THandler> invoker) {
         if (!_handlers.TryGetValue(packetId, out var handler)) {
             Logger.Error($"There is no {_registryName} packet handler registered for ID: {packetId}");
-            return false;
+            return;
         }
 
         if (_dispatchToMainThread) {
@@ -94,8 +82,6 @@ internal class PacketHandlerRegistry<TPacketId, THandler>
         } else {
             SafeInvoke(packetId, handler, invoker);
         }
-
-        return true;
     }
 
     /// <summary>
@@ -108,16 +94,4 @@ internal class PacketHandlerRegistry<TPacketId, THandler>
             Logger.Error($"Exception occurred while executing {_registryName} packet handler for ID {packetId}:\n{e}");
         }
     }
-
-    /// <summary>
-    /// Clears all registered handlers.
-    /// </summary>
-    public void Clear() {
-        _handlers.Clear();
-    }
-
-    /// <summary>
-    /// Gets the count of registered handlers.
-    /// </summary>
-    public int Count => _handlers.Count;
 }

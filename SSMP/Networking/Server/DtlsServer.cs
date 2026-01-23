@@ -374,7 +374,7 @@ internal class DtlsServer {
         Logger.Info($"Starting handshake for {endPoint}");
 
         DtlsTransport? dtlsTransport = null;
-        bool handshakeSucceeded = false;
+        var handshakeSucceeded = false;
 
         try {
             var handshakeTask = Task.Run(
@@ -465,20 +465,13 @@ internal class DtlsServer {
     private void ClientReceiveLoop(DtlsServerClient dtlsServerClient, CancellationToken cancellationToken) {
         var dtlsTransport = dtlsServerClient.DtlsTransport;
         var receiveLimit = dtlsTransport.GetReceiveLimit();
-        
+    
         // Use pooled buffer to reduce GC pressure in hot path
         var buffer = ArrayPool<byte>.Shared.Rent(receiveLimit);
 
         try {
             while (!cancellationToken.IsCancellationRequested) {
-                int numReceived;
-
-                try {
-                    numReceived = dtlsTransport.Receive(buffer, 0, receiveLimit, 100);
-                } catch (Exception) {
-                    // Silently ignore receive errors during polling
-                    numReceived = -1;
-                }
+                var numReceived = dtlsTransport.Receive(buffer, 0, receiveLimit, 100);
 
                 if (numReceived <= 0) continue;
 
@@ -486,11 +479,12 @@ internal class DtlsServer {
                 var packetBuffer = new byte[numReceived];
                 Array.Copy(buffer, 0, packetBuffer, 0, numReceived);
 
-                try {
-                    DataReceivedEvent?.Invoke(dtlsServerClient, packetBuffer, numReceived);
-                } catch (Exception e) {
-                    Logger.Error($"Error in DtlsServer.DataReceivedEvent: {e}");
-                }
+                DataReceivedEvent?.Invoke(dtlsServerClient, packetBuffer, numReceived);
+            }
+        } catch (Exception e) {
+            // Log only unexpected errors (receive timeouts are normal)
+            if (!cancellationToken.IsCancellationRequested) {
+                Logger.Error($"Error in DtlsServer receive loop: {e}");
             }
         } finally {
             ArrayPool<byte>.Shared.Return(buffer);

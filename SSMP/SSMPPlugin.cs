@@ -17,11 +17,11 @@ public partial class SSMPPlugin : BaseUnityPlugin {
     /// </summary>
     public SSMPPlugin() {
         Logging.Logger.AddLogger(new BepInExLogger());
-        
+
         EventHooks.Initialize();
         CustomHooks.Initialize();
     }
-    
+
     private void Awake() {
         Logging.Logger.Info($"Plugin {Name} ({Id}) has loaded!");
 
@@ -34,12 +34,12 @@ public partial class SSMPPlugin : BaseUnityPlugin {
     /// </summary>
     private void Initialize() {
         Logging.Logger.Info("Initializing SSMP");
-        
+
         EventHooks.UIManagerUIGoToMainMenu -= Initialize;
-        
+
         // Add the MonoBehaviourUtil to the game object associated with this plugin
         gameObject.AddComponent<MonoBehaviourUtil>();
-        
+
         _gameManager = new Game.GameManager();
         _gameManager.Initialize();
     }

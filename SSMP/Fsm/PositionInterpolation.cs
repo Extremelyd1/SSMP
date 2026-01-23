@@ -1,5 +1,4 @@
-/*
-using UnityEngine;
+/*using UnityEngine;
 
 namespace SSMP.Fsm;
 
@@ -93,11 +92,7 @@ internal class PositionInterpolation : MonoBehaviour {
         _transform.localPosition = _cachedPosition;
 
         // Check if we've reached the target using squared distance (faster than magnitude)
-        var sqrDistanceToTarget = (_cachedPosition.x - _targetPosition.x) * (_cachedPosition.x - _targetPosition.x) +
-                                     (_cachedPosition.y - _targetPosition.y) * (_cachedPosition.y - _targetPosition.y) +
-                                     (_cachedPosition.z - _targetPosition.z) * (_cachedPosition.z - _targetPosition.z);
-        
-        if (sqrDistanceToTarget < PositionThresholdSq) {
+        if (SquaredDistance(_cachedPosition, _targetPosition) < PositionThresholdSq) {
             // Snap to target when close enough
             _transform.localPosition = _targetPosition;
             _cachedPosition = _targetPosition;
@@ -111,15 +106,21 @@ internal class PositionInterpolation : MonoBehaviour {
     /// </summary>
     /// <param name="newPosition">The new position as Vector3.</param>
     public void SetNewPosition(Vector3 newPosition) {
-        // Manual squared distance calculation (faster than vector subtraction + sqrMagnitude)
-        var sqrDistance = (newPosition.x - _targetPosition.x) * (newPosition.x - _targetPosition.x) +
-                           (newPosition.y - _targetPosition.y) * (newPosition.y - _targetPosition.y) +
-                           (newPosition.z - _targetPosition.z) * (newPosition.z - _targetPosition.z);
-        
         // Only update if the new position is actually different
-        if (sqrDistance > PositionThresholdSq) {
+        if (SquaredDistance(newPosition, _targetPosition) > PositionThresholdSq) {
             _targetPosition = newPosition;
             _hasReachedTarget = false;
         }
     }
-}*/
+
+    /// <summary>
+    /// Calculate squared distance between two positions (faster than Vector3.sqrMagnitude).
+    /// </summary>
+    private static float SquaredDistance(Vector3 a, Vector3 b) {
+        var dx = a.x - b.x;
+        var dy = a.y - b.y;
+        var dz = a.z - b.z;
+        return dx * dx + dy * dy + dz * dz;
+    }
+}
+*/
