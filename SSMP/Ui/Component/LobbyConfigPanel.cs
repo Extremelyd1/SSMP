@@ -1,4 +1,5 @@
 using System;
+using SSMP.Networking.Matchmaking;
 using UnityEngine;
 using UnityEngine.UI;
 using Object = UnityEngine.Object;
@@ -13,9 +14,6 @@ internal class LobbyConfigPanel : IComponent {
     /// <summary>The root GameObject for this panel.</summary>
     private GameObject GameObject { get; }
 
-    /// <summary>Input field for the lobby name.</summary>
-    private readonly InputField _nameInput;
-
     /// <summary>Text displaying the current visibility option (Steam only).</summary>
     private readonly Text _visibilityText;
 
@@ -23,7 +21,7 @@ internal class LobbyConfigPanel : IComponent {
     private LobbyVisibility _visibility = LobbyVisibility.Public;
 
     /// <summary>Callback invoked when Create is pressed.</summary>
-    private Action<string, LobbyVisibility>? _onCreate;
+    private Action<LobbyVisibility>? _onCreate;
 
     /// <summary>Callback invoked when Cancel is pressed.</summary>
     private Action? _onCancel;
@@ -34,8 +32,8 @@ internal class LobbyConfigPanel : IComponent {
     /// <summary>Parent component group for visibility management.</summary>
     private readonly ComponentGroup _componentGroup;
 
-    /// <summary>The lobby type: "steam" or "matchmaking".</summary>
-    private readonly string _lobbyType;
+    /// <summary>The lobby type: Steam or Matchmaking.</summary>
+    private readonly PublicLobbyType _lobbyType;
 
     /// <summary>Height of the header text.</summary>
     private const float HeaderHeight = 35f;
@@ -58,8 +56,13 @@ internal class LobbyConfigPanel : IComponent {
     /// <param name="parent">Parent component group</param>
     /// <param name="position">Center position</param>
     /// <param name="size">Panel size</param>
-    /// <param name="lobbyType">Type of lobby: "steam" or "matchmaking"</param>
-    public LobbyConfigPanel(ComponentGroup parent, Vector2 position, Vector2 size, string lobbyType = "matchmaking") {
+    /// <param name="lobbyType">Type of lobby.</param>
+    public LobbyConfigPanel(
+        ComponentGroup parent, 
+        Vector2 position, 
+        Vector2 size, 
+        PublicLobbyType lobbyType = PublicLobbyType.Matchmaking
+    ) {
         _lobbyType = lobbyType;
 
         // Create main container
@@ -82,30 +85,6 @@ internal class LobbyConfigPanel : IComponent {
         );
         header.transform.SetParent(GameObject.transform, false);
         currentY -= HeaderHeight + RowSpacing;
-
-        // Lobby Name row
-        var nameLabel = CreateText(
-            "Lobby Name:",
-            new Vector2(-size.x / 4f - 10f, currentY),
-            size.x / 2f - 20f,
-            RowHeight,
-            14,
-            Color.white,
-            TextAnchor.MiddleLeft
-        );
-        nameLabel.transform.SetParent(GameObject.transform, false);
-
-        var nameInputGo = CreateInputField(
-            new Vector2(size.x / 4f - 10f, currentY),
-            size.x / 2f,
-            RowHeight,
-            ""
-        );
-        nameInputGo.transform.SetParent(GameObject.transform, false);
-        _nameInput = nameInputGo.GetComponent<InputField>();
-        currentY -= RowHeight + RowSpacing;
-
-        currentY -= RowSpacing;
 
         // Visibility row (for all lobby types)
         var visLabel = CreateText(
@@ -175,32 +154,16 @@ internal class LobbyConfigPanel : IComponent {
     #region Public API
 
     /// <summary>
-    /// Sets the default lobby name in the input field.
-    /// </summary>
-    /// <param name="name">Default name to display.</param>
-    public void SetDefaultName(string name) => _nameInput.text = name;
-
-    /// <summary>
     /// Sets the callback invoked when the Create button is pressed.
     /// </summary>
     /// <param name="callback">Callback receiving the lobby name and visibility.</param>
-    public void SetOnCreate(Action<string, LobbyVisibility> callback) => _onCreate = callback;
+    public void SetOnCreate(Action<LobbyVisibility> callback) => _onCreate = callback;
 
     /// <summary>
     /// Sets the callback invoked when the Cancel button is pressed.
     /// </summary>
     /// <param name="callback">Callback to invoke on cancel.</param>
     public void SetOnCancel(Action callback) => _onCancel = callback;
-
-    /// <summary>
-    /// Gets the lobby type ("steam" or "matchmaking").
-    /// </summary>
-    public string LobbyType => _lobbyType;
-
-    /// <summary>
-    /// Gets whether the panel is currently visible.
-    /// </summary>
-    public bool IsVisible => _activeSelf;
 
     /// <summary>
     /// Shows the panel.
@@ -253,17 +216,12 @@ internal class LobbyConfigPanel : IComponent {
     #region Private Helpers
 
     private void OnCreatePressed() {
-        var name = _nameInput.text;
-        if (string.IsNullOrWhiteSpace(name)) {
-            name = "Unnamed Lobby";
-        }
-
-        _onCreate?.Invoke(name, _visibility);
+        _onCreate?.Invoke(_visibility);
     }
 
     private void OnPrevVisibility() {
         // For matchmaking, skip FriendsOnly (Steam-specific)
-        if (_lobbyType == "matchmaking") {
+        if (_lobbyType == PublicLobbyType.Matchmaking) {
             _visibility = _visibility == LobbyVisibility.Public 
                 ? LobbyVisibility.Private 
                 : LobbyVisibility.Public;
@@ -280,7 +238,7 @@ internal class LobbyConfigPanel : IComponent {
 
     private void OnNextVisibility() {
         // For matchmaking, skip FriendsOnly (Steam-specific)
-        if (_lobbyType == "matchmaking") {
+        if (_lobbyType == PublicLobbyType.Matchmaking) {
             _visibility = _visibility == LobbyVisibility.Public 
                 ? LobbyVisibility.Private 
                 : LobbyVisibility.Public;

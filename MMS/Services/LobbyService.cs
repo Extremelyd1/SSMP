@@ -7,7 +7,7 @@ namespace MMS.Services;
 /// Thread-safe in-memory lobby storage with heartbeat-based expiration.
 /// Lobbies are keyed by ConnectionData (Steam ID or IP:Port).
 /// </summary>
-public class LobbyService {
+public class LobbyService(LobbyNameService lobbyNameService) {
     /// <summary>Thread-safe dictionary of lobbies keyed by ConnectionData.</summary>
     private readonly ConcurrentDictionary<string, Lobby> _lobbies = new();
 
@@ -137,8 +137,12 @@ public class LobbyService {
     /// <returns>True if the lobby was found and removed; otherwise, false.</returns>
     private bool RemoveLobby(string connectionData) {
         if (!_lobbies.TryRemove(connectionData, out var lobby)) return false;
+
         _tokenToConnectionData.TryRemove(lobby.HostToken, out _);
         _codeToConnectionData.TryRemove(lobby.LobbyCode, out _);
+
+        lobbyNameService.FreeLobbyName(lobby.LobbyName);
+
         return true;
     }
 

@@ -24,6 +24,7 @@ public class Program {
         );
 
         builder.Services.AddSingleton<LobbyService>();
+        builder.Services.AddSingleton<LobbyNameService>();
         builder.Services.AddHostedService<LobbyCleanupService>();
 
         var app = builder.Build();
@@ -123,6 +124,7 @@ public class Program {
     static Created<CreateLobbyResponse> CreateLobby(
         CreateLobbyRequest request,
         LobbyService lobbyService,
+        LobbyNameService lobbyNameService,
         HttpContext context
     ) {
         var lobbyType = request.LobbyType ?? "matchmaking";
@@ -132,7 +134,7 @@ public class Program {
             if (string.IsNullOrEmpty(request.ConnectionData)) {
                 return TypedResults.Created(
                     "/lobby/invalid",
-                    new CreateLobbyResponse("error", "Steam lobby requires ConnectionData", "")
+                    new CreateLobbyResponse("error", "Steam lobby requires ConnectionData", "", "")
                 );
             }
 
@@ -142,7 +144,7 @@ public class Program {
             if (string.IsNullOrEmpty(rawHostIp) || !IPAddress.TryParse(rawHostIp, out var parsedHostIp)) {
                 return TypedResults.Created(
                     "/lobby/invalid",
-                    new CreateLobbyResponse("error", "Invalid IP address", "")
+                    new CreateLobbyResponse("error", "Invalid IP address", "", "")
                 );
             }
 
@@ -150,16 +152,18 @@ public class Program {
             if (request.HostPort is null or <= 0 or > 65535) {
                 return TypedResults.Created(
                     "/lobby/invalid",
-                    new CreateLobbyResponse("error", "Invalid port number", "")
+                    new CreateLobbyResponse("error", "Invalid port number", "", "")
                 );
             }
 
             connectionData = $"{hostIp}:{request.HostPort}";
         }
 
+        var lobbyName = lobbyNameService.GenerateLobbyName();
+
         var lobby = lobbyService.CreateLobby(
             connectionData,
-            request.LobbyName ?? "Unnamed Lobby",
+            lobbyName,
             lobbyType,
             request.HostLanIp,
             request.IsPublic ?? true
@@ -171,7 +175,7 @@ public class Program {
         );
         return TypedResults.Created(
             $"/lobby/{lobby.ConnectionData}",
-            new CreateLobbyResponse(lobby.ConnectionData, lobby.HostToken, lobby.LobbyCode)
+            new CreateLobbyResponse(lobby.ConnectionData, lobby.HostToken, lobby.LobbyName, lobby.LobbyCode)
         );
     }
 
@@ -316,7 +320,6 @@ public class Program {
     /// <param name="HostIp">Host IP (Matchmaking only, optional).</param>
     /// <param name="HostPort">Host port (Matchmaking only).</param>
     /// <param name="ConnectionData">Steam lobby ID (Steam only).</param>
-    /// <param name="LobbyName">Display name for the lobby.</param>
     /// <param name="LobbyType">"steam" or "matchmaking" (default: matchmaking).</param>
     /// <param name="HostLanIp">Host LAN IP for local network discovery.</param>
     /// <param name="IsPublic">Whether lobby appears in browser (default: true).</param>
@@ -325,7 +328,6 @@ public class Program {
         string? HostIp,
         int? HostPort,
         string? ConnectionData,
-        string? LobbyName,
         string? LobbyType,
         string? HostLanIp,
         bool? IsPublic
@@ -333,15 +335,23 @@ public class Program {
 
     /// <param name="ConnectionData">Connection identifier (IP:Port or Steam lobby ID).</param>
     /// <param name="HostToken">Secret token for host operations.</param>
+    /// <param name="LobbyName">Name for the lobby.</param>
     /// <param name="LobbyCode">Human-readable invite code.</param>
-    internal record CreateLobbyResponse([UsedImplicitly] string ConnectionData, string HostToken, string LobbyCode);
+    [UsedImplicitly]
+    internal record CreateLobbyResponse(
+        string ConnectionData,
+        string HostToken,
+        string LobbyName,
+        string LobbyCode
+    );
 
     /// <param name="ConnectionData">Connection identifier (IP:Port or Steam lobby ID).</param>
     /// <param name="Name">Display name.</param>
     /// <param name="LobbyType">"steam" or "matchmaking".</param>
     /// <param name="LobbyCode">Human-readable invite code.</param>
+    [UsedImplicitly]
     internal record LobbyResponse(
-        [UsedImplicitly] string ConnectionData,
+        string ConnectionData,
         string Name,
         string LobbyType,
         string LobbyCode
@@ -349,14 +359,16 @@ public class Program {
 
     /// <param name="ClientIp">Client IP (optional - uses connection IP if null).</param>
     /// <param name="ClientPort">Client's local port for hole-punching.</param>
-    internal record JoinLobbyRequest([UsedImplicitly] string? ClientIp, int ClientPort);
+    [UsedImplicitly]
+    internal record JoinLobbyRequest(string? ClientIp, int ClientPort);
 
     /// <param name="ConnectionData">Host connection data (IP:Port or Steam lobby ID).</param>
     /// <param name="LobbyType">"steam" or "matchmaking".</param>
     /// <param name="ClientIp">Client's public IP as seen by MMS.</param>
     /// <param name="ClientPort">Client's public port.</param>
+    [UsedImplicitly]
     internal record JoinResponse(
-        [UsedImplicitly] string ConnectionData,
+        string ConnectionData,
         string LobbyType,
         string ClientIp,
         int ClientPort
@@ -364,13 +376,16 @@ public class Program {
 
     /// <param name="ClientIp">Pending client's IP.</param>
     /// <param name="ClientPort">Pending client's port.</param>
-    internal record PendingClientResponse([UsedImplicitly] string ClientIp, int ClientPort);
+    [UsedImplicitly]
+    internal record PendingClientResponse(string ClientIp, int ClientPort);
 
     /// <param name="Error">Error message.</param>
-    internal record ErrorResponse([UsedImplicitly] string Error);
+    [UsedImplicitly]
+    internal record ErrorResponse(string Error);
 
     /// <param name="Status">Status message.</param>
-    internal record StatusResponse([UsedImplicitly] string Status);
+    [UsedImplicitly]
+    internal record StatusResponse(string Status);
 
     #endregion
 }

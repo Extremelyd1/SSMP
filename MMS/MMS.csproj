@@ -9,4 +9,8 @@
     <ItemGroup>
         <PackageReference Include="JetBrains.Annotations" Version="2025.2.4"/>
     </ItemGroup>
+
+    <ItemGroup>
+        <EmbeddedResource Include="Resources\lobby-name-data.json"/>
+    </ItemGroup>
 </Project>

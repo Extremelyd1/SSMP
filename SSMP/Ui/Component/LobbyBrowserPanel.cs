@@ -258,7 +258,7 @@ internal class LobbyBrowserPanel : IComponent {
         nameRect.offsetMin = new Vector2(15f, 0f);
         nameRect.offsetMax = Vector2.zero;
         var nameText = nameObj.AddComponent<Text>();
-        nameText.text = lobby.Name;
+        nameText.text = BreakStringAtUppercase(lobby.Name, 2);
         nameText.font = Resources.FontManager.UIFontRegular;
         nameText.fontSize = 16;
         nameText.alignment = TextAnchor.MiddleLeft;
@@ -273,11 +273,11 @@ internal class LobbyBrowserPanel : IComponent {
         typeRect.offsetMin = Vector2.zero;
         typeRect.offsetMax = Vector2.zero;
         var typeText = typeObj.AddComponent<Text>();
-        typeText.text = lobby.LobbyType.ToUpper();
+        typeText.text = lobby.LobbyType == PublicLobbyType.Matchmaking ? "MATCH\nMAKING" : "STEAM";
         typeText.font = Resources.FontManager.UIFontRegular;
         typeText.fontSize = 14;
         typeText.alignment = TextAnchor.MiddleCenter;
-        typeText.color = lobby.LobbyType == "steam" ? new Color(0.4f, 0.7f, 1f, 1f) : new Color(1f, 0.85f, 0.6f, 1f);
+        typeText.color = lobby.LobbyType == PublicLobbyType.Steam ? new Color(0.4f, 0.7f, 1f, 1f) : new Color(1f, 0.85f, 0.6f, 1f);
         typeObj.transform.SetParent(entry.transform, false);
 
         // Join button (right)
@@ -356,4 +356,27 @@ internal class LobbyBrowserPanel : IComponent {
 
     /// <inheritdoc />
     public Vector2 GetSize() => GameObject.GetComponent<RectTransform>().sizeDelta;
+
+    /// <summary>
+    /// Breaks the given string by inserting a newline character just before the next uppercase character after a
+    /// given number have been encountered. This is used for formatting generated lobby names. For example:
+    /// "SharpenedNeedleStrikesSwiftly" will become "SharpenedNeedle\nStrikesSwiftly"
+    /// </summary>
+    /// <param name="s">The string to break.</param>
+    /// <param name="numUppercaseBeforeBreak">The number of uppercase characters after which to break.</param>
+    /// <returns>The string with the newline character inserted or the input string if no character was inserted.
+    /// </returns>
+    private static string BreakStringAtUppercase(string s, int numUppercaseBeforeBreak) {
+        var chars = s.ToCharArray();
+        var upperCount = 0;
+        for (var i = 0; i < chars.Length; i++) {
+            if (!char.IsUpper(chars[i])) continue;
+
+            if (upperCount++ < numUppercaseBeforeBreak) continue;
+
+            return s[..i] + "\n" + s.Substring(i, s.Length - i);
+        }
+
+        return s;
+    }
 }

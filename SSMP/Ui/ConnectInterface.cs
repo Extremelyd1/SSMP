@@ -586,7 +586,7 @@ internal class ConnectInterface {
                     _steamGroup.SetActive(true);
 
                     // Steam lobbies join via Steam ID (ConnectionData)
-                    if (lobby.LobbyType == "steam") {
+                    if (lobby.LobbyType == PublicLobbyType.Steam) {
                         JoinSteamLobbyFromBrowser(lobby.ConnectionData);
                     } else {
                         ShowFeedback(Color.red, "Invalid Steam lobby");
@@ -608,12 +608,12 @@ internal class ConnectInterface {
                 _backgroundGroup,
                 new Vector2(InitialX, currentY),
                 new Vector2(ContentWidth, 280f),
-                "steam"
+                PublicLobbyType.Steam
             );
-            _steamLobbyConfigPanel.SetOnCreate((name, visibility) => {
+            _steamLobbyConfigPanel.SetOnCreate(visibility => {
                     _steamLobbyConfigPanel.Hide();
                     _steamGroup?.SetActive(true);
-                    CreateSteamLobbyWithConfig(name, visibility);
+                    CreateSteamLobbyWithConfig(visibility);
                 }
             );
             _steamLobbyConfigPanel.SetOnCancel(() => {
@@ -629,10 +629,10 @@ internal class ConnectInterface {
             new Vector2(InitialX, currentY),
             new Vector2(ContentWidth, 280f)
         );
-        _lobbyConfigPanel.SetOnCreate((name, visibility) => {
+        _lobbyConfigPanel.SetOnCreate(visibility => {
                 _lobbyConfigPanel.Hide();
                 _matchmakingGroup.SetActive(true);
-                CreateMatchmakingLobbyWithConfig(name, visibility);
+                CreateMatchmakingLobbyWithConfig(visibility);
             }
         );
         _lobbyConfigPanel.SetOnCancel(() => {
@@ -1166,7 +1166,7 @@ internal class ConnectInterface {
 
         var (connectionData, lobbyType) = result.Value;
 
-        if (lobbyType == "steam") {
+        if (lobbyType == PublicLobbyType.Steam) {
             // Steam Connection - we don't need the hole punch socket
             HolePunchEncryptedTransport.HolePunchSocket.Dispose();
             HolePunchEncryptedTransport.HolePunchSocket = null;
@@ -1201,13 +1201,12 @@ internal class ConnectInterface {
     /// Shows the lobby configuration panel.
     /// </summary>
     private void OnHostLobbyButtonPressed() {
-        if (!ValidateUsername(out var username)) {
+        if (!ValidateUsername(out _)) {
             return;
         }
 
         // Show config panel with default name
         _matchmakingGroup.SetActive(false);
-        _lobbyConfigPanel.SetDefaultName($"{username}'s Lobby");
         _lobbyConfigPanel.Show();
     }
 
@@ -1215,16 +1214,16 @@ internal class ConnectInterface {
     /// Creates a matchmaking lobby with the specified configuration.
     /// Called from the config panel's Create callback.
     /// </summary>
-    private void CreateMatchmakingLobbyWithConfig(string lobbyName, LobbyVisibility visibility) {
+    private void CreateMatchmakingLobbyWithConfig(LobbyVisibility visibility) {
         if (!ValidateUsername(out var username)) {
             return;
         }
 
         ShowFeedback(Color.yellow, "Creating lobby...");
-        Logger.Info($"Host lobby requested: '{lobbyName}' ({visibility}) - HolePunch transport");
+        Logger.Info($"Host lobby requested: ({visibility}) - HolePunch transport");
 
         MonoBehaviourUtil.Instance.StartCoroutine(
-            CreateLobbyWithConfigCoroutine(lobbyName, visibility, "matchmaking", username)
+            CreateLobbyWithConfigCoroutine(visibility, PublicLobbyType.Matchmaking, username)
         );
     }
 
@@ -1232,13 +1231,13 @@ internal class ConnectInterface {
     /// Creates a Steam lobby with the specified configuration.
     /// Called from the Steam config panel's Create callback.
     /// </summary>
-    private void CreateSteamLobbyWithConfig(string lobbyName, LobbyVisibility visibility) {
+    private void CreateSteamLobbyWithConfig(LobbyVisibility visibility) {
         if (!ValidateUsername(out var username)) {
             return;
         }
 
         ShowFeedback(Color.yellow, "Creating Steam lobby...");
-        Logger.Info($"Steam lobby requested: '{lobbyName}' ({visibility})");
+        Logger.Info($"Steam lobby requested: ({visibility})");
 
         // Convert visibility to Steam lobby type
         var steamLobbyType = visibility switch {
@@ -1266,7 +1265,7 @@ internal class ConnectInterface {
             // Private and Friends-Only lobbies use Steam's native discovery only
             if (isPublic) {
                 MonoBehaviourUtil.Instance.StartCoroutine(
-                    RegisterSteamLobbyForBrowserCoroutine(steamLobbyId.m_SteamID.ToString(), lobbyName, username)
+                    RegisterSteamLobbyForBrowserCoroutine(steamLobbyId.m_SteamID.ToString(), username)
                 );
             } else {
                 ShowFeedback(Color.green, "Steam lobby created!");
@@ -1280,12 +1279,10 @@ internal class ConnectInterface {
     /// </summary>
     private IEnumerator RegisterSteamLobbyForBrowserCoroutine(
         string steamLobbyId,
-        string lobbyName,
         string username
     ) {
         var task = _mmsClient.RegisterSteamLobbyAsync(
             steamLobbyId,
-            lobbyName,
             isPublic: true,
             gameVersion: Application.version
         );
@@ -1307,15 +1304,13 @@ internal class ConnectInterface {
     /// Coroutine for async lobby creation with config.
     /// </summary>
     private IEnumerator CreateLobbyWithConfigCoroutine(
-        string lobbyName,
         LobbyVisibility visibility,
-        string lobbyType,
+        PublicLobbyType lobbyType,
         string username
     ) {
         var isPublic = visibility == LobbyVisibility.Public;
         var task = _mmsClient.CreateLobbyAsync(
             hostPort: 26960,
-            lobbyName: lobbyName,
             isPublic: isPublic,
             gameVersion: Application.version,
             lobbyType: lobbyType
@@ -1323,8 +1318,8 @@ internal class ConnectInterface {
 
         yield return new WaitUntil(() => task.IsCompleted);
 
-        var lobbyId = task.Result;
-        if (lobbyId == null) {
+        var (lobbyId, lobbyName) = task.Result;
+        if (lobbyId == null || lobbyName == null) {
             ShowFeedback(Color.red, "Failed to create lobby. Is MMS running?");
             yield break;
         }
@@ -1339,6 +1334,9 @@ internal class ConnectInterface {
             );
             ShowFeedback(Color.green, "Private lobby created!");
         } else {
+            UiManager.InternalChatBox.AddMessage(
+                $"<color=yellow>[Public Lobby]</color> Lobby name: <color=lime>{lobbyName}</color>, invite code: <color=lime>{lobbyId}</color>"
+            );
             ShowFeedback(Color.green, $"Lobby: {lobbyId}");
         }
 
@@ -1362,7 +1360,7 @@ internal class ConnectInterface {
     /// Coroutine for async lobby fetching (Matchmaking tab).
     /// </summary>
     private IEnumerator FetchLobbiesCoroutine() {
-        var task = _mmsClient.GetPublicLobbiesAsync("matchmaking");
+        var task = _mmsClient.GetPublicLobbiesAsync(PublicLobbyType.Matchmaking);
 
         // Wait for async operation without blocking main thread
         yield return new WaitUntil(() => task.IsCompleted);
@@ -1402,7 +1400,7 @@ internal class ConnectInterface {
             return;
         }
 
-        if (!ValidateUsername(out var username)) {
+        if (!ValidateUsername(out _)) {
             return;
         }
 
@@ -1410,7 +1408,6 @@ internal class ConnectInterface {
 
         // Show config panel with default name
         _steamGroup.SetActive(false);
-        _steamLobbyConfigPanel.SetDefaultName($"{username}'s Lobby");
         _steamLobbyConfigPanel.Show();
     }
 
@@ -1438,7 +1435,7 @@ internal class ConnectInterface {
     /// Coroutine for async Steam lobby fetching from MMS.
     /// </summary>
     private IEnumerator FetchSteamLobbiesCoroutine() {
-        var task = _mmsClient.GetPublicLobbiesAsync("steam"); // Filter by steam type
+        var task = _mmsClient.GetPublicLobbiesAsync(PublicLobbyType.Steam); // Filter by steam type
 
         yield return new WaitUntil(() => task.IsCompleted);
 
