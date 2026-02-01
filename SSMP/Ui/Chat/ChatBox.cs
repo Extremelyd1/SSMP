@@ -91,7 +91,7 @@ internal class ChatBox : IChatBox {
     /// <summary>
     /// Whether the chat is currently open.
     /// </summary>
-    private bool _isOpen;
+    public bool IsOpen { get; private set; }
     /// <summary>
     /// The current scroll offset based on how much the user has scrolled the chat when opened.
     /// </summary>
@@ -179,7 +179,7 @@ internal class ChatBox : IChatBox {
     private void CheckKeyBinds(ModSettings modSettings) {
         if (!_chatBoxGroup.IsActive()) return;
 
-        if (_isOpen) {
+        if (IsOpen) {
             HandleOpenChatInput();
         } else if (modSettings.Keybinds.OpenChat.IsPressed && CanOpenChat()) {
             ShowChatInput();
@@ -290,7 +290,7 @@ internal class ChatBox : IChatBox {
     /// Show the chat input.
     /// </summary>
     private void ShowChatInput() {
-        _isOpen = true;
+        IsOpen = true;
         _scrollOffset = 0;
 
         UpdateMessageVisibility();
@@ -307,7 +307,7 @@ internal class ChatBox : IChatBox {
     /// Hide the chat input.
     /// </summary>
     private void HideChatInput() {
-        _isOpen = false;
+        IsOpen = false;
         _scrollOffset = 0;
 
         for (var i = 0; i < MaxMessages; i++) 
@@ -327,7 +327,7 @@ internal class ChatBox : IChatBox {
     /// </summary>
     private void UpdateMessageVisibility() {
         var messageCount = CountMessages();
-        var visibleCount = _isOpen ? MaxShownMessagesWhenOpen : MaxShownMessages;
+        var visibleCount = IsOpen ? MaxShownMessagesWhenOpen : MaxShownMessages;
         var maxScroll = Mathf.Max(0, messageCount - visibleCount);
 
         _scrollOffset = Mathf.Clamp(_scrollOffset, 0, maxScroll);
@@ -346,7 +346,7 @@ internal class ChatBox : IChatBox {
                            (visualSlot * MessageHeight);
 
                 message.SetPosition(new Vector2(MessageSize.x / 2f + MarginLeft, yPos));
-                message.OnChatToggle(_isOpen);
+                message.OnChatToggle(IsOpen);
             } else {
                 message.Hide();
             }
@@ -508,7 +508,7 @@ internal class ChatBox : IChatBox {
                 InputMarginBottom + InputHeight + BoxInputMargin),
             messageText
         );
-        newMessage.Display(_isOpen);
+        newMessage.Display(IsOpen);
         _messages[0] = newMessage;
 
         _scrollOffset = 0;
