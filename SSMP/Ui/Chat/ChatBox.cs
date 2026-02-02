@@ -88,9 +88,7 @@ internal class ChatBox : IChatBox {
     /// The chat input component.
     /// </summary>
     private readonly ChatInputComponent _chatInput;
-    /// <summary>
-    /// Whether the chat is currently open.
-    /// </summary>
+    /// <inheritdoc />
     public bool IsOpen { get; private set; }
     /// <summary>
     /// The current scroll offset based on how much the user has scrolled the chat when opened.
