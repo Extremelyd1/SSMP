@@ -66,9 +66,9 @@ internal class ModSettings {
 
     /// <summary>
     /// The URL of the MatchMaking Service (MMS).
-    /// Default points to localhost on port 5000.
+    /// Default points to a domain name for the standard MMS.
     /// </summary>
-    public string MmsUrl { get; set; } = "http://localhost:5000";
+    public string MmsUrl { get; set; } = "https://mms.ssmp.gg";
     
     /// <summary>
     /// Load the mod settings from file or create a new instance.

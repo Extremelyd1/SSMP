@@ -272,7 +272,7 @@ internal class MmsClient {
 
                     PublicLobbyType? type = null;
                     if (typeString != null) {
-                        Enum.TryParse(typeString, out PublicLobbyType parsedType);
+                        Enum.TryParse(typeString, true, out PublicLobbyType parsedType);
                         type = parsedType;
                     }
 
@@ -346,7 +346,7 @@ internal class MmsClient {
                         return null;
                     }
 
-                    if (!Enum.TryParse(lobbyTypeString, out PublicLobbyType lobbyType)) {
+                    if (!Enum.TryParse(lobbyTypeString, true, out PublicLobbyType lobbyType)) {
                         Logger.Error($"MmsClient: Invalid lobby type from JoinLobby: {lobbyTypeString}");
                         return null;
                     }
