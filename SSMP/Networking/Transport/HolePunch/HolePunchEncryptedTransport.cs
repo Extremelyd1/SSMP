@@ -120,6 +120,12 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     }
 
     /// <summary>
+    /// Optional fallback address to use if the primary connection fails.
+    /// Used when attempting a direct LAN connection first, falling back to hole-punching.
+    /// </summary>
+    public string? FallbackAddress { get; init; }
+
+    /// <summary>
     /// Connects to the specified remote endpoint with NAT traversal.
     /// Performs hole-punching for remote connections, direct connection for localhost.
     /// </summary>
@@ -127,32 +133,63 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     /// <param name="port">The port to connect to</param>
     /// <remarks>
     /// Connection process:
-    /// - Localhost: Direct DTLS connection (no hole-punching needed)
+    /// - Localhost/LAN: Direct DTLS connection (no hole-punching needed)
     /// - Remote: Hole-punch first, then DTLS connection over punched socket
+    /// - Fallback: If LAN fails and FallbackAddress is set, retry with fallback
     /// </remarks>
     public void Connect(string address, int port) {
-        // Detect self-connect or LAN scenario
-        if (address == LocalhostAddress || IsPrivateIp(address)) {
-            Logger.Debug($"HolePunch: Local/LAN connection detected ({address}), using direct DTLS");
-
-            // We don't need the pre-bound socket for LAN, so clean it up
-            if (HolePunchSocket != null) {
-                HolePunchSocket.Close();
-                HolePunchSocket = null;
-            }
-
-            // No hole-punching needed for localhost/LAN
-            _dtlsClient.Connect(address, port);
-            return;
+        if (IsLocalOrLanConnection(address)) {
+            ConnectLocalOrLan(address, port);
+        } else {
+            ConnectRemote(address, port);
         }
+    }
 
-        // Remote connection requires NAT traversal
+    /// <summary>
+    /// Determines if the connection is local or LAN-based.
+    /// </summary>
+    private static bool IsLocalOrLanConnection(string address) =>
+        address == LocalhostAddress || IsPrivateIp(address);
+
+    /// <summary>
+    /// Establishes a direct DTLS connection for local/LAN endpoints.
+    /// Retries with fallback address if initial connection fails.
+    /// </summary>
+    private void ConnectLocalOrLan(string address, int port) {
+        Logger.Debug($"HolePunch: Local/LAN connection detected ({address}), using direct DTLS.");
+
+        CleanupHolePunchSocket();
+
+        try {
+            _dtlsClient.Connect(address, port);
+        } catch (Exception ex) when (FallbackAddress != null) {
+            Logger.Warn(
+                $"HolePunch: Direct LAN connection to {address} failed ({ex.Message}), retrying with fallback: {FallbackAddress}."
+            );
+            Connect(FallbackAddress, port);
+        }
+    }
+
+    /// <summary>
+    /// Establishes a connection to a remote endpoint with NAT traversal.
+    /// </summary>
+    private void ConnectRemote(string address, int port) {
         Logger.Info($"HolePunch: Starting NAT traversal to {address}:{port}");
         var socket = PerformHolePunch(address, port);
-
-        // Establish DTLS connection using the hole-punched socket
         _dtlsClient.Connect(address, port, socket);
     }
+
+    /// <summary>
+    /// Cleans up the pre-bound hole punch socket if it exists.
+    /// </summary>
+    private static void CleanupHolePunchSocket() {
+        if (HolePunchSocket == null) {
+            return;
+        }
+        HolePunchSocket.Close();
+        HolePunchSocket = null;
+    }
+
 
     /// <summary>
     /// Checks if an IP address is a private (LAN) address.
@@ -161,10 +198,9 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
         if (!IPAddress.TryParse(ipAddress, out var ip)) return false;
 
         var bytes = ip.GetAddressBytes();
-
         return bytes[0] switch {
             10 => true, // 10.0.0.0/8
-            172 => bytes[1] >= 16 && bytes[1] <= 31, // 172.16.0.0/12
+            172 => bytes[1] is >= 16 and <= 31, // 172.16.0.0/12
             192 => bytes[1] == 168, // 192.168.0.0/16
             _ => false
         };
