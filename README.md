@@ -20,46 +20,59 @@ Follow the instructions for the BepInExPack on Thunderstore and once completed, 
 
 ## Usage
 The mod can be accessed by using the "Start Multiplayer" option in the main menu of the game.
-Once in the multiplayer menu, there is an option to host a game on the entered port and an option to join a game at the entered address and entered port.
-Playing multiplayer with people on your LAN is straightforward, but playing over the internet requires some extra work.
-Namely, the port of the hosted game should be forwarded in your router to point to the device you are hosting on.
-Alternatively, you could use software to facilitate extending your LAN, such as [Hamachi](https://vpn.net).
+Once the multiplayer menu is opened, you will be greeted with a dashboard from which you can choose to play online or on a local network.
+
+### Steam Support
+SSMP fully supports Steam networking.
+This means you can easily host a game and invite your friends through the Steam overlay without worrying about port forwarding or IP addresses.
+- **Hosting**: To host a Steam lobby, simply select the "Steam" option in the hosting menu.
+- **Inviting**: Once hosting, you can use the Steam overlay to invite friends, or use the `/invite` command in-game.
+- **Joining**: Friends can join your game directly through their Friends list or by accepting your invite.
+
+### Matchmaking Service (MMS)
+The mod includes a built-in server browser powered by our Matchmaking Service.
+- **Lobby Browser**: You can browse public lobbies directly from the multiplayer menu.
+- **Hole Punching**: The MMS facilitates NAT hole-punching, which allows players to connect to each other directly (P2P) without needing to port forward in most cases.
+
+### Direct Connection & LAN
+For those who prefer a traditional connection, you can still connect directly via IP address.
+- **Hosting**: Forward the port (default `26960`) on your router to your device.
+- **LAN**: Playing on the same local network works out of the box.
+- **VPN**: Tools like [Hamachi](https://vpn.net) can be used to simulate a LAN over the internet.
 
 If you start hosting or joining a server, the mod will prompt you to select a save file to use.
 This save file is only used locally and will not synchronise with the server.
 
+### Commands
 The mod features a chat window that allows users to enter commands.
-The chat input can be opened with a key-bind (`Y` by default), which feature the following commands:
-- `addon <enable|disable|list> [addon(s)]`: Enable, disable, or list addons.
-- `list`: List the names of the currently connected players.
-- `set <setting name> [value]`: Read or write a setting with the given name and given value. For a list of possible
-  settings, see the section below.
-- `skin <skin ID>`: Change the currently used skin ID for the player.
-- `team <None|Moss|Hive|Grimm|Lifeblood>`: Change the team that the player is on.
-- `announce <message>`: Broadcast a chat message to all connected players.
-- `kick <auth key|username|ip address>`: Kick the player with the given authentication key, username or IP address.
-- `ban <auth key|username>`: Ban the player with the given authentication key or username. If given a username, will only
-  issue the ban if a user with the given username is currently connected to the server.
-- `unban <auth key>`: Unban the player with the given authentication key.
-- `banip <auth key|username|ip address>`: Ban the IP of the player with the given authentication key, username or IP address.
-  If given an auth key or a username, will only issue the ban if a user with the given auth key or username is currently
-  connected to the server.
-- `unbanip <ip address>`: Unban the IP of the player with the given IP address.
+The chat input can be opened with a key-bind (`Y` by default), which features the following commands:
+- `/help`: Show the list of available commands.
+- `/list`: List the names of the currently connected players.
+- `/invite` or `/inv`: Open Steam's invite dialog to invite friends to your lobby.
+- `/addon <enable|disable|list> [addon(s)]`: Enable, disable, or list client addons.
+- `/set <setting name> [value]`: Read or write a setting with the given name and value.
+- `/skin <skin ID>`: Change the currently used skin ID for the player.
+- `/team <None|Moss|Hive|Grimm|Lifeblood>`: Change the team that the player is on.
+- `/announce <message>`: Broadcast a chat message to all connected players (Admin only).
+- `/kick <auth key|username|ip address>`: Kick a player (Admin only).
+- `/ban <auth key|username>`: Ban a player (Admin only).
+- `/unban <auth key>`: Unban a player (Admin only).
+- `/banip <auth key|username|ip address>`: Ban an IP address (Admin only).
+- `/unbanip <ip address>`: Unban an IP address (Admin only).
+- `/copysave <from> <to>`: Copy save data from one player to another (Currently disabled).
+- `/debug`: Output various debug information to the log.
 
 ### Authentication/authorization
 Each user will locally generate an auth key for authentication and authorization.
 This key can be used to whitelist and authorize specific users to allow them to join
 the server or execute commands that require higher permission.
 
-- `whitelist [args]`: Manage the whitelist with following options:
-    - `whitelist <on|off>`: Enable/disable the whitelist.
-    - `whitelist <add|remove> [name|auth key]`: Add/remove the given username or auth key to/from
-      the whitelist. If given a username that does not correspond with an online player, the username will be
-      added to the 'pre-list'. Then, if a new player with a username on this list will login, they are automatically
-      whitelisted.
-    - `whitelist <clear> [prelist]`: Clear the whitelist (or the pre-list if `prelist` was given as argument).
-- `auth [name|auth key]`: Authorize the online player with the given username or auth key.
-- `deauth [name|auth key]`: De-authorize the online player with the given username or auth key.
+- `/whitelist [args]`: Manage the whitelist with following options:
+    - `on|off`: Enable/disable the whitelist.
+    - `add|remove [name|auth key]`: Add/remove a user.
+    - `clear [prelist]`: Clear the whitelist.
+- `/auth <name|auth key>`: Authorize a player.
+- `/deauth <name|auth key>`: De-authorize a player.
 
 ### Standalone server
 It is possible to run a standalone server on Windows, Linux and Mac.
@@ -85,7 +98,7 @@ In addition to the commands described above, the standalone server also has the 
 ### Settings
 There are a lot of configurable settings that can change how the mod functions.
 
-The values below can be read and modified by the `set` command described above.
+The values below can be read and modified by the `/set` command described above.
 All names for the settings are case-insensitive, but are written in case for clarity.
 - `IsPvpEnabled`: whether player vs. player damage is enabled.
     - Aliases: `pvp`

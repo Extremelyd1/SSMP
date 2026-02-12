@@ -122,9 +122,9 @@ internal class UiManager : IUiManager {
 
     /// <summary>
     /// Event raised when the user requests to start hosting a server from the UI.
-    /// Parameters: address, port, username, transport type.
+    /// Parameters: address, port, username, transport type, fallback address.
     /// </summary>
-    public event Action<string, int, string, TransportType>? RequestServerStartHostEvent;
+    public event Action<string, int, string, TransportType, string?>? RequestServerStartHostEvent;
 
     /// <summary>
     /// Event raised when the user requests to stop hosting the current server.
@@ -133,9 +133,9 @@ internal class UiManager : IUiManager {
 
     /// <summary>
     /// Event raised when the user requests to connect to a server from the UI.
-    /// Parameters: address, port, username, transport type, is auto-connect (localhost).
+    /// Parameters: address, port, username, transport type, is auto-connect (localhost), fallback address.
     /// </summary>
-    public event Action<string, int, string, TransportType, bool>? RequestClientConnectEvent;
+    public event Action<string, int, string, TransportType, bool, string?>? RequestClientConnectEvent;
 
     /// <summary>
     /// Event raised when the user requests to disconnect from the current server.
@@ -489,20 +489,32 @@ internal class UiManager : IUiManager {
     /// <summary>
     /// Handles host button press by opening save selection.
     /// </summary>
-    private void OnStartHostRequested(string address, int port, string username, TransportType transportType) {
+    private void OnStartHostRequested(
+        string address,
+        int port,
+        string username,
+        TransportType transportType,
+        string? fallbackAddress
+    ) {
         OpenSaveSlotSelection(saveSelected => {
             if (!saveSelected) return;
 
-            RequestServerStartHostEvent?.Invoke(address, port, username, transportType);
-            RequestClientConnectEvent?.Invoke(LocalhostAddress, port, username, transportType, true);
+            RequestServerStartHostEvent?.Invoke(address, port, username, transportType, fallbackAddress);
+            RequestClientConnectEvent?.Invoke(LocalhostAddress, port, username, transportType, true, null);
         });
     }
 
     /// <summary>
     /// Handles connect button press.
     /// </summary>
-    private void OnConnectRequested(string address, int port, string username, TransportType transportType) =>
-        RequestClientConnectEvent?.Invoke(address, port, username, transportType, false);
+    private void OnConnectRequested(
+        string address,
+        int port,
+        string username,
+        TransportType transportType,
+        string? fallbackAddress
+    ) =>
+        RequestClientConnectEvent?.Invoke(address, port, username, transportType, false, fallbackAddress);
 
     #endregion
 

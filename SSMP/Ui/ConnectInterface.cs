@@ -1,5 +1,7 @@
 using System;
 using System.Collections;
+using System.Net;
+using System.Net.Sockets;
 using SSMP.Game;
 using SSMP.Game.Settings;
 using SSMP.Networking.Client;
@@ -12,6 +14,7 @@ using SSMP.Ui.Util;
 using SSMP.Util;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
+
 // ReSharper disable ObjectCreationAsStatement
 
 namespace SSMP.Ui;
@@ -481,23 +484,21 @@ internal class ConnectInterface {
     /// </summary>
     public MmsClient MmsClient => _mmsClient;
 
-
-
     #endregion
 
     #region Events
 
     /// <summary>
     /// Fired when the user attempts to connect to a server.
-    /// Parameters: address, port, username, transportType
+    /// Parameters: address, port, username, transportType, fallbackAddress
     /// </summary>
-    public event Action<string, int, string, TransportType>? ConnectButtonPressed;
+    public event Action<string, int, string, TransportType, string?>? ConnectButtonPressed;
 
     /// <summary>
     /// Fired when the user attempts to start hosting a server.
-    /// Parameters: address, port, username, transportType
+    /// Parameters: address, port, username, transportType, fallbackAddress
     /// </summary>
-    public event Action<string, int, string, TransportType>? StartHostButtonPressed;
+    public event Action<string, int, string, TransportType, string?>? StartHostButtonPressed;
 
     #endregion
 
@@ -834,7 +835,8 @@ internal class ConnectInterface {
         // Two buttons side-by-side (same layout as Direct IP tab)
         var buttonGap = 10f;
         var buttonWidth = (ContentWidth - buttonGap) / 2f;
-        var buttonOffset = ((buttonWidth + buttonGap) / 2f) / (float) System.Math.Pow(UiManager.ScreenHeightRatio, 2);
+        var buttonOffset = ((buttonWidth + buttonGap) / 2f) /
+                           (float) System.Math.Pow(UiManager.ScreenHeightRatio, 2);
 
         // Connect button (left)
         var connectButton = new ButtonComponent(
@@ -994,7 +996,8 @@ internal class ConnectInterface {
         // Direct IP button values
         var buttonGap = 10f;
         var buttonWidth = (ContentWidth - buttonGap) / 2f;
-        var buttonOffset = ((buttonWidth + buttonGap) / 2f) / (float) System.Math.Pow(UiManager.ScreenHeightRatio, 2);
+        var buttonOffset = ((buttonWidth + buttonGap) / 2f) /
+                           (float) System.Math.Pow(UiManager.ScreenHeightRatio, 2);
 
         // Connect button (left)
         var connectButton = new ButtonComponent(
@@ -1138,61 +1141,29 @@ internal class ConnectInterface {
     private IEnumerator JoinLobbyCoroutine(string lobbyId, string username) {
         ShowFeedback(Color.yellow, "Joining lobby...");
 
-        // Create a socket for hole-punching - bind to any available port
-        // MMS will see our public IP from the HTTP connection
-        var socket = new System.Net.Sockets.Socket(
-            System.Net.Sockets.AddressFamily.InterNetwork,
-            System.Net.Sockets.SocketType.Dgram,
-            System.Net.Sockets.ProtocolType.Udp
-        );
-        socket.Bind(new System.Net.IPEndPoint(System.Net.IPAddress.Any, 0));
-        var clientPort = ((System.Net.IPEndPoint)socket.LocalEndPoint!).Port;
+        // Create hole-punch socket for non-Steam lobbies
+        var holePunchSocket = CreateHolePunchSocket();
+        var clientPort = GetSocketPort(holePunchSocket);
 
-        // Store socket for HolePunchEncryptedTransport to use
-        HolePunchEncryptedTransport.HolePunchSocket = socket;
-
-        // Join lobby and register our endpoint for punch-back
+        // Join lobby and get connection info
         var task = _mmsClient.JoinLobbyAsync(lobbyId, clientPort);
         yield return new WaitUntil(() => task.IsCompleted);
 
-        var result = task.Result;
-
-        if (result == null) {
-            HolePunchEncryptedTransport.HolePunchSocket.Dispose();
-            HolePunchEncryptedTransport.HolePunchSocket = null;
+        var lobbyInfo = task.Result;
+        if (lobbyInfo == null) {
+            CleanupHolePunchSocket(holePunchSocket);
             ShowFeedback(Color.red, "Lobby not found, offline, or join failed");
             yield break;
         }
 
-        var (connectionData, lobbyType) = result.Value;
+        var (connectionData, lobbyType, lanConnectionData) = lobbyInfo.Value;
 
+        // Handle connection based on lobby type
         if (lobbyType == PublicLobbyType.Steam) {
-            // Steam Connection - we don't need the hole punch socket
-            HolePunchEncryptedTransport.HolePunchSocket.Dispose();
-            HolePunchEncryptedTransport.HolePunchSocket = null;
-
-            if (!SteamManager.IsInitialized) {
-                ShowFeedback(Color.red, "Steam is not initialized");
-                yield break;
-            }
-
-            ShowFeedback(Color.green, "Joining Steam lobby...");
-            // Pass Steam Lobby ID as IP, Port 0, Transport SteamP2P
-            ConnectButtonPressed?.Invoke(connectionData, 0, username, TransportType.Steam);
+            CleanupHolePunchSocket(holePunchSocket);
+            ConnectToSteamLobby(connectionData, username);
         } else {
-            // Matchmaking Connection (IP:Port)
-            var parts = connectionData.Split(':');
-            if (parts.Length != 2 || !int.TryParse(parts[1], out var hostPort)) {
-                ShowFeedback(Color.red, "Invalid connection data");
-                HolePunchEncryptedTransport.HolePunchSocket.Dispose();
-                HolePunchEncryptedTransport.HolePunchSocket = null;
-                yield break;
-            }
-
-            var hostIp = parts[0];
-
-            ShowFeedback(Color.green, $"Connecting to {hostIp}:{hostPort}...");
-            ConnectButtonPressed?.Invoke(hostIp, hostPort, username, TransportType.HolePunch);
+            ConnectToMatchmakingLobby(connectionData, lanConnectionData, username, holePunchSocket);
         }
     }
 
@@ -1269,7 +1240,7 @@ internal class ConnectInterface {
                 );
             } else {
                 ShowFeedback(Color.green, "Steam lobby created!");
-                StartHostButtonPressed?.Invoke("0.0.0.0", 0, username, TransportType.Steam);
+                StartHostButtonPressed?.Invoke("0.0.0.0", 0, username, TransportType.Steam, null);
             }
         }
     }
@@ -1296,7 +1267,7 @@ internal class ConnectInterface {
             ShowFeedback(Color.green, "Steam lobby created!");
         }
 
-        StartHostButtonPressed?.Invoke("0.0.0.0", 0, username, TransportType.Steam);
+        StartHostButtonPressed?.Invoke("0.0.0.0", 0, username, TransportType.Steam, null);
     }
 
 
@@ -1340,7 +1311,7 @@ internal class ConnectInterface {
             ShowFeedback(Color.green, $"Lobby: {lobbyId}");
         }
 
-        StartHostButtonPressed?.Invoke("0.0.0.0", 26960, username, TransportType.HolePunch);
+        StartHostButtonPressed?.Invoke("0.0.0.0", 26960, username, TransportType.HolePunch, null);
     }
 
     /// <summary>
@@ -1521,7 +1492,7 @@ internal class ConnectInterface {
         _directConnectButton.SetInteractable(false);
 
         Logger.Debug($"Connecting to {address}:{port} as {username}");
-        ConnectButtonPressed?.Invoke(address, port, username, TransportType.Udp);
+        ConnectButtonPressed?.Invoke(address, port, username, TransportType.Udp, null);
     }
 
     /// <summary>
@@ -1538,7 +1509,7 @@ internal class ConnectInterface {
             return;
         }
 
-        StartHostButtonPressed?.Invoke("", port, username, TransportType.Udp);
+        StartHostButtonPressed?.Invoke("", port, username, TransportType.Udp, null);
     }
 
     #endregion
@@ -1556,7 +1527,7 @@ internal class ConnectInterface {
         ShowFeedback(Color.green, "Lobby created! Friends can join via Steam overlay.");
 
         // Start hosting with Steam transport (port 0 as it's not used for Steam P2P)
-        StartHostButtonPressed?.Invoke("", 0, username, TransportType.Steam);
+        StartHostButtonPressed?.Invoke("", 0, username, TransportType.Steam, null);
     }
 
     /// <summary>
@@ -1592,7 +1563,20 @@ internal class ConnectInterface {
         }
 
         // Connect using Steam ID as address with Steam transport
-        ConnectButtonPressed?.Invoke(hostId.ToString(), 0, username, TransportType.Steam);
+        ConnectButtonPressed?.Invoke(hostId.ToString(), 0, username, TransportType.Steam, null);
+    }
+
+    /// <summary>
+    /// Handles connection to a Steam lobby.
+    /// </summary>
+    private void ConnectToSteamLobby(string connectionData, string username) {
+        if (!SteamManager.IsInitialized) {
+            ShowFeedback(Color.red, "Steam is not initialized");
+            return;
+        }
+
+        ShowFeedback(Color.green, "Joining Steam lobby...");
+        ConnectButtonPressed?.Invoke(connectionData, 0, username, TransportType.Steam, null);
     }
 
     #endregion
@@ -1637,18 +1621,18 @@ internal class ConnectInterface {
     /// <param name="username">Output parameter containing the validated username.</param>
     /// <returns>True if username is valid, false otherwise.</returns>
     private bool ValidateUsername(out string username) {
-        if (!ConnectInterfaceHelpers.ValidateUsername(
+        if (ConnectInterfaceHelpers.ValidateUsername(
                 _usernameInput,
                 _feedbackText,
                 out username,
                 _feedbackHideCoroutine,
                 out var newCoroutine
-            )) {
-            _feedbackHideCoroutine = newCoroutine;
-            return false;
+        )) {
+            return true;
         }
 
-        return true;
+        _feedbackHideCoroutine = newCoroutine;
+        return false;
     }
 
     /// <summary>
@@ -1657,7 +1641,7 @@ internal class ConnectInterface {
     /// <param name="portString">The string to parse.</param>
     /// <param name="port">Output parameter containing the parsed port number.</param>
     /// <returns>True if parsing succeeded and port is valid (non-zero), false otherwise.</returns>
-    private bool TryParsePort(string portString, out int port) {
+    private static bool TryParsePort(string portString, out int port) {
         return int.TryParse(portString, out port) && port != 0;
     }
 
@@ -1698,7 +1682,7 @@ internal class ConnectInterface {
     /// </summary>
     /// <param name="result">The connection failure details.</param>
     /// <returns>A formatted error message string.</returns>
-    private string GetFailureMessage(ConnectionFailedResult result) {
+    private static string GetFailureMessage(ConnectionFailedResult result) {
         return result.Reason switch {
             ConnectionFailedReason.InvalidAddons => ErrorInvalidAddons,
             ConnectionFailedReason.SocketException or
@@ -1710,5 +1694,132 @@ internal class ConnectInterface {
         };
     }
 
+    /// <summary>
+    /// Creates and configures a UDP socket for hole-punching.
+    /// </summary>
+    private static Socket CreateHolePunchSocket() {
+        var socket = new Socket(
+            AddressFamily.InterNetwork,
+            SocketType.Dgram,
+            ProtocolType.Udp
+        );
+
+        socket.Bind(new IPEndPoint(IPAddress.Any, 0));
+        HolePunchEncryptedTransport.HolePunchSocket = socket;
+
+        return socket;
+    }
+
+    /// <summary>
+    /// Gets the local port from a bound socket.
+    /// </summary>
+    private static int GetSocketPort(Socket socket) {
+        return ((IPEndPoint) socket.LocalEndPoint!).Port;
+    }
+
+    /// <summary>
+    /// Handles connection to a matchmaking lobby with LAN/public fallback.
+    /// </summary>
+    private void ConnectToMatchmakingLobby(
+        string connectionData,
+        string? lanConnectionData,
+        string username,
+        Socket? holePunchSocket
+    ) {
+        var connectionInfo = DetermineConnectionInfo(connectionData, lanConnectionData);
+
+        if (connectionInfo == null) {
+            ShowFeedback(Color.red, "Invalid connection data");
+            CleanupHolePunchSocket(holePunchSocket);
+            return;
+        }
+
+        ShowFeedback(Color.green, connectionInfo.Value.FeedbackMessage);
+        ConnectButtonPressed?.Invoke(
+            connectionInfo.Value.PrimaryIp,
+            connectionInfo.Value.PrimaryPort,
+            username,
+            TransportType.HolePunch,
+            connectionInfo.Value.FallbackIp
+        );
+    }
+
+    /// <summary>
+    /// Determines the optimal connection strategy (LAN first, then public).
+    /// </summary>
+    private static ConnectionInfo? DetermineConnectionInfo(string publicConnectionData, string? lanConnectionData) {
+        // Try LAN connection first if available
+        if (!string.IsNullOrEmpty(lanConnectionData) &&
+            TryParseConnectionData(lanConnectionData, out var lanIp, out var lanPort)) {
+            var publicIp = publicConnectionData.Split(':')[0];
+            return new ConnectionInfo(
+                lanIp,
+                lanPort,
+                publicIp,
+                $"Connecting to LAN {lanIp}:{lanPort}..."
+            );
+        }
+
+        // Fall back to public connection
+        if (TryParseConnectionData(publicConnectionData, out var publicIpParsed, out var publicPort)) {
+            return new ConnectionInfo(
+                publicIpParsed,
+                publicPort,
+                null,
+                $"Connecting to {publicIpParsed}:{publicPort}..."
+            );
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Parses connection data in format "IP:Port".
+    /// </summary>
+    private static bool TryParseConnectionData(string connectionData, out string ip, out int port) {
+        ip = string.Empty;
+        port = 0;
+
+        var parts = connectionData.Split(':');
+        if (parts.Length != 2)
+            return false;
+
+        ip = parts[0];
+        return int.TryParse(parts[1], out port);
+    }
+
+    /// <summary>
+    /// Safely disposes the hole-punch socket.
+    /// </summary>
+    private static void CleanupHolePunchSocket(Socket? socket) {
+        if (socket == null) {
+            return;
+        }
+
+        socket.Dispose();
+        HolePunchEncryptedTransport.HolePunchSocket = null;
+    }
+
     #endregion
 }
+
+#region Helper Structs
+
+/// <summary>
+/// Contains connection information for matchmaking lobbies.
+/// </summary>
+internal readonly struct ConnectionInfo {
+    public string PrimaryIp { get; }
+    public int PrimaryPort { get; }
+    public string? FallbackIp { get; }
+    public string FeedbackMessage { get; }
+
+    public ConnectionInfo(string primaryIp, int primaryPort, string? fallbackIp, string feedbackMessage) {
+        PrimaryIp = primaryIp;
+        PrimaryPort = primaryPort;
+        FallbackIp = fallbackIp;
+        FeedbackMessage = feedbackMessage;
+    }
+}
+
+#endregion

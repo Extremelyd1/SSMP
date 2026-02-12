@@ -321,9 +321,13 @@ internal class MmsClient {
     /// </summary>
     /// <param name="lobbyId">The ID of the lobby to join</param>
     /// <param name="clientPort">The local port the client is listening on</param>
-    /// <returns>Host connection details (connectionData, lobbyType) or null on failure</returns>
-    public Task<(string connectionData, PublicLobbyType lobbyType)?> JoinLobbyAsync(string lobbyId, int clientPort) {
-        return Task.Run<(string connectionData, PublicLobbyType lobbyType)?>(async () => {
+    /// <returns>Host connection details (connectionData, lobbyType, and optionally lanConnectionData) or null on
+    /// failure</returns>
+    public Task<(string connectionData, PublicLobbyType lobbyType, string? lanConnectionData)?> JoinLobbyAsync(
+        string lobbyId, 
+        int clientPort
+    ) {
+        return Task.Run<(string connectionData, PublicLobbyType lobbyType, string? lanConnectionData)?>(async () => {
             try {
                 // Request join to get host connection info and queue for hole punching
                 var jsonRequest = $"{{\"ClientIp\":null,\"ClientPort\":{clientPort}}}";
@@ -340,6 +344,7 @@ internal class MmsClient {
 
                     var connectionData = ExtractJsonValueSpan(span, "connectionData");
                     var lobbyTypeString = ExtractJsonValueSpan(span, "lobbyType");
+                    var lanConnectionData = ExtractJsonValueSpan(span, "lanConnectionData");
 
                     if (connectionData == null || lobbyTypeString == null) {
                         Logger.Error($"MmsClient: Invalid response from JoinLobby: {response}");
@@ -351,8 +356,8 @@ internal class MmsClient {
                         return null;
                     }
 
-                    Logger.Info($"MmsClient: Joined lobby {lobbyId}, type: {lobbyType}, connection: {connectionData}");
-                    return (connectionData, lobbyType);
+                    Logger.Info($"MmsClient: Joined lobby {lobbyId}, type: {lobbyType}, connection: {connectionData}, lan: {lanConnectionData}");
+                    return (connectionData, lobbyType, lanConnectionData);
                 } finally {
                     CharPool.Return(buffer);
                 }

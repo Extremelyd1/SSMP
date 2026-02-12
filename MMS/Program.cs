@@ -364,6 +364,7 @@ public class Program {
 
         // Check if client is on the same network as the host
         var joinConnectionData = lobby.ConnectionData;
+        string? lanConnectionData = null;
 
         // We can only check IP equality if we have the host's IP (for matchmaking lobbies mainly)
         // NOTE: This assumes lobby.ConnectionData is in "IP:Port" format for matchmaking
@@ -373,11 +374,11 @@ public class Program {
 
             if (clientIp == hostPublicIp) {
                 Logger.LogInformation("[JOIN] Local Network Detected! Returning LAN IP: {}", lobby.HostLanIp);
-                joinConnectionData = lobby.HostLanIp;
+                lanConnectionData = lobby.HostLanIp;
             }
         }
 
-        return TypedResults.Ok(new JoinResponse(joinConnectionData, lobby.LobbyType, clientIp, request.ClientPort));
+        return TypedResults.Ok(new JoinResponse(joinConnectionData, lobby.LobbyType, clientIp, request.ClientPort, lanConnectionData));
     }
 
     #endregion
@@ -433,12 +434,14 @@ public class Program {
     /// <param name="LobbyType">"steam" or "matchmaking".</param>
     /// <param name="ClientIp">Client's public IP as seen by MMS.</param>
     /// <param name="ClientPort">Client's public port.</param>
+    /// <param name="LanConnectionData">Host's LAN connection data in case LAN is detected.</param>
     [UsedImplicitly]
     internal record JoinResponse(
         string ConnectionData,
         string LobbyType,
         string ClientIp,
-        int ClientPort
+        int ClientPort,
+        string? LanConnectionData
     );
 
     /// <param name="ClientIp">Pending client's IP.</param>

@@ -28,7 +28,7 @@ namespace SSMP.Networking.Transport.HolePunch;
 /// <para>
 /// The transport handles both:
 /// - Remote connections: Full hole-punching and DTLS
-/// - Local connections: Direct DTLS without hole-punching
+/// - LAN connections: Direct DTLS without hole-punching
 /// </para>
 /// </remarks>
 internal class HolePunchEncryptedTransport : IEncryptedTransport {
@@ -109,6 +109,12 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     public int MaxPacketSize => UdpMaxPacketSize;
 
     /// <summary>
+    /// Optional fallback address to use if the primary connection fails.
+    /// Used when attempting a direct LAN connection first, falling back to hole-punching.
+    /// </summary>
+    public string? FallbackAddress { get; init; }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="HolePunchEncryptedTransport"/> class.
     /// Sets up the DTLS client and subscribes to its data events.
     /// </summary>
@@ -121,37 +127,67 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
 
     /// <summary>
     /// Connects to the specified remote endpoint with NAT traversal.
-    /// Performs hole-punching for remote connections, direct connection for localhost.
+    /// Performs hole-punching for remote connections, direct connection for LAN.
     /// </summary>
     /// <param name="address">The IP address to connect to</param>
     /// <param name="port">The port to connect to</param>
     /// <remarks>
     /// Connection process:
-    /// - Localhost: Direct DTLS connection (no hole-punching needed)
+    /// - LAN: Direct DTLS connection (no hole-punching needed)
     /// - Remote: Hole-punch first, then DTLS connection over punched socket
+    /// - Fallback: If LAN fails and FallbackAddress is set, retry with fallback
     /// </remarks>
     public void Connect(string address, int port) {
-        // Detect self-connect or LAN scenario
-        if (address == LocalhostAddress || IsPrivateIp(address)) {
-            Logger.Debug($"HolePunch: Local/LAN connection detected ({address}), using direct DTLS");
-
-            // We don't need the pre-bound socket for LAN, so clean it up
-            if (HolePunchSocket != null) {
-                HolePunchSocket.Close();
-                HolePunchSocket = null;
-            }
-
-            // No hole-punching needed for localhost/LAN
-            _dtlsClient.Connect(address, port);
-            return;
+        if (IsLanConnection(address)) {
+            ConnectLan(address, port);
+        } else {
+            ConnectRemote(address, port);
         }
+    }
 
-        // Remote connection requires NAT traversal
+    /// <summary>
+    /// Determines if the connection is LAN-based.
+    /// </summary>
+    private static bool IsLanConnection(string address) =>
+        address == LocalhostAddress || IsPrivateIp(address);
+
+    /// <summary>
+    /// Establishes a direct DTLS connection for LAN endpoints.
+    /// Retries with fallback address if initial connection fails.
+    /// </summary>
+    private void ConnectLan(string address, int port) {
+        Logger.Debug($"HolePunch: LAN connection detected ({address}), using direct DTLS.");
+
+        CleanupHolePunchSocket();
+
+        try {
+            _dtlsClient.Connect(address, port);
+        } catch (Exception ex) when (FallbackAddress != null) {
+            Logger.Warn(
+                $"HolePunch: Direct LAN connection to {address} failed ({ex.Message}), retrying with fallback: {FallbackAddress}."
+            );
+            Connect(FallbackAddress, port);
+        }
+    }
+
+    /// <summary>
+    /// Establishes a connection to a remote endpoint with NAT traversal.
+    /// </summary>
+    private void ConnectRemote(string address, int port) {
         Logger.Info($"HolePunch: Starting NAT traversal to {address}:{port}");
         var socket = PerformHolePunch(address, port);
-
-        // Establish DTLS connection using the hole-punched socket
         _dtlsClient.Connect(address, port, socket);
+    }
+
+    /// <summary>
+    /// Cleans up the pre-bound hole punch socket if it exists.
+    /// </summary>
+    private static void CleanupHolePunchSocket() {
+        if (HolePunchSocket == null) {
+            return;
+        }
+        HolePunchSocket.Close();
+        HolePunchSocket = null;
     }
 
     /// <summary>
@@ -161,10 +197,9 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
         if (!IPAddress.TryParse(ipAddress, out var ip)) return false;
 
         var bytes = ip.GetAddressBytes();
-
         return bytes[0] switch {
             10 => true, // 10.0.0.0/8
-            172 => bytes[1] >= 16 && bytes[1] <= 31, // 172.16.0.0/12
+            172 => bytes[1] is >= 16 and <= 31, // 172.16.0.0/12
             192 => bytes[1] == 168, // 192.168.0.0/16
             _ => false
         };
