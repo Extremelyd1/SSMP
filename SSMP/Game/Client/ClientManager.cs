@@ -489,11 +489,12 @@ internal class ClientManager : IClientManager {
         }
 
         // Log connection details based on transport type
-        Logger.Info(
-            transportType == TransportType.Steam
-                ? $"Connecting client via Steam to {address} as {username}"
-                : $"Connecting client to server: {address}:{port} as {username} (Fallback: {fallbackAddress ?? "None"})"
-        );
+        if (transportType == TransportType.Steam) {
+            Logger.Info($"Connecting client via Steam to {address} as {username}");
+        } else {
+            var fallbackString = fallbackAddress == null ? "" : $" (Fallback: {fallbackAddress})";
+            Logger.Info($"Connecting client to server: {address}:{port} as {username}{fallbackString}");
+        }
 
         // Stop existing client
         if (_netClient.IsConnected) {
@@ -681,10 +682,8 @@ internal class ClientManager : IClientManager {
                 // with a local save file that they want to use
                 _uiManager.OpenSaveSlotSelection(saveSelected => {
                         // If this callback executes, but we have not selected a save (by pressing the back button on
-                        // the
-                        // save selection screen, we need to disconnect from the server again, because we are not
-                        // entering
-                        // the world
+                        // the save selection screen, we need to disconnect from the server again, because we are not
+                        // entering the world
                         if (saveSelected) {
                             _netClient.UpdateManager.AddPlayerSettingUpdate(
                                 crestType: CrestTypeExt.FromInternal(PlayerData.instance.CurrentCrestID)

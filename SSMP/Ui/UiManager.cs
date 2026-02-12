@@ -489,7 +489,13 @@ internal class UiManager : IUiManager {
     /// <summary>
     /// Handles host button press by opening save selection.
     /// </summary>
-    private void OnStartHostRequested(string address, int port, string username, TransportType transportType, string? fallbackAddress) {
+    private void OnStartHostRequested(
+        string address,
+        int port,
+        string username,
+        TransportType transportType,
+        string? fallbackAddress
+    ) {
         OpenSaveSlotSelection(saveSelected => {
             if (!saveSelected) return;
 
@@ -501,7 +507,13 @@ internal class UiManager : IUiManager {
     /// <summary>
     /// Handles connect button press.
     /// </summary>
-    private void OnConnectRequested(string address, int port, string username, TransportType transportType, string? fallbackAddress) =>
+    private void OnConnectRequested(
+        string address,
+        int port,
+        string username,
+        TransportType transportType,
+        string? fallbackAddress
+    ) =>
         RequestClientConnectEvent?.Invoke(address, port, username, transportType, false, fallbackAddress);
 
     #endregion

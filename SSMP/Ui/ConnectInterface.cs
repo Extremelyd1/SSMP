@@ -1627,7 +1627,10 @@ internal class ConnectInterface {
                 out username,
                 _feedbackHideCoroutine,
                 out var newCoroutine
-            )) return true;
+        )) {
+            return true;
+        }
+
         _feedbackHideCoroutine = newCoroutine;
         return false;
     }

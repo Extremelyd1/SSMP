@@ -434,6 +434,7 @@ public class Program {
     /// <param name="LobbyType">"steam" or "matchmaking".</param>
     /// <param name="ClientIp">Client's public IP as seen by MMS.</param>
     /// <param name="ClientPort">Client's public port.</param>
+    /// <param name="LanConnectionData">Host's LAN connection data in case LAN is detected.</param>
     [UsedImplicitly]
     internal record JoinResponse(
         string ConnectionData,

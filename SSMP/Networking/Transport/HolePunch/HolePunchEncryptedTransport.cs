@@ -28,7 +28,7 @@ namespace SSMP.Networking.Transport.HolePunch;
 /// <para>
 /// The transport handles both:
 /// - Remote connections: Full hole-punching and DTLS
-/// - Local connections: Direct DTLS without hole-punching
+/// - LAN connections: Direct DTLS without hole-punching
 /// </para>
 /// </remarks>
 internal class HolePunchEncryptedTransport : IEncryptedTransport {
@@ -109,6 +109,12 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     public int MaxPacketSize => UdpMaxPacketSize;
 
     /// <summary>
+    /// Optional fallback address to use if the primary connection fails.
+    /// Used when attempting a direct LAN connection first, falling back to hole-punching.
+    /// </summary>
+    public string? FallbackAddress { get; init; }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="HolePunchEncryptedTransport"/> class.
     /// Sets up the DTLS client and subscribes to its data events.
     /// </summary>
@@ -120,43 +126,37 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     }
 
     /// <summary>
-    /// Optional fallback address to use if the primary connection fails.
-    /// Used when attempting a direct LAN connection first, falling back to hole-punching.
-    /// </summary>
-    public string? FallbackAddress { get; init; }
-
-    /// <summary>
     /// Connects to the specified remote endpoint with NAT traversal.
-    /// Performs hole-punching for remote connections, direct connection for localhost.
+    /// Performs hole-punching for remote connections, direct connection for LAN.
     /// </summary>
     /// <param name="address">The IP address to connect to</param>
     /// <param name="port">The port to connect to</param>
     /// <remarks>
     /// Connection process:
-    /// - Localhost/LAN: Direct DTLS connection (no hole-punching needed)
+    /// - LAN: Direct DTLS connection (no hole-punching needed)
     /// - Remote: Hole-punch first, then DTLS connection over punched socket
     /// - Fallback: If LAN fails and FallbackAddress is set, retry with fallback
     /// </remarks>
     public void Connect(string address, int port) {
-        if (IsLocalOrLanConnection(address)) {
-            ConnectLocalOrLan(address, port);
+        if (IsLanConnection(address)) {
+            ConnectLan(address, port);
         } else {
             ConnectRemote(address, port);
         }
     }
 
     /// <summary>
-    /// Determines if the connection is local or LAN-based.
+    /// Determines if the connection is LAN-based.
     /// </summary>
-    private static bool IsLocalOrLanConnection(string address) =>
+    private static bool IsLanConnection(string address) =>
         address == LocalhostAddress || IsPrivateIp(address);
 
     /// <summary>
-    /// Establishes a direct DTLS connection for local/LAN endpoints.
+    /// Establishes a direct DTLS connection for LAN endpoints.
     /// Retries with fallback address if initial connection fails.
     /// </summary>
-    private void ConnectLocalOrLan(string address, int port) {
-        Logger.Debug($"HolePunch: Local/LAN connection detected ({address}), using direct DTLS.");
+    private void ConnectLan(string address, int port) {
+        Logger.Debug($"HolePunch: LAN connection detected ({address}), using direct DTLS.");
 
         CleanupHolePunchSocket();
 
@@ -189,7 +189,6 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
         HolePunchSocket.Close();
         HolePunchSocket = null;
     }
-
 
     /// <summary>
     /// Checks if an IP address is a private (LAN) address.

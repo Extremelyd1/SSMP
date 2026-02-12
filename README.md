@@ -23,8 +23,9 @@ The mod can be accessed by using the "Start Multiplayer" option in the main menu
 Once the multiplayer menu is opened, you will be greeted with a dashboard from which you can choose to play online or on a local network.
 
 ### Steam Support
-SSMP fully supports Steam networking. This means you can easily host a game and invite your friends through the Steam overlay without worrying about port forwarding or IP addresses.
-- **Hosting**: To host a Steam lobby, simply select "Steam" as the transport type in the hosting menu.
+SSMP fully supports Steam networking.
+This means you can easily host a game and invite your friends through the Steam overlay without worrying about port forwarding or IP addresses.
+- **Hosting**: To host a Steam lobby, simply select the "Steam" option in the hosting menu.
 - **Inviting**: Once hosting, you can use the Steam overlay to invite friends, or use the `/invite` command in-game.
 - **Joining**: Friends can join your game directly through their Friends list or by accepting your invite.
 
@@ -35,7 +36,7 @@ The mod includes a built-in server browser powered by our Matchmaking Service.
 
 ### Direct Connection & LAN
 For those who prefer a traditional connection, you can still connect directly via IP address.
-- **Hosting**: Forward the port (default 26960) on your router to your device.
+- **Hosting**: Forward the port (default `26960`) on your router to your device.
 - **LAN**: Playing on the same local network works out of the box.
 - **VPN**: Tools like [Hamachi](https://vpn.net) can be used to simulate a LAN over the internet.
 

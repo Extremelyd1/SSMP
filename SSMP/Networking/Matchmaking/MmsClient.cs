@@ -321,8 +321,12 @@ internal class MmsClient {
     /// </summary>
     /// <param name="lobbyId">The ID of the lobby to join</param>
     /// <param name="clientPort">The local port the client is listening on</param>
-    /// <returns>Host connection details (connectionData, lobbyType) or null on failure</returns>
-    public Task<(string connectionData, PublicLobbyType lobbyType, string? lanConnectionData)?> JoinLobbyAsync(string lobbyId, int clientPort) {
+    /// <returns>Host connection details (connectionData, lobbyType, and optionally lanConnectionData) or null on
+    /// failure</returns>
+    public Task<(string connectionData, PublicLobbyType lobbyType, string? lanConnectionData)?> JoinLobbyAsync(
+        string lobbyId, 
+        int clientPort
+    ) {
         return Task.Run<(string connectionData, PublicLobbyType lobbyType, string? lanConnectionData)?>(async () => {
             try {
                 // Request join to get host connection info and queue for hole punching
