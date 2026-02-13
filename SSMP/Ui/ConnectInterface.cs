@@ -524,7 +524,7 @@ internal class ConnectInterface {
     /// <param name="connectGroup">Parent component group for the interface.</param>
     public ConnectInterface(ModSettings modSettings, ComponentGroup connectGroup) {
         _modSettings = modSettings;
-        _mmsClient = new MmsClient(modSettings.MmsUrl);
+        _mmsClient = new MmsClient(modSettings.MmsSettings.MmsUrl);
 
         SubscribeToSteamEvents();
 

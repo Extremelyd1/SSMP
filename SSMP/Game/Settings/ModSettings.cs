@@ -65,10 +65,9 @@ internal class ModSettings {
     public ServerSettings? ServerSettings { get; set; }
 
     /// <summary>
-    /// The URL of the MatchMaking Service (MMS).
-    /// Default points to a domain name for the standard MMS.
+    /// The settings for the MatchMaking Server (MMS).
     /// </summary>
-    public string MmsUrl { get; set; } = "https://mms.ssmp.gg";
+    public MmsSettings MmsSettings { get; set; } = new();
     
     /// <summary>
     /// Load the mod settings from file or create a new instance.
