@@ -34,7 +34,7 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
     /// <param name="target">The target game object to attach the component to.</param>
     /// <param name="damage">The number of mask of damage it should deal.</param>
     protected static void AddDamageHeroComponent(GameObject target, int damage = 1) {
-        var damageHero = target.AddComponent<DamageHero>();
+        var damageHero = target.AddComponentIfNotPresent<DamageHero>();
         damageHero.damageDealt = damage;
         damageHero.OnDamagedHero = new UnityEvent();
     }
