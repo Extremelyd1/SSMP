@@ -645,7 +645,8 @@ internal class AnimationManager {
         { AnimationClip.SlashCharged, new NeedleStrike(false) },
         { AnimationClip.SlashChargedLoop, new NeedleStrike(true) },
         { AnimationClip.NeedleArtDash, new NeedleStrike(false) },
-        { AnimationClip.BindChargeGround, new Bind() }
+        { AnimationClip.BindChargeGround, new Bind() },
+        { AnimationClip.BindBurstGround, new BindBurst() }
     };
 
     /// <summary>
