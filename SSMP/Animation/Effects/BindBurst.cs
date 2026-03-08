@@ -30,7 +30,9 @@ internal class BindBurst : Bind {
             case CrestType.Beast:
                 PlayBeastRage(bindEffects);
                 break;
-                //yield break;
+            case CrestType.Shaman:
+                PlayShamanEnd(bindEffects);
+                break;
             default:
                 break;
         }
@@ -135,6 +137,14 @@ internal class BindBurst : Bind {
     private void PlayBeastRage(GameObject bindEffects) {
         var beastRage = CreateEffectIfNotExists(bindEffects, "crest rage_burst_effect(Clone)");
         beastRage?.SetActive(true);
+    }
+
+    private void PlayShamanEnd(GameObject bindEffects) {
+        var shamanAntic = bindEffects.FindGameObjectInChildren("Shaman_Bind_antic_silk");
+        if (shamanAntic == null) {
+            return;
+        }
+        shamanAntic.SetActive(false);
     }
 
     private void PlayNormalEnd(GameObject bindEffects) {

@@ -36,36 +36,57 @@ public class PlayerAnimation : MonoBehaviour {
         return CrestType.Hunter;
     }
 
-    public bool IsEquipped(string toolName) {
-        return ToolItemManager.IsToolEquipped(toolName);
+    void SetSettings(AnimationEffect bind) {
+        var plugin = GameObject.FindFirstObjectByType<SSMPPlugin>();
+        var traverse = Traverse.Create(plugin).Field("_gameManager").Field("_clientManager").Field("_serverSettings");
+        var settings = traverse.GetValue<ServerSettings>();
+
+        bind.SetServerSettings(settings);
     }
 
-    public void StartAnimation() {
+    void Init() {
         gameObject.SetActive(true);
-
-
-        string clipName = "BindCharge Ground";
-        CrestType crest = DetermineCrest();
 
         var hornet = HeroController.instance.gameObject;
         var position = hornet.transform.position;
         var playerPosition = new Vector3(position.x + 10, position.y, position.z);
         transform.position = playerPosition;
+    }
+
+    public void StartPreAnimation() {
+        CrestType crest = DetermineCrest();
+
+        if (crest != CrestType.Shaman) {
+            return;
+        }
+        Init();
+        string clipName = "BindCharge Ground";
 
         var playerObject = transform.GetChild(0).gameObject;
-        var bind = new Bind();
+        var bind = new Bind { ShamanDoneFalling = false };
 
         var info = bind.GetEffectInfo();
-        Logger.Info(string.Join(", ", info));
 
-        //bind.UsingClawMirrors = ToolItemManager.IsToolEquipped("Dazzle Blind");
-        //bind.ClawMirrorsUpgraded = ToolItemManager.IsToolEquipped("Dazzle Blind Upgraded");
-        //bind.UsingBindBell = ToolItemManager.IsToolEquipped("Bell Bind");
-        //bind.UsingMultiBind = ToolItemManager.IsToolEquipped("Multibind");
-        //bind.UsingQuickBind = ToolItemManager.IsToolEquipped("Quickbind");
-        //bind.UsingReserveBind = ToolItemManager.IsToolEquipped("Reserve Bind");
-        //bind.InAir = !HeroController.instance.onFlatGround;
-        //bind.Maggoted = HeroController.instance.cState.isMaggoted;
+        SetSettings(bind);
+        bind.Play(playerObject, crest, info);
+
+        var spriteAnimator = playerObject.GetComponent<tk2dSpriteAnimator>();
+
+        var clip = spriteAnimator.GetClipByName(clipName);
+        spriteAnimator.PlayFromFrame(clip, 0);
+    }
+
+    public void StartAnimation() {
+
+        Init();
+
+        string clipName = "BindCharge Ground";
+        CrestType crest = DetermineCrest();
+
+        var playerObject = transform.GetChild(0).gameObject;
+        var bind = new Bind { ShamanDoneFalling = true };
+
+        var info = bind.GetEffectInfo();
 
         SetSettings(bind);
         bind.Play(playerObject, crest, info);
@@ -74,14 +95,6 @@ public class PlayerAnimation : MonoBehaviour {
 
         var clip = spriteAnimator.GetClipByName(clipName);
         spriteAnimator.PlayFromFrame(clip, 0);
-    }
-
-    void SetSettings(AnimationEffect bind) {
-        var plugin = GameObject.FindFirstObjectByType<SSMPPlugin>();
-        var traverse = Traverse.Create(plugin).Field("_gameManager").Field("_clientManager").Field("_serverSettings");
-        var settings = traverse.GetValue<ServerSettings>();
-
-        bind.SetServerSettings(settings);
     }
 
     public void StopAnimation() {

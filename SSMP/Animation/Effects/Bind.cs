@@ -17,6 +17,8 @@ internal class Bind : DamageAnimationEffect {
 
     protected string BIND_BELL_NAME = "bind_bell_appear_instance";
 
+    public bool ShamanDoneFalling = false;
+
     protected class Flags {
         public bool BindBell = false;
         public bool BaseMirror = false;
@@ -79,6 +81,14 @@ internal class Bind : DamageAnimationEffect {
             Logger.Info("Playing Witch Crest Animation");
         } else if (crestType == CrestType.Shaman) {
             Logger.Info("Playing Shaman Crest Animation");
+            if (ShamanDoneFalling) {
+                PlayShamanFall(bindEffects);
+                yield break;
+            }
+
+            PlayShamanFallEnd(bindEffects);
+            PlayNormalStart(bindEffects, flags);
+            //PlayShamanBindStart(bindEffects);
         } else {
             Logger.Info("Playing Default Animation");
             PlayNormalStart(bindEffects, flags);
@@ -154,8 +164,33 @@ internal class Bind : DamageAnimationEffect {
             return;
         }
 
+        beastAntic.SetActive(false);
         beastAntic.SetActive(true);
+    }
+    
+    private void PlayShamanFall(GameObject bindEffects) {
+        var shamanAntic = CreateEffectIfNotExists(bindEffects, "Shaman_Bind_antic_silk");
+        if (shamanAntic == null) {
+            return;
+        }
 
+        var delay = shamanAntic.AddComponentIfNotPresent<DeactivateAfterDelay>();
+        delay.time = 5;
+
+        shamanAntic.SetActive(false);
+        shamanAntic.SetActive(true);
+    }
+
+    private void PlayShamanFallEnd(GameObject bindEffects) {
+        var shamanAntic = bindEffects.FindGameObjectInChildren("Shaman_Bind_antic_silk");
+        if (shamanAntic == null) {
+            return;
+        }
+        var animator = shamanAntic.GetComponent<Animator>();
+        animator.Play("End");
+        //var clip = animator.runtimeAnimatorController.animationClips[2];
+        
+        //shamanAntic.SetActive(false);
     }
 
     /// <inheritdoc/>

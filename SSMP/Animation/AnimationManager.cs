@@ -646,7 +646,9 @@ internal class AnimationManager {
         { AnimationClip.SlashChargedLoop, new NeedleStrike(true) },
         { AnimationClip.NeedleArtDash, new NeedleStrike(false) },
         { AnimationClip.BindChargeGround, new Bind() },
-        { AnimationClip.BindBurstGround, new BindBurst() }
+        { AnimationClip.BindChargeGroundLand, new Bind { ShamanDoneFalling = true } },
+        { AnimationClip.BindBurstGround, new BindBurst() },
+        { AnimationClip.BindChargeHealBurst, new BindBurst() }
     };
 
     /// <summary>
@@ -955,7 +957,7 @@ internal class AnimationManager {
             return;
         }
 
-        if (_debugLogAnimations) Logger.Info($"  conditions 2: {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Loop}, {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.LoopSection}, {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Once}");
+        //if (_debugLogAnimations) Logger.Info($"  conditions 2: {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Loop}, {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.LoopSection}, {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Once}");
 
         // Skip clips that do not have the wrap mode loop, loop-section or once
         if (clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Loop &&
