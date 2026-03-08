@@ -301,7 +301,6 @@ internal class AnimationManager {
         { "Wall Scramble Repeat", AnimationClip.WallScrambleRepeat },
         { "Wall Slash", AnimationClip.WallSlash },
         { "Somersault Pin Drop", AnimationClip.SomersaultPinDrop },
-        { "Walljump Somersault", AnimationClip.WallJumpSomersault },
         { "Airborne", AnimationClip.Airborne },
         { "Bonked", AnimationClip.Bonked },
         { "Sprint Bonk", AnimationClip.SprintBonk },
@@ -418,7 +417,6 @@ internal class AnimationManager {
         { "Charge Up Bench Silk", AnimationClip.ChargeUpBenchSilk },
         { "Charge Up Burst", AnimationClip.ChargeUpBurst },
 
-        { "Idle Hurt", AnimationClip.IdleHurt },
         { "TurnWalk", AnimationClip.TurnWalk },
         { "Turn Back Three Quarter", AnimationClip.TurnBackThreeQuarter },
         { "Turn Back Three Quarter EndToIdle", AnimationClip.TurnBackThreeQuarterEndToIdle },
