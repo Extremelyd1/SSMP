@@ -5,7 +5,6 @@ namespace MMS.Services;
 
 /// <summary>
 /// Stores UDP-discovered external endpoints and pending client join tokens.
-/// Replaces Google STUN with a self-hosted endpoint discovery mechanism.
 /// </summary>
 public sealed class DiscoveryService {
     /// <summary>How long a recorded endpoint or pending join remains valid.</summary>
@@ -17,7 +16,7 @@ public sealed class DiscoveryService {
     // Stores discovered endpoints. Expiry is a monotonic timestamp (ticks).
     private readonly ConcurrentDictionary<Guid, (IPEndPoint Endpoint, long ExpiryTicks)> _cache = new();
 
-    // Maps clientToken → (hostToken, registrationTicks) for pending UDP joins.
+    // Maps clientToken -> (hostToken, registrationTicks) for pending UDP joins.
     private readonly ConcurrentDictionary<Guid, (string HostToken, long RegisteredTicks)> _pendingJoins = new();
 
     private readonly TimeProvider _timeProvider;
