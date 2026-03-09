@@ -198,32 +198,30 @@ internal sealed class MmsClient : IDisposable {
     }
 
     /// <summary>
-    /// Synchronous overload that closes the currently hosted lobby on the MMS.
+    /// Closes the currently hosted lobby on the MMS.
+    /// Stops the heartbeat and WebSocket synchronously, then fires the HTTP DELETE
+    /// in the background so the calling thread (Unity main thread) is not blocked.
     /// </summary>
-    /// <remarks>
-    /// Uses <c>GetAwaiter().GetResult()</c> as the sync-over-async bridge, which correctly
-    /// unwraps <see cref="AggregateException"/> unlike <c>.Wait()</c>.
-    /// The heartbeat timer and WebSocket are stopped before the HTTP call so no messages
-    /// are processed for a lobby that is already being torn down.
-    /// </remarks>
     public void CloseLobby() {
         if (_hostToken is null) return;
 
         StopHeartbeat();
         StopWebSocket();
 
-        try {
-            DeleteAsync($"{_baseUrl}/lobby/{_hostToken}")
-                .GetAwaiter()
-                .GetResult();
+        // Capture before clearing so the background task captures the right values.
+        var token = _hostToken;
+        var code = _currentLobbyCode;
+        _hostToken = null;
+        _currentLobbyCode = null;
 
-            Logger.Info($"MmsClient: Closed lobby {_currentLobbyCode}");
-        } catch (Exception ex) {
-            Logger.Warn($"MmsClient: CloseLobby failed: {ex.Message}");
-        } finally {
-            _hostToken = null;
-            _currentLobbyCode = null;
-        }
+        _ = Task.Run(async () => {
+            try {
+                if (await DeleteAsync($"{_baseUrl}/lobby/{token}")) Logger.Info($"MmsClient: Closed lobby {code}");
+                else Logger.Warn($"MmsClient: CloseLobby DELETE returned false for lobby {code}");
+            } catch (Exception ex) {
+                Logger.Warn($"MmsClient: CloseLobby failed: {ex.Message}");
+            }
+        });
     }
 
     /// <summary>
