@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using HutongGames.PlayMaker.Actions;
 using SSMP.Internals;
@@ -22,9 +23,11 @@ internal class BindBurst : Bind {
             yield break;
         }
 
-        if (flags.BaseMirror || flags.UpgradedMirror) PlayMirror(bindEffects, flags.UpgradedMirror);
-        if (flags.BindBell) StopBindBell(bindEffects);
+        if (flags.BaseMirror || flags.UpgradedMirror) PlayMirror(playerObject, flags.UpgradedMirror);
         if (flags.Maggoted) PlayMaggotCleanse(bindEffects, playerObject);
+        
+        // Stop regardless of if its on or not
+        StopBindBell(bindEffects);
 
         switch (crestType) {
             case CrestType.Beast:
@@ -40,19 +43,23 @@ internal class BindBurst : Bind {
         PlayNormalEnd(bindEffects);
     }
 
-    private GameObject? PrepareMirror(GameObject bindEffects, SetGameObject mirrorSource, string name) {
-        var mirror = bindEffects.FindGameObjectInChildren(name);
-        if (mirror != null) {
-            mirror.SetActive(false);
-            return mirror;
-        }
+    /// <summary>
+    /// Creates the appropriate Claw Mirror object.
+    /// The object will be destroyed after it finishes.
+    /// </summary>
+    private GameObject? PrepareMirror(GameObject playerObject, SetGameObject mirrorSource, string name) {
 
         if (mirrorSource == null) {
             Logger.Warn("Unable to find mirror source");
             return null;
         }
 
-        mirror = mirrorSource.gameObject.Value.Spawn(bindEffects.transform, Vector3.zero);
+        // This is ugly and i hate it, but it works
+        var mirror = GameObject.Instantiate(mirrorSource.gameObject.Value, playerObject.transform);
+        mirror.transform.SetParent(null);
+        mirror.transform.position = playerObject.transform.position;
+        mirror.SetActive(true);
+
         if (mirror == null) {
             Logger.Warn("Unable to spawn mirror");
             return null;
@@ -63,26 +70,31 @@ internal class BindBurst : Bind {
         if (shaker != null) {
             Component.DestroyImmediate(shaker);
         }
-        var delay = mirror.AddComponentIfNotPresent<DeactivateAfterDelay>();
-        delay.time = 2f;
+
         EffectUtils.SafelyRemoveAutoRecycle(mirror);
+        mirror.DestroyAfterTime(2f);
+
         var haze = mirror.FindGameObjectInChildren("haze2");
         if (haze != null) {
             GameObject.Destroy(haze);
         }
 
-        mirror.SetActive(false);
+        //mirror.SetActive(false);
         return mirror;
     }
 
-    private void PlayMirror(GameObject bindEffects, bool upgraded) {
+    /// <summary>
+    /// Plays the appropriate Claw Mirror animation.
+    /// Adds a damage component if appropriate.
+    /// </summary>
+    private void PlayMirror(GameObject playerObject, bool upgraded) {
         Logger.Info("Playing Claw Mirror Animation");
         var regularClaw = GetOrFindBindFsm().GetAction<SetGameObject>("Dazzle?", 3)!;
         var upgradedClaw = GetOrFindBindFsm().GetAction<SetGameObject>("Dazzle?", 4)!;
 
         GameObject? claw;
-        if (upgraded) claw = PrepareMirror(bindEffects, upgradedClaw, "dazzle_upgraded");
-        else claw = PrepareMirror(bindEffects, regularClaw, "dazzle_regular");
+        if (upgraded) claw = PrepareMirror(playerObject, upgradedClaw, "dazzle_upgraded");
+        else claw = PrepareMirror(playerObject, regularClaw, "dazzle_regular");
 
         if (claw == null) {
             Logger.Warn("Unable to create claw mirror object.");
@@ -99,14 +111,12 @@ internal class BindBurst : Bind {
             } else {
                 Logger.Warn("Couldn't find claw mirror damager");
             }
-        } else {
-            var damager = claw.GetComponentInChildren<DamageHero>(true);
-            if (damager != null) {
-                Component.Destroy(damager);
-            }
         }
     }
 
+    /// <summary>
+    /// Stops the bind bell animation
+    /// </summary>
     private void StopBindBell(GameObject bindEffects) {
         var bindBell = bindEffects.FindGameObjectInChildren(BIND_BELL_NAME);
         if (bindBell != null) {
@@ -114,6 +124,9 @@ internal class BindBurst : Bind {
         }
     }
 
+    /// <summary>
+    /// Plays the maggot cleanse animation
+    /// </summary>
     private void PlayMaggotCleanse(GameObject bindEffects, GameObject playerObject) {
         Logger.Info("Playing Maggot Animation");
         var maggotBurst = GetOrFindBindFsm().GetAction<SpawnObjectFromGlobalPool>("Maggoted?", 2);
@@ -134,11 +147,17 @@ internal class BindBurst : Bind {
         }
     }
 
+    /// <summary>
+    /// Plays the Beast Crest specific rage animation
+    /// </summary>
     private void PlayBeastRage(GameObject bindEffects) {
         var beastRage = CreateEffectIfNotExists(bindEffects, "crest rage_burst_effect(Clone)");
         beastRage?.SetActive(true);
     }
 
+    /// <summary>
+    /// Stops the Shaman Crest specific silk animation
+    /// </summary>
     private void PlayShamanEnd(GameObject bindEffects) {
         var shamanAntic = bindEffects.FindGameObjectInChildren("Shaman_Bind_antic_silk");
         if (shamanAntic == null) {
@@ -147,6 +166,9 @@ internal class BindBurst : Bind {
         shamanAntic.SetActive(false);
     }
 
+    /// <summary>
+    /// Plays particles and shows a flash
+    /// </summary>
     private void PlayNormalEnd(GameObject bindEffects) {
         Logger.Info("Playing Heal Particles and Anim");
         var healParticle = CreateEffectIfNotExists(bindEffects, "Pt Heal");

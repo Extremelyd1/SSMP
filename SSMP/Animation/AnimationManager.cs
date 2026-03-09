@@ -648,7 +648,9 @@ internal class AnimationManager {
         { AnimationClip.BindChargeGround, new Bind() },
         { AnimationClip.BindChargeGroundLand, new Bind { ShamanDoneFalling = true } },
         { AnimationClip.BindBurstGround, new BindBurst() },
-        { AnimationClip.BindChargeHealBurst, new BindBurst() }
+        { AnimationClip.BindChargeHealBurst, new BindBurst() },
+        { AnimationClip.BindBurstAir, new BindBurst() },
+        { AnimationClip.RageBindBurst, new BindBurst() },
     };
 
     /// <summary>

@@ -68,8 +68,6 @@ internal class Bind : DamageAnimationEffect {
             yield break;
         }
 
-        // TODO: if Beast is equipped, activate rage burst object (State: Rage Burst?)
-
         Logger.Info("Determining crest animation...");
 
         if (crestType == CrestType.Beast) {
@@ -81,14 +79,14 @@ internal class Bind : DamageAnimationEffect {
             Logger.Info("Playing Witch Crest Animation");
         } else if (crestType == CrestType.Shaman) {
             Logger.Info("Playing Shaman Crest Animation");
-            if (ShamanDoneFalling) {
+            if (!ShamanDoneFalling) {
                 PlayShamanFall(bindEffects);
+            } else {
+                PlayShamanFallEnd(bindEffects);
+                PlayNormalStart(bindEffects, flags);
                 yield break;
             }
 
-            PlayShamanFallEnd(bindEffects);
-            PlayNormalStart(bindEffects, flags);
-            //PlayShamanBindStart(bindEffects);
         } else {
             Logger.Info("Playing Default Animation");
             PlayNormalStart(bindEffects, flags);
@@ -101,19 +99,17 @@ internal class Bind : DamageAnimationEffect {
 
         // TODO: If using reserve bind, use reserve bind animation?
 
-        // TODO: Use air animations if applicable
-
         // TODO: Quick Craft animations
 
         Logger.Info("Getting clip name for no reason...");
         var playerAnimator = playerObject.GetComponent<tk2dSpriteAnimator>();
         var currentClip = playerAnimator?.currentClip;
         Logger.Info($"Player Animator current clip for Bind: {currentClip?.name}");
-        // TODO: figure out when animation triggers happen
-
-        // TODO: adjust bind time based on crest and tools
     }
 
+    /// <summary>
+    /// Creates the bind bell
+    /// </summary>
     private void StartBindBell(GameObject bindEffects) {
         var bindBell = bindEffects.FindGameObjectInChildren(BIND_BELL_NAME);
         
@@ -140,7 +136,9 @@ internal class Bind : DamageAnimationEffect {
         bindBell.SetActive(false);
         bindBell.SetActive(true);
     }
-
+    /// <summary>
+    /// Plays the normal silk animation
+    /// </summary>
     private void PlayNormalStart(GameObject bindEffects, Flags flags) {
         var bindSilkObj = CreateEffectIfNotExists(bindEffects, "Bind Silk");
         if (bindSilkObj == null) {
@@ -158,6 +156,9 @@ internal class Bind : DamageAnimationEffect {
         else bindSilkAnimator.Play(bindSilkAnimator.GetClipByName("Bind Silk"));
     }
 
+    /// <summary>
+    /// Plays the Beast Crest specific silk animation
+    /// </summary>
     private void PlayBeastBindStart(GameObject bindEffects) {
         var beastAntic = CreateEffectIfNotExists(bindEffects, "Warrior_Bind_antic_silk");
         if (beastAntic == null) {
@@ -168,6 +169,10 @@ internal class Bind : DamageAnimationEffect {
         beastAntic.SetActive(true);
     }
     
+    /// <summary>
+    /// Plays the Shaman Crest falling silk animation
+    /// </summary>
+    /// <param name="bindEffects"></param>
     private void PlayShamanFall(GameObject bindEffects) {
         var shamanAntic = CreateEffectIfNotExists(bindEffects, "Shaman_Bind_antic_silk");
         if (shamanAntic == null) {
@@ -181,6 +186,9 @@ internal class Bind : DamageAnimationEffect {
         shamanAntic.SetActive(true);
     }
 
+    /// <summary>
+    /// Transitions from the falling silk animation to the normal silk animation
+    /// </summary>
     private void PlayShamanFallEnd(GameObject bindEffects) {
         var shamanAntic = bindEffects.FindGameObjectInChildren("Shaman_Bind_antic_silk");
         if (shamanAntic == null) {
@@ -230,6 +238,12 @@ internal class Bind : DamageAnimationEffect {
         throw new InvalidOperationException("Could not find Bind FSM on hero");
     }
 
+    /// <summary>
+    /// Attempts to locate and bind the 'Bind Effects' GameObject to the specified player object.
+    /// </summary>
+    /// <param name="playerObject">The player's object.</param>
+    /// <param name="bindEffects">The player's 'Bind Effects' object, or null if not found.</param>
+    /// <returns>true if the 'Bind Effects' GameObject is successfully found and bound; otherwise, false.</returns>
     protected bool CreateObjects(GameObject playerObject, out GameObject bindEffects) {
         _localBindEffects ??= HeroController.instance.gameObject.FindGameObjectInChildren("Bind Effects");
         if (_localBindEffects == null) {
@@ -247,6 +261,12 @@ internal class Bind : DamageAnimationEffect {
         return true;
     }
 
+    /// <summary>
+    /// Finds and returns a bind effect with the specified name, creating it if it doesn't already exist.
+    /// </summary>
+    /// <param name="bindEffects">The player's Bind Effects object.</param>
+    /// <param name="objectName">The name of the effect to find or create.</param>
+    /// <returns>The existing or new effect, or null if the effect cannot be found or created</returns>
     protected GameObject? CreateEffectIfNotExists(GameObject bindEffects, string objectName) {
         var obj = bindEffects.FindGameObjectInChildren(objectName);
         if (obj == null) {
