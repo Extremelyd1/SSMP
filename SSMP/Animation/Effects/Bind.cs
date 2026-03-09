@@ -75,6 +75,8 @@ internal class Bind : DamageAnimationEffect {
             PlayBeastBindStart(bindEffects);
         } else if (crestType == CrestType.Cursed) {
             Logger.Info("Playing Cursed Crest Animation");
+            PlayCursedFail(bindEffects);
+            yield break;
         } else if (crestType == CrestType.Witch) {
             Logger.Info("Playing Witch Crest Animation");
         } else if (crestType == CrestType.Shaman) {
@@ -167,6 +169,45 @@ internal class Bind : DamageAnimationEffect {
 
         beastAntic.SetActive(false);
         beastAntic.SetActive(true);
+    }
+
+    private void PlayCursedFail(GameObject bindEffects) {
+        var failAntic = bindEffects.FindGameObjectInChildren("cursed_bind_fail");
+
+        tk2dSpriteAnimator animator;
+        if (failAntic == null) {
+            var effects = HeroController.instance.gameObject.FindGameObjectInChildren("Effects");
+            if (effects == null) {
+                Logger.Warn("Unable to find local effects object");
+                return;
+            }
+
+            var localFailAntic = effects.FindGameObjectInChildren("Cursed Bind Hornet");
+            if (localFailAntic == null) {
+                Logger.Warn("Unable to find local cursed bind object");
+                return;
+            }
+
+            failAntic = GameObject.Instantiate(localFailAntic, bindEffects.transform);
+            failAntic.name = "cursed_bind_fail";
+            animator = failAntic.GetComponent<tk2dSpriteAnimator>();
+            animator.AnimationCompletedEvent += PlayNextCursedPart;
+        } else {
+            animator = failAntic.GetComponent<tk2dSpriteAnimator>();
+        }
+
+        failAntic.SetActive(false);
+        failAntic.SetActive(true);
+
+        animator.Play("Bind Cursed Start");
+    }
+
+    private void PlayNextCursedPart(tk2dSpriteAnimator animator, tk2dSpriteAnimationClip clip) {
+        if (clip.name == "Bind Cursed Start") {
+            animator.Play("Bind Cursed Mid");
+        } else if (clip.name == "Bind Cursed Mid") {
+            animator.Play("Bind Cursed End");
+        }
     }
     
     /// <summary>

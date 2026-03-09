@@ -46,6 +46,7 @@ public class PlayerAnimation : MonoBehaviour {
 
     void Init() {
         gameObject.SetActive(true);
+        ToolItemManager.SetEquippedCrest(Gameplay.CursedCrest.name);
 
         var hornet = HeroController.instance.gameObject;
         var position = hornet.transform.position;
@@ -54,12 +55,12 @@ public class PlayerAnimation : MonoBehaviour {
     }
 
     public void StartPreAnimation() {
+        Init();
         CrestType crest = DetermineCrest();
 
         if (crest != CrestType.Shaman) {
             return;
         }
-        Init();
         string clipName = "BindCharge Ground";
 
         var playerObject = transform.GetChild(0).gameObject;
