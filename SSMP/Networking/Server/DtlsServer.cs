@@ -94,7 +94,6 @@ internal class DtlsServer {
     /// <param name="preboundSocket">A UDP socket that is already bound to the desired port.</param>
     public void Start(Socket preboundSocket) {
         _port = ((IPEndPoint) preboundSocket.LocalEndPoint!).Port;
-        _serverProtocol = new DtlsServerProtocol();
         _tlsServer = new ServerTlsServer(new BcTlsCrypto());
         _cancellationTokenSource = new CancellationTokenSource();
         _socket = preboundSocket;
