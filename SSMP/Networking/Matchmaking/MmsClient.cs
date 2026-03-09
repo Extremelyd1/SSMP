@@ -1,424 +1,389 @@
 using System;
 using System.Buffers;
 using System.Collections.Generic;
+using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Net.Sockets;
 using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using SSMP.Logging;
 
-using System.Net.Sockets;
-using System.Net;
-
 namespace SSMP.Networking.Matchmaking;
 
 /// <summary>
-/// High-performance client for the MatchMaking Service (MMS) API.
-/// Handles lobby creation, lookup, heartbeat, and NAT hole-punching coordination.
+/// Client for the MatchMaking Service (MMS) API.
+/// Handles lobby creation, lookup, heartbeat, and NAT hole-punch coordination.
 /// </summary>
-internal class MmsClient {
-    /// <summary>
-    /// Base URL of the MMS server (e.g., "http://localhost:5000")
-    /// </summary>
-    private readonly string _baseUrl;
+internal sealed class MmsClient : IDisposable {
+    /// <summary>UDP port on the MMS server used for endpoint discovery.</summary>
+    private const int UdpDiscoveryPort = 5001;
+
+    /// <summary>Interval between heartbeat requests. Keeps the lobby alive on the MMS.</summary>
+    private const int HeartbeatIntervalMs = 30_000;
+
+    /// <summary>HTTP request timeout. Prevents hanging on an unresponsive server.</summary>
+    private const int HttpTimeoutMs = 5_000;
+
+    /// <summary>Opcode for UDP endpoint discovery packets: <c>[0x44][16-byte Guid]</c>.</summary>
+    private const byte DiscoveryOpcode = 0x44; // 'D'
 
     /// <summary>
-    /// Authentication token for host operations (heartbeat, close, pending clients).
-    /// Set when a lobby is created, cleared when closed.
+    /// Shared, connection-pooled client. Do NOT dispose per-request.
+    /// Configured for minimal overhead: no cookies, no proxy, no redirects.
+    /// <para>
+    ///   NOTE: The <see cref="ServicePointManager"/> settings applied in
+    ///   <see cref="CreateSharedHttpClient"/> are process-wide. In Unity Mono they are
+    ///   required for proper connection pooling. Be aware if other HTTP clients coexist
+    ///   in the same process.
+    /// </para>
     /// </summary>
-    private string? _hostToken;
+    private static readonly HttpClient HttpClient = CreateSharedHttpClient();
 
     /// <summary>
-    /// The currently active lobby ID, if this client is hosting a lobby.
+    /// Pre-built content for heartbeat POSTs. Constructed once, reused forever.
+    /// Sending an empty JSON object is sufficient — the token is in the URL.
     /// </summary>
-    private string? CurrentLobbyId { get; set; }
+    private static readonly ByteArrayContent EmptyJsonContent = CreateEmptyJsonContent();
 
-    /// <summary>
-    /// Timer that sends periodic heartbeats to keep the lobby alive on the MMS.
-    /// Fires every 30 seconds while a lobby is active.
-    /// </summary>
-    private Timer? _heartbeatTimer;
-
-    /// <summary>
-    /// Interval between heartbeat requests (30 seconds).
-    /// Keeps the lobby registered and prevents timeout on the MMS.
-    /// </summary>
-    private const int HeartbeatIntervalMs = 30000;
-
-    /// <summary>
-    /// HTTP request timeout in milliseconds (5 seconds).
-    /// Prevents hanging on unresponsive server.
-    /// </summary>
-    private const int HttpTimeoutMs = 5000;
-
-    /// <summary>
-    /// WebSocket connection for receiving push notifications from MMS.
-    /// </summary>
-    private ClientWebSocket? _hostWebSocket;
-
-    /// <summary>
-    /// Cancellation token source for WebSocket connection.
-    /// </summary>
-    private CancellationTokenSource? _webSocketCts;
-
-    /// <summary>
-    /// Reusable empty JSON object bytes for heartbeat requests.
-    /// Eliminates allocations since heartbeats send no data.
-    /// </summary>
-    private static readonly byte[] EmptyJsonBytes = "{}"u8.ToArray();
-
-    /// <summary>
-    /// Shared character array pool for zero-allocation JSON string building.
-    /// Reuses buffers across all JSON formatting operations.
-    /// </summary>
-    private static readonly ArrayPool<char> CharPool = ArrayPool<char>.Shared;
-
-    /// <summary>
-    /// Shared HttpClient instance for connection pooling and reuse across all MmsClient instances.
-    /// This provides 3-5x performance improvement over creating new connections per request.
-    /// Configured for optimal performance with disabled cookies, proxies, and redirects.
-    /// </summary>
-    private static readonly HttpClient HttpClient = CreateHttpClient();
-
-    /// <summary>
-    /// Creates and configures the shared HttpClient with optimal performance settings.
-    /// </summary>
-    /// <returns>Configured HttpClient instance for MMS API calls</returns>
-    private static HttpClient CreateHttpClient() {
-        // Configure handler for maximum performance
-        var handler = new HttpClientHandler {
-            // Skip proxy detection for faster connections
-            UseProxy = false,
-            // MMS doesn't use cookies
-            UseCookies = false,
-            // MMS doesn't redirect
-            AllowAutoRedirect = false
-        };
-
-        // Configure ServicePointManager for connection pooling (works in Unity Mono)
+    private static HttpClient CreateSharedHttpClient() {
+        // Process-wide on Mono/Unity — documented intentionally (see XML doc above)
         ServicePointManager.DefaultConnectionLimit = 10;
-        // Disable Nagle for lower latency
         ServicePointManager.UseNagleAlgorithm = false;
-        // Skip 100-Continue handshake
         ServicePointManager.Expect100Continue = false;
+
+        var handler = new HttpClientHandler {
+            UseProxy = false,
+            UseCookies = false,
+            AllowAutoRedirect = false,
+        };
 
         return new HttpClient(handler) {
             Timeout = TimeSpan.FromMilliseconds(HttpTimeoutMs)
         };
     }
 
-    /// <summary>
-    /// Static constructor to hook process exit and dispose the shared HttpClient.
-    /// Ensures that OS-level resources are released when the host process shuts down.
-    /// </summary>
-    static MmsClient() {
-        AppDomain.CurrentDomain.ProcessExit += (_, _) => {
-            HttpClient.Dispose();
-        };
+    private static ByteArrayContent CreateEmptyJsonContent() {
+        var content = new ByteArrayContent("{}"u8.ToArray());
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+        return content;
     }
 
+    private readonly string _baseUrl;
+
+    private string? _hostToken;
+    private string? _currentLobbyCode;
+
+    private Timer? _heartbeatTimer;
+    private ClientWebSocket? _hostWebSocket;
+    private CancellationTokenSource? _webSocketCts;
+
+    private bool _disposed;
+
     /// <summary>
-    /// Initializes a new instance of the MmsClient.
+    /// Raised when a pending client needs NAT hole-punching.
+    /// Subscribe through an <see cref="MmsClient"/> instance.
+    /// <para>
+    ///   Parameters: (clientIp, clientPort). The caller should send UDP packets
+    ///   to that endpoint from the gameplay socket to initiate hole punching.
+    /// </para>
     /// </summary>
-    /// <param name="baseUrl">Base URL of the MMS server (default: "http://localhost:5000")</param>
+    public event Action<string, int>? PunchClientRequested;
+
+    /// <summary>
+    /// Static relay for callers that cannot hold an <see cref="MmsClient"/> instance reference.
+    /// The active instance routes its push notifications here automatically.
+    /// Prefer subscribing to <see cref="PunchClientRequested"/> directly when possible,
+    /// as static events require manual unsubscription to avoid memory leaks.
+    /// </summary>
+    public static event Action<string, int>? PunchClientRequestedStatic;
+
+    /// <summary>Initialises a new <see cref="MmsClient"/> targeting the given server URL.</summary>
+    /// <param name="baseUrl">Base URL of the MMS server (e.g. <c>"http://localhost:5000"</c>).</param>
     public MmsClient(string baseUrl = "http://localhost:5000") {
         _baseUrl = baseUrl.TrimEnd('/');
     }
 
+    /// <summary>
+    /// Stops the heartbeat timer and WebSocket connection, then releases all managed resources.
+    /// </summary>
+    public void Dispose() {
+        if (_disposed) return;
+        _disposed = true;
+
+        StopHeartbeat();
+        StopWebSocket();
+    }
 
     /// <summary>
-    /// Creates a new lobby asynchronously with configuration options.
-    /// Non-blocking - runs STUN discovery and HTTP request on background thread.
+    /// Creates a matchmaking lobby. The caller must have already called
+    /// <see cref="SendDiscoveryPacket"/> with <paramref name="discoveryToken"/> so the MMS
+    /// can record the host's external endpoint before this request arrives.
     /// </summary>
-    /// <param name="hostPort">Local port the host is listening on.</param>
-    /// <param name="isPublic">Whether to list in public browser.</param>
-    /// <param name="gameVersion">Game version for compatibility.</param>
-    /// <param name="lobbyType">Type of lobby.</param>
-    /// <returns>Task containing the lobby ID and name if successful, null on failure.</returns>
-    public Task<(string?, string?)> CreateLobbyAsync(
-        int hostPort, 
-        bool isPublic = true, 
-        string gameVersion = "unknown", 
+    /// <param name="discoveryToken">Token sent in the UDP discovery packet to identify this host.</param>
+    /// <param name="localPort">Host's local port, used to format the LAN IP for same-network detection.</param>
+    /// <param name="isPublic">Whether to list in the public lobby browser.</param>
+    /// <param name="gameVersion">Game version string for compatibility filtering.</param>
+    /// <param name="lobbyType">Type of lobby to create.</param>
+    /// <returns>Lobby code and display name on success; <c>(null, null)</c> on failure.</returns>
+    public async Task<(string? LobbyCode, string? LobbyName)> CreateLobbyAsync(
+        Guid discoveryToken,
+        int localPort = 26960,
+        bool isPublic = true,
+        string gameVersion = "unknown",
         PublicLobbyType lobbyType = PublicLobbyType.Matchmaking
     ) {
-        return Task.Run(async () => {
-            try {
-                // Rent a buffer from the pool to build JSON without allocations
-                var buffer = CharPool.Rent(512);
-                try {
-                    // MMS will use the connection's source IP for the host address
-                    // Include local LAN IP for same-network detection
-                    var localIp = GetLocalIpAddress();
-                    var length = FormatCreateLobbyJsonPortOnly(
-                        buffer, hostPort, isPublic, gameVersion, lobbyType, localIp
-                    );
-                    Logger.Info($"MmsClient: Creating lobby on port {hostPort}, Local IP: {localIp}");
+        try {
+            var localIp = GetLocalIpAddress();
+            var lanIpPart = localIp is not null ? $",\"HostLanIp\":\"{localIp}:{localPort}\"" : "";
+            var typeString = lobbyType.ToWireString();
+            var json =
+                $"{{\"DiscoveryToken\":\"{discoveryToken}\"," +
+                $"\"IsPublic\":{(isPublic ? "true" : "false")}," +
+                $"\"GameVersion\":\"{gameVersion}\"," +
+                $"\"LobbyType\":\"{typeString}\"{lanIpPart}}}";
 
-                    // Build string from buffer and send POST request
-                    var json = new string(buffer, 0, length);
-                    var response = await PostJsonAsync($"{_baseUrl}/lobby", json);
-                    if (response == null) return (null, null);
+            Logger.Info($"MmsClient: Creating lobby (token={discoveryToken}, localIp={localIp})");
 
-                    // Parse response to extract connection data, host token, and lobby code
-                    var lobbyId = ExtractJsonValueSpan(response.AsSpan(), "connectionData");
-                    var hostToken = ExtractJsonValueSpan(response.AsSpan(), "hostToken");
-                    var lobbyName = ExtractJsonValueSpan(response.AsSpan(), "lobbyName");
-                    var lobbyCode = ExtractJsonValueSpan(response.AsSpan(), "lobbyCode");
+            var response = await PostJsonStringAsync($"{_baseUrl}/lobby", json);
+            if (response is null) return (null, null);
 
-                    if (lobbyId == null || hostToken == null || lobbyName == null || lobbyCode == null) {
-                        Logger.Error($"MmsClient: Invalid response from CreateLobby: {response}");
-                        return (null, null);
-                    }
-
-                    // Store tokens and start heartbeat to keep lobby alive
-                    _hostToken = hostToken;
-                    CurrentLobbyId = lobbyId;
-
-                    StartHeartbeat();
-                    Logger.Info($"MmsClient: Created lobby {lobbyCode}");
-                    return (lobbyCode, lobbyName);
-                } finally {
-                    // Always return buffer to pool to enable reuse
-                    CharPool.Return(buffer);
-                }
-            } catch (Exception ex) {
-                Logger.Error($"MmsClient: Failed to create lobby: {ex.Message}");
+            if (!TryApplyLobbyCreationResponse(
+                    response, nameof(CreateLobbyAsync), out var lobbyCode, out var lobbyName
+                ))
                 return (null, null);
-            }
-        });
+
+            Logger.Info($"MmsClient: Created lobby {lobbyCode}");
+            return (lobbyCode, lobbyName);
+        } catch (Exception ex) {
+            Logger.Error($"MmsClient: CreateLobby failed: {ex.Message}");
+            return (null, null);
+        }
     }
 
     /// <summary>
-    /// Registers a Steam lobby with MMS for discovery.
-    /// Called after creating a Steam lobby via SteamMatchmaking.CreateLobby().
+    /// Registers an existing Steam lobby with MMS for discovery.
+    /// Call after creating a Steam lobby via <c>SteamMatchmaking.CreateLobby()</c>.
     /// </summary>
-    /// <param name="steamLobbyId">The Steam lobby ID (CSteamID as string)</param>
-    /// <param name="isPublic">Whether to list in public browser</param>
-    /// <param name="gameVersion">Game version for compatibility</param>
-    /// <returns>Task containing the MMS lobby ID if successful, null on failure</returns>
-    public Task<string?> RegisterSteamLobbyAsync(
-        string steamLobbyId, 
-        bool isPublic = true, 
+    /// <param name="steamLobbyId">The Steam lobby ID (<c>CSteamID</c> as string).</param>
+    /// <param name="isPublic">Whether to list in the public lobby browser.</param>
+    /// <param name="gameVersion">Game version string for compatibility filtering.</param>
+    /// <returns>MMS lobby code on success; <see langword="null"/> on failure.</returns>
+    public async Task<string?> RegisterSteamLobbyAsync(
+        string steamLobbyId,
+        bool isPublic = true,
         string gameVersion = "unknown"
     ) {
-        return Task.Run(async () => {
-            try {
-                // Build JSON with ConnectionData = Steam lobby ID
-                var json = $"{{\"ConnectionData\":\"{steamLobbyId}\",\"IsPublic\":{(isPublic ? "true" : "false")},\"GameVersion\":\"{gameVersion}\",\"LobbyType\":\"steam\"}}";
-                
-                var response = await PostJsonAsync($"{_baseUrl}/lobby", json);
-                if (response == null) return null;
+        try {
+            var json =
+                $"{{\"ConnectionData\":\"{steamLobbyId}\"," +
+                $"\"IsPublic\":{(isPublic ? "true" : "false")}," +
+                $"\"GameVersion\":\"{gameVersion}\"," +
+                $"\"LobbyType\":\"steam\"}}";
 
-                // Parse response to extract connection data, host token, and lobby code
-                var lobbyId = ExtractJsonValueSpan(response.AsSpan(), "connectionData");
-                var hostToken = ExtractJsonValueSpan(response.AsSpan(), "hostToken");
-                var lobbyName = ExtractJsonValueSpan(response.AsSpan(), "lobbyName");
-                var lobbyCode = ExtractJsonValueSpan(response.AsSpan(), "lobbyCode");
+            var response = await PostJsonStringAsync($"{_baseUrl}/lobby", json);
+            if (response is null) return null;
 
-                if (lobbyId == null || hostToken == null || lobbyName == null || lobbyCode == null) {
-                    Logger.Error($"MmsClient: Invalid response from RegisterSteamLobby: {response}");
-                    return null;
-                }
-
-                // Store tokens for heartbeat
-                _hostToken = hostToken;
-                CurrentLobbyId = lobbyId;
-
-                StartHeartbeat();
-                Logger.Info($"MmsClient: Registered Steam lobby {steamLobbyId} as MMS lobby {lobbyCode}");
-                return lobbyCode;
-
-            } catch (TaskCanceledException) {
-                Logger.Warn("MmsClient: Steam lobby registration was canceled");
+            if (!TryApplyLobbyCreationResponse(response, nameof(RegisterSteamLobbyAsync), out var lobbyCode, out _))
                 return null;
-            } catch (Exception ex) {
-                Logger.Warn($"MmsClient: Failed to register Steam lobby: {ex.Message}");
-                return null;
-            }
-        });
+
+            Logger.Info($"MmsClient: Registered Steam lobby {steamLobbyId} as {lobbyCode}");
+            return lobbyCode;
+        } catch (Exception ex) {
+            Logger.Warn($"MmsClient: RegisterSteamLobby failed: {ex.Message}");
+            return null;
+        }
     }
 
     /// <summary>
-    /// Gets the list of public lobbies asynchronously.
-    /// Non-blocking - runs HTTP request on background thread.
+    /// Synchronous overload that closes the currently hosted lobby on the MMS.
     /// </summary>
-    /// <param name="lobbyType">Optional: filter by Steam or Matchmaking.</param>
-    /// <returns>Task containing list of public lobby info, or null on failure.</returns>
-    public Task<List<PublicLobbyInfo>?> GetPublicLobbiesAsync(PublicLobbyType? lobbyType = null) {
-        return Task.Run(async () => {
-            try {
-                var url = $"{_baseUrl}/lobbies";
-                if (lobbyType != null) {
-                    url += $"?type={lobbyType.ToString().ToLower()}";
-                }
-                var response = await GetJsonAsync(url);
-                if (response == null) return null;
-
-                var result = new List<PublicLobbyInfo>();
-                var span = response.AsSpan();
-                var idx = 0;
-
-                // Parse JSON array of lobbies
-                while (idx < span.Length) {
-                    var connStart = span[idx..].IndexOf("\"connectionData\":");
-                    if (connStart == -1) break;
-
-                    connStart += idx;
-                    var connectionData = ExtractJsonValueSpan(span[connStart..], "connectionData");
-                    var name = ExtractJsonValueSpan(span[connStart..], "name");
-                    var typeString = ExtractJsonValueSpan(span[connStart..], "lobbyType");
-                    var code = ExtractJsonValueSpan(span[connStart..], "lobbyCode");
-
-                    PublicLobbyType? type = null;
-                    if (typeString != null) {
-                        Enum.TryParse(typeString, true, out PublicLobbyType parsedType);
-                        type = parsedType;
-                    }
-
-                    if (connectionData != null && name != null) {
-                        result.Add(new PublicLobbyInfo(connectionData, name, type ?? PublicLobbyType.Matchmaking, code ?? ""));
-                    }
-
-                    idx = connStart + 1;
-                }
-
-                return result;
-            } catch (Exception ex) {
-                Logger.Error($"MmsClient: Failed to get public lobbies: {ex.Message}");
-                return null;
-            }
-        });
-    }
-
-
-    /// <summary>
-    /// Closes the currently hosted lobby and unregisters it from the MMS.
-    /// Stops heartbeat and WebSocket connection.
-    /// </summary>
+    /// <remarks>
+    /// Uses <c>GetAwaiter().GetResult()</c> as the sync-over-async bridge, which correctly
+    /// unwraps <see cref="AggregateException"/> unlike <c>.Wait()</c>.
+    /// The heartbeat timer and WebSocket are stopped before the HTTP call so no messages
+    /// are processed for a lobby that is already being torn down.
+    /// </remarks>
     public void CloseLobby() {
-        if (_hostToken == null) return;
+        if (_hostToken is null) return;
 
-        // Stop all connections before closing
         StopHeartbeat();
         StopWebSocket();
 
         try {
-            // Send DELETE request to remove lobby from MMS (run on background thread)
-            Task.Run(async () => await DeleteRequestAsync($"{_baseUrl}/lobby/{_hostToken}")).Wait(HttpTimeoutMs);
-            Logger.Info($"MmsClient: Closed lobby {CurrentLobbyId}");
-        } catch (Exception ex) {
-            Logger.Warn($"MmsClient: Failed to close lobby: {ex.Message}");
-        }
+            DeleteAsync($"{_baseUrl}/lobby/{_hostToken}")
+                .GetAwaiter()
+                .GetResult();
 
-        // Clear state
-        _hostToken = null;
-        CurrentLobbyId = null;
+            Logger.Info($"MmsClient: Closed lobby {_currentLobbyCode}");
+        } catch (Exception ex) {
+            Logger.Warn($"MmsClient: CloseLobby failed: {ex.Message}");
+        } finally {
+            _hostToken = null;
+            _currentLobbyCode = null;
+        }
     }
 
     /// <summary>
-    /// Joins a lobby, performs NAT hole-punching, and returns host connection details.
+    /// Returns the list of public lobbies, optionally filtered by type.
     /// </summary>
-    /// <param name="lobbyId">The ID of the lobby to join</param>
-    /// <param name="clientPort">The local port the client is listening on</param>
-    /// <returns>Host connection details (connectionData, lobbyType, and optionally lanConnectionData) or null on
-    /// failure</returns>
-    public Task<(string connectionData, PublicLobbyType lobbyType, string? lanConnectionData)?> JoinLobbyAsync(
-        string lobbyId, 
-        int clientPort
-    ) {
-        return Task.Run<(string connectionData, PublicLobbyType lobbyType, string? lanConnectionData)?>(async () => {
-            try {
-                // Request join to get host connection info and queue for hole punching
-                var jsonRequest = $"{{\"ClientIp\":null,\"ClientPort\":{clientPort}}}";
-                var response = await PostJsonAsync($"{_baseUrl}/lobby/{lobbyId}/join", jsonRequest);
+    /// <param name="lobbyType">Optional filter. Pass <see langword="null"/> to return all types.</param>
+    /// <returns>List of lobbies on success; <see langword="null"/> on failure.</returns>
+    public async Task<List<PublicLobbyInfo>?> GetPublicLobbiesAsync(PublicLobbyType? lobbyType = null) {
+        try {
+            var url = lobbyType is null
+                ? $"{_baseUrl}/lobbies"
+                : $"{_baseUrl}/lobbies?type={lobbyType.Value.ToWireString()}";
 
-                if (response == null) return null;
+            var response = await GetJsonAsync(url);
+            return response is null ? null : ParseLobbyList(response.AsSpan());
+        } catch (Exception ex) {
+            Logger.Error($"MmsClient: GetPublicLobbies failed: {ex.Message}");
+            return null;
+        }
+    }
 
-                // Rent buffer for zero-allocation parsing
-                var buffer = CharPool.Rent(response.Length);
-                try {
-                    // Use standard CopyTo compatible with older .NET/Unity
-                    response.CopyTo(0, buffer, 0, response.Length);
-                    var span = buffer.AsSpan(0, response.Length);
+    /// <summary>
+    /// Joins a lobby and returns host connection info plus a client token for UDP discovery.
+    /// After calling this, invoke <see cref="SendDiscoveryPacket"/> with the returned
+    /// <c>ClientToken</c> from the gameplay socket to initiate NAT hole-punching.
+    /// </summary>
+    /// <param name="lobbyId">The lobby code or connection data to join.</param>
+    /// <returns>
+    /// A tuple of host connection details and a client token on success;
+    /// <see langword="null"/> on failure.
+    /// </returns>
+    public async Task<(string ConnectionData, PublicLobbyType LobbyType, string? LanConnectionData, Guid ClientToken)?>
+        JoinLobbyAsync(string lobbyId) {
+        try {
+            var response = await PostJsonStringAsync($"{_baseUrl}/lobby/{lobbyId}/join", "{}");
+            if (response is null) return null;
 
-                    var connectionData = ExtractJsonValueSpan(span, "connectionData");
-                    var lobbyTypeString = ExtractJsonValueSpan(span, "lobbyType");
-                    var lanConnectionData = ExtractJsonValueSpan(span, "lanConnectionData");
+            // response.AsSpan() is zero-allocation — no CharPool rental needed
+            var span = response.AsSpan();
 
-                    if (connectionData == null || lobbyTypeString == null) {
-                        Logger.Error($"MmsClient: Invalid response from JoinLobby: {response}");
-                        return null;
-                    }
+            var connectionData = ExtractJsonValue(span, "connectionData");
+            var lobbyTypeString = ExtractJsonValue(span, "lobbyType");
+            var lanConnectionData = ExtractJsonValue(span, "lanConnectionData");
+            var clientTokenString = ExtractJsonValue(span, "clientToken");
 
-                    if (!Enum.TryParse(lobbyTypeString, true, out PublicLobbyType lobbyType)) {
-                        Logger.Error($"MmsClient: Invalid lobby type from JoinLobby: {lobbyTypeString}");
-                        return null;
-                    }
-
-                    Logger.Info($"MmsClient: Joined lobby {lobbyId}, type: {lobbyType}, connection: {connectionData}, lan: {lanConnectionData}");
-                    return (connectionData, lobbyType, lanConnectionData);
-                } finally {
-                    CharPool.Return(buffer);
-                }
-            } catch (Exception ex) {
-                Logger.Error($"MmsClient: Failed to join lobby: {ex.Message}");
+            if (connectionData is null || lobbyTypeString is null || clientTokenString is null) {
+                Logger.Error($"MmsClient: Unexpected JoinLobby response: {response}");
                 return null;
             }
-        });
+
+            if (!Enum.TryParse(lobbyTypeString, ignoreCase: true, out PublicLobbyType lobbyType)) {
+                Logger.Error($"MmsClient: Unknown lobby type '{lobbyTypeString}'");
+                return null;
+            }
+
+            if (!Guid.TryParse(clientTokenString, out var clientToken)) {
+                Logger.Error($"MmsClient: Invalid client token '{clientTokenString}'");
+                return null;
+            }
+
+            Logger.Info($"MmsClient: Joined lobby {lobbyId} [{lobbyType}] -> {connectionData}");
+            return (connectionData, lobbyType, lanConnectionData, clientToken);
+        } catch (Exception ex) {
+            Logger.Error($"MmsClient: JoinLobby failed: {ex.Message}");
+            return null;
+        }
     }
 
     /// <summary>
-    /// Event raised when a pending client needs NAT hole-punching.
-    /// Subscribers should send packets to the specified endpoint to punch through NAT.
+    /// Sends a 17-byte UDP discovery packet so the MMS can record this socket's
+    /// external endpoint. Must be called from the same socket used for gameplay,
+    /// so the observed external endpoint matches the one peers need to reach.
     /// </summary>
-    public static event Action<string, int>? PunchClientRequested;
+    /// <remarks>
+    /// Packet layout: <c>[0x44 'D'][16-byte Guid, little-endian]</c>.
+    /// The packet is stack-allocated — no heap allocations occur.
+    /// </remarks>
+    /// <param name="socket">The bound UDP socket to send from.</param>
+    /// <param name="token">Token that identifies this discovery attempt.</param>
+    public void SendDiscoveryPacket(Socket socket, Guid token) {
+        try {
+            var uri = new Uri(_baseUrl);
+            var addresses = Dns.GetHostAddresses(uri.Host);
+            if (addresses.Length == 0) {
+                Logger.Warn("MmsClient: Could not resolve MMS hostname for UDP discovery");
+                return;
+            }
+
+            // Stack-allocate the 17-byte packet — zero heap allocations
+            Span<byte> packet = stackalloc byte[17];
+            packet[0] = DiscoveryOpcode;
+            token.TryWriteBytes(packet[1..]);
+
+            var endpoint = new IPEndPoint(addresses[0], UdpDiscoveryPort);
+            socket.SendTo(packet.ToArray(), endpoint);
+            Logger.Info($"MmsClient: Sent discovery packet to {endpoint} for token {token}");
+        } catch (Exception ex) {
+            Logger.Warn($"MmsClient: Discovery packet failed: {ex.Message}");
+        }
+    }
 
     /// <summary>
-    /// Starts WebSocket connection to MMS for receiving push notifications.
-    /// Should be called after creating a lobby to enable instant client notifications.
+    /// Opens a WebSocket connection to the MMS to receive real-time client endpoint
+    /// push notifications. Should be called immediately after creating a lobby.
+    /// Runs the connection loop on the thread pool via fire-and-forget.
     /// </summary>
     public void StartPendingClientPolling() {
-        if (_hostToken == null) {
+        if (_hostToken is null) {
             Logger.Error("MmsClient: Cannot start WebSocket without host token");
             return;
         }
 
-        // Run WebSocket connection on background thread
-        Task.Run(ConnectWebSocketAsync);
+        // Fire-and-forget — ConnectWebSocketAsync runs on the thread pool
+        _ = ConnectWebSocketAsync();
     }
 
     /// <summary>
-    /// Connects to MMS WebSocket and listens for pending client notifications.
+    /// Connects the WebSocket, receives messages in a loop until cancellation or closure,
+    /// then disposes the socket. Uses a rented buffer for the receive loop to avoid
+    /// per-message allocation.
     /// </summary>
     private async Task ConnectWebSocketAsync() {
-        StopWebSocket(); // Ensure no duplicate connections
+        StopWebSocket();
 
         _webSocketCts = new CancellationTokenSource();
         _hostWebSocket = new ClientWebSocket();
+        var ct = _webSocketCts.Token;
+
+        var wsUrl = _baseUrl
+                    .Replace("http://", "ws://", StringComparison.OrdinalIgnoreCase)
+                    .Replace("https://", "wss://", StringComparison.OrdinalIgnoreCase);
 
         try {
-            // Convert http:// to ws://
-            var wsUrl = _baseUrl.Replace("http://", "ws://").Replace("https://", "wss://");
-            var uri = new Uri($"{wsUrl}/ws/{_hostToken}");
+            await _hostWebSocket.ConnectAsync(new Uri($"{wsUrl}/ws/{_hostToken}"), ct);
+            Logger.Info("MmsClient: WebSocket connected");
 
-            await _hostWebSocket.ConnectAsync(uri, _webSocketCts.Token);
-            Logger.Info($"MmsClient: WebSocket connected to MMS");
+            // Rent receive buffer for the lifetime of this connection
+            var buffer = ArrayPool<byte>.Shared.Rent(1024);
+            try {
+                while (_hostWebSocket.State == WebSocketState.Open && !ct.IsCancellationRequested) {
+                    var result = await _hostWebSocket.ReceiveAsync(
+                        new ArraySegment<byte>(buffer), ct
+                    );
 
-            // Listen for messages
-            var buffer = new byte[1024];
-            while (_hostWebSocket.State == WebSocketState.Open && !_webSocketCts.Token.IsCancellationRequested) {
-                var result = await _hostWebSocket.ReceiveAsync(buffer, _webSocketCts.Token);
-                if (result.MessageType == WebSocketMessageType.Close) break;
+                    if (result.MessageType == WebSocketMessageType.Close)
+                        break;
 
-                if (result is { MessageType: WebSocketMessageType.Text, Count: > 0 }) {
-                    var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                    HandleWebSocketMessage(message);
+                    if (result is { MessageType: WebSocketMessageType.Text, Count: > 0 })
+                        HandleWebSocketMessage(Encoding.UTF8.GetString(buffer, 0, result.Count));
                 }
+            } finally {
+                ArrayPool<byte>.Shared.Return(buffer);
             }
-        } catch (Exception ex) when (ex is not OperationCanceledException) {
+        } catch (OperationCanceledException) {
+            // Normal shutdown via StopWebSocket — not an error
+        } catch (Exception ex) {
             Logger.Error($"MmsClient: WebSocket error: {ex.Message}");
         } finally {
+            // Always dispose here — StopWebSocket only cancels, never disposes directly,
+            // to avoid ObjectDisposedException mid-ReceiveAsync
             _hostWebSocket?.Dispose();
             _hostWebSocket = null;
             Logger.Info("MmsClient: WebSocket disconnected");
@@ -426,204 +391,251 @@ internal class MmsClient {
     }
 
     /// <summary>
-    /// Handles incoming WebSocket message containing pending client info.
+    /// Parses an incoming WebSocket message and raises <see cref="PunchClientRequested"/>
+    /// and <see cref="PunchClientRequestedStatic"/> if a valid client endpoint is found.
     /// </summary>
+    /// <param name="message">Raw UTF-8 JSON message received from the MMS server.</param>
     private void HandleWebSocketMessage(string message) {
-        // Parse JSON: {"clientIp":"x.x.x.x","clientPort":12345}
-        var ip = ExtractJsonValueSpan(message.AsSpan(), "clientIp");
-        var portStr = ExtractJsonValueSpan(message.AsSpan(), "clientPort");
+        var span = message.AsSpan();
+        var ip = ExtractJsonValue(span, "clientIp");
+        var portStr = ExtractJsonValue(span, "clientPort");
 
-        if (ip != null && int.TryParse(portStr, out var port)) {
-            Logger.Info($"MmsClient: WebSocket received pending client {ip}:{port}");
-            PunchClientRequested?.Invoke(ip, port);
+        if (ip is not null && int.TryParse(portStr, out var port)) {
+            Logger.Info($"MmsClient: Push notification — client {ip}:{port}");
+            PunchClientRequested?.Invoke(ip, port); // instance subscribers
+            PunchClientRequestedStatic?.Invoke(ip, port); // static relay for singleton callers
         }
     }
 
     /// <summary>
-    /// Stops WebSocket connection.
+    /// Cancels and disposes the active WebSocket cancellation token source.
+    /// The receive loop in <see cref="ConnectWebSocketAsync"/> disposes the socket itself
+    /// to avoid <see cref="ObjectDisposedException"/> mid-receive.
     /// </summary>
     private void StopWebSocket() {
         _webSocketCts?.Cancel();
         _webSocketCts?.Dispose();
         _webSocketCts = null;
-        _hostWebSocket?.Dispose();
-        _hostWebSocket = null;
     }
 
-    /// <summary>
-    /// Starts the heartbeat timer to keep the lobby alive on the MMS.
-    /// Lobbies without heartbeats expire after a timeout period.
-    /// </summary>
+    /// <summary>Starts (or restarts) the periodic heartbeat timer.</summary>
     private void StartHeartbeat() {
-        StopHeartbeat(); // Ensure no duplicate timers
-        _heartbeatTimer = new Timer(SendHeartbeat, null, HeartbeatIntervalMs, HeartbeatIntervalMs);
+        StopHeartbeat();
+        _heartbeatTimer = new Timer(OnHeartbeatTick, null, HeartbeatIntervalMs, HeartbeatIntervalMs);
     }
 
-    /// <summary>
-    /// Stops the heartbeat timer.
-    /// Called when lobby is closed.
-    /// </summary>
+    /// <summary>Stops and disposes the heartbeat timer if one is running.</summary>
     private void StopHeartbeat() {
         _heartbeatTimer?.Dispose();
         _heartbeatTimer = null;
     }
 
     /// <summary>
-    /// Timer callback that sends a heartbeat to the MMS.
-    /// Uses empty JSON body and reusable byte array to minimize allocations.
+    /// Timer callback that fires <see cref="SendHeartbeatAsync"/> as a fire-and-forget task.
+    /// Never blocks the timer thread.
     /// </summary>
-    /// <param name="state">Unused timer state parameter</param>
-    private void SendHeartbeat(object? state) {
-        if (_hostToken == null) return;
+    /// <param name="state">Unused timer state object.</param>
+    private void OnHeartbeatTick(object? state) {
+        if (_hostToken is null) return;
 
+        // Fire-and-forget — log on failure, never block the timer thread
+        _ = SendHeartbeatAsync(_hostToken);
+    }
+
+    /// <summary>
+    /// Posts a heartbeat to the MMS for the given host token.
+    /// Uses the pre-built <see cref="EmptyJsonContent"/> to avoid per-call allocation.
+    /// </summary>
+    /// <param name="hostToken">Host token of the lobby to refresh.</param>
+    private async Task SendHeartbeatAsync(string hostToken) {
         try {
-            // Send empty JSON body - just need to hit the endpoint (run on background thread)
-            Task.Run(async () => await PostJsonBytesAsync($"{_baseUrl}/lobby/heartbeat/{_hostToken}", EmptyJsonBytes))
-                .Wait(HttpTimeoutMs);
+            // EmptyJsonContent is a pre-built shared instance — zero per-call allocation
+            await HttpClient.PostAsync($"{_baseUrl}/lobby/heartbeat/{hostToken}", EmptyJsonContent);
         } catch (Exception ex) {
             Logger.Warn($"MmsClient: Heartbeat failed: {ex.Message}");
         }
     }
 
-    #region HTTP Helpers (Async with HttpClient)
-
     /// <summary>
-    /// Performs an HTTP GET request and returns the response body as a string.
-    /// Uses ResponseHeadersRead for efficient streaming.
+    /// Issues a GET request and returns the response body as a string.
+    /// Returns <see langword="null"/> on a non-success status code or network error.
     /// </summary>
-    /// <param name="url">The URL to GET</param>
-    /// <returns>Response body as string, or null if request failed</returns>
+    /// <param name="url">Absolute URL to request.</param>
     private static async Task<string?> GetJsonAsync(string url) {
         try {
-            // ResponseHeadersRead allows streaming without buffering entire response
-            var response = await HttpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+            using var response = await HttpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
             if (!response.IsSuccessStatusCode) return null;
-
             return await response.Content.ReadAsStringAsync();
-        } catch (HttpRequestException) {
-            // Network error or invalid response
-            return null;
-        } catch (TaskCanceledException) {
-            // Timeout exceeded
+        } catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException) {
             return null;
         }
     }
 
     /// <summary>
-    /// Performs an HTTP POST request with JSON content.
+    /// Issues a POST request with a raw JSON string body and returns the response body.
+    /// Returns <see langword="null"/> on a non-success status code or network error.
     /// </summary>
-    /// <param name="url">The URL to POST to</param>
-    /// <param name="json">JSON string to send as request body</param>
-    /// <returns>Response body as string</returns>
-    private static async Task<string?> PostJsonAsync(string url, string json) {
-        // StringContent handles UTF-8 encoding and sets Content-Type header
-        using var content = new StringContent(json, Encoding.UTF8, "application/json");
-        using var response = await HttpClient.PostAsync(url, content);
-        return await response.Content.ReadAsStringAsync();
+    /// <param name="url">Absolute URL to POST to.</param>
+    /// <param name="json">JSON string to send as the request body.</param>
+    private static async Task<string?> PostJsonStringAsync(string url, string json) {
+        try {
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+            using var response = await HttpClient.PostAsync(url, content);
+            if (!response.IsSuccessStatusCode) return null;
+            return await response.Content.ReadAsStringAsync();
+        } catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException) {
+            return null;
+        }
     }
 
     /// <summary>
-    /// Performs an HTTP POST request with pre-encoded JSON bytes.
-    /// More efficient than string-based version for reusable content like heartbeats.
+    /// Issues a DELETE request and returns whether it succeeded.
+    /// Returns <see langword="false"/> on a non-success status code or network error.
     /// </summary>
-    /// <param name="url">The URL to POST to</param>
-    /// <param name="jsonBytes">JSON bytes to send as request body</param>
-    /// <returns>Response body as string</returns>
-    private static async Task<string?> PostJsonBytesAsync(string url, byte[] jsonBytes) {
-        using var content = new ByteArrayContent(jsonBytes);
-        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-        using var response = await HttpClient.PostAsync(url, content);
-        return await response.Content.ReadAsStringAsync();
+    /// <param name="url">Absolute URL to DELETE.</param>
+    private static async Task<bool> DeleteAsync(string url) {
+        try {
+            using var response = await HttpClient.DeleteAsync(url);
+            return response.IsSuccessStatusCode;
+        } catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException) {
+            return false;
+        }
     }
 
     /// <summary>
-    /// Performs an HTTP DELETE request.
-    /// Used to close lobbies on the MMS.
+    /// Extracts <c>hostToken</c>, <c>lobbyCode</c>, and <c>lobbyName</c> from a lobby
+    /// creation response, applies them to instance state, and starts the heartbeat timer.
+    /// Shared by <see cref="CreateLobbyAsync"/> and <see cref="RegisterSteamLobbyAsync"/>
+    /// to avoid duplicating identical post-processing logic.
     /// </summary>
-    /// <param name="url">The URL to DELETE</param>
-    private static async Task DeleteRequestAsync(string url) {
-        await HttpClient.DeleteAsync(url);
-    }
-
-    #endregion
-
-    #region Zero-Allocation JSON Helpers
-
-    /// <summary>
-    /// Formats JSON for CreateLobby request with port only.
-    /// MMS will use the HTTP connection's source IP as the host address.
-    /// </summary>
-    private static int FormatCreateLobbyJsonPortOnly(
-        Span<char> buffer,
-        int port,
-        bool isPublic,
-        string gameVersion,
-        PublicLobbyType lobbyType,
-        string? hostLanIp
+    /// <param name="response">Raw JSON response body from a successful <c>POST /lobby</c> call.</param>
+    /// <param name="callerName">
+    /// Name of the calling method, used verbatim in the error log message when parsing fails.
+    /// </param>
+    /// <param name="lobbyCode">
+    /// When this method returns <see langword="true"/>, contains the parsed lobby code;
+    /// otherwise <see langword="null"/>.
+    /// </param>
+    /// <param name="lobbyName">
+    /// When this method returns <see langword="true"/>, contains the parsed lobby name;
+    /// otherwise <see langword="null"/>.
+    /// </param>
+    /// <returns>
+    /// <see langword="true"/> if all three fields were present and state was updated;
+    /// <see langword="false"/> if any field was missing (the unexpected response is logged at Error).
+    /// </returns>
+    private bool TryApplyLobbyCreationResponse(
+        string response,
+        string callerName,
+        out string? lobbyCode,
+        out string? lobbyName
     ) {
-        var lanIpPart = hostLanIp != null ? $",\"HostLanIp\":\"{hostLanIp}:{port}\"" : "";
-        var json =
-            $"{{\"HostPort\":{port},\"IsPublic\":{(isPublic ? "true" : "false")},\"GameVersion\":\"{gameVersion}\",\"LobbyType\":\"{lobbyType.ToString().ToLower()}\"{lanIpPart}}}";
-        json.AsSpan().CopyTo(buffer);
-        return json.Length;
+        var span = response.AsSpan();
+        var hostToken = ExtractJsonValue(span, "hostToken");
+        lobbyCode = ExtractJsonValue(span, "lobbyCode");
+        lobbyName = ExtractJsonValue(span, "lobbyName");
+
+        if (hostToken is null || lobbyCode is null || lobbyName is null) {
+            Logger.Error($"MmsClient: Unexpected {callerName} response: {response}");
+            lobbyCode = null;
+            lobbyName = null;
+            return false;
+        }
+
+        _hostToken = hostToken;
+        _currentLobbyCode = lobbyCode;
+        StartHeartbeat();
+        return true;
     }
 
     /// <summary>
-    /// Extracts a JSON value by key from a JSON string using zero allocations.
-    /// Supports both string values (quoted) and numeric values (unquoted).
+    /// Parses a JSON array of lobby objects into a list.
+    /// Advances the scan position after each parsed entry to avoid O(N²) re-scanning.
     /// </summary>
-    /// <param name="json">JSON string to search</param>
-    /// <param name="key">Key to find (without quotes)</param>
-    /// <returns>The value as a string, or null if not found</returns>
-    /// <remarks>
-    /// This is a simple parser suitable for MMS responses. It assumes well-formed JSON.
-    /// Searches for "key": pattern and extracts the following value.
-    /// </remarks>
-    private static string? ExtractJsonValueSpan(ReadOnlySpan<char> json, string key) {
-        // Build search pattern: "key":
+    /// <param name="json">The raw JSON span to parse.</param>
+    /// <returns>A list of <see cref="PublicLobbyInfo"/> entries found in the array.</returns>
+    private static List<PublicLobbyInfo> ParseLobbyList(ReadOnlySpan<char> json) {
+        var result = new List<PublicLobbyInfo>();
+        var remaining = json;
+
+        while (true) {
+            var entryStart = remaining.IndexOf("\"connectionData\":", StringComparison.Ordinal);
+            if (entryStart == -1) break;
+
+            var entry = remaining[entryStart..];
+            var connectionData = ExtractJsonValue(entry, "connectionData");
+            var name = ExtractJsonValue(entry, "name");
+            var typeString = ExtractJsonValue(entry, "lobbyType");
+            var code = ExtractJsonValue(entry, "lobbyCode");
+
+            if (connectionData is not null && name is not null) {
+                Enum.TryParse(typeString, ignoreCase: true, out PublicLobbyType lobbyType);
+                result.Add(new PublicLobbyInfo(connectionData, name, lobbyType, code ?? ""));
+            }
+
+            // Advance past the current entry to avoid re-scanning processed data
+            remaining = remaining[(entryStart + "\"connectionData\":".Length)..];
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Extracts a string or numeric JSON value by key with zero heap allocations.
+    /// Assumes well-formed JSON as produced by MMS responses.
+    /// Searches for <c>"key":</c> and extracts the immediately following value.
+    /// </summary>
+    /// <param name="json">The JSON span to search.</param>
+    /// <param name="key">The property name to locate (without quotes).</param>
+    /// <returns>
+    /// The extracted value as a <see cref="string"/> (quotes stripped for string values);
+    /// <see langword="null"/> if the key is not found or the span is malformed.
+    /// </returns>
+    private static string? ExtractJsonValue(ReadOnlySpan<char> json, string key) {
+        // Build "key": on the stack — no heap allocation for the search pattern
         Span<char> searchKey = stackalloc char[key.Length + 3];
         searchKey[0] = '"';
         key.AsSpan().CopyTo(searchKey[1..]);
         searchKey[key.Length + 1] = '"';
         searchKey[key.Length + 2] = ':';
 
-        // Find the key in JSON
         var idx = json.IndexOf(searchKey, StringComparison.Ordinal);
         if (idx == -1) return null;
 
         var valueStart = idx + searchKey.Length;
-
-        // Skip any whitespace after the colon
         while (valueStart < json.Length && char.IsWhiteSpace(json[valueStart]))
             valueStart++;
 
         if (valueStart >= json.Length) return null;
 
-        // Determine if value is quoted (string) or unquoted (number)
         if (json[valueStart] == '"') {
-            // String value - find closing quote
+            // Quoted string — find the closing quote
             var valueEnd = json[(valueStart + 1)..].IndexOf('"');
             return valueEnd == -1 ? null : json.Slice(valueStart + 1, valueEnd).ToString();
         } else {
-            // Numeric value - read until non-digit character
+            // Unquoted value (number, bool, null) — read until JSON delimiter
             var valueEnd = valueStart;
             while (valueEnd < json.Length &&
-                   (char.IsDigit(json[valueEnd]) || json[valueEnd] == '.' || json[valueEnd] == '-'))
+                   json[valueEnd] != ',' && json[valueEnd] != '}' && json[valueEnd] != ']')
                 valueEnd++;
-            return json.Slice(valueStart, valueEnd - valueStart).ToString();
+
+            return json.Slice(valueStart, valueEnd - valueStart).Trim().ToString();
         }
     }
 
-    #endregion
-
     /// <summary>
-    /// Gets the local IP address of the machine.
-    /// Uses a UDP socket to determine the routing to the internet to pick the correct interface.
-    /// Will not actually establish a connection, so used IP and port (8.8.8.8:65530) are irrelevant.
+    /// Determines the machine's outbound-facing local IP without establishing a connection.
+    /// Uses a dummy UDP <c>Connect</c> to select the correct routing interface.
     /// </summary>
+    /// <remarks>
+    /// The target address (<c>8.8.8.8:65530</c>) is irrelevant — no data is ever sent.
+    /// All socket exceptions are intentionally swallowed; a missing LAN IP is non-fatal
+    /// and results in same-network detection being skipped on the server side.
+    /// </remarks>
+    /// <returns>The local IP address string, or <see langword="null"/> if it cannot be determined.</returns>
     private static string? GetLocalIpAddress() {
         try {
-            using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, 0);
+            using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
             socket.Connect("8.8.8.8", 65530);
             return (socket.LocalEndPoint as IPEndPoint)?.Address.ToString();
         } catch {
@@ -632,27 +644,38 @@ internal class MmsClient {
     }
 }
 
-/// <summary>
-/// Public lobby information for the lobby browser.
-/// </summary>
+/// <summary>Public lobby information returned by the lobby browser endpoint.</summary>
 public record PublicLobbyInfo(
-    // IP:Port for Matchmaking, Steam lobby ID for Steam
-    string ConnectionData, 
+    string ConnectionData,
     string Name,
     PublicLobbyType LobbyType,
     string LobbyCode
 );
 
-/// <summary>
-/// Enum for public lobby types.
-/// </summary>
+/// <summary>Discriminates between the two supported lobby transports.</summary>
 public enum PublicLobbyType {
-    /// <summary>
-    /// Standalone matchmaking through MMS.
-    /// </summary>
+    /// <summary>Standalone matchmaking through MMS with UDP hole-punching.</summary>
     Matchmaking,
-    /// <summary>
-    /// Steam matchmaking through MMS.
-    /// </summary>
+
+    /// <summary>Steam matchmaking registered through MMS for discoverability.</summary>
     Steam
+}
+
+/// <summary>Extension methods for <see cref="PublicLobbyType"/>.</summary>
+internal static class PublicLobbyTypeExtensions {
+    /// <summary>
+    /// Returns the lowercase wire-format string used in MMS API requests.
+    /// Uses a switch expression rather than <c>ToString().ToLowerInvariant()</c>
+    /// to avoid culture-sensitivity issues and unnecessary string allocation.
+    /// </summary>
+    /// <param name="type">The lobby type to convert.</param>
+    /// <returns>
+    /// <c>"matchmaking"</c> or <c>"steam"</c>; falls back to
+    /// <c>ToString().ToLowerInvariant()</c> for unknown values.
+    /// </returns>
+    public static string ToWireString(this PublicLobbyType type) => type switch {
+        PublicLobbyType.Matchmaking => "matchmaking",
+        PublicLobbyType.Steam => "steam",
+        _ => type.ToString().ToLowerInvariant()
+    };
 }

@@ -92,6 +92,26 @@ internal class DtlsServer {
     }
 
     /// <summary>
+    /// Start the DTLS server using an already-bound socket.
+    /// Use this when STUN discovery was run on the same socket so the NAT mapping is preserved.
+    /// NAT creates per-socket mappings — the socket that sent the STUN request must be the same
+    /// socket that receives gameplay traffic, or the discovered external port will be wrong.
+    /// </summary>
+    /// <param name="preboundSocket">A UDP socket that is already bound to the desired port.</param>
+    public void Start(Socket preboundSocket) {
+        _port = ((IPEndPoint) preboundSocket.LocalEndPoint!).Port;
+        _serverProtocol = new DtlsServerProtocol();
+        _tlsServer = new ServerTlsServer(new BcTlsCrypto());
+        _cancellationTokenSource = new CancellationTokenSource();
+        _socket = preboundSocket;
+
+        _socketReceiveThread = new Thread(() => SocketReceiveLoop(_cancellationTokenSource.Token)) {
+            IsBackground = true
+        };
+        _socketReceiveThread.Start();
+    }
+
+    /// <summary>
     /// Send a raw UDP packet to the given endpoint (for hole punching).
     /// </summary>
     public void SendRaw(byte[] data, IPEndPoint endPoint) {

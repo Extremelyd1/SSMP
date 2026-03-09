@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using SSMP.Logging;
 using SSMP.Util;
 
@@ -77,11 +78,13 @@ internal class PacketHandlerRegistry<TPacketId, THandler>
             return;
         }
 
-        if (_dispatchToMainThread) {
-            ThreadUtil.RunActionOnMainThread(() => SafeInvoke(packetId, handler, invoker));
-        } else {
-            SafeInvoke(packetId, handler, invoker);
-        }
+        if (_dispatchToMainThread) DispatchToMainThread(packetId, handler, invoker);
+        else SafeInvoke(packetId, handler, invoker);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void DispatchToMainThread(TPacketId packetId, THandler handler, Action<THandler> invoker) {
+        ThreadUtil.RunActionOnMainThread(() => SafeInvoke(packetId, handler, invoker));
     }
 
     /// <summary>
