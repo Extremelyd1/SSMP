@@ -35,11 +35,6 @@ internal class DtlsServer {
 
     // DTLS Protocol Objects
     /// <summary>
-    /// The DTLS server protocol instance from which to start establishing connections with clients.
-    /// </summary>
-    private DtlsServerProtocol? _serverProtocol;
-
-    /// <summary>
     /// The TLS client for communicating supported cipher suites and handling certificates.
     /// </summary>
     private ServerTlsServer? _tlsServer;
@@ -78,7 +73,6 @@ internal class DtlsServer {
     /// <param name="port">The port to start listening on.</param>
     public void Start(int port) {
         _port = port;
-        _serverProtocol = new DtlsServerProtocol();
         _tlsServer = new ServerTlsServer(new BcTlsCrypto());
         _cancellationTokenSource = new CancellationTokenSource();
 
@@ -380,12 +374,6 @@ internal class DtlsServer {
     /// <param name="endPoint">The IP endpoint of the connecting client.</param>
     /// <param name="cancellationToken">The cancellation token for checking whether this task is requested to cancel.</param>
     private void PerformHandshake(IPEndPoint endPoint, CancellationToken cancellationToken) {
-        if (_serverProtocol == null) {
-            Logger.Error("Could not perform handshake because server protocol is null");
-            CleanupFailedHandshake(endPoint);
-            return;
-        }
-
         if (!_connections.TryGetValue(endPoint, out var connInfo)) {
             Logger.Error($"Connection info not found for {endPoint}");
             return;
@@ -396,9 +384,11 @@ internal class DtlsServer {
         DtlsTransport? dtlsTransport = null;
         var handshakeSucceeded = false;
 
+        var serverProtocol = new DtlsServerProtocol();
+
         try {
             var handshakeTask = Task.Run(
-                () => _serverProtocol.Accept(_tlsServer, connInfo.DatagramTransport), 
+                () => serverProtocol.Accept(_tlsServer, connInfo.DatagramTransport), 
                 cancellationToken
             );
 
