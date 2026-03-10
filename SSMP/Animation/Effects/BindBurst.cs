@@ -33,6 +33,9 @@ internal class BindBurst : Bind {
             case CrestType.Beast:
                 PlayBeastRage(bindEffects);
                 break;
+            case CrestType.Witch:
+                PlayWitchEnd(bindEffects);
+                break;
             case CrestType.Shaman:
                 PlayShamanEnd(bindEffects);
                 break;
@@ -125,34 +128,47 @@ internal class BindBurst : Bind {
     }
 
     /// <summary>
-    /// Plays the maggot cleanse animation
-    /// </summary>
-    private void PlayMaggotCleanse(GameObject bindEffects, GameObject playerObject) {
-        Logger.Info("Playing Maggot Animation");
-        var maggotBurst = GetOrFindBindFsm().GetAction<SpawnObjectFromGlobalPool>("Maggoted?", 2);
-        var maggotFlash = GetOrFindBindFsm().GetAction<SpawnObjectFromGlobalPool>("Maggoted?", 4);
-        var maggotAudio = GetOrFindBindFsm().GetFirstAction<PlayAudioEvent>("Maggoted?");
-
-        if (maggotBurst != null) {
-            maggotBurst.gameObject.Value.Spawn(bindEffects.transform, Vector3.zero);
-        }
-        if (maggotFlash != null) {
-            maggotFlash.gameObject.Value.Spawn(bindEffects.transform, Vector3.zero);
-        }
-        if (maggotAudio != null) {
-            AudioUtil.PlayAudioEventAtPlayerObject(
-                maggotAudio,
-                playerObject
-            );
-        }
-    }
-
-    /// <summary>
     /// Plays the Beast Crest specific rage animation
     /// </summary>
     private void PlayBeastRage(GameObject bindEffects) {
         var beastRage = CreateEffectIfNotExists(bindEffects, "crest rage_burst_effect(Clone)");
         beastRage?.SetActive(true);
+    }
+
+    private void PlayWitchEnd(GameObject bindEffects) {
+        var witchBind = bindEffects.FindGameObjectInChildren("Witch Bind");
+        if (witchBind == null) {
+            var localWitchBind = _localBindEffects.FindGameObjectInChildren("Witch Bind");
+            if (localWitchBind == null) {
+                Logger.Warn("Unable to find local Witch Bind object");
+                return;
+            }
+
+            witchBind = GameObject.Instantiate(localWitchBind, bindEffects.transform);
+
+            var shaker = witchBind.GetComponent<CameraControlAnimationEvents>();
+            if (shaker != null) {
+                Component.DestroyImmediate(shaker);
+            }
+
+            if (ServerSettings.IsPvpEnabled && ShouldDoDamage) {
+                SetWitchDamagers(witchBind);
+            }
+        }
+
+        witchBind.SetActive(false);
+        witchBind.SetActive(true);
+    }
+
+    private void SetWitchDamagers(GameObject witchBind) {
+        for (int i = 0; i < witchBind.transform.childCount; i++) {
+            var child = witchBind.transform.GetChild(i);
+            if (!child.name.StartsWith("Damager")) {
+                continue;
+            }
+
+            AddDamageHeroComponent(child.gameObject);
+        }
     }
 
     /// <summary>

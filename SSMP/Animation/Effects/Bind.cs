@@ -54,11 +54,13 @@ internal class Bind : DamageAnimationEffect {
         var randomClipAction = GetOrFindBindFsm().GetFirstAction<GetRandomAudioClipFromTable>("Bind Start");
         var playAudioAction = GetOrFindBindFsm().GetFirstAction<PlayAudioEvent>("Bind Start");
 
-        AudioUtil.PlayAudioEventWithRandomAudioClipFromTableAtPlayerObject(
-            playAudioAction,
-            randomClipAction,
-            playerObject
-        );
+        if (!ShamanDoneFalling) {
+            AudioUtil.PlayAudioEventWithRandomAudioClipFromTableAtPlayerObject(
+                playAudioAction,
+                randomClipAction,
+                playerObject
+            );
+        }
 
         var oneShotSingleAction = GetOrFindBindFsm().GetFirstAction<AudioPlayerOneShotSingle>("Check Grounded");
         AudioUtil.PlayAudioOneShotSingleAtPlayerObject(oneShotSingleAction, playerObject);
@@ -79,6 +81,15 @@ internal class Bind : DamageAnimationEffect {
             yield break;
         } else if (crestType == CrestType.Witch) {
             Logger.Info("Playing Witch Crest Animation");
+            if (flags.Maggoted) {
+                PlayWitchMaggoted(bindEffects);
+                PlayMaggotCleanse(bindEffects, playerObject);
+                yield break;
+            } else {
+                PlayWitchAnimationAntic(bindEffects);
+                //PlayWitchAnimation(bindEffects);
+            }
+
         } else if (crestType == CrestType.Shaman) {
             Logger.Info("Playing Shaman Crest Animation");
             if (!ShamanDoneFalling) {
@@ -156,6 +167,9 @@ internal class Bind : DamageAnimationEffect {
 
         if (flags.QuickBind) bindSilkAnimator.Play(bindSilkAnimator.GetClipByName("Bind Silk Quick"));
         else bindSilkAnimator.Play(bindSilkAnimator.GetClipByName("Bind Silk"));
+
+        bindSilkObj.SetActive(false);
+        bindSilkObj.SetActive(true);
     }
 
     /// <summary>
@@ -209,7 +223,48 @@ internal class Bind : DamageAnimationEffect {
             animator.Play("Bind Cursed End");
         }
     }
-    
+
+    private void PlayWitchMaggoted(GameObject bindEffects) {
+        var maggotCleanse = CreateEffectIfNotExists(bindEffects, "Witch Bind Maggot Cleanse");
+        if (maggotCleanse != null) {
+            maggotCleanse.SetActive(false);
+            maggotCleanse.SetActive(true);
+        }
+    }
+
+    private void PlayWitchAnimationAntic(GameObject bindEffects) {
+        var silkAntic = CreateEffectIfNotExists(bindEffects, "Whip_Bind_silk_antic");
+        if (silkAntic == null) {
+            return;
+        }
+
+        silkAntic.SetActive(false);
+        silkAntic.SetActive(true);
+    }
+
+    /// <summary>
+    /// Plays the maggot cleanse animation
+    /// </summary>
+    protected void PlayMaggotCleanse(GameObject bindEffects, GameObject playerObject) {
+        Logger.Info("Playing Maggot Animation");
+        var maggotBurst = GetOrFindBindFsm().GetAction<SpawnObjectFromGlobalPool>("Maggoted?", 2);
+        var maggotFlash = GetOrFindBindFsm().GetAction<SpawnObjectFromGlobalPool>("Maggoted?", 4);
+        var maggotAudio = GetOrFindBindFsm().GetFirstAction<PlayAudioEvent>("Maggoted?");
+
+        if (maggotBurst != null) {
+            maggotBurst.gameObject.Value.Spawn(bindEffects.transform, Vector3.zero);
+        }
+        if (maggotFlash != null) {
+            maggotFlash.gameObject.Value.Spawn(bindEffects.transform, Vector3.zero);
+        }
+        if (maggotAudio != null) {
+            AudioUtil.PlayAudioEventAtPlayerObject(
+                maggotAudio,
+                playerObject
+            );
+        }
+    }
+
     /// <summary>
     /// Plays the Shaman Crest falling silk animation
     /// </summary>
