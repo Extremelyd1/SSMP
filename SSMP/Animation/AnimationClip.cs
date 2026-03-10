@@ -756,4 +756,7 @@ internal enum AnimationClip {
     NailArtChargeEnd,
     WallSlideEnd,
     HazardDeath,
+
+    // Sub-animation names
+    WitchTentacles,
 }

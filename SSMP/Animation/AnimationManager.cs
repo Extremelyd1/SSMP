@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using SSMP.Animation.Effects;
 using SSMP.Collection;
+using SSMP.Fsm;
 using SSMP.Game;
 using SSMP.Game.Client;
 using SSMP.Game.Settings;
@@ -615,6 +616,8 @@ internal class AnimationManager {
         { "Wound Double Strike", AnimationClip.WoundDoubleStrike },
         { "Wound Zap", AnimationClip.WoundZap },
 
+        { "Witch Tentacles!", AnimationClip.WitchTentacles }
+
     };
 
     /// <summary>
@@ -651,6 +654,10 @@ internal class AnimationManager {
         { AnimationClip.BindChargeHealBurst, new BindBurst() },
         { AnimationClip.BindBurstAir, new BindBurst() },
         { AnimationClip.RageBindBurst, new BindBurst() },
+    };
+
+    private static readonly Dictionary<AnimationClip, IAnimationEffect> SubAnimationEffects = new() {
+        { AnimationClip.WitchTentacles, new BindBurst() }
     };
 
     /// <summary>
@@ -732,6 +739,10 @@ internal class AnimationManager {
         foreach (var effect in AnimationEffects.Values) {
             effect.SetServerSettings(serverSettings);
         }
+
+        foreach (var effect in SubAnimationEffects.Values) {
+            effect.SetServerSettings(serverSettings);
+        }
     }
 
     /// <summary>
@@ -748,6 +759,14 @@ internal class AnimationManager {
         // Register callbacks for tracking the start of playing animation clips
         EventHooks.SpriteAnimatorWarpClipToLocalTime += Tk2dSpriteAnimatorOnWarpClipToLocalTime;
         EventHooks.SpriteAnimatorProcessEvents += Tk2dSpriteAnimatorOnProcessEvents;
+
+        // Register FSM hooks for certain bind actions
+        if (HeroController.SilentInstance != null) {
+            CreateWitchTentaclesHook(HeroController.instance);
+        } else {
+            HeroController.OnHeroInstanceSet += CreateWitchTentaclesHook;
+        }
+
 
         // Register a callback so we know when the dash has finished
         // On.HeroController.CancelDash += HeroControllerOnCancelDash;
@@ -806,7 +825,11 @@ internal class AnimationManager {
 
         var animationClip = (AnimationClip) clipId;
 
-        if (AnimationEffects.TryGetValue(animationClip, out var animationEffect)) {
+        if (!AnimationEffects.TryGetValue(animationClip, out var animationEffect)) {
+            SubAnimationEffects.TryGetValue(animationClip, out animationEffect);
+        }
+
+        if (animationEffect != null) {
             var playerObject = _playerManager.GetPlayerObject(id);
             if (!playerObject) {
                 // Logger.Get().Warn(this, $"Tried to play animation effect {clipName} with ID: {id}, but player object doesn't exist");
@@ -853,6 +876,11 @@ internal class AnimationManager {
         var animationClip = (AnimationClip) clipId;
 
         if (_debugLogAnimations) Logger.Info($"Received PlayerAnimationUpdate: {animationClip}");
+
+        if (SubAnimationEffects.ContainsKey(animationClip)) {
+            if (_debugLogAnimations) Logger.Info($"PlayerAnimationUpdate was sub-effect: {animationClip}");
+            return;
+        }
 
         if (!ClipEnumNames.ContainsSecond(animationClip)) {
             // This happens when we send custom clips, that can't be played by the sprite animator, so for now we
@@ -950,7 +978,7 @@ internal class AnimationManager {
             return;
         }
 
-        if (_debugLogAnimations) Logger.Info($"  conditions 1: {clip.name.Equals(_lastAnimationClip)}, {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Once}, {!AllowedLoopAnimations.Contains(clip.name)}");
+        //if (_debugLogAnimations) Logger.Info($"  conditions 1: {clip.name.Equals(_lastAnimationClip)}, {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Once}, {!AllowedLoopAnimations.Contains(clip.name)}");
 
         // Skip event handling when we already handled this clip, unless it is a clip with wrap mode once
         if (clip.name.Equals(_lastAnimationClip)
@@ -997,12 +1025,15 @@ internal class AnimationManager {
         if (AnimationEffects.TryGetValue(animationClip, out var effect)) {
             var effectInfo = effect.GetEffectInfo();
 
+        } else if (SubAnimationEffects.TryGetValue(animationClip, out var subEffect)) {
+            var effectInfo = subEffect.GetEffectInfo();
+
             _netClient.UpdateManager.UpdatePlayerAnimation(animationClip, 0, effectInfo);
         } else {
             _netClient.UpdateManager.UpdatePlayerAnimation(animationClip);
         }
 
-        if (_debugLogAnimations) Logger.Info($"  Sending animation: {animationClip}");
+        //if (_debugLogAnimations) Logger.Info($"  Sending animation: {animationClip}");
 
         // Update the last clip name, since it changed
         _lastAnimationClip = clip.name;
@@ -1011,6 +1042,31 @@ internal class AnimationManager {
         // _animationControllerWasLastSent = false;
     }
 
+        var heroFsms = hc.GetComponents<PlayMakerFSM>();
+        PlayMakerFSM bindFsm = heroFsms.FirstOrDefault(fsm => fsm.FsmName == "Bind");
+        if (bindFsm != null) {
+            // Find witch crest tenticles
+            var tenticles = bindFsm.GetState("Witch Tentancles!"); // no that's not a typo... at least on my end
+            if (tenticles != null) {
+                FsmStateActionInjector.Inject(tenticles, 4, OnWitchTentacles);
+            } else {
+                Logger.Warn("Unable to find Witch Tentacles! state");
+            }
+        } else {
+            Logger.Warn("Unable to find Bind FSM");
+        }
+    }
+
+    /// <summary>
+    /// Animation subanimation hook for the Witch Tentacles FSM state
+    /// </summary>
+    /// <param name="fsm"></param>
+    private void OnWitchTentacles(PlayMakerFSM fsm) {
+        var dummyClip = new tk2dSpriteAnimationClip();
+        dummyClip.name = "Witch Tentacles!";
+        dummyClip.wrapMode = tk2dSpriteAnimationClip.WrapMode.Once;
+        OnAnimationEvent(dummyClip);
+    }
     // /// <summary>
     // /// Callback method on the HeroAnimationController#Play method.
     // /// </summary>
@@ -1168,7 +1224,7 @@ internal class AnimationManager {
         var frame = clip.frames[index];
     
         if (index == 0 || frame.triggerEvent || AllowedLoopAnimations.Contains(clip.name)) {
-            if (_debugLogAnimations) Logger.Info($"OnAnimationEvent from tk2dSpriteAnimatorOnWarpClipToLocalTime: {clip.name}, conditions: {index == 0}, {frame.triggerEvent}, {AllowedLoopAnimations.Contains(clip.name)}");
+            //if (_debugLogAnimations) Logger.Info($"OnAnimationEvent from tk2dSpriteAnimatorOnWarpClipToLocalTime: {clip.name}, conditions: {index == 0}, {frame.triggerEvent}, {AllowedLoopAnimations.Contains(clip.name)}");
             OnAnimationEvent(clip);
         }
     }
@@ -1221,6 +1277,7 @@ internal class AnimationManager {
             // }
         
             if (_debugLogAnimations) Logger.Info($"OnAnimationEvent from tk2dSpriteAnimatorOnProcessEvents: {self.CurrentClip.name}, conditions: {i}, {frames[i].triggerEvent}");
+            //if (_debugLogAnimations) Logger.Info($"OnAnimationEvent from tk2dSpriteAnimatorOnProcessEvents: {self.CurrentClip.name}, conditions: {i}, {frames[i].triggerEvent}");
             // OnAnimationEvent(self.CurrentClip);
         }
     }
