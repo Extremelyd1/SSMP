@@ -652,14 +652,14 @@ internal class AnimationManager {
         { AnimationClip.NeedleArtDash, new NeedleStrike(false) },
         { AnimationClip.BindChargeGround, new Bind() },
         { AnimationClip.BindChargeGroundLand, new Bind { ShamanDoneFalling = true } },
-        { AnimationClip.BindBurstGround, new BindBurst() },
-        { AnimationClip.BindChargeHealBurst, new BindBurst() },
-        { AnimationClip.BindBurstAir, new BindBurst() },
-        { AnimationClip.RageBindBurst, new BindBurst() },
+        { AnimationClip.BindBurstGround, BindBurst.Instance },
+        { AnimationClip.BindChargeHealBurst, BindBurst.Instance },
+        { AnimationClip.BindBurstAir, BindBurst.Instance },
+        { AnimationClip.RageBindBurst, BindBurst.Instance },
     };
 
     private static readonly Dictionary<AnimationClip, IAnimationEffect> SubAnimationEffects = new() {
-        { AnimationClip.WitchTentacles, new BindBurst() }
+        { AnimationClip.WitchTentacles, BindBurst.Instance }
     };
 
     /// <summary>

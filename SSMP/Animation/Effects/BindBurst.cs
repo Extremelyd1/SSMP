@@ -13,6 +13,12 @@ using Object = UnityEngine.Object;
 namespace SSMP.Animation.Effects;
 
 internal class BindBurst : Bind {
+    /// <summary>
+    /// Static instance for access by multiple animation clips in <see cref="AnimationManager"/>.
+    /// </summary>
+    private static BindBurst? _instance;
+    /// <inheritdoc cref="_instance" />
+    public new static BindBurst Instance => _instance ??= new BindBurst();
     public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
         Flags flags = new Flags(effectInfo);
         MonoBehaviourUtil.Instance.StartCoroutine(PlayBindBurstEffect(playerObject, crestType, flags));

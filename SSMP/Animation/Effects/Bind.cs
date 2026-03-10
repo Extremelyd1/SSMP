@@ -15,7 +15,7 @@ namespace SSMP.Animation.Effects;
 /// </summary>
 internal class Bind : DamageAnimationEffect {
 
-    protected string BIND_BELL_NAME = "bind_bell_appear_instance";
+    protected const string BIND_BELL_NAME = "bind_bell_appear_instance";
 
     public bool ShamanDoneFalling = false;
 
