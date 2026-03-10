@@ -1,4 +1,4 @@
-﻿using HutongGames.PlayMaker.Actions;
+using HutongGames.PlayMaker.Actions;
 using SSMP.Internals;
 using SSMP.Util;
 using UnityEngine;
@@ -23,7 +23,7 @@ internal class DashSlashAntic : DamageAnimationEffect {
     }
 
     /// <inheritdoc/>
-    public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
+    public override void Play(GameObject playerObject, CrestType crestType, ushort playerId, byte[]? effectInfo) {
         var sprintFsm = HeroController.instance.sprintFSM;
         PlayAudioEvent playAudioAction;
         switch (crestType) {

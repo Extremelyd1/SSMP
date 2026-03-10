@@ -18,9 +18,14 @@ internal class BindBurst : Bind {
     /// </summary>
     private static BindBurst? _instance;
     /// <inheritdoc cref="_instance" />
-    public new static BindBurst Instance => _instance ??= new BindBurst();
-    public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
+    public static BindBurst Instance => _instance ??= new BindBurst();
+    public static HashSet<ushort> MaggotedPlayers = new HashSet<ushort>();
+    public override void Play(GameObject playerObject, CrestType crestType, ushort playerId, byte[]? effectInfo) {
         Flags flags = new Flags(effectInfo);
+        if (MaggotedPlayers.Contains(playerId)) {
+            flags.Maggoted = true;
+            MaggotedPlayers.Remove(playerId);
+        }
         MonoBehaviourUtil.Instance.StartCoroutine(PlayBindBurstEffect(playerObject, crestType, flags));
     }
 
@@ -37,10 +42,16 @@ internal class BindBurst : Bind {
 
         switch (crestType) {
             case CrestType.Beast:
-                PlayBeastRage(bindEffects);
+                if (!flags.Maggoted) {
+                    PlayBeastRage(bindEffects);
+                }
                 break;
             case CrestType.Witch:
-                PlayWitchEnd(bindEffects);
+                if (!flags.Maggoted) {
+                    PlayWitchEnd(bindEffects);
+                } else {
+                    PlayWitchMaggoted(bindEffects);
+                }
                 break;
             case CrestType.Shaman:
                 PlayShamanEnd(bindEffects);
@@ -50,6 +61,29 @@ internal class BindBurst : Bind {
         }
 
         PlayNormalEnd(bindEffects);
+    }
+
+    /// <summary>
+    /// Plays the maggot cleanse animation
+    /// </summary>
+    protected void PlayMaggotCleanse(GameObject bindEffects, GameObject playerObject) {
+        Logger.Info("Playing Maggot Animation");
+        var maggotBurst = GetOrFindBindFsm().GetAction<SpawnObjectFromGlobalPool>("Maggoted?", 2);
+        var maggotFlash = GetOrFindBindFsm().GetAction<SpawnObjectFromGlobalPool>("Maggoted?", 4);
+        var maggotAudio = GetOrFindBindFsm().GetFirstAction<PlayAudioEvent>("Maggoted?");
+
+        if (maggotBurst != null) {
+            maggotBurst.gameObject.Value.Spawn(bindEffects.transform, Vector3.zero);
+        }
+        if (maggotFlash != null) {
+            maggotFlash.gameObject.Value.Spawn(bindEffects.transform, Vector3.zero);
+        }
+        if (maggotAudio != null) {
+            AudioUtil.PlayAudioEventAtPlayerObject(
+                maggotAudio,
+                playerObject
+            );
+        }
     }
 
     /// <summary>
@@ -126,7 +160,7 @@ internal class BindBurst : Bind {
     /// <summary>
     /// Stops the bind bell animation
     /// </summary>
-    private void StopBindBell(GameObject bindEffects) {
+    public void StopBindBell(GameObject bindEffects) {
         var bindBell = bindEffects.FindGameObjectInChildren(BIND_BELL_NAME);
         if (bindBell != null) {
             bindBell.SetActive(false);
@@ -139,6 +173,14 @@ internal class BindBurst : Bind {
     private void PlayBeastRage(GameObject bindEffects) {
         var beastRage = CreateEffectIfNotExists(bindEffects, "crest rage_burst_effect(Clone)");
         beastRage?.SetActive(true);
+    }
+
+    private void PlayWitchMaggoted(GameObject bindEffects) {
+        var maggotCleanse = CreateEffectIfNotExists(bindEffects, "Witch Bind Maggot Cleanse");
+        if (maggotCleanse != null) {
+            maggotCleanse.SetActive(false);
+            maggotCleanse.SetActive(true);
+        }
     }
 
     private void PlayWitchEnd(GameObject bindEffects) {

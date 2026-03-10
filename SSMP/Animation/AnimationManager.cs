@@ -617,7 +617,8 @@ internal class AnimationManager {
         { "Wound Double Strike", AnimationClip.WoundDoubleStrike },
         { "Wound Zap", AnimationClip.WoundZap },
 
-        { "Witch Tentacles!", AnimationClip.WitchTentacles }
+        { "Witch Tentacles!", AnimationClip.WitchTentacles },
+        { "Shaman Cancel", AnimationClip.ShamanCancel },
 
     };
 
@@ -651,15 +652,16 @@ internal class AnimationManager {
         { AnimationClip.SlashChargedLoop, new NeedleStrike(true) },
         { AnimationClip.NeedleArtDash, new NeedleStrike(false) },
         { AnimationClip.BindChargeGround, new Bind() },
-        { AnimationClip.BindChargeGroundLand, new Bind { ShamanDoneFalling = true } },
+        { AnimationClip.BindChargeGroundLand, new Bind { BindState = Bind.State.ShamanDoneFalling } },
         { AnimationClip.BindBurstGround, BindBurst.Instance },
         { AnimationClip.BindChargeHealBurst, BindBurst.Instance },
         { AnimationClip.BindBurstAir, BindBurst.Instance },
-        { AnimationClip.RageBindBurst, BindBurst.Instance },
+        { AnimationClip.RageBindBurst, BindBurst.Instance }
     };
 
     private static readonly Dictionary<AnimationClip, IAnimationEffect> SubAnimationEffects = new() {
-        { AnimationClip.WitchTentacles, BindBurst.Instance }
+        { AnimationClip.WitchTentacles, BindBurst.Instance },
+        { AnimationClip.ShamanCancel, new Bind { BindState = Bind.State.ShamanCancel } }
     };
 
     /// <summary>
@@ -764,9 +766,9 @@ internal class AnimationManager {
 
         // Register FSM hooks for certain bind actions
         if (HeroController.SilentInstance != null) {
-            CreateWitchTentaclesHook(HeroController.instance);
+            CreateBindHooks(HeroController.instance);
         } else {
-            HeroController.OnHeroInstanceSet += CreateWitchTentaclesHook;
+            HeroController.OnHeroInstanceSet += CreateBindHooks;
         }
 
 
@@ -856,6 +858,7 @@ internal class AnimationManager {
             animationEffect.Play(
                 playerObject,
                 crestType,
+                id,
                 effectInfo
             );
         }
@@ -1045,32 +1048,54 @@ internal class AnimationManager {
         // _animationControllerWasLastSent = false;
     }
 
-    private void CreateWitchTentaclesHook(HeroController hc) {
+    /// <summary>
+    /// Creates hooks for the Witch Tentacles and Shaman Cancel states in
+    /// the Bind fsm once the HeroController is ready.
+    /// </summary>
+    private void CreateBindHooks(HeroController hc) {
         var heroFsms = hc.GetComponents<PlayMakerFSM>();
         PlayMakerFSM bindFsm = heroFsms.FirstOrDefault(fsm => fsm.FsmName == "Bind");
-        if (bindFsm != null) {
-            // Find witch crest tenticles
-            var tenticles = bindFsm.GetState("Witch Tentancles!"); // no that's not a typo... at least on my end
-            if (tenticles != null) {
-                FsmStateActionInjector.Inject(tenticles, 4, OnWitchTentacles);
-            } else {
-                Logger.Warn("Unable to find Witch Tentacles! state");
-            }
+        if (bindFsm == null) {
+            Logger.Warn("Unable to find Bind FSM to hook.");
+            return;
+        }
+
+        // Find witch crest tenticles
+        var tenticles = bindFsm.GetState("Witch Tentancles!"); // no that's not a typo... at least on my end
+        if (tenticles != null) {
+            FsmStateActionInjector.Inject(tenticles, 4, OnWitchTentacles);
         } else {
-            Logger.Warn("Unable to find Bind FSM");
+            Logger.Warn("Unable to find Witch Tentacles! state");
+        }
+
+        var shamanCancel = bindFsm.GetState("Shaman Air Cancel");
+        if (shamanCancel != null) {
+            FsmStateActionInjector.Inject(shamanCancel, OnShamanCancel);
+        } else {
+            Logger.Warn("Unable to find Shaman Air Cancel state");
         }
     }
 
     /// <summary>
     /// Animation subanimation hook for the Witch Tentacles FSM state
     /// </summary>
-    /// <param name="fsm"></param>
     private void OnWitchTentacles(PlayMakerFSM fsm) {
         var dummyClip = new tk2dSpriteAnimationClip();
         dummyClip.name = "Witch Tentacles!";
         dummyClip.wrapMode = tk2dSpriteAnimationClip.WrapMode.Once;
         OnAnimationEvent(dummyClip);
     }
+
+    /// <summary>
+    /// Animation subanimation hook for the Shaman Air Cancel FSM state
+    /// </summary>
+    private void OnShamanCancel(PlayMakerFSM fsm) {
+        var dummyClip = new tk2dSpriteAnimationClip();
+        dummyClip.name = "Shaman Cancel";
+        dummyClip.wrapMode = tk2dSpriteAnimationClip.WrapMode.Once;
+        OnAnimationEvent(dummyClip);
+    }
+
     // /// <summary>
     // /// Callback method on the HeroAnimationController#Play method.
     // /// </summary>

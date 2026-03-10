@@ -14,7 +14,7 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
     protected bool ShouldDoDamage;
 
     /// <inheritdoc/>
-    public abstract override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo);
+    public abstract override void Play(GameObject playerObject, CrestType crestType, ushort playerId, byte[]? effectInfo);
 
     /// <inheritdoc/>
     public abstract override byte[]? GetEffectInfo();

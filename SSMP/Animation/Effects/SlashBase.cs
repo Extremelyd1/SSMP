@@ -16,7 +16,7 @@ namespace SSMP.Animation.Effects;
 /// </summary>
 internal abstract class SlashBase : ParryableEffect {
     /// <inheritdoc/>
-    public abstract override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo);
+    public abstract override void Play(GameObject playerObject, CrestType crestType, ushort playerId, byte[]? effectInfo);
 
     /// <inheritdoc/>
     public override byte[] GetEffectInfo() {

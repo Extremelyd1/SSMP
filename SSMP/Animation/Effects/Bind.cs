@@ -15,9 +15,15 @@ namespace SSMP.Animation.Effects;
 /// </summary>
 internal class Bind : DamageAnimationEffect {
 
+    public enum State {
+        Normal,
+        ShamanCancel,
+        ShamanDoneFalling
+    }
+
     protected const string BIND_BELL_NAME = "bind_bell_appear_instance";
 
-    public bool ShamanDoneFalling = false;
+    public State BindState = State.Normal;
 
     protected class Flags {
         public bool BindBell = false;
@@ -45,8 +51,17 @@ internal class Bind : DamageAnimationEffect {
 
     protected static GameObject? _localBindEffects;
 
-    public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
+    public override void Play(GameObject playerObject, CrestType crestType, ushort playerId, byte[]? effectInfo) {
         Flags flags = new Flags(effectInfo);
+
+        // The maggot state is cleared by the time the bind burst is sent.
+        // This keeps track of it, although at a slight possible loss of consistancy
+        if (flags.Maggoted && !(crestType == CrestType.Shaman && BindState == State.ShamanCancel)) {
+            BindBurst.MaggotedPlayers.Add(playerId);
+        } else {
+            BindBurst.MaggotedPlayers.Remove(playerId);
+        }
+
         MonoBehaviourUtil.Instance.StartCoroutine(PlayBindEffect(playerObject, crestType, flags));
     }
 
@@ -54,7 +69,7 @@ internal class Bind : DamageAnimationEffect {
         var randomClipAction = GetOrFindBindFsm().GetFirstAction<GetRandomAudioClipFromTable>("Bind Start");
         var playAudioAction = GetOrFindBindFsm().GetFirstAction<PlayAudioEvent>("Bind Start");
 
-        if (!ShamanDoneFalling) {
+        if (BindState == State.Normal) {
             AudioUtil.PlayAudioEventWithRandomAudioClipFromTableAtPlayerObject(
                 playAudioAction,
                 randomClipAction,
@@ -81,19 +96,14 @@ internal class Bind : DamageAnimationEffect {
             yield break;
         } else if (crestType == CrestType.Witch) {
             Logger.Info("Playing Witch Crest Animation");
-            if (flags.Maggoted) {
-                PlayWitchMaggoted(bindEffects);
-                PlayMaggotCleanse(bindEffects, playerObject);
-                yield break;
-            } else {
-                PlayWitchAnimationAntic(bindEffects);
-                //PlayWitchAnimation(bindEffects);
-            }
-
+           PlayWitchAnimationAntic(bindEffects);
         } else if (crestType == CrestType.Shaman) {
             Logger.Info("Playing Shaman Crest Animation");
-            if (!ShamanDoneFalling) {
+            if (BindState == State.Normal) {
                 PlayShamanFall(bindEffects);
+            } else if (BindState == State.ShamanCancel) { 
+                PlayShamanCancel(playerObject, bindEffects);
+                yield break;
             } else {
                 PlayShamanFallEnd(bindEffects);
                 PlayNormalStart(bindEffects, flags);
@@ -149,6 +159,7 @@ internal class Bind : DamageAnimationEffect {
         bindBell.SetActive(false);
         bindBell.SetActive(true);
     }
+
     /// <summary>
     /// Plays the normal silk animation
     /// </summary>
@@ -224,14 +235,6 @@ internal class Bind : DamageAnimationEffect {
         }
     }
 
-    private void PlayWitchMaggoted(GameObject bindEffects) {
-        var maggotCleanse = CreateEffectIfNotExists(bindEffects, "Witch Bind Maggot Cleanse");
-        if (maggotCleanse != null) {
-            maggotCleanse.SetActive(false);
-            maggotCleanse.SetActive(true);
-        }
-    }
-
     private void PlayWitchAnimationAntic(GameObject bindEffects) {
         var silkAntic = CreateEffectIfNotExists(bindEffects, "Whip_Bind_silk_antic");
         if (silkAntic == null) {
@@ -240,29 +243,6 @@ internal class Bind : DamageAnimationEffect {
 
         silkAntic.SetActive(false);
         silkAntic.SetActive(true);
-    }
-
-    /// <summary>
-    /// Plays the maggot cleanse animation
-    /// </summary>
-    protected void PlayMaggotCleanse(GameObject bindEffects, GameObject playerObject) {
-        Logger.Info("Playing Maggot Animation");
-        var maggotBurst = GetOrFindBindFsm().GetAction<SpawnObjectFromGlobalPool>("Maggoted?", 2);
-        var maggotFlash = GetOrFindBindFsm().GetAction<SpawnObjectFromGlobalPool>("Maggoted?", 4);
-        var maggotAudio = GetOrFindBindFsm().GetFirstAction<PlayAudioEvent>("Maggoted?");
-
-        if (maggotBurst != null) {
-            maggotBurst.gameObject.Value.Spawn(bindEffects.transform, Vector3.zero);
-        }
-        if (maggotFlash != null) {
-            maggotFlash.gameObject.Value.Spawn(bindEffects.transform, Vector3.zero);
-        }
-        if (maggotAudio != null) {
-            AudioUtil.PlayAudioEventAtPlayerObject(
-                maggotAudio,
-                playerObject
-            );
-        }
     }
 
     /// <summary>
@@ -280,6 +260,24 @@ internal class Bind : DamageAnimationEffect {
 
         shamanAntic.SetActive(false);
         shamanAntic.SetActive(true);
+    }
+
+    private void PlayShamanCancel(GameObject playerObject, GameObject bindEffects) {
+        var shamanAntic = bindEffects.FindGameObjectInChildren("Shaman_Bind_antic_silk");
+        if (shamanAntic != null) {
+            shamanAntic.SetActive(false);
+        }
+
+        var silkPuffSpawner = GetOrFindBindFsm().GetFirstAction<SpawnObjectFromGlobalPool>("Shaman Air Cancel");
+        if (silkPuffSpawner == null) {
+            Logger.Warn("Unable to find FSM action for Shaman Air Cancel");
+            return;
+        }
+
+        var globalSilkPuff = silkPuffSpawner.gameObject.Value;
+        EffectUtils.SpawnGlobalPoolObject(globalSilkPuff, playerObject.transform, false);
+
+        BindBurst.Instance.StopBindBell(bindEffects);
     }
 
     /// <summary>
@@ -305,10 +303,9 @@ internal class Bind : DamageAnimationEffect {
             (byte) (ToolItemManager.IsToolEquipped("Dazzle Bind Upgraded") ? 1 : 0),
             (byte) (ToolItemManager.IsToolEquipped("Quickbind") ? 1 : 0),
             (byte) (ToolItemManager.IsToolEquipped("Reserve Bind") ? 1 : 0),
-            (byte) (HeroController.instance.cState.isMaggoted ? 1 : 0),
-            //(byte) (HeroController.instance.onFlatGround ? 0 : 1)
+            (byte) (HeroController.instance.cState.isMaggoted ? 1 : 0)
         };
-
+        Logger.Info(HeroController.instance.cState.isMaggoted ? "MAGGOTS" : "NO MAGGOTS");
         return effectInfo;
     }
 

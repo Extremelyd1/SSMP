@@ -15,4 +15,17 @@ internal static class EffectUtils {
             Component.Destroy(recycler);
         }
     }
+
+    public static GameObject SpawnGlobalPoolObject(GameObject globalObj, Transform spawnLocation, bool keepParent = false) {
+        var newObj = GameObject.Instantiate(globalObj, spawnLocation);
+        
+        if (!keepParent) {
+            newObj.transform.SetParent(null);
+            newObj.transform.position = spawnLocation.position;
+        }
+        newObj.SetActive(true);
+
+        SafelyRemoveAutoRecycle(newObj);
+        return newObj;
+    }
 }

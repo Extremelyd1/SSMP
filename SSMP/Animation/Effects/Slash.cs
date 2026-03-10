@@ -1,4 +1,4 @@
-﻿using SSMP.Internals;
+using SSMP.Internals;
 using UnityEngine;
 
 namespace SSMP.Animation.Effects;
@@ -21,7 +21,7 @@ internal class Slash : SlashBase {
     }
     
     /// <inheritdoc/>
-    public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
+    public override void Play(GameObject playerObject, CrestType crestType, ushort playerId, byte[]? effectInfo) {
         // Call the base function with the correct parameters
         Play(playerObject, crestType, effectInfo, _slashType);
     }

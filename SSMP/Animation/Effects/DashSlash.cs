@@ -1,4 +1,4 @@
-﻿using SSMP.Internals;
+using SSMP.Internals;
 using SSMP.Networking.Packet;
 using SSMP.Util;
 using UnityEngine;
@@ -25,7 +25,7 @@ internal class DashSlash : SlashBase {
     }
 
     /// <inheritdoc/>
-    public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
+    public override void Play(GameObject playerObject, CrestType crestType, ushort playerId, byte[]? effectInfo) {
         if (effectInfo == null || effectInfo.Length < 1) {
             Logger.Error("Could not get null or empty effect info for DashAttack");
             return;

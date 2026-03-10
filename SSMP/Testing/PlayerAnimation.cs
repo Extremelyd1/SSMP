@@ -54,7 +54,7 @@ public class PlayerAnimation : MonoBehaviour {
         transform.position = playerPosition;
     }
 
-    public void StartPreAnimation() {
+    public void StartAnimation1() {
         Init();
         CrestType crest = DetermineCrest();
 
@@ -64,12 +64,12 @@ public class PlayerAnimation : MonoBehaviour {
         string clipName = "BindCharge Ground";
 
         var playerObject = transform.GetChild(0).gameObject;
-        var bind = new Bind { ShamanDoneFalling = false };
+        var bind = new Bind { BindState = Bind.State.Normal };
 
         var info = bind.GetEffectInfo();
 
         SetSettings(bind);
-        bind.Play(playerObject, crest, info);
+        bind.Play(playerObject, crest, 1, info);
 
         var spriteAnimator = playerObject.GetComponent<tk2dSpriteAnimator>();
 
@@ -77,28 +77,7 @@ public class PlayerAnimation : MonoBehaviour {
         spriteAnimator.PlayFromFrame(clip, 0);
     }
 
-    public void StartAnimation() {
-
-        Init();
-
-        string clipName = "BindCharge Ground";
-        CrestType crest = DetermineCrest();
-
-        var playerObject = transform.GetChild(0).gameObject;
-        var bind = new Bind { ShamanDoneFalling = true };
-
-        var info = bind.GetEffectInfo();
-
-        SetSettings(bind);
-        bind.Play(playerObject, crest, info);
-        
-        var spriteAnimator = playerObject.GetComponent<tk2dSpriteAnimator>();
-
-        var clip = spriteAnimator.GetClipByName(clipName);
-        spriteAnimator.PlayFromFrame(clip, 0);
-    }
-
-    public void StopAnimation() {
+    public void StartAnimation2() {
         var clipName = "BindBurst Ground";
 
         var playerObject = transform.GetChild(0).gameObject;
@@ -110,7 +89,49 @@ public class PlayerAnimation : MonoBehaviour {
         var info = bind.GetEffectInfo();
         CrestType crest = DetermineCrest();
 
-        bind.Play(playerObject, crest, info);
+        bind.Play(playerObject, crest, 1, info);
+
+        var spriteAnimator = playerObject.GetComponent<tk2dSpriteAnimator>();
+
+        var clip = spriteAnimator.GetClipByName(clipName);
+        spriteAnimator.PlayFromFrame(clip, 0);
+    }
+
+
+    public void StartAnimation3() {
+
+        Init();
+
+        string clipName = "BindCharge Ground";
+        CrestType crest = DetermineCrest();
+
+        var playerObject = transform.GetChild(0).gameObject;
+        var bind = new Bind { BindState = Bind.State.ShamanDoneFalling };
+
+        var info = bind.GetEffectInfo();
+
+        SetSettings(bind);
+        bind.Play(playerObject, crest, 1, info);
+        
+        var spriteAnimator = playerObject.GetComponent<tk2dSpriteAnimator>();
+
+        var clip = spriteAnimator.GetClipByName(clipName);
+        spriteAnimator.PlayFromFrame(clip, 0);
+    }
+
+    public void StartAnimation4() {
+        var clipName = "BindBurst Ground";
+
+        var playerObject = transform.GetChild(0).gameObject;
+
+        var bind = new Bind { BindState = Bind.State.ShamanCancel };
+        SetSettings(bind);
+        bind.SetShouldDoDamage(true);
+
+        var info = bind.GetEffectInfo();
+        CrestType crest = DetermineCrest();
+
+        bind.Play(playerObject, crest, 1, info);
 
         var spriteAnimator = playerObject.GetComponent<tk2dSpriteAnimator>();
 
