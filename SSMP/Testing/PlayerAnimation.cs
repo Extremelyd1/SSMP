@@ -46,7 +46,7 @@ public class PlayerAnimation : MonoBehaviour {
 
     void Init() {
         gameObject.SetActive(true);
-        ToolItemManager.SetEquippedCrest(Gameplay.CursedCrest.name);
+        //ToolItemManager.SetEquippedCrest(Gameplay.CursedCrest.name);
 
         var hornet = HeroController.instance.gameObject;
         var position = hornet.transform.position;

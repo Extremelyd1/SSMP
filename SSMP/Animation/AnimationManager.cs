@@ -978,7 +978,7 @@ internal class AnimationManager {
             return;
         }
 
-        //if (_debugLogAnimations) Logger.Info($"  conditions 1: {clip.name.Equals(_lastAnimationClip)}, {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Once}, {!AllowedLoopAnimations.Contains(clip.name)}");
+        if (_debugLogAnimations) Logger.Info($"  conditions 1: {clip.name.Equals(_lastAnimationClip)}, {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Once}, {!AllowedLoopAnimations.Contains(clip.name)}");
 
         // Skip event handling when we already handled this clip, unless it is a clip with wrap mode once
         if (clip.name.Equals(_lastAnimationClip)
@@ -987,7 +987,7 @@ internal class AnimationManager {
             return;
         }
 
-        //if (_debugLogAnimations) Logger.Info($"  conditions 2: {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Loop}, {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.LoopSection}, {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Once}");
+        if (_debugLogAnimations) Logger.Info($"  conditions 2: {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Loop}, {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.LoopSection}, {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Once}");
 
         // Skip clips that do not have the wrap mode loop, loop-section or once
         if (clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Loop &&
@@ -1025,6 +1025,7 @@ internal class AnimationManager {
         if (AnimationEffects.TryGetValue(animationClip, out var effect)) {
             var effectInfo = effect.GetEffectInfo();
 
+            _netClient.UpdateManager.UpdatePlayerAnimation(animationClip, 0, effectInfo);
         } else if (SubAnimationEffects.TryGetValue(animationClip, out var subEffect)) {
             var effectInfo = subEffect.GetEffectInfo();
 
@@ -1033,7 +1034,7 @@ internal class AnimationManager {
             _netClient.UpdateManager.UpdatePlayerAnimation(animationClip);
         }
 
-        //if (_debugLogAnimations) Logger.Info($"  Sending animation: {animationClip}");
+        if (_debugLogAnimations) Logger.Info($"  Sending animation: {animationClip}");
 
         // Update the last clip name, since it changed
         _lastAnimationClip = clip.name;
@@ -1042,6 +1043,7 @@ internal class AnimationManager {
         // _animationControllerWasLastSent = false;
     }
 
+    private void CreateWitchTentaclesHook(HeroController hc) {
         var heroFsms = hc.GetComponents<PlayMakerFSM>();
         PlayMakerFSM bindFsm = heroFsms.FirstOrDefault(fsm => fsm.FsmName == "Bind");
         if (bindFsm != null) {
@@ -1224,7 +1226,7 @@ internal class AnimationManager {
         var frame = clip.frames[index];
     
         if (index == 0 || frame.triggerEvent || AllowedLoopAnimations.Contains(clip.name)) {
-            //if (_debugLogAnimations) Logger.Info($"OnAnimationEvent from tk2dSpriteAnimatorOnWarpClipToLocalTime: {clip.name}, conditions: {index == 0}, {frame.triggerEvent}, {AllowedLoopAnimations.Contains(clip.name)}");
+            if (_debugLogAnimations) Logger.Info($"OnAnimationEvent from tk2dSpriteAnimatorOnWarpClipToLocalTime: {clip.name}, conditions: {index == 0}, {frame.triggerEvent}, {AllowedLoopAnimations.Contains(clip.name)}");
             OnAnimationEvent(clip);
         }
     }
@@ -1277,7 +1279,6 @@ internal class AnimationManager {
             // }
         
             if (_debugLogAnimations) Logger.Info($"OnAnimationEvent from tk2dSpriteAnimatorOnProcessEvents: {self.CurrentClip.name}, conditions: {i}, {frames[i].triggerEvent}");
-            //if (_debugLogAnimations) Logger.Info($"OnAnimationEvent from tk2dSpriteAnimatorOnProcessEvents: {self.CurrentClip.name}, conditions: {i}, {frames[i].triggerEvent}");
             // OnAnimationEvent(self.CurrentClip);
         }
     }
