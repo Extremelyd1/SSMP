@@ -55,7 +55,7 @@ internal class Bind : DamageAnimationEffect {
         Flags flags = new Flags(effectInfo);
 
         // The maggot state is cleared by the time the bind burst is sent.
-        // This keeps track of it, although at a slight possible loss of consistancy
+        // This method keeps track of it, although at a slight possible loss of consistancy
         if (flags.Maggoted && !(crestType == CrestType.Shaman && BindState == State.ShamanCancel)) {
             BindBurst.MaggotedPlayers.Add(playerId);
         } else {
@@ -87,32 +87,25 @@ internal class Bind : DamageAnimationEffect {
 
         Logger.Info("Determining crest animation...");
 
-        if (crestType == CrestType.Beast) {
-            Logger.Info("Playing Beast Crest Animation");
-            PlayBeastBindStart(bindEffects);
-        } else if (crestType == CrestType.Cursed) {
-            Logger.Info("Playing Cursed Crest Animation");
-            PlayCursedFail(bindEffects);
-            yield break;
-        } else if (crestType == CrestType.Witch) {
-            Logger.Info("Playing Witch Crest Animation");
-           PlayWitchAnimationAntic(bindEffects);
-        } else if (crestType == CrestType.Shaman) {
-            Logger.Info("Playing Shaman Crest Animation");
-            if (BindState == State.Normal) {
-                PlayShamanFall(bindEffects);
-            } else if (BindState == State.ShamanCancel) { 
-                PlayShamanCancel(playerObject, bindEffects);
+        switch(crestType) {
+            case CrestType.Beast:
+                PlayBeastBindStart(bindEffects);
+                break;
+            case CrestType.Cursed:
+                PlayCursedFail(bindEffects);
                 yield break;
-            } else {
-                PlayShamanFallEnd(bindEffects);
+            case CrestType.Witch:
+                PlayWitchAnimationAntic(bindEffects);
+                break;
+            case CrestType.Shaman:
+                var shouldContinue = PickShamanAnimation(playerObject, bindEffects, flags);
+                if (!shouldContinue) {
+                    yield break;
+                }
+                break;
+            default:
                 PlayNormalStart(bindEffects, flags);
-                yield break;
-            }
-
-        } else {
-            Logger.Info("Playing Default Animation");
-            PlayNormalStart(bindEffects, flags);
+                break;
         }
 
         // If bind bell, do effects in state "Bind Bell?" and "Bind Bell Disappear?"
@@ -124,7 +117,6 @@ internal class Bind : DamageAnimationEffect {
 
         // TODO: Quick Craft animations
 
-        Logger.Info("Getting clip name for no reason...");
         var playerAnimator = playerObject.GetComponent<tk2dSpriteAnimator>();
         var currentClip = playerAnimator?.currentClip;
         Logger.Info($"Player Animator current clip for Bind: {currentClip?.name}");
@@ -134,6 +126,7 @@ internal class Bind : DamageAnimationEffect {
     /// Creates the bind bell
     /// </summary>
     private void StartBindBell(GameObject bindEffects) {
+        Logger.Debug("Starting bind bell");
         var bindBell = bindEffects.FindGameObjectInChildren(BIND_BELL_NAME);
         
         if (bindBell == null) {
@@ -164,6 +157,7 @@ internal class Bind : DamageAnimationEffect {
     /// Plays the normal silk animation
     /// </summary>
     private void PlayNormalStart(GameObject bindEffects, Flags flags) {
+        Logger.Debug("Playing normal bind start animation");
         var bindSilkObj = CreateEffectIfNotExists(bindEffects, "Bind Silk");
         if (bindSilkObj == null) {
             return;
@@ -187,6 +181,7 @@ internal class Bind : DamageAnimationEffect {
     /// Plays the Beast Crest specific silk animation
     /// </summary>
     private void PlayBeastBindStart(GameObject bindEffects) {
+        Logger.Debug("Playing Beast Crest start antic");
         var beastAntic = CreateEffectIfNotExists(bindEffects, "Warrior_Bind_antic_silk");
         if (beastAntic == null) {
             return;
@@ -196,7 +191,11 @@ internal class Bind : DamageAnimationEffect {
         beastAntic.SetActive(true);
     }
 
+    /// <summary>
+    /// Starts the Cursed Crest bind animation
+    /// </summary>
     private void PlayCursedFail(GameObject bindEffects) {
+        Logger.Debug("Playing Cursed Crest bind fail animation");
         var failAntic = bindEffects.FindGameObjectInChildren("cursed_bind_fail");
 
         tk2dSpriteAnimator animator;
@@ -227,6 +226,9 @@ internal class Bind : DamageAnimationEffect {
         animator.Play("Bind Cursed Start");
     }
 
+    /// <summary>
+    /// Starts the next part of the Cursed Crest animation
+    /// </summary>
     private void PlayNextCursedPart(tk2dSpriteAnimator animator, tk2dSpriteAnimationClip clip) {
         if (clip.name == "Bind Cursed Start") {
             animator.Play("Bind Cursed Mid");
@@ -235,7 +237,11 @@ internal class Bind : DamageAnimationEffect {
         }
     }
 
+    /// <summary>
+    /// Plays the Witch Crest silk bind animation
+    /// </summary>
     private void PlayWitchAnimationAntic(GameObject bindEffects) {
+        Logger.Debug("Playing Witch Crest bind antic");
         var silkAntic = CreateEffectIfNotExists(bindEffects, "Whip_Bind_silk_antic");
         if (silkAntic == null) {
             return;
@@ -245,11 +251,27 @@ internal class Bind : DamageAnimationEffect {
         silkAntic.SetActive(true);
     }
 
+
+    private bool PickShamanAnimation(GameObject playerObject, GameObject bindEffects, Flags flags) {
+        if (BindState == State.Normal) {
+            PlayShamanFall(bindEffects);
+            return true;
+        } else if (BindState == State.ShamanCancel) {
+            PlayShamanCancel(playerObject, bindEffects);
+            return false;
+        } else {
+            PlayShamanFallEnd(bindEffects);
+            PlayNormalStart(bindEffects, flags);
+            return false;
+        }
+
+    }
+    
     /// <summary>
     /// Plays the Shaman Crest falling silk animation
     /// </summary>
-    /// <param name="bindEffects"></param>
     private void PlayShamanFall(GameObject bindEffects) {
+        Logger.Debug("Playing Shaman Crest bind fall animation");
         var shamanAntic = CreateEffectIfNotExists(bindEffects, "Shaman_Bind_antic_silk");
         if (shamanAntic == null) {
             return;
@@ -263,6 +285,7 @@ internal class Bind : DamageAnimationEffect {
     }
 
     private void PlayShamanCancel(GameObject playerObject, GameObject bindEffects) {
+        Logger.Debug("Playing Shaman Crest bind cancel/fail animation");
         var shamanAntic = bindEffects.FindGameObjectInChildren("Shaman_Bind_antic_silk");
         if (shamanAntic != null) {
             shamanAntic.SetActive(false);
@@ -284,25 +307,23 @@ internal class Bind : DamageAnimationEffect {
     /// Transitions from the falling silk animation to the normal silk animation
     /// </summary>
     private void PlayShamanFallEnd(GameObject bindEffects) {
+        Logger.Debug("Playing Shaman Crest bind fall finished transition animation");
         var shamanAntic = bindEffects.FindGameObjectInChildren("Shaman_Bind_antic_silk");
         if (shamanAntic == null) {
             return;
         }
         var animator = shamanAntic.GetComponent<Animator>();
         animator.Play("End");
-        //var clip = animator.runtimeAnimatorController.animationClips[2];
-        
-        //shamanAntic.SetActive(false);
     }
 
     /// <inheritdoc/>
     public override byte[]? GetEffectInfo() {
         byte[] effectInfo = {
-            (byte) (ToolItemManager.IsToolEquipped("Bell Bind") ? 1 : 0),
+            (byte) ((ToolItemManager.IsToolEquipped("Bell Bind") && !ToolItemManager.GetToolByName("Bell Bind").IsEmpty) ? 1 : 0),
             (byte) (ToolItemManager.IsToolEquipped("Dazzle Bind") ? 1 : 0),
             (byte) (ToolItemManager.IsToolEquipped("Dazzle Bind Upgraded") ? 1 : 0),
             (byte) (ToolItemManager.IsToolEquipped("Quickbind") ? 1 : 0),
-            (byte) (ToolItemManager.IsToolEquipped("Reserve Bind") ? 1 : 0),
+            (byte) ((ToolItemManager.IsToolEquipped("Reserve Bind") && !ToolItemManager.GetToolByName("Reserve Bind").IsEmpty) ? 1 : 0),
             (byte) (HeroController.instance.cState.isMaggoted ? 1 : 0)
         };
         Logger.Info(HeroController.instance.cState.isMaggoted ? "MAGGOTS" : "NO MAGGOTS");
@@ -374,5 +395,34 @@ internal class Bind : DamageAnimationEffect {
         }
 
         return obj;
+    }
+
+    public static void ForceStopAllEffects(GameObject bindEffects) {
+        BindBurst.Instance.StopBindBell(bindEffects);
+
+        var shamanAntic = bindEffects.FindGameObjectInChildren("Shaman_Bind_antic_silk");
+        if (shamanAntic != null) {
+            shamanAntic.SetActive(false);
+        }
+
+        var silkAntic = bindEffects.FindGameObjectInChildren("Whip_Bind_silk_antic");
+        if (silkAntic != null) {
+            silkAntic.SetActive(false);
+        }
+
+        var cursedFailAntic = bindEffects.FindGameObjectInChildren("cursed_bind_fail");
+        if (cursedFailAntic != null) {
+            cursedFailAntic.SetActive(false);
+        }
+
+        var beastAntic = bindEffects.FindGameObjectInChildren("Warrior_Bind_antic_silk");
+        if (beastAntic != null) {
+            beastAntic.SetActive(false);
+        }
+
+        var bindSilkObj = bindEffects.FindGameObjectInChildren("Bind Silk");
+        if (bindSilkObj != null) {
+            bindSilkObj.SetActive(false);
+        }
     }
 }

@@ -175,6 +175,9 @@ internal class BindBurst : Bind {
         beastRage?.SetActive(true);
     }
 
+    /// <summary>
+    /// Plays the witch maggot cleanse animation
+    /// </summary>
     private void PlayWitchMaggoted(GameObject bindEffects) {
         var maggotCleanse = CreateEffectIfNotExists(bindEffects, "Witch Bind Maggot Cleanse");
         if (maggotCleanse != null) {
@@ -183,6 +186,10 @@ internal class BindBurst : Bind {
         }
     }
 
+    /// <summary>
+    /// Plays the Witch Crest tentancles animation
+    /// Yes it's called Tentancles internally. Thanks TC.
+    /// </summary>
     private void PlayWitchEnd(GameObject bindEffects) {
         var witchBind = bindEffects.FindGameObjectInChildren("Witch Bind");
         if (witchBind == null) {
@@ -208,6 +215,9 @@ internal class BindBurst : Bind {
         witchBind.SetActive(true);
     }
 
+    /// <summary>
+    /// Adds hero damage components to Witch Crest bind if PVP is on
+    /// </summary>
     private void SetWitchDamagers(GameObject witchBind) {
         for (int i = 0; i < witchBind.transform.childCount; i++) {
             var child = witchBind.transform.GetChild(i);
