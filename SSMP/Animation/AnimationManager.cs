@@ -344,6 +344,7 @@ internal class AnimationManager {
         { "BindCharge Witch Long", AnimationClip.BindChargeWitchLong },
         
         { "DownSpike Charge", AnimationClip.DownSpikeCharge },
+        { "DownSpike Charged", AnimationClip.DownSpikeCharged },
         { "Dash Attack Charge", AnimationClip.DashAttackCharge },
         { "Quick Craft Ground", AnimationClip.QuickCraftGround },
         { "Quick Craft Air", AnimationClip.QuickCraftAir },
@@ -629,6 +630,7 @@ internal class AnimationManager {
         { AnimationClip.UpSlash, new Slash(SlashBase.SlashType.Up) },
         { AnimationClip.WallSlash, new Slash(SlashBase.SlashType.Wall) },
         { AnimationClip.DownSpike, new DownSpike() }, // Hunter Crest down slash
+        { AnimationClip.DownSpikeCharged, new DownSpike() }, // Architect Crest charged down slash
         { AnimationClip.V3DownSlash, new Slash(SlashBase.SlashType.Down) },
         { AnimationClip.DownSlash, new Slash(SlashBase.SlashType.Down) },
         { AnimationClip.DownSlashAlt, new Slash(SlashBase.SlashType.DownAlt) },

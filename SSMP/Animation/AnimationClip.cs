@@ -415,6 +415,10 @@ internal enum AnimationClip {
     /// </summary>
     DownSpikeCharge,
     /// <summary>
+    /// Fully charged down slash with Architect crest
+    /// </summary>
+    DownSpikeCharged,
+    /// <summary>
     /// Slash while sprinting/dashing with Architect crest
     /// </summary>
     DashAttackCharge,
