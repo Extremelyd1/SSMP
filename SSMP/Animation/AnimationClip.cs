@@ -763,5 +763,6 @@ internal enum AnimationClip {
 
     // Sub-animation names
     WitchTentacles,
-    ShamanCancel
+    ShamanCancel,
+    BindFailBurst,
 }

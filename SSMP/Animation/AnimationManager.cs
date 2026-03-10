@@ -619,7 +619,7 @@ internal class AnimationManager {
 
         { "Witch Tentacles!", AnimationClip.WitchTentacles },
         { "Shaman Cancel", AnimationClip.ShamanCancel },
-
+        { "Bind Fail Burst", AnimationClip.BindFailBurst }
     };
 
     /// <summary>
@@ -661,7 +661,8 @@ internal class AnimationManager {
 
     private static readonly Dictionary<AnimationClip, IAnimationEffect> SubAnimationEffects = new() {
         { AnimationClip.WitchTentacles, BindBurst.Instance },
-        { AnimationClip.ShamanCancel, new Bind { BindState = Bind.State.ShamanCancel } }
+        { AnimationClip.ShamanCancel, new Bind { BindState = Bind.State.ShamanCancel } },
+        { AnimationClip.BindFailBurst, BindFail.Instance }
     };
 
     /// <summary>
@@ -1053,6 +1054,7 @@ internal class AnimationManager {
     /// the Bind fsm once the HeroController is ready.
     /// </summary>
     private void CreateBindHooks(HeroController hc) {
+        HeroController.instance.bellBindFSM.Init();
         var heroFsms = hc.GetComponents<PlayMakerFSM>();
         PlayMakerFSM bindFsm = heroFsms.FirstOrDefault(fsm => fsm.FsmName == "Bind");
         if (bindFsm == null) {
@@ -1074,6 +1076,11 @@ internal class AnimationManager {
         } else {
             Logger.Warn("Unable to find Shaman Air Cancel state");
         }
+
+        var bindFail = bindFsm.GetState("Remove Silk?");
+        if (bindFsm != null) {
+            FsmStateActionInjector.Inject(bindFail, 2, OnBindFail);
+        }
     }
 
     /// <summary>
@@ -1092,6 +1099,14 @@ internal class AnimationManager {
     private void OnShamanCancel(PlayMakerFSM fsm) {
         var dummyClip = new tk2dSpriteAnimationClip();
         dummyClip.name = "Shaman Cancel";
+        dummyClip.wrapMode = tk2dSpriteAnimationClip.WrapMode.Once;
+        OnAnimationEvent(dummyClip);
+    }
+
+    private void OnBindFail(PlayMakerFSM fsm) {
+        Logger.Warn("PLAYING BIND FAIL");
+        var dummyClip = new tk2dSpriteAnimationClip();
+        dummyClip.name = "Bind Fail Burst";
         dummyClip.wrapMode = tk2dSpriteAnimationClip.WrapMode.Once;
         OnAnimationEvent(dummyClip);
     }
