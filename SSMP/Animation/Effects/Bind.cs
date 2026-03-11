@@ -71,10 +71,11 @@ internal class Bind : DamageAnimationEffect {
 
         if (BindState == State.Normal) {
             PlaySound(playerObject, randomClipAction, playAudioAction);
+            
+            var oneShotSingleAction = GetOrFindBindFsm().GetFirstAction<AudioPlayerOneShotSingle>("Check Grounded");
+            PlaySound(playerObject, oneShotSingleAction);
         }
 
-        var oneShotSingleAction = GetOrFindBindFsm().GetFirstAction<AudioPlayerOneShotSingle>("Check Grounded");
-        PlaySound(playerObject, oneShotSingleAction);
 
         var created = CreateObjects(playerObject, out var bindEffects);
         if (!created) {
