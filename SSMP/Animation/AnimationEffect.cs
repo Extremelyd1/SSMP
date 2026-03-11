@@ -1,5 +1,7 @@
+using HutongGames.PlayMaker.Actions;
 using SSMP.Game.Settings;
 using SSMP.Internals;
+using SSMP.Util;
 using UnityEngine;
 
 namespace SSMP.Animation;
@@ -39,5 +41,21 @@ internal abstract class AnimationEffect : IAnimationEffect {
         // Find the variable that controls the slash direction for damaging enemies
         var directionVar = damageFsm.FsmVariables.GetFsmFloat("direction");
         directionVar.Value = direction;
+    }
+
+    protected static void PlaySound(GameObject source, AudioPlayerOneShotSingle audio) {
+        AudioUtil.PlayAudioOneShotSingleAtPlayerObject(audio, source);
+    }
+
+    protected static void PlaySound(GameObject source, PlayAudioEvent audio) {
+        AudioUtil.PlayAudioEventAtPlayerObject(audio, source);
+    }
+
+    protected static void PlaySound(GameObject source, GetRandomAudioClipFromTable getAction, PlayAudioEvent playAction) {
+        AudioUtil.PlayAudioEventWithRandomAudioClipFromTableAtPlayerObject(
+                playAction,
+                getAction,
+                source
+            );
     }
 }

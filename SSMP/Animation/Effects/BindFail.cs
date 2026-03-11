@@ -38,19 +38,21 @@ internal class BindFail : Bind {
     private void PlayBindBurst(GameObject bindEffects) {
         var bellBurstSpawner = GetOrFindBindFsm().GetFirstAction<SpawnObjectFromGlobalPool>("Remove Silk?");
         if (bellBurstSpawner == null) {
-            Logger.Warn("Unable to find Bell Burst spawner");
+            Logger.Warn("Unable to find bind burst effect spawner");
             return;
         }
 
-        var globalBellBurst = bellBurstSpawner.gameObject.Value;
-        var burst = EffectUtils.SpawnGlobalPoolObject(globalBellBurst, bindEffects.transform);
+        var audio = GetOrFindBindFsm().GetFirstAction<PlayAudioEvent>("Remove Silk?");
+
+        var burst = EffectUtils.SpawnGlobalPoolObject(bellBurstSpawner, bindEffects.transform, 5f);
 
         if (burst == null) {
-            Logger.Warn("Unable to create Bell Burst");
+            Logger.Warn("Unable to create bind burst effect");
             return;
         }
 
-        burst.DestroyAfterTime(5f);
+        PlaySound(bindEffects.transform.parent.gameObject, audio);
+
         if (ServerSettings.IsPvpEnabled && ShouldDoDamage) {
             AddDamageHeroComponent(burst);
         }
@@ -80,6 +82,8 @@ internal class BindFail : Bind {
         }
 
         var audio = bellFsm.GetFirstAction<PlayAudioEvent>("Burst");
+        PlaySound(bindEffects.transform.parent.gameObject, audio);
+
         var spawner = bellFsm.GetFirstAction<SpawnObjectFromGlobalPool>("Burst");
 
         if (spawner == null) {
@@ -87,7 +91,7 @@ internal class BindFail : Bind {
             return;
         }
 
-        var bindBell = EffectUtils.SpawnGlobalPoolObject(spawner.gameObject.Value, bindEffects.transform);
+        var bindBell = EffectUtils.SpawnGlobalPoolObject(spawner, bindEffects.transform, 5f);
         var shaker = bindBell.GetComponentInChildren<CameraControlAnimationEvents>();
         if (shaker != null) {
             Component.DestroyImmediate(shaker);

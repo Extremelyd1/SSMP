@@ -1,3 +1,5 @@
+using HutongGames.PlayMaker.Actions;
+using SSMP.Util;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
 using Object = UnityEngine.Object;
@@ -16,16 +18,41 @@ internal static class EffectUtils {
         }
     }
 
-    public static GameObject SpawnGlobalPoolObject(GameObject globalObj, Transform spawnLocation, bool keepParent = false) {
+    public static GameObject? SpawnGlobalPoolObject(SpawnObjectFromGlobalPool? spawner, Transform spawnLocation, float destroyAfterDelay, bool keepParent = false) {
+        if (spawner == null) {
+            Logger.Warn("Unable to find global pool object");
+            return null;
+        }
+
+        return SpawnGlobalPoolObject(spawner.gameObject.Value, spawnLocation, destroyAfterDelay, keepParent);
+    }
+
+    public static GameObject? SpawnGlobalPoolObject(GameObject? globalObj, Transform spawnLocation, float destroyAfterDelay, bool keepParent = false) {
+        if (globalObj == null) {
+            Logger.Warn("Unable to find global pool object");
+            return null;
+        }
+
         var newObj = GameObject.Instantiate(globalObj, spawnLocation);
-        
+        if (newObj == null) {
+            Logger.Warn($"Unable to spawn global pool object {globalObj.name}");
+            return null;
+        }
+
+        // This is ugly and i hate it, but it works
         if (!keepParent) {
             newObj.transform.SetParent(null);
             newObj.transform.position = spawnLocation.position;
         }
+
         newObj.SetActive(true);
 
         SafelyRemoveAutoRecycle(newObj);
+
+        if (destroyAfterDelay > 0) {
+            newObj.DestroyAfterTime(destroyAfterDelay);
+        }
+
         return newObj;
     }
 }

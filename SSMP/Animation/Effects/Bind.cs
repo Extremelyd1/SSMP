@@ -70,15 +70,11 @@ internal class Bind : DamageAnimationEffect {
         var playAudioAction = GetOrFindBindFsm().GetFirstAction<PlayAudioEvent>("Bind Start");
 
         if (BindState == State.Normal) {
-            AudioUtil.PlayAudioEventWithRandomAudioClipFromTableAtPlayerObject(
-                playAudioAction,
-                randomClipAction,
-                playerObject
-            );
+            PlaySound(playerObject, randomClipAction, playAudioAction);
         }
 
         var oneShotSingleAction = GetOrFindBindFsm().GetFirstAction<AudioPlayerOneShotSingle>("Check Grounded");
-        AudioUtil.PlayAudioOneShotSingleAtPlayerObject(oneShotSingleAction, playerObject);
+        PlaySound(playerObject, oneShotSingleAction);
 
         var created = CreateObjects(playerObject, out var bindEffects);
         if (!created) {
@@ -214,6 +210,8 @@ internal class Bind : DamageAnimationEffect {
 
             failAntic = GameObject.Instantiate(localFailAntic, bindEffects.transform);
             failAntic.name = "cursed_bind_fail";
+            failAntic.transform.SetLocalPositionZ(failAntic.transform.localPosition.z - 0.25f);
+
             animator = failAntic.GetComponent<tk2dSpriteAnimator>();
             animator.AnimationCompletedEvent += PlayNextCursedPart;
         } else {
@@ -297,8 +295,12 @@ internal class Bind : DamageAnimationEffect {
             return;
         }
 
-        var globalSilkPuff = silkPuffSpawner.gameObject.Value;
-        EffectUtils.SpawnGlobalPoolObject(globalSilkPuff, playerObject.transform, false);
+        var audio = GetOrFindBindFsm().GetFirstAction<PlayAudioEvent>("Shaman Air Cancel");
+        if (audio != null) {
+            PlaySound(playerObject, audio);
+        }
+
+        EffectUtils.SpawnGlobalPoolObject(silkPuffSpawner, playerObject.transform, 5f);
 
         BindBurst.Instance.StopBindBell(bindEffects);
     }
@@ -315,6 +317,8 @@ internal class Bind : DamageAnimationEffect {
         var animator = shamanAntic.GetComponent<Animator>();
         animator.Play("End");
     }
+
+
 
     /// <inheritdoc/>
     public override byte[]? GetEffectInfo() {

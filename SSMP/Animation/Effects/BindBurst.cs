@@ -21,22 +21,20 @@ internal class BindBurst : Bind {
     public static BindBurst Instance => _instance ??= new BindBurst();
     public static HashSet<ushort> MaggotedPlayers = new HashSet<ushort>();
     public override void Play(GameObject playerObject, CrestType crestType, ushort playerId, byte[]? effectInfo) {
+        // Set maggot info
         Flags flags = new Flags(effectInfo);
         if (MaggotedPlayers.Contains(playerId)) {
             flags.Maggoted = true;
             MaggotedPlayers.Remove(playerId);
         }
-        MonoBehaviourUtil.Instance.StartCoroutine(PlayBindBurstEffect(playerObject, crestType, flags));
-    }
 
-    private IEnumerator PlayBindBurstEffect(GameObject playerObject, CrestType crestType, Flags flags) {
         if (!CreateObjects(playerObject, out var bindEffects)) {
-            yield break;
+            return;
         }
 
         if (flags.BaseMirror || flags.UpgradedMirror) PlayMirror(playerObject, flags.UpgradedMirror);
         if (flags.Maggoted) PlayMaggotCleanse(bindEffects, playerObject);
-        
+
         // Stop regardless of if its on or not
         StopBindBell(bindEffects);
 
@@ -52,7 +50,7 @@ internal class BindBurst : Bind {
                 } else {
                     PlayWitchMaggoted(bindEffects);
                 }
-                break;
+                return;
             case CrestType.Shaman:
                 PlayShamanEnd(bindEffects);
                 break;
@@ -72,17 +70,16 @@ internal class BindBurst : Bind {
         var maggotFlash = GetOrFindBindFsm().GetAction<SpawnObjectFromGlobalPool>("Maggoted?", 4);
         var maggotAudio = GetOrFindBindFsm().GetFirstAction<PlayAudioEvent>("Maggoted?");
 
-        if (maggotBurst != null) {
-            maggotBurst.gameObject.Value.Spawn(bindEffects.transform, Vector3.zero);
-        }
-        if (maggotFlash != null) {
-            maggotFlash.gameObject.Value.Spawn(bindEffects.transform, Vector3.zero);
-        }
+        EffectUtils.SpawnGlobalPoolObject(maggotBurst, bindEffects.transform, 5f);
+        //if (maggotBurst != null) {
+            //maggotBurst.gameObject.Value.Spawn(bindEffects.transform, Vector3.zero);
+        //}
+        EffectUtils.SpawnGlobalPoolObject(maggotFlash, bindEffects.transform, 5f);
+        //if (maggotFlash != null) {
+            //maggotFlash.gameObject.Value.Spawn(bindEffects.transform, Vector3.zero);
+        //}
         if (maggotAudio != null) {
-            AudioUtil.PlayAudioEventAtPlayerObject(
-                maggotAudio,
-                playerObject
-            );
+            PlaySound(playerObject, maggotAudio);
         }
     }
 
@@ -90,39 +87,24 @@ internal class BindBurst : Bind {
     /// Creates the appropriate Claw Mirror object.
     /// The object will be destroyed after it finishes.
     /// </summary>
-    private GameObject? PrepareMirror(GameObject playerObject, SetGameObject mirrorSource, string name) {
+    private GameObject? PrepareMirror(GameObject playerObject, SetGameObject mirrorSource) {
 
-        if (mirrorSource == null) {
-            Logger.Warn("Unable to find mirror source");
-            return null;
-        }
-
-        // This is ugly and i hate it, but it works
-        var mirror = GameObject.Instantiate(mirrorSource.gameObject.Value, playerObject.transform);
-        mirror.transform.SetParent(null);
-        mirror.transform.position = playerObject.transform.position;
-        mirror.SetActive(true);
+        var mirror = EffectUtils.SpawnGlobalPoolObject(mirrorSource.gameObject.Value, playerObject.transform, 3f);
 
         if (mirror == null) {
-            Logger.Warn("Unable to spawn mirror");
             return null;
         }
-        mirror.name = name;
 
         var shaker = mirror.GetComponentInChildren<CameraControlAnimationEvents>();
         if (shaker != null) {
             Component.DestroyImmediate(shaker);
         }
 
-        EffectUtils.SafelyRemoveAutoRecycle(mirror);
-        mirror.DestroyAfterTime(2f);
-
         var haze = mirror.FindGameObjectInChildren("haze2");
         if (haze != null) {
             GameObject.Destroy(haze);
         }
 
-        //mirror.SetActive(false);
         return mirror;
     }
 
@@ -136,24 +118,27 @@ internal class BindBurst : Bind {
         var upgradedClaw = GetOrFindBindFsm().GetAction<SetGameObject>("Dazzle?", 4)!;
 
         GameObject? claw;
-        if (upgraded) claw = PrepareMirror(playerObject, upgradedClaw, "dazzle_upgraded");
-        else claw = PrepareMirror(playerObject, regularClaw, "dazzle_regular");
+        if (upgraded) claw = PrepareMirror(playerObject, upgradedClaw);
+        else claw = PrepareMirror(playerObject, regularClaw);
 
         if (claw == null) {
-            Logger.Warn("Unable to create claw mirror object.");
             return;
         }
 
         claw.SetActive(true);
+        
         if (ServerSettings.IsPvpEnabled && ShouldDoDamage) {
             var damagerParent = claw.FindGameObjectInChildren("Trobbio_dazzle_flash");
             var damager = damagerParent?.FindGameObjectInChildren("hero_dazzle_flash_damager");
-            if (damager != null) {
-                damager.layer = (int) GlobalEnums.PhysLayers.HERO_ATTACK;
-                AddDamageHeroComponent(damager);
-            } else {
+            if (damager == null) {
                 Logger.Warn("Couldn't find claw mirror damager");
+                return;
             }
+
+            damager.layer = (int) GlobalEnums.PhysLayers.HERO_ATTACK;
+
+            var damageComponent = AddDamageHeroComponent(damager);
+            damageComponent.hazardType = GlobalEnums.HazardType.EXPLOSION;
         }
     }
 
@@ -206,9 +191,12 @@ internal class BindBurst : Bind {
                 Component.DestroyImmediate(shaker);
             }
 
-            if (ServerSettings.IsPvpEnabled && ShouldDoDamage) {
-                SetWitchDamagers(witchBind);
-            }
+            SetWitchDamagers(witchBind);
+        }
+
+        var audio = GetOrFindBindFsm().GetFirstAction<PlayAudioEvent>("Witch Tentancles!");
+        if (audio != null) {
+            PlaySound(bindEffects.transform.parent.gameObject, audio);
         }
 
         witchBind.SetActive(false);
@@ -219,13 +207,13 @@ internal class BindBurst : Bind {
     /// Adds hero damage components to Witch Crest bind if PVP is on
     /// </summary>
     private void SetWitchDamagers(GameObject witchBind) {
-        for (int i = 0; i < witchBind.transform.childCount; i++) {
+        for (var i = 0; i < witchBind.transform.childCount; i++) {
             var child = witchBind.transform.GetChild(i);
             if (!child.name.StartsWith("Damager")) {
                 continue;
             }
 
-            AddDamageHeroComponent(child.gameObject);
+            SetDamageHeroState(child.gameObject);
         }
     }
 
@@ -260,5 +248,12 @@ internal class BindBurst : Bind {
             var bindSilkMeshRenderer = bindSilkObj.GetComponent<MeshRenderer>();
             bindSilkMeshRenderer.enabled = false;
         }
+
+        var audio = GetOrFindBindFsm().GetFirstAction<AudioPlayerOneShotSingle>("Bind Burst");
+        if (audio != null) {
+            PlaySound(bindEffects.transform.parent.gameObject, audio);
+        }
+
+
     }
 }

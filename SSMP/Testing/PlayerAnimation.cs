@@ -44,6 +44,10 @@ public class PlayerAnimation : MonoBehaviour {
         bind.SetServerSettings(settings);
     }
 
+    void SetCrest(string crest) {
+        ToolItemManager.SetEquippedCrest(crest);
+    }
+
     void Init() {
         gameObject.SetActive(true);
         //ToolItemManager.SetEquippedCrest(Gameplay.CursedCrest.name);
