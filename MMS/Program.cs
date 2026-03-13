@@ -2,11 +2,12 @@ using System.Net;
 using System.Net.WebSockets;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using System.Text;
+using System.Text.Json;
 using JetBrains.Annotations;
 using MMS.Services;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.HttpOverrides;
+using System.Threading.RateLimiting;
 
 namespace MMS;
 
@@ -19,11 +20,25 @@ public class Program {
     /// Whether we are running a development environment.
     /// </summary>
     private static bool IsDevelopment { get; set; }
-    
+
     /// <summary>
     /// The logger for logging information to the console.
     /// </summary>
     private static ILogger Logger { get; set; } = null!;
+
+    /// <summary>
+    /// The number of times to poll for a discovered port before timing out.
+    /// Combined with <see cref="DiscoveryPollIntervalMs"/>, defines a total timeout of
+    /// <c>DiscoveryPollCount * DiscoveryPollIntervalMs</c> milliseconds (default: 10 seconds).
+    /// </summary>
+    private const int DiscoveryPollCount = 40;
+
+    /// <summary>
+    /// The delay in milliseconds between each discovery poll attempt.
+    /// Combined with <see cref="DiscoveryPollCount"/>, defines a total timeout of
+    /// <c>DiscoveryPollCount * DiscoveryPollIntervalMs</c> milliseconds (default: 10 seconds).
+    /// </summary>
+    private const int DiscoveryPollIntervalMs = 250;
 
     /// <summary>
     /// Entrypoint for the MMS.
@@ -44,14 +59,16 @@ public class Program {
         builder.Services.AddSingleton<LobbyService>();
         builder.Services.AddSingleton<LobbyNameService>();
         builder.Services.AddHostedService<LobbyCleanupService>();
+        builder.Services.AddHostedService<UdpDiscoveryService>();
 
         builder.Services.Configure<ForwardedHeadersOptions>(options => {
-            options.ForwardedHeaders = 
-                ForwardedHeaders.XForwardedFor | 
-                ForwardedHeaders.XForwardedHost |
-                ForwardedHeaders.XForwardedProto;
-        });
-        
+                options.ForwardedHeaders =
+                    ForwardedHeaders.XForwardedFor |
+                    ForwardedHeaders.XForwardedHost |
+                    ForwardedHeaders.XForwardedProto;
+            }
+        );
+
         if (IsDevelopment) {
             builder.Services.AddHttpLogging(_ => { });
         } else {
@@ -59,6 +76,52 @@ public class Program {
                 return;
             }
         }
+
+        builder.Services.AddRateLimiter(options => {
+                options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+                options.OnRejected = async (context, token) => {
+                    await context.HttpContext.Response.WriteAsJsonAsync(
+                        new ErrorResponse("Too many requests. Please try again later."), cancellationToken: token
+                    );
+                };
+
+                options.AddPolicy(
+                    "create", context =>
+                        RateLimitPartition.GetFixedWindowLimiter(
+                            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                            factory: _ => new FixedWindowRateLimiterOptions {
+                                PermitLimit = 5,
+                                Window = TimeSpan.FromSeconds(30),
+                                QueueLimit = 0
+                            }
+                        )
+                );
+
+                options.AddPolicy(
+                    "search", context =>
+                        RateLimitPartition.GetFixedWindowLimiter(
+                            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                            factory: _ => new FixedWindowRateLimiterOptions {
+                                PermitLimit = 10,
+                                Window = TimeSpan.FromSeconds(10),
+                                QueueLimit = 0
+                            }
+                        )
+                );
+
+                options.AddPolicy(
+                    "join", context =>
+                        RateLimitPartition.GetFixedWindowLimiter(
+                            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                            factory: _ => new FixedWindowRateLimiterOptions {
+                                PermitLimit = 5,
+                                Window = TimeSpan.FromSeconds(30),
+                                QueueLimit = 0
+                            }
+                        )
+                );
+            }
+        );
 
         var app = builder.Build();
 
@@ -71,6 +134,7 @@ public class Program {
         }
 
         app.UseForwardedHeaders();
+        app.UseRateLimiter();
         app.UseWebSockets();
         MapEndpoints(app);
         app.Urls.Add(IsDevelopment ? "http://0.0.0.0:5000" : "https://0.0.0.0:5000");
@@ -89,7 +153,7 @@ public class Program {
             Console.WriteLine("Certificate file 'cert.pem' does not exist");
             return false;
         }
-            
+
         if (!File.Exists("key.pem")) {
             Console.WriteLine("Certificate key file 'key.pem' does not exist");
             return false;
@@ -115,35 +179,37 @@ public class Program {
 
         builder.WebHost.ConfigureKestrel(s => {
                 s.ListenAnyIP(
-                    5000, options => {
-                        options.UseHttps(x509);
-                    }
+                    5000, options => { options.UseHttps(x509); }
                 );
             }
         );
 
         return true;
     }
-    
+
     #endregion
 
     #region Endpoint Registration
 
+    /// <summary>
+    /// Registers all API endpoints for the MatchMaking Server.
+    /// </summary>
     private static void MapEndpoints(WebApplication app) {
         var lobbyService = app.Services.GetRequiredService<LobbyService>();
 
         // Health & Monitoring
         app.MapGet("/", () => Results.Ok(new { service = "MMS", version = "1.0", status = "healthy" }))
            .WithName("HealthCheck");
-        app.MapGet("/lobbies", GetLobbies).WithName("ListLobbies");
+        app.MapGet("/lobbies", GetLobbies).WithName("ListLobbies").RequireRateLimiting("search");
 
         // Lobby Management
-        app.MapPost("/lobby", CreateLobby).WithName("CreateLobby");
+        app.MapPost("/lobby", CreateLobby).WithName("CreateLobby").RequireRateLimiting("create");
         app.MapDelete("/lobby/{token}", CloseLobby).WithName("CloseLobby");
 
         // Host Operations
         app.MapPost("/lobby/heartbeat/{token}", Heartbeat).WithName("Heartbeat");
         app.MapGet("/lobby/pending/{token}", GetPendingClients).WithName("GetPendingClients");
+        app.MapPost("/lobby/discovery/verify/{token}", VerifyDiscovery).WithName("VerifyDiscovery");
 
         // WebSocket for host push notifications
         app.Map(
@@ -163,7 +229,7 @@ public class Program {
                 lobby.HostWebSocket = webSocket;
 
                 Logger.LogInformation(
-                    "[WS] Host connected for lobby {}", 
+                    "[WS] Host connected for lobby {LobbyIdentifier}",
                     IsDevelopment ? lobby.ConnectionData : lobby.LobbyName
                 );
 
@@ -181,7 +247,7 @@ public class Program {
                 } finally {
                     lobby.HostWebSocket = null;
                     Logger.LogInformation(
-                        "[WS] Host disconnected from lobby {}", 
+                        "[WS] Host disconnected from lobby {LobbyIdentifier}",
                         IsDevelopment ? lobby.ConnectionData : lobby.LobbyName
                     );
                 }
@@ -189,7 +255,7 @@ public class Program {
         );
 
         // Client Operations
-        app.MapPost("/lobby/{connectionData}/join", JoinLobby).WithName("JoinLobby");
+        app.MapPost("/lobby/{connectionData}/join", JoinLobby).WithName("JoinLobby").RequireRateLimiting("join");
     }
 
     #endregion
@@ -256,17 +322,78 @@ public class Program {
         var visibility = lobby.IsPublic ? "Public" : "Private";
         var connectionDataString = IsDevelopment ? lobby.ConnectionData : "[Redacted]";
         Logger.LogInformation(
-            "[LOBBY] Created: '{LobbyName}' [{LobbyType}] ({Visibility}) -> {ConnectionDataString} (Code: {LobbyCode})", 
-            lobby.LobbyName, 
-            lobby.LobbyType, 
-            visibility, 
-            connectionDataString, 
+            "[LOBBY] Created: '{LobbyName}' [{LobbyType}] ({Visibility}) -> {ConnectionDataString} (Code: {LobbyCode})",
+            lobby.LobbyName,
+            lobby.LobbyType,
+            visibility,
+            connectionDataString,
             lobby.LobbyCode
         );
 
         return TypedResults.Created(
             $"/lobby/{lobby.LobbyCode}",
-            new CreateLobbyResponse(lobby.ConnectionData, lobby.HostToken, lobby.LobbyName, lobby.LobbyCode)
+            new CreateLobbyResponse(
+                lobby.ConnectionData, lobby.HostToken, lobby.LobbyName, lobby.LobbyCode, lobby.HostDiscoveryToken
+            )
+        );
+    }
+
+    /// <summary>
+    /// Waits for UDP discovery to complete and returns the discovered port.
+    /// Notifies the host via WebSocket if a client token is provided.
+    /// </summary>
+    private static async Task<Results<Ok<DiscoveryResponse>, BadRequest<ErrorResponse>>> VerifyDiscovery(
+        string token,
+        LobbyService lobbyService,
+        CancellationToken cancellationToken = default
+    ) {
+        for (var i = 0; i < DiscoveryPollCount; i++) {
+            var port = lobbyService.GetDiscoveredPort(token);
+
+            if (port is not null) {
+                await TryNotifyHostAsync(token, port.Value, lobbyService, cancellationToken);
+                lobbyService.ApplyHostPort(token, port.Value);
+                lobbyService.RemoveDiscoveryToken(token);
+                return TypedResults.Ok(new DiscoveryResponse(port.Value));
+            }
+
+            await Task.Delay(DiscoveryPollIntervalMs, cancellationToken);
+        }
+
+        return TypedResults.BadRequest(new ErrorResponse("Discovery timed out"));
+    }
+
+    /// <summary>
+    /// If the token belongs to a client, pushes their external endpoint to the host via WebSocket.
+    /// Silently skips if the lobby or WebSocket is unavailable.
+    /// </summary>
+    private static async Task TryNotifyHostAsync(
+        string token,
+        int port,
+        LobbyService lobbyService,
+        CancellationToken cancellationToken
+    ) {
+        if (!lobbyService.TryGetClientInfo(token, out var lobbyCode, out var clientIp))
+            return;
+
+        var lobby = lobbyService.GetLobbyByCode(lobbyCode);
+
+        if (lobby?.HostWebSocket is not { State: WebSocketState.Open } ws)
+            return;
+
+        var payload = JsonSerializer.SerializeToUtf8Bytes(
+            new {
+                clientIp,
+                clientPort = port
+            }
+        );
+
+        await ws.SendAsync(payload, WebSocketMessageType.Text, endOfMessage: true, cancellationToken);
+
+        Logger.LogInformation(
+            "Pushed client {ClientIp}:{ClientPort} to host via WebSocket after discovery",
+            clientIp,
+            port
         );
     }
 
@@ -285,7 +412,10 @@ public class Program {
     /// <summary>
     /// Refreshes lobby heartbeat to prevent expiration.
     /// </summary>
-    private static Results<Ok<StatusResponse>, NotFound<ErrorResponse>> Heartbeat(string token, LobbyService lobbyService) {
+    private static Results<Ok<StatusResponse>, NotFound<ErrorResponse>> Heartbeat(
+        string token,
+        LobbyService lobbyService
+    ) {
         return lobbyService.Heartbeat(token)
             ? TypedResults.Ok(new StatusResponse("alive"))
             : TypedResults.NotFound(new ErrorResponse("Lobby not found"));
@@ -319,7 +449,7 @@ public class Program {
     /// Notifies host of pending client and returns host connection info.
     /// Uses WebSocket push if available, otherwise queues for polling.
     /// </summary>
-    private static async Task<Results<Ok<JoinResponse>, NotFound<ErrorResponse>>> JoinLobby(
+    private static Results<Ok<JoinResponse>, NotFound<ErrorResponse>> JoinLobby(
         string connectionData,
         JoinLobbyRequest request,
         LobbyService lobbyService,
@@ -342,25 +472,22 @@ public class Program {
             return TypedResults.NotFound(new ErrorResponse("Invalid port"));
         }
 
+        var clientDiscoveryToken = lobbyService.RegisterClientDiscoveryToken(lobby.LobbyCode, clientIp);
+
         Logger.LogInformation(
-            "[JOIN] {}", 
-            IsDevelopment ? 
-                $"{clientIp}:{request.ClientPort} -> {lobby.ConnectionData}" :
-                $"[Redacted]:{request.ClientPort} -> [Redacted]"
+            "[JOIN] {ConnectionDetails}",
+            IsDevelopment
+                ? $"{clientIp}:{request.ClientPort} -> {lobby.ConnectionData}"
+                : $"[Redacted]:{request.ClientPort} -> [Redacted]"
         );
 
-        // Try WebSocket push first (instant notification)
-        if (lobby.HostWebSocket is { State: WebSocketState.Open }) {
-            var message = $"{{\"clientIp\":\"{clientIp}\",\"clientPort\":{request.ClientPort}}}";
-            var bytes = Encoding.UTF8.GetBytes(message);
-            await lobby.HostWebSocket.SendAsync(bytes, WebSocketMessageType.Text, true, CancellationToken.None);
-            Logger.LogInformation("[WS] Pushed client to host via WebSocket");
-        } else {
-            // Fallback to queue for polling (legacy clients)
-            lobby.PendingClients.Enqueue(
-                new Models.PendingClient(clientIp, request.ClientPort, DateTime.UtcNow)
-            );
-        }
+        /* Host notification is now delayed until VerifyDiscovery is called by the client */
+        /* This ensures the host gets the actual external port for hole-punching */
+
+        // Fallback to queue for polling (legacy clients)
+        lobby.PendingClients.Enqueue(
+            new Models.PendingClient(clientIp, request.ClientPort, DateTime.UtcNow)
+        );
 
         // Check if client is on the same network as the host
         var joinConnectionData = lobby.ConnectionData;
@@ -368,17 +495,36 @@ public class Program {
 
         // We can only check IP equality if we have the host's IP (for matchmaking lobbies mainly)
         // NOTE: This assumes lobby.ConnectionData is in "IP:Port" format for matchmaking
-        if (!string.IsNullOrEmpty(lobby.HostLanIp)) {
-            // Parse Host Public IP from ConnectionData (format: "IP:Port")
-            var hostPublicIp = lobby.ConnectionData.Split(':')[0];
-
-            if (clientIp == hostPublicIp) {
-                Logger.LogInformation("[JOIN] Local Network Detected! Returning LAN IP: {}", lobby.HostLanIp);
-                lanConnectionData = lobby.HostLanIp;
-            }
+        if (string.IsNullOrEmpty(lobby.HostLanIp)) {
+            return TypedResults.Ok(
+                new JoinResponse(
+                    joinConnectionData, lobby.LobbyType, clientIp, request.ClientPort, lanConnectionData,
+                    clientDiscoveryToken
+                )
+            );
         }
 
-        return TypedResults.Ok(new JoinResponse(joinConnectionData, lobby.LobbyType, clientIp, request.ClientPort, lanConnectionData));
+        // Parse Host Public IP from ConnectionData (format: "IP:Port")
+        var hostPublicIp = lobby.ConnectionData.Split(':')[0];
+
+        if (clientIp != hostPublicIp) {
+            return TypedResults.Ok(
+                new JoinResponse(
+                    joinConnectionData, lobby.LobbyType, clientIp, request.ClientPort, lanConnectionData,
+                    clientDiscoveryToken
+                )
+            );
+        }
+
+        Logger.LogInformation("[JOIN] Local Network Detected! Returning LAN IP: {HostLanIp}", lobby.HostLanIp);
+        lanConnectionData = lobby.HostLanIp;
+
+        return TypedResults.Ok(
+            new JoinResponse(
+                joinConnectionData, lobby.LobbyType, clientIp, request.ClientPort, lanConnectionData,
+                clientDiscoveryToken
+            )
+        );
     }
 
     #endregion
@@ -410,7 +556,8 @@ public class Program {
         string ConnectionData,
         string HostToken,
         string LobbyName,
-        string LobbyCode
+        string LobbyCode,
+        string? HostDiscoveryToken
     );
 
     /// <param name="ConnectionData">Connection identifier (IP:Port or Steam lobby ID).</param>
@@ -441,8 +588,13 @@ public class Program {
         string LobbyType,
         string ClientIp,
         int ClientPort,
-        string? LanConnectionData
+        string? LanConnectionData,
+        string? ClientDiscoveryToken
     );
+
+    /// <param name="ExternalPort">Discovered external port.</param>
+    [UsedImplicitly]
+    internal record DiscoveryResponse(int ExternalPort);
 
     /// <param name="ClientIp">Pending client's IP.</param>
     /// <param name="ClientPort">Pending client's port.</param>

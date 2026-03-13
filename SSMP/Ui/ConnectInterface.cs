@@ -474,15 +474,10 @@ internal class ConnectInterface {
     private Coroutine? _feedbackHideCoroutine;
 
     /// <summary>
-    /// Client for the MatchMaking Service (MMS).
-    /// </summary>
-    private readonly MmsClient _mmsClient;
-
-    /// <summary>
     /// Public accessor for the MMS client.
     /// Used by server manager to pass to HolePunch transport for lobby cleanup.
     /// </summary>
-    public MmsClient MmsClient => _mmsClient;
+    public MmsClient MmsClient { get; }
 
     #endregion
 
@@ -524,7 +519,7 @@ internal class ConnectInterface {
     /// <param name="connectGroup">Parent component group for the interface.</param>
     public ConnectInterface(ModSettings modSettings, ComponentGroup connectGroup) {
         _modSettings = modSettings;
-        _mmsClient = new MmsClient(modSettings.MmsSettings.MmsUrl);
+        MmsClient = new MmsClient(modSettings.MmsSettings.MmsUrl);
 
         SubscribeToSteamEvents();
 
@@ -1146,7 +1141,7 @@ internal class ConnectInterface {
         var clientPort = GetSocketPort(holePunchSocket);
 
         // Join lobby and get connection info
-        var task = _mmsClient.JoinLobbyAsync(lobbyId, clientPort);
+        var task = MmsClient.JoinLobbyAsync(lobbyId, clientPort);
         yield return new WaitUntil(() => task.IsCompleted);
 
         var lobbyInfo = task.Result;
@@ -1156,7 +1151,23 @@ internal class ConnectInterface {
             yield break;
         }
 
-        var (connectionData, lobbyType, lanConnectionData) = lobbyInfo.Value;
+        var (connectionData, lobbyType, lanConnectionData, clientDiscoveryToken) = lobbyInfo.Value;
+
+        // Perform UDP discovery if token is provided
+        if (clientDiscoveryToken != null) {
+            ShowFeedback(Color.yellow, "Mapping external port...");
+            var mmsHost = new Uri(MmsClient.BaseUrl).Host;
+            var discoveryTask = MmsClient.PerformDiscoveryAsync(clientDiscoveryToken, mmsHost, (data, endpoint) => {
+                holePunchSocket.SendTo(data, endpoint);
+            });
+            yield return new WaitUntil(() => discoveryTask.IsCompleted);
+            
+            if (discoveryTask.Result == null) {
+                Logger.Warn("MmsClient: UDP discovery timed out, falling back to local port");
+            } else {
+                Logger.Info($"MmsClient: Discovered external port {discoveryTask.Result}");
+            }
+        }
 
         // Handle connection based on lobby type
         if (lobbyType == PublicLobbyType.Steam) {
@@ -1252,7 +1263,7 @@ internal class ConnectInterface {
         string steamLobbyId,
         string username
     ) {
-        var task = _mmsClient.RegisterSteamLobbyAsync(
+        var task = MmsClient.RegisterSteamLobbyAsync(
             steamLobbyId,
             isPublic: true,
             gameVersion: Application.version
@@ -1280,8 +1291,13 @@ internal class ConnectInterface {
         string username
     ) {
         var isPublic = visibility == LobbyVisibility.Public;
-        var task = _mmsClient.CreateLobbyAsync(
-            hostPort: 26960,
+
+        // Create socket first to get actual port
+        var holePunchSocket = CreateHolePunchSocket();
+        var actualPort = GetSocketPort(holePunchSocket);
+
+        var task = MmsClient.CreateLobbyAsync(
+            hostPort: actualPort,
             isPublic: isPublic,
             gameVersion: Application.version,
             lobbyType: lobbyType
@@ -1289,14 +1305,31 @@ internal class ConnectInterface {
 
         yield return new WaitUntil(() => task.IsCompleted);
 
-        var (lobbyId, lobbyName) = task.Result;
+        var (lobbyId, lobbyName, hostDiscoveryToken) = task.Result;
         if (lobbyId == null || lobbyName == null) {
             ShowFeedback(Color.red, "Failed to create lobby. Is MMS running?");
+            CleanupHolePunchSocket(holePunchSocket);
             yield break;
         }
 
+        // Perform UDP discovery if token is provided
+        if (hostDiscoveryToken != null) {
+            ShowFeedback(Color.yellow, "Mapping external port...");
+            var mmsHost = new Uri(MmsClient.BaseUrl).Host;
+            var discoveryTask = MmsClient.PerformDiscoveryAsync(hostDiscoveryToken, mmsHost, (data, endpoint) => {
+                holePunchSocket.SendTo(data, endpoint);
+            });
+            yield return new WaitUntil(() => discoveryTask.IsCompleted);
+
+            if (discoveryTask.Result == null) {
+                Logger.Warn("MmsClient: UDP discovery timed out, falling back to mapping-less hosting");
+            } else {
+                Logger.Info($"MmsClient: Discovered external port {discoveryTask.Result}");
+            }
+        }
+
         // Start polling for pending clients to punch back
-        _mmsClient.StartPendingClientPolling();
+        MmsClient.StartPendingClientPolling();
 
         // For private lobbies, show invite code in ChatBox so it's easily shareable
         if (visibility == LobbyVisibility.Private) {
@@ -1311,7 +1344,10 @@ internal class ConnectInterface {
             ShowFeedback(Color.green, $"Lobby: {lobbyId}");
         }
 
-        StartHostButtonPressed?.Invoke("0.0.0.0", 26960, username, TransportType.HolePunch, null);
+        // Pass the pre-bound socket to the transport layer before hosting
+        HolePunchEncryptedTransportServer.PreBoundSocket = holePunchSocket;
+
+        StartHostButtonPressed?.Invoke("0.0.0.0", actualPort, username, TransportType.HolePunch, null);
     }
 
     /// <summary>
@@ -1331,7 +1367,7 @@ internal class ConnectInterface {
     /// Coroutine for async lobby fetching (Matchmaking tab).
     /// </summary>
     private IEnumerator FetchLobbiesCoroutine() {
-        var task = _mmsClient.GetPublicLobbiesAsync(PublicLobbyType.Matchmaking);
+        var task = MmsClient.GetPublicLobbiesAsync(PublicLobbyType.Matchmaking);
 
         // Wait for async operation without blocking main thread
         yield return new WaitUntil(() => task.IsCompleted);
@@ -1406,7 +1442,7 @@ internal class ConnectInterface {
     /// Coroutine for async Steam lobby fetching from MMS.
     /// </summary>
     private IEnumerator FetchSteamLobbiesCoroutine() {
-        var task = _mmsClient.GetPublicLobbiesAsync(PublicLobbyType.Steam); // Filter by steam type
+        var task = MmsClient.GetPublicLobbiesAsync(PublicLobbyType.Steam); // Filter by steam type
 
         yield return new WaitUntil(() => task.IsCompleted);
 
@@ -1605,7 +1641,19 @@ internal class ConnectInterface {
     /// Displays an appropriate error message based on the failure reason.
     /// </summary>
     /// <param name="result">Details about why the connection failed.</param>
-    public void OnFailedConnect(ConnectionFailedResult result) {
+    /// <param name="fallbackAddress">Optional fallback address (IP:Port) to attempt on failure.</param>
+    public void OnFailedConnect(ConnectionFailedResult result, string? fallbackAddress = null) {
+        // If we have a fallback connection to try, we do so now
+        if (!string.IsNullOrEmpty(fallbackAddress) && TryParseConnectionData(fallbackAddress, out var address, out var port)) {
+            ShowFeedback(Color.yellow, "LAN failed, retrying Public...");
+            Logger.Info($"ConnectInterface: LAN connection failed, retrying Public at {address}:{port}");
+
+            // Trigger the fallback connection using the current username input
+            var username = _usernameInput.GetInput();
+            ConnectButtonPressed?.Invoke(address, port, username, TransportType.HolePunch, null);
+            return;
+        }
+
         var message = GetFailureMessage(result);
         ShowFeedback(Color.red, message);
         ResetConnectionButtons();
@@ -1704,8 +1752,11 @@ internal class ConnectInterface {
             ProtocolType.Udp
         );
 
-        socket.Bind(new IPEndPoint(IPAddress.Any, 0));
-        HolePunchEncryptedTransport.HolePunchSocket = socket;
+        try {
+            socket.Bind(new IPEndPoint(IPAddress.Any, 26960));
+        } catch (SocketException) {
+            socket.Bind(new IPEndPoint(IPAddress.Any, 0));
+        }
 
         return socket;
     }
@@ -1735,42 +1786,36 @@ internal class ConnectInterface {
         }
 
         ShowFeedback(Color.green, connectionInfo.Value.FeedbackMessage);
+        
+        // Pass the pre-bound socket to the transport layer before connecting
+        HolePunchEncryptedTransport.HolePunchSocket = holePunchSocket;
+        
         ConnectButtonPressed?.Invoke(
             connectionInfo.Value.PrimaryIp,
             connectionInfo.Value.PrimaryPort,
             username,
             TransportType.HolePunch,
-            connectionInfo.Value.FallbackIp
+            connectionInfo.Value.FallbackAddress
         );
     }
 
     /// <summary>
     /// Determines the optimal connection strategy (LAN first, then public).
     /// </summary>
-    private static ConnectionInfo? DetermineConnectionInfo(string publicConnectionData, string? lanConnectionData) {
-        // Try LAN connection first if available
+    private static ConnectionInfo? DetermineConnectionInfo(string publicConnectionData, string? lanConnectionData)
+    {
+        // Public connection is required in all cases
+        if (!TryParseConnectionData(publicConnectionData, out var publicIp, out var publicPort))
+            return null;
+
+        // Prefer LAN if available, using public as the fallback relay
         if (!string.IsNullOrEmpty(lanConnectionData) &&
-            TryParseConnectionData(lanConnectionData, out var lanIp, out var lanPort)) {
-            var publicIp = publicConnectionData.Split(':')[0];
-            return new ConnectionInfo(
-                lanIp,
-                lanPort,
-                publicIp,
-                $"Connecting to LAN {lanIp}:{lanPort}..."
-            );
+            TryParseConnectionData(lanConnectionData, out var lanIp, out var lanPort))
+        {
+            return new ConnectionInfo(lanIp, lanPort, $"{publicIp}:{publicPort}", $"Connecting to LAN {lanIp}:{lanPort}...");
         }
 
-        // Fall back to public connection
-        if (TryParseConnectionData(publicConnectionData, out var publicIpParsed, out var publicPort)) {
-            return new ConnectionInfo(
-                publicIpParsed,
-                publicPort,
-                null,
-                $"Connecting to {publicIpParsed}:{publicPort}..."
-            );
-        }
-
-        return null;
+        return new ConnectionInfo(publicIp, publicPort, null, $"Connecting to {publicIp}:{publicPort}...");
     }
 
     /// <summary>
@@ -1802,24 +1847,3 @@ internal class ConnectInterface {
 
     #endregion
 }
-
-#region Helper Structs
-
-/// <summary>
-/// Contains connection information for matchmaking lobbies.
-/// </summary>
-internal readonly struct ConnectionInfo {
-    public string PrimaryIp { get; }
-    public int PrimaryPort { get; }
-    public string? FallbackIp { get; }
-    public string FeedbackMessage { get; }
-
-    public ConnectionInfo(string primaryIp, int primaryPort, string? fallbackIp, string feedbackMessage) {
-        PrimaryIp = primaryIp;
-        PrimaryPort = primaryPort;
-        FallbackIp = fallbackIp;
-        FeedbackMessage = feedbackMessage;
-    }
-}
-
-#endregion
