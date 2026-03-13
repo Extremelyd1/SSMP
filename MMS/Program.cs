@@ -27,20 +27,6 @@ public class Program {
     private static ILogger Logger { get; set; } = null!;
 
     /// <summary>
-    /// The number of times to poll for a discovered port before timing out.
-    /// Combined with <see cref="DiscoveryPollIntervalMs"/>, defines a total timeout of
-    /// <c>DiscoveryPollCount * DiscoveryPollIntervalMs</c> milliseconds (default: 10 seconds).
-    /// </summary>
-    private const int DiscoveryPollCount = 40;
-
-    /// <summary>
-    /// The delay in milliseconds between each discovery poll attempt.
-    /// Combined with <see cref="DiscoveryPollCount"/>, defines a total timeout of
-    /// <c>DiscoveryPollCount * DiscoveryPollIntervalMs</c> milliseconds (default: 10 seconds).
-    /// </summary>
-    private const int DiscoveryPollIntervalMs = 250;
-
-    /// <summary>
     /// Entrypoint for the MMS.
     /// </summary>
     public static void Main(string[] args) {
@@ -268,7 +254,7 @@ public class Program {
     private static Ok<IEnumerable<LobbyResponse>> GetLobbies(LobbyService lobbyService, string? type = null) {
         var lobbies = lobbyService.GetLobbies(type)
                                   .Select(l => new LobbyResponse(
-                                          l.ConnectionData,
+                                          l.AdvertisedConnectionData,
                                           l.LobbyName,
                                           l.LobbyType,
                                           l.LobbyCode
@@ -320,7 +306,7 @@ public class Program {
         );
 
         var visibility = lobby.IsPublic ? "Public" : "Private";
-        var connectionDataString = IsDevelopment ? lobby.ConnectionData : "[Redacted]";
+        var connectionDataString = IsDevelopment ? lobby.AdvertisedConnectionData : "[Redacted]";
         Logger.LogInformation(
             "[LOBBY] Created: '{LobbyName}' [{LobbyType}] ({Visibility}) -> {ConnectionDataString} (Code: {LobbyCode})",
             lobby.LobbyName,
@@ -333,34 +319,27 @@ public class Program {
         return TypedResults.Created(
             $"/lobby/{lobby.LobbyCode}",
             new CreateLobbyResponse(
-                lobby.ConnectionData, lobby.HostToken, lobby.LobbyName, lobby.LobbyCode, lobby.HostDiscoveryToken
+                lobby.AdvertisedConnectionData, lobby.HostToken, lobby.LobbyName, lobby.LobbyCode, lobby.HostDiscoveryToken
             )
         );
     }
 
     /// <summary>
-    /// Waits for UDP discovery to complete and returns the discovered port.
-    /// Notifies the host via WebSocket if a client token is provided.
+    /// Returns the discovered external port when ready.
+    /// The client owns the retry loop and polls this endpoint until discovery completes.
     /// </summary>
-    private static async Task<Results<Ok<DiscoveryResponse>, BadRequest<ErrorResponse>>> VerifyDiscovery(
+    private static async Task<IResult> VerifyDiscovery(
         string token,
         LobbyService lobbyService,
         CancellationToken cancellationToken = default
     ) {
-        for (var i = 0; i < DiscoveryPollCount; i++) {
-            var port = lobbyService.GetDiscoveredPort(token);
+        var port = lobbyService.GetDiscoveredPort(token);
+        if (port is null) return TypedResults.Ok(new StatusResponse("pending"));
 
-            if (port is not null) {
-                await TryNotifyHostAsync(token, port.Value, lobbyService, cancellationToken);
-                lobbyService.ApplyHostPort(token, port.Value);
-                lobbyService.RemoveDiscoveryToken(token);
-                return TypedResults.Ok(new DiscoveryResponse(port.Value));
-            }
-
-            await Task.Delay(DiscoveryPollIntervalMs, cancellationToken);
-        }
-
-        return TypedResults.BadRequest(new ErrorResponse("Discovery timed out"));
+        await TryNotifyHostAsync(token, port.Value, lobbyService, cancellationToken);
+        lobbyService.ApplyHostPort(token, port.Value);
+        lobbyService.RemoveDiscoveryToken(token);
+        return TypedResults.Ok(new DiscoveryResponse(port.Value));
     }
 
     /// <summary>
@@ -477,7 +456,7 @@ public class Program {
         Logger.LogInformation(
             "[JOIN] {ConnectionDetails}",
             IsDevelopment
-                ? $"{clientIp}:{request.ClientPort} -> {lobby.ConnectionData}"
+                ? $"{clientIp}:{request.ClientPort} -> {lobby.AdvertisedConnectionData}"
                 : $"[Redacted]:{request.ClientPort} -> [Redacted]"
         );
 
@@ -490,7 +469,7 @@ public class Program {
         );
 
         // Check if client is on the same network as the host
-        var joinConnectionData = lobby.ConnectionData;
+        var joinConnectionData = lobby.AdvertisedConnectionData;
         string? lanConnectionData = null;
 
         // We can only check IP equality if we have the host's IP (for matchmaking lobbies mainly)

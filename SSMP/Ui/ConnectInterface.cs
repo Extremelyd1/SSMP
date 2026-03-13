@@ -1153,21 +1153,11 @@ internal class ConnectInterface {
 
         var (connectionData, lobbyType, lanConnectionData, clientDiscoveryToken) = lobbyInfo.Value;
 
-        // Perform UDP discovery if token is provided
-        if (clientDiscoveryToken != null) {
-            ShowFeedback(Color.yellow, "Mapping external port...");
-            var mmsHost = new Uri(MmsClient.BaseUrl).Host;
-            var discoveryTask = MmsClient.PerformDiscoveryAsync(clientDiscoveryToken, mmsHost, (data, endpoint) => {
-                holePunchSocket.SendTo(data, endpoint);
-            });
-            yield return new WaitUntil(() => discoveryTask.IsCompleted);
-            
-            if (discoveryTask.Result == null) {
-                Logger.Warn("MmsClient: UDP discovery timed out, falling back to local port");
-            } else {
-                Logger.Info($"MmsClient: Discovered external port {discoveryTask.Result}");
-            }
-        }
+        yield return RunDiscoveryCoroutine(
+            holePunchSocket,
+            clientDiscoveryToken,
+            "MmsClient: UDP discovery timed out, falling back to local port"
+        );
 
         // Handle connection based on lobby type
         if (lobbyType == PublicLobbyType.Steam) {
@@ -1312,21 +1302,11 @@ internal class ConnectInterface {
             yield break;
         }
 
-        // Perform UDP discovery if token is provided
-        if (hostDiscoveryToken != null) {
-            ShowFeedback(Color.yellow, "Mapping external port...");
-            var mmsHost = new Uri(MmsClient.BaseUrl).Host;
-            var discoveryTask = MmsClient.PerformDiscoveryAsync(hostDiscoveryToken, mmsHost, (data, endpoint) => {
-                holePunchSocket.SendTo(data, endpoint);
-            });
-            yield return new WaitUntil(() => discoveryTask.IsCompleted);
-
-            if (discoveryTask.Result == null) {
-                Logger.Warn("MmsClient: UDP discovery timed out, falling back to mapping-less hosting");
-            } else {
-                Logger.Info($"MmsClient: Discovered external port {discoveryTask.Result}");
-            }
-        }
+        yield return RunDiscoveryCoroutine(
+            holePunchSocket,
+            hostDiscoveryToken,
+            "MmsClient: UDP discovery timed out, falling back to mapping-less hosting"
+        );
 
         // Start polling for pending clients to punch back
         MmsClient.StartPendingClientPolling();
@@ -1766,6 +1746,33 @@ internal class ConnectInterface {
     /// </summary>
     private static int GetSocketPort(Socket socket) {
         return ((IPEndPoint) socket.LocalEndPoint!).Port;
+    }
+
+    /// <summary>
+    /// Performs MMS-backed UDP discovery for a pre-bound hole-punch socket.
+    /// </summary>
+    private IEnumerator RunDiscoveryCoroutine(Socket holePunchSocket, string? discoveryToken, string timeoutMessage) {
+        if (string.IsNullOrEmpty(discoveryToken)) {
+            yield break;
+        }
+
+        ShowFeedback(Color.yellow, "Mapping external port...");
+
+        var mmsHost = new Uri(MmsClient.BaseUrl).Host;
+        var discoveryTask = MmsClient.PerformDiscoveryAsync(
+            discoveryToken,
+            mmsHost,
+            (data, endpoint) => { holePunchSocket.SendTo(data, endpoint); }
+        );
+
+        yield return new WaitUntil(() => discoveryTask.IsCompleted);
+
+        if (discoveryTask.Result == null) {
+            Logger.Warn(timeoutMessage);
+            yield break;
+        }
+
+        Logger.Info($"MmsClient: Discovered external port {discoveryTask.Result}");
     }
 
     /// <summary>
