@@ -17,6 +17,9 @@ public class LobbyService(LobbyNameService lobbyNameService) {
     /// <summary>Maps lobby codes to ConnectionData for quick lookup.</summary>
     private readonly ConcurrentDictionary<string, string> _codeToConnectionData = new();
 
+    /// <summary>Consolidated metadata for active discovery sessions (matchmaking only).</summary>
+    private readonly ConcurrentDictionary<string, DiscoveryTokenMetadata> _discoveryMetadata = new();
+
     /// <summary>Random number generator for token and code generation.</summary>
     private static readonly Random Random = new();
 
@@ -44,7 +47,18 @@ public class LobbyService(LobbyNameService lobbyNameService) {
         // Only generate lobby codes for matchmaking lobbies
         // Steam lobbies use Steam's native join flow (no MMS invite codes)
         var lobbyCode = lobbyType == "steam" ? "" : GenerateLobbyCode();
-        var lobby = new Lobby(connectionData, hostToken, lobbyCode, lobbyName, lobbyType, hostLanIp, isPublic);
+        // Matchmaking lobbies use a discovery token for NAT traversal; Steam lobbies do not.
+        string? hostDiscoveryToken = null;
+        if (lobbyType == "matchmaking") {
+            hostDiscoveryToken = GenerateToken(32);
+            _discoveryMetadata[hostDiscoveryToken] = new DiscoveryTokenMetadata {
+                HostConnectionData = connectionData
+            };
+        }
+
+        var lobby = new Lobby(connectionData, hostToken, lobbyCode, lobbyName, lobbyType, hostLanIp, isPublic) {
+            HostDiscoveryToken = hostDiscoveryToken
+        };
 
         _lobbies[connectionData] = lobby;
         _tokenToConnectionData[hostToken] = connectionData;
@@ -113,7 +127,7 @@ public class LobbyService(LobbyNameService lobbyNameService) {
     /// Private lobbies are excluded from browser listings.
     /// </summary>
     public IEnumerable<Lobby> GetLobbies(string? lobbyType = null) {
-        var lobbies = _lobbies.Values.Where(l => !l.IsDead && l.IsPublic);
+        var lobbies = _lobbies.Values.Where(l => l is { IsDead: false, IsPublic: true });
         return string.IsNullOrEmpty(lobbyType)
             ? lobbies
             : lobbies.Where(l => l.LobbyType.Equals(lobbyType, StringComparison.OrdinalIgnoreCase));
@@ -127,6 +141,18 @@ public class LobbyService(LobbyNameService lobbyNameService) {
         foreach (var lobby in dead) {
             RemoveLobby(lobby.ConnectionData);
         }
+
+        // Cleanup expired discovery tokens (older than 2 minutes)
+        var tokenCutoff = DateTime.UtcNow.AddMinutes(-2);
+        var expiredTokens = _discoveryMetadata
+            .Where(kvp => kvp.Value.CreatedAt < tokenCutoff)
+            .Select(kvp => kvp.Key)
+            .ToList();
+
+        foreach (var token in expiredTokens) {
+            _discoveryMetadata.TryRemove(token, out _);
+        }
+
         return dead.Count;
     }
 
@@ -141,9 +167,76 @@ public class LobbyService(LobbyNameService lobbyNameService) {
         _tokenToConnectionData.TryRemove(lobby.HostToken, out _);
         _codeToConnectionData.TryRemove(lobby.LobbyCode, out _);
 
+        if (lobby.HostDiscoveryToken != null) {
+            _discoveryMetadata.TryRemove(lobby.HostDiscoveryToken, out _);
+        }
+
         lobbyNameService.FreeLobbyName(lobby.LobbyName);
 
         return true;
+    }
+
+    /// <summary>
+    /// Registers a new discovery token for a client (matchmaking only).
+    /// </summary>
+    public string? RegisterClientDiscoveryToken(string lobbyCode, string clientIp) {
+        var lobby = GetLobbyByCode(lobbyCode);
+        if (lobby == null || lobby.LobbyType == "steam") return null;
+
+        var token = GenerateToken(32);
+        _discoveryMetadata[token] = new DiscoveryTokenMetadata {
+            LobbyCode = lobbyCode,
+            ClientIp = clientIp
+        };
+        return token;
+    }
+
+    /// <summary>
+    /// Gets client info for a discovery token.
+    /// </summary>
+    public bool TryGetClientInfo(string token, out string lobbyCode, out string clientIp) {
+        if (_discoveryMetadata.TryGetValue(token, out var metadata) && metadata.ClientIp != null) {
+            lobbyCode = metadata.LobbyCode ?? "";
+            clientIp = metadata.ClientIp;
+            return true;
+        }
+        lobbyCode = "";
+        clientIp = "";
+        return false;
+    }
+
+    /// <summary>
+    /// If the token belongs to a host, updates their lobby's external port.
+    /// </summary>
+    public void ApplyHostPort(string token, int port) {
+        if (!_discoveryMetadata.TryGetValue(token, out var metadata) || metadata.HostConnectionData == null) return;
+        var lobby = GetLobby(metadata.HostConnectionData);
+        if (lobby != null) {
+            lobby.ExternalPort = port;
+        }
+    }
+
+    /// <summary>
+    /// Updates the discovered port for a given token.
+    /// </summary>
+    public void SetDiscoveredPort(string token, int port) {
+        if (_discoveryMetadata.TryGetValue(token, out var metadata)) {
+            metadata.DiscoveredPort = port;
+        }
+    }
+
+    /// <summary>
+    /// Gets the discovered port for a given token, if any.
+    /// </summary>
+    public int? GetDiscoveredPort(string token) {
+        return _discoveryMetadata.TryGetValue(token, out var metadata) ? metadata.DiscoveredPort : null;
+    }
+
+    /// <summary>
+    /// Removes a discovery token and its associated metadata.
+    /// </summary>
+    public void RemoveDiscoveryToken(string token) {
+        _discoveryMetadata.TryRemove(token, out _);
     }
 
     /// <summary>

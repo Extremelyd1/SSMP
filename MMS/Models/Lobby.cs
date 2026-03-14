@@ -21,7 +21,7 @@ public class Lobby(
     string? hostLanIp = null,
     bool isPublic = true
 ) {
-    /// <summary>Connection data: Steam lobby ID for Steam, IP:Port for matchmaking.</summary>
+    /// <summary>Stable connection data used as the lobby identity and storage key.</summary>
     public string ConnectionData { get; } = connectionData;
 
     /// <summary>Secret token for host authentication.</summary>
@@ -50,6 +50,21 @@ public class Lobby(
 
     /// <summary>True if no heartbeat received in the last 60 seconds.</summary>
     public bool IsDead => DateTime.UtcNow - LastHeartbeat > TimeSpan.FromSeconds(60);
+
+    /// <summary>Discovered external port for NAT traversal.</summary>
+    public int? ExternalPort { get; internal set; }
+
+    /// <summary>Token used for UDP port discovery.</summary>
+    public string? HostDiscoveryToken { get; init; }
+
+    /// <summary>Connection data that should be advertised to clients.</summary>
+    public string AdvertisedConnectionData {
+        get {
+            if (ExternalPort == null || LobbyType != "matchmaking") return ConnectionData;
+            var ip = ConnectionData.Split(':')[0];
+            return $"{ip}:{ExternalPort}";
+        }
+    }
 
     /// <summary>
     /// WebSocket connection from the host for push notifications.

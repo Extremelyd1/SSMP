@@ -90,13 +90,9 @@ internal class DtlsClient {
         }
 
         // Only connect if we created the socket (hole punch sockets are already "connected")
-        if (boundSocket == null) {
-            try {
-                _socket.Connect(address, port);
-            } catch (SocketException e) {
-                Logger.Error($"Failed to connect socket to {address}:{port}");
-                CleanupAndThrow(e);
-            }
+        if (boundSocket is null) {
+            try { _socket.Connect(address, port); }
+            catch (Exception e) { CleanupAndThrow(e); }
         }
 
         var clientProtocol = new DtlsClientProtocol();

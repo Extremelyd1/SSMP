@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Net;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using SSMP.Logging;
@@ -43,6 +44,12 @@ internal class HolePunchEncryptedTransportServer : IEncryptedTransportServer {
     private readonly DtlsServer _dtlsServer;
 
     /// <summary>
+    /// Pre-bound socket for NAT hole-punching.
+    /// Created by ConnectInterface during lobby creation, consumed by HolePunchEncryptedTransportServer.
+    /// </summary>
+    public static Socket? PreBoundSocket { get; set; }
+
+    /// <summary>
     /// Dictionary containing the clients of this server.
     /// </summary>
     private readonly ConcurrentDictionary<IPEndPoint, HolePunchEncryptedTransportClient> _clients;
@@ -64,7 +71,10 @@ internal class HolePunchEncryptedTransportServer : IEncryptedTransportServer {
         // Subscribe to punch coordination
         MmsClient.PunchClientRequested += OnPunchClientRequested;
         
-        _dtlsServer.Start(port);
+        var socket = PreBoundSocket;
+        PreBoundSocket = null;
+        
+        _dtlsServer.Start(port, socket);
     }
 
     /// <inheritdoc />
