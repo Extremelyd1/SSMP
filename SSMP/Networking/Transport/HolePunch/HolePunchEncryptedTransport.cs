@@ -109,12 +109,6 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     public int MaxPacketSize => UdpMaxPacketSize;
 
     /// <summary>
-    /// Optional fallback address to use if the primary connection fails.
-    /// Used when attempting a direct LAN connection first, falling back to hole-punching.
-    /// </summary>
-    public string? FallbackAddress { get; init; }
-
-    /// <summary>
     /// Initializes a new instance of the <see cref="HolePunchEncryptedTransport"/> class.
     /// Sets up the DTLS client and subscribes to its data events.
     /// </summary>
@@ -159,15 +153,7 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
         Logger.Debug($"HolePunch: LAN connection detected ({address}), using direct DTLS.");
 
         CleanupHolePunchSocket();
-
-        try {
-            _dtlsClient.Connect(address, port);
-        } catch (Exception ex) when (FallbackAddress != null) {
-            Logger.Warn(
-                $"HolePunch: Direct LAN connection to {address} failed ({ex.Message}), retrying with fallback: {FallbackAddress}."
-            );
-            Connect(FallbackAddress, port);
-        }
+        _dtlsClient.Connect(address, port);
     }
 
     /// <summary>

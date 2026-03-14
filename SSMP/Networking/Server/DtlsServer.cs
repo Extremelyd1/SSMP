@@ -71,14 +71,18 @@ internal class DtlsServer {
     /// Start the DTLS server on the given port.
     /// </summary>
     /// <param name="port">The port to start listening on.</param>
-    public void Start(int port) {
+    /// <param name="existingSocket">Optional pre-bound socket to reuse (for NAT traversal).</param>
+    public void Start(int port, Socket? existingSocket = null) {
         _port = port;
         _tlsServer = new ServerTlsServer(new BcTlsCrypto());
         _cancellationTokenSource = new CancellationTokenSource();
 
-        _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-        _socket.Bind(new IPEndPoint(IPAddress.Any, _port));
-
+        if (existingSocket != null) {
+            _socket = existingSocket;
+        } else {
+            _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            _socket.Bind(new IPEndPoint(IPAddress.Any, _port));
+        }
         _socketReceiveThread = new Thread(() => SocketReceiveLoop(_cancellationTokenSource.Token)) {
             IsBackground = true
         };

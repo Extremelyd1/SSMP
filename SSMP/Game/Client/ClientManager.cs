@@ -125,6 +125,11 @@ internal class ClientManager : IClientManager {
     /// This is used to determine whether to apply save data from the server to the client and warp them to a bench.
     /// </summary>
     private bool _autoConnect;
+    
+    /// <summary>
+    /// Stores the fallback address (IP:Port) of the last connection attempt for automatic retries.
+    /// </summary>
+    private string? _lastFallbackAddress;
 
     /// <summary>
     /// The username that was last used to connect with.
@@ -483,6 +488,8 @@ internal class ClientManager : IClientManager {
         TransportType transportType,
         string? fallbackAddress = null
     ) {
+        // Store fallback address for potential retry on failure
+        _lastFallbackAddress = fallbackAddress;
         // If we are hosting and using Steam, we need to connect to our own Steam ID
         if (_autoConnect && transportType == TransportType.Steam) {
             address = SteamUser.GetSteamID().ToString();
@@ -510,7 +517,7 @@ internal class ClientManager : IClientManager {
         IEncryptedTransport transport = transportType switch {
             TransportType.Udp => new UdpEncryptedTransport(),
             TransportType.Steam => new SteamEncryptedTransport(),
-            TransportType.HolePunch => new HolePunchEncryptedTransport { FallbackAddress = fallbackAddress },
+            TransportType.HolePunch => new HolePunchEncryptedTransport(),
             _ => throw new ArgumentOutOfRangeException(
                 nameof(transportType), transportType, "Unsupported transport type"
             )
@@ -588,7 +595,7 @@ internal class ClientManager : IClientManager {
     /// </summary>
     /// <param name="result">The result of the failed connection.</param>
     private void OnConnectFailed(ConnectionFailedResult result) {
-        _uiManager.OnFailedConnect(result);
+        _uiManager.OnFailedConnect(result, _lastFallbackAddress);
 
         if (result.Reason == ConnectionFailedReason.InvalidAddons) {
             // Inform the user of the correct addons that the server needs

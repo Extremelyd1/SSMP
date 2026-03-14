@@ -569,8 +569,9 @@ internal class UiManager : IUiManager {
     /// Updates UI to show error message based on failure reason.
     /// </summary>
     /// <param name="result">The reason for connection failure</param>
-    public void OnFailedConnect(ConnectionFailedResult result) =>
-        _connectInterface.OnFailedConnect(result);
+    /// <param name="fallbackAddress">Optional fallback address (IP:Port) to attempt on failure.</param>
+    public void OnFailedConnect(ConnectionFailedResult result, string? fallbackAddress = null) =>
+        _connectInterface.OnFailedConnect(result, fallbackAddress);
 
     /// <summary>
     /// Callback invoked when client disconnects from the server.
