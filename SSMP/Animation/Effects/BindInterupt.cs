@@ -12,13 +12,13 @@ using Logger = SSMP.Logging.Logger;
 
 namespace SSMP.Animation.Effects;
 
-internal class BindFail : Bind {
+internal class BindInterupt : Bind {
     /// <summary>
     /// Static instance for access by multiple animation clips in <see cref="AnimationManager"/>.
     /// </summary>
-    private static BindFail? _instance;
+    private static BindInterupt? _instance;
     /// <inheritdoc cref="_instance" />
-    public static BindFail Instance => _instance ??= new BindFail();
+    public static BindInterupt Instance => _instance ??= new BindInterupt();
     public override void Play(GameObject playerObject, CrestType crestType, ushort playerId, byte[]? effectInfo) {
         Flags flags = new Flags(effectInfo);
 
@@ -92,6 +92,10 @@ internal class BindFail : Bind {
         }
 
         var bindBell = EffectUtils.SpawnGlobalPoolObject(spawner, bindEffects.transform, 5f);
+        if (bindBell == null) {
+            return;
+        }
+
         var shaker = bindBell.GetComponentInChildren<CameraControlAnimationEvents>();
         if (shaker != null) {
             Component.DestroyImmediate(shaker);

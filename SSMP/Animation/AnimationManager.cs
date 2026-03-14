@@ -619,7 +619,7 @@ internal class AnimationManager {
 
         { "Witch Tentacles!", AnimationClip.WitchTentacles },
         { "Shaman Cancel", AnimationClip.ShamanCancel },
-        { "Bind Fail Burst", AnimationClip.BindFailBurst }
+        { "Bind Fail Burst", AnimationClip.BindInterupt }
     };
 
     /// <summary>
@@ -662,7 +662,7 @@ internal class AnimationManager {
     private static readonly Dictionary<AnimationClip, IAnimationEffect> SubAnimationEffects = new() {
         { AnimationClip.WitchTentacles, BindBurst.Instance },
         { AnimationClip.ShamanCancel, new Bind { BindState = Bind.State.ShamanCancel } },
-        { AnimationClip.BindFailBurst, BindFail.Instance }
+        { AnimationClip.BindInterupt, BindInterupt.Instance }
     };
 
     /// <summary>
@@ -766,10 +766,9 @@ internal class AnimationManager {
         EventHooks.SpriteAnimatorProcessEvents += Tk2dSpriteAnimatorOnProcessEvents;
 
         // Register FSM hooks for certain bind actions
+        HeroController.OnHeroInstanceSet += CreateBindHooks;
         if (HeroController.SilentInstance != null) {
             CreateBindHooks(HeroController.instance);
-        } else {
-            HeroController.OnHeroInstanceSet += CreateBindHooks;
         }
 
 
@@ -797,6 +796,8 @@ internal class AnimationManager {
     public void DeregisterHooks() {
         SceneManager.activeSceneChanged -= OnSceneChange;
 
+        HeroController.OnHeroInstanceSet -= CreateBindHooks;
+        FsmStateActionInjector.UninjectAll();
         // On.HeroAnimationController.Play -= HeroAnimationControllerOnPlay;
         // On.HeroAnimationController.PlayFromFrame -= HeroAnimationControllerOnPlayFromFrame;
 
@@ -1065,7 +1066,7 @@ internal class AnimationManager {
         // Find witch crest tenticles
         var tenticles = bindFsm.GetState("Witch Tentancles!"); // no that's not a typo... at least on my end
         if (tenticles != null) {
-            FsmStateActionInjector.Inject(tenticles, 4, OnWitchTentacles);
+            FsmStateActionInjector.Inject(tenticles, OnWitchTentacles, 4);
         } else {
             Logger.Warn("Unable to find Witch Tentacles! state");
         }
@@ -1077,9 +1078,9 @@ internal class AnimationManager {
             Logger.Warn("Unable to find Shaman Air Cancel state");
         }
 
-        var bindFail = bindFsm.GetState("Remove Silk?");
-        if (bindFsm != null) {
-            FsmStateActionInjector.Inject(bindFail, 2, OnBindFail);
+        var bindInterupt = bindFsm.GetState("Remove Silk?");
+        if (bindInterupt != null) {
+            FsmStateActionInjector.Inject(bindInterupt, OnBindInterupt, 2);
         }
     }
 
@@ -1102,9 +1103,10 @@ internal class AnimationManager {
         dummyClip.wrapMode = tk2dSpriteAnimationClip.WrapMode.Once;
         OnAnimationEvent(dummyClip);
     }
-
-    private void OnBindFail(PlayMakerFSM fsm) {
-        Logger.Warn("PLAYING BIND FAIL");
+    /// <summary>
+    /// Animation subanimation hook for interupted binds
+    /// </summary>
+    private void OnBindInterupt(PlayMakerFSM fsm) {
         var dummyClip = new tk2dSpriteAnimationClip();
         dummyClip.name = "Bind Fail Burst";
         dummyClip.wrapMode = tk2dSpriteAnimationClip.WrapMode.Once;
