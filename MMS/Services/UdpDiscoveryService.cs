@@ -58,7 +58,11 @@ public sealed class UdpDiscoveryService : BackgroundService {
             try {
                 var result = await udpClient.ReceiveAsync(stoppingToken);
                 ProcessPacket(result.Buffer, result.RemoteEndPoint);
-            } catch (OperationCanceledException) { break; } catch (Exception ex) { _logger.LogError(ex, "Error in UDP Discovery Service receive loop"); }
+            } catch (OperationCanceledException) {
+                break;
+            } catch (Exception ex) {
+                _logger.LogError(ex, "Error in UDP Discovery Service receive loop");
+            }
         }
 
         _logger.LogInformation("UDP Discovery Service stopped");
@@ -89,7 +93,8 @@ public sealed class UdpDiscoveryService : BackgroundService {
             _logger.LogWarning(
                 "Received malformed discovery packet from {EndPoint} (length: {Length})",
                 FormatEndPoint(remoteEndPoint),
-                buffer.Length);
+                buffer.Length
+            );
             return;
         }
 
@@ -98,7 +103,8 @@ public sealed class UdpDiscoveryService : BackgroundService {
         _logger.LogInformation(
             "Received discovery token {Token} from {EndPoint}",
             token,
-            FormatEndPoint(remoteEndPoint));
+            FormatEndPoint(remoteEndPoint)
+        );
 
         _lobbyService.SetDiscoveredPort(token, remoteEndPoint.Port);
     }
