@@ -23,9 +23,9 @@ internal class MmsClient {
     private readonly string _baseUrl;
 
     /// <summary>
-    /// MMS UDP discovery endpoint derived from the configured base URL.
+    /// MMS UDP discovery host derived from the configured base URL.
     /// </summary>
-    private readonly IPEndPoint? _discoveryEndpoint;
+    private readonly string? _discoveryHost;
 
     /// <summary>
     /// Authentication token for host operations (heartbeat, close, pending clients).
@@ -133,9 +133,8 @@ internal class MmsClient {
     public MmsClient(string baseUrl = "http://localhost:5000") {
         _baseUrl = baseUrl.TrimEnd('/');
 
-        if (Uri.TryCreate(_baseUrl, UriKind.Absolute, out var baseUri) &&
-            IPAddress.TryParse(baseUri.Host, out var mmsAddress)) {
-            _discoveryEndpoint = new IPEndPoint(mmsAddress, DiscoveryPort);
+        if (Uri.TryCreate(_baseUrl, UriKind.Absolute, out var baseUri)) {
+            _discoveryHost = baseUri.Host;
         }
     }
 
@@ -643,7 +642,7 @@ internal class MmsClient {
         string token,
         Action<byte[], IPEndPoint> sendRawAction
     ) {
-        if (_discoveryEndpoint is null) {
+        if (_discoveryHost is null) {
             Logger.Error("MmsClient: MMS URL must use a direct IP address for UDP discovery");
             return null;
         }
@@ -653,8 +652,17 @@ internal class MmsClient {
         var tokenBytes = Encoding.UTF8.GetBytes(token);
         var encodedToken = Uri.EscapeDataString(token);
 
+        // Resolve the host address for the MMS discovery service
+        var hostAddresses = await Dns.GetHostAddressesAsync(_discoveryHost);
+        if (hostAddresses == null || hostAddresses.Length == 0) {
+            Logger.Error($"MmsClient: Could not resolve discovery host ({_discoveryHost}) to IP address");
+            return null;
+        }
+
+        var ipEndpoint = new IPEndPoint(hostAddresses[0], DiscoveryPort);
+
         // Send UDP packets in background until discovery succeeds or times out
-        var udpTask = SendDiscoveryPacketsAsync(tokenBytes, _discoveryEndpoint, sendRawAction, cts.Token);
+        var udpTask = SendDiscoveryPacketsAsync(tokenBytes, ipEndpoint, sendRawAction, cts.Token);
 
         try {
             while (!cts.Token.IsCancellationRequested) {
