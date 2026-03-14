@@ -8,8 +8,7 @@ namespace MMS.Services;
 /// A hosted background service that listens for incoming UDP packets on a fixed port,
 /// used as part of a NAT traversal / hole-punching discovery flow.
 /// </summary>
-public sealed class UdpDiscoveryService : BackgroundService
-{
+public sealed class UdpDiscoveryService : BackgroundService {
     private readonly LobbyService _lobbyService;
     private readonly ILogger<UdpDiscoveryService> _logger;
 
@@ -35,8 +34,7 @@ public sealed class UdpDiscoveryService : BackgroundService
     /// <param name="logger">
     /// Logger used to emit startup, shutdown, and per-packet diagnostic messages.
     /// </param>
-    public UdpDiscoveryService(LobbyService lobbyService, ILogger<UdpDiscoveryService> logger)
-    {
+    public UdpDiscoveryService(LobbyService lobbyService, ILogger<UdpDiscoveryService> logger) {
         _lobbyService = lobbyService;
         _logger = logger;
     }
@@ -52,20 +50,15 @@ public sealed class UdpDiscoveryService : BackgroundService
     /// When fired, the current <c>ReceiveAsync</c> call is cancelled and the loop exits cleanly.
     /// </param>
     /// <returns>A <see cref="Task"/> that completes when the service has fully stopped.</returns>
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
         using var udpClient = new UdpClient(Port);
         _logger.LogInformation("UDP Discovery Service listening on port {Port}", Port);
 
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
+        while (!stoppingToken.IsCancellationRequested) {
+            try {
                 var result = await udpClient.ReceiveAsync(stoppingToken);
                 ProcessPacket(result.Buffer, result.RemoteEndPoint);
-            }
-            catch (OperationCanceledException) { break; }
-            catch (Exception ex) { _logger.LogError(ex, "Error in UDP Discovery Service receive loop"); }
+            } catch (OperationCanceledException) { break; } catch (Exception ex) { _logger.LogError(ex, "Error in UDP Discovery Service receive loop"); }
         }
 
         _logger.LogInformation("UDP Discovery Service stopped");
@@ -90,14 +83,12 @@ public sealed class UdpDiscoveryService : BackgroundService
     /// NAT-translated public endpoint, not the client's LAN address.
     /// The port component of this value is what gets stored as the discovered port.
     /// </param>
-    private void ProcessPacket(byte[] buffer, IPEndPoint remoteEndPoint)
-    {
+    private void ProcessPacket(byte[] buffer, IPEndPoint remoteEndPoint) {
         // Validate byte length before decoding to avoid unnecessary string allocation
-        if (buffer.Length != TokenByteLength)
-        {
+        if (buffer.Length != TokenByteLength) {
             _logger.LogWarning(
                 "Received malformed discovery packet from {EndPoint} (length: {Length})",
-                remoteEndPoint,
+                FormatEndPoint(remoteEndPoint),
                 buffer.Length);
             return;
         }
@@ -107,8 +98,11 @@ public sealed class UdpDiscoveryService : BackgroundService
         _logger.LogInformation(
             "Received discovery token {Token} from {EndPoint}",
             token,
-            remoteEndPoint);
+            FormatEndPoint(remoteEndPoint));
 
         _lobbyService.SetDiscoveredPort(token, remoteEndPoint.Port);
     }
+
+    private static string FormatEndPoint(IPEndPoint remoteEndPoint) =>
+        Program.IsDevelopment ? remoteEndPoint.ToString() : "[Redacted]";
 }

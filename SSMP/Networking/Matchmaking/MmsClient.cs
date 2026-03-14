@@ -20,7 +20,12 @@ internal class MmsClient {
     /// <summary>
     /// Base URL of the MMS server (e.g., "http://localhost:5000")
     /// </summary>
-    public string BaseUrl { get; }
+    private readonly string _baseUrl;
+
+    /// <summary>
+    /// MMS UDP discovery endpoint derived from the configured base URL.
+    /// </summary>
+    private readonly IPEndPoint? _discoveryEndpoint;
 
     /// <summary>
     /// Authentication token for host operations (heartbeat, close, pending clients).
@@ -126,7 +131,12 @@ internal class MmsClient {
     /// </summary>
     /// <param name="baseUrl">Base URL of the MMS server (default: "http://localhost:5000")</param>
     public MmsClient(string baseUrl = "http://localhost:5000") {
-        BaseUrl = baseUrl.TrimEnd('/');
+        _baseUrl = baseUrl.TrimEnd('/');
+
+        if (Uri.TryCreate(_baseUrl, UriKind.Absolute, out var baseUri) &&
+            IPAddress.TryParse(baseUri.Host, out var mmsAddress)) {
+            _discoveryEndpoint = new IPEndPoint(mmsAddress, DiscoveryPort);
+        }
     }
 
 
@@ -138,7 +148,7 @@ internal class MmsClient {
     /// <param name="isPublic">Whether to list in public browser.</param>
     /// <param name="gameVersion">Game version for compatibility.</param>
     /// <param name="lobbyType">Type of lobby.</param>
-    /// <returns>Task containing the lobby ID and name if successful, null on failure.</returns>
+    /// <returns>Task containing the lobby code, lobby name, and host discovery token if successful.</returns>
     public async Task<(string? lobbyCode, string? lobbyName, string? hostDiscoveryToken)> CreateLobbyAsync(
         int hostPort,
         bool isPublic = true,
@@ -155,7 +165,7 @@ internal class MmsClient {
                 Logger.Info($"MmsClient: Creating lobby on port {hostPort}, Local IP: {localIp}");
 
                 var json = new string(buffer, 0, length);
-                var response = await PostJsonAsync($"{BaseUrl}/lobby", json);
+                var response = await PostJsonAsync($"{_baseUrl}/lobby", json);
                 if (response == null) return (null, null, null);
 
                 var lobbyId = ExtractJsonValueSpan(response.AsSpan(), "connectionData");
@@ -201,7 +211,7 @@ internal class MmsClient {
             var json =
                 $"{{\"ConnectionData\":\"{steamLobbyId}\",\"IsPublic\":{(isPublic ? "true" : "false")},\"GameVersion\":\"{gameVersion}\",\"LobbyType\":\"steam\"}}";
 
-            var response = await PostJsonAsync($"{BaseUrl}/lobby", json);
+            var response = await PostJsonAsync($"{_baseUrl}/lobby", json);
             if (response == null) return null;
 
             var lobbyId = ExtractJsonValueSpan(response.AsSpan(), "connectionData");
@@ -237,7 +247,7 @@ internal class MmsClient {
     /// <returns>Task containing list of public lobby info, or null on failure.</returns>
     public async Task<List<PublicLobbyInfo>?> GetPublicLobbiesAsync(PublicLobbyType? lobbyType = null) {
         try {
-            var url = $"{BaseUrl}/lobbies";
+            var url = $"{_baseUrl}/lobbies";
             if (lobbyType != null) {
                 url += $"?type={lobbyType.ToString().ToLower()}";
             }
@@ -297,7 +307,7 @@ internal class MmsClient {
 
         try {
             // Send DELETE request to remove lobby from MMS (run on background thread)
-            Task.Run(async () => await DeleteRequestAsync($"{BaseUrl}/lobby/{_hostToken}")).Wait(HttpTimeoutMs);
+            Task.Run(async () => await DeleteRequestAsync($"{_baseUrl}/lobby/{_hostToken}")).Wait(HttpTimeoutMs);
             Logger.Info($"MmsClient: Closed lobby {CurrentLobbyId}");
         } catch (Exception ex) {
             Logger.Warn($"MmsClient: Failed to close lobby: {ex.Message}");
@@ -322,7 +332,7 @@ internal class MmsClient {
     ) {
         try {
             var jsonRequest = $"{{\"ClientIp\":null,\"ClientPort\":{clientPort}}}";
-            var response = await PostJsonAsync($"{BaseUrl}/lobby/{lobbyId}/join", jsonRequest);
+            var response = await PostJsonAsync($"{_baseUrl}/lobby/{lobbyId}/join", jsonRequest);
 
             if (response == null) return null;
 
@@ -390,7 +400,7 @@ internal class MmsClient {
 
         try {
             // Convert http:// to ws://
-            var wsUrl = BaseUrl.Replace("http://", "ws://").Replace("https://", "wss://");
+            var wsUrl = _baseUrl.Replace("http://", "ws://").Replace("https://", "wss://");
             var uri = new Uri($"{wsUrl}/ws/{_hostToken}");
 
             await _hostWebSocket.ConnectAsync(uri, _webSocketCts.Token);
@@ -469,7 +479,7 @@ internal class MmsClient {
 
         try {
             // Send empty JSON body - just need to hit the endpoint (run on background thread)
-            Task.Run(async () => await PostJsonBytesAsync($"{BaseUrl}/lobby/heartbeat/{_hostToken}", EmptyJsonBytes))
+            Task.Run(async () => await PostJsonBytesAsync($"{_baseUrl}/lobby/heartbeat/{_hostToken}", EmptyJsonBytes))
                 .Wait(HttpTimeoutMs);
         } catch (Exception ex) {
             Logger.Warn($"MmsClient: Heartbeat failed: {ex.Message}");
@@ -626,29 +636,30 @@ internal class MmsClient {
     /// Performs UDP port discovery by sending packets and polling the TCP verification endpoint.
     /// Returns the discovered external port, or null if discovery times out.
     /// </summary>
+    /// <param name="token">Discovery token issued by MMS for this host or client session.</param>
+    /// <param name="sendRawAction">Callback that sends the raw token bytes through the caller's pre-bound UDP socket.</param>
+    /// <returns>The discovered external port, or null if discovery fails or times out.</returns>
     public async Task<int?> PerformDiscoveryAsync(
         string token,
-        string mmsHost,
         Action<byte[], IPEndPoint> sendRawAction
     ) {
-        if (!IPAddress.TryParse(mmsHost, out var mmsAddress)) {
-            Logger.Error($"Invalid MMS host address: {mmsHost}");
+        if (_discoveryEndpoint is null) {
+            Logger.Error("MmsClient: MMS URL must use a direct IP address for UDP discovery");
             return null;
         }
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
 
         var tokenBytes = Encoding.UTF8.GetBytes(token);
-        var mmsDiscoveryEndpoint = new IPEndPoint(mmsAddress, DiscoveryPort);
         var encodedToken = Uri.EscapeDataString(token);
 
         // Send UDP packets in background until discovery succeeds or times out
-        var udpTask = SendDiscoveryPacketsAsync(tokenBytes, mmsDiscoveryEndpoint, sendRawAction, cts.Token);
+        var udpTask = SendDiscoveryPacketsAsync(tokenBytes, _discoveryEndpoint, sendRawAction, cts.Token);
 
         try {
             while (!cts.Token.IsCancellationRequested) {
                 var response = await PostJsonAsync(
-                    $"{BaseUrl}/lobby/discovery/verify/{encodedToken}",
+                    $"{_baseUrl}/lobby/discovery/verify/{encodedToken}",
                     EmptyJsonBody
                 );
 
@@ -711,7 +722,7 @@ internal class MmsClient {
 /// </summary>
 public record PublicLobbyInfo(
     // IP:Port for Matchmaking, Steam lobby ID for Steam
-    string ConnectionData, 
+    string ConnectionData,
     string Name,
     PublicLobbyType LobbyType,
     string LobbyCode

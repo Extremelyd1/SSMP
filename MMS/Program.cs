@@ -3,11 +3,11 @@ using System.Net.WebSockets;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
+using System.Threading.RateLimiting;
 using JetBrains.Annotations;
-using MMS.Services;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.HttpOverrides;
-using System.Threading.RateLimiting;
+using MMS.Services;
 
 namespace MMS;
 
@@ -19,7 +19,7 @@ public class Program {
     /// <summary>
     /// Whether we are running a development environment.
     /// </summary>
-    private static bool IsDevelopment { get; set; }
+    internal static bool IsDevelopment { get; private set; }
 
     /// <summary>
     /// The logger for logging information to the console.
@@ -36,10 +36,10 @@ public class Program {
 
         builder.Logging.ClearProviders();
         builder.Logging.AddSimpleConsole(options => {
-                options.SingleLine = true;
-                options.IncludeScopes = false;
-                options.TimestampFormat = "HH:mm:ss ";
-            }
+            options.SingleLine = true;
+            options.IncludeScopes = false;
+            options.TimestampFormat = "HH:mm:ss ";
+        }
         );
 
         builder.Services.AddSingleton<LobbyService>();
@@ -48,11 +48,11 @@ public class Program {
         builder.Services.AddHostedService<UdpDiscoveryService>();
 
         builder.Services.Configure<ForwardedHeadersOptions>(options => {
-                options.ForwardedHeaders =
-                    ForwardedHeaders.XForwardedFor |
-                    ForwardedHeaders.XForwardedHost |
-                    ForwardedHeaders.XForwardedProto;
-            }
+            options.ForwardedHeaders =
+                ForwardedHeaders.XForwardedFor |
+                ForwardedHeaders.XForwardedHost |
+                ForwardedHeaders.XForwardedProto;
+        }
         );
 
         if (IsDevelopment) {
@@ -64,49 +64,51 @@ public class Program {
         }
 
         builder.Services.AddRateLimiter(options => {
-                options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-                options.OnRejected = async (context, token) => {
-                    await context.HttpContext.Response.WriteAsJsonAsync(
-                        new ErrorResponse("Too many requests. Please try again later."), cancellationToken: token
-                    );
-                };
-
-                options.AddPolicy(
-                    "create", context =>
-                        RateLimitPartition.GetFixedWindowLimiter(
-                            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                            factory: _ => new FixedWindowRateLimiterOptions {
-                                PermitLimit = 5,
-                                Window = TimeSpan.FromSeconds(30),
-                                QueueLimit = 0
-                            }
-                        )
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.OnRejected = async (context, token) => {
+                // The current client treats 429s as generic failures.
+                // Keep this response stable until the client adds explicit rate-limit handling.
+                await context.HttpContext.Response.WriteAsJsonAsync(
+                    new ErrorResponse("Too many requests. Please try again later."), cancellationToken: token
                 );
+            };
 
-                options.AddPolicy(
-                    "search", context =>
-                        RateLimitPartition.GetFixedWindowLimiter(
-                            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                            factory: _ => new FixedWindowRateLimiterOptions {
-                                PermitLimit = 10,
-                                Window = TimeSpan.FromSeconds(10),
-                                QueueLimit = 0
-                            }
-                        )
-                );
+            options.AddPolicy(
+                "create", context =>
+                    RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                        factory: _ => new FixedWindowRateLimiterOptions {
+                            PermitLimit = 5,
+                            Window = TimeSpan.FromSeconds(30),
+                            QueueLimit = 0
+                        }
+                    )
+            );
 
-                options.AddPolicy(
-                    "join", context =>
-                        RateLimitPartition.GetFixedWindowLimiter(
-                            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                            factory: _ => new FixedWindowRateLimiterOptions {
-                                PermitLimit = 5,
-                                Window = TimeSpan.FromSeconds(30),
-                                QueueLimit = 0
-                            }
-                        )
-                );
-            }
+            options.AddPolicy(
+                "search", context =>
+                    RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                        factory: _ => new FixedWindowRateLimiterOptions {
+                            PermitLimit = 10,
+                            Window = TimeSpan.FromSeconds(10),
+                            QueueLimit = 0
+                        }
+                    )
+            );
+
+            options.AddPolicy(
+                "join", context =>
+                    RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                        factory: _ => new FixedWindowRateLimiterOptions {
+                            PermitLimit = 5,
+                            Window = TimeSpan.FromSeconds(30),
+                            QueueLimit = 0
+                        }
+                    )
+            );
+        }
         );
 
         var app = builder.Build();
@@ -164,10 +166,10 @@ public class Program {
         }
 
         builder.WebHost.ConfigureKestrel(s => {
-                s.ListenAnyIP(
-                    5000, options => { options.UseHttps(x509); }
-                );
-            }
+            s.ListenAnyIP(
+                5000, options => { options.UseHttps(x509); }
+            );
+        }
         );
 
         return true;
@@ -326,7 +328,9 @@ public class Program {
 
     /// <summary>
     /// Returns the discovered external port when ready.
-    /// The client owns the retry loop and polls this endpoint until discovery completes.
+    /// Joining clients do not maintain a WebSocket to MMS, so they poll this endpoint
+    /// until discovery completes.
+    /// Once discovery succeeds, the host is notified via WebSocket if one is connected.
     /// </summary>
     private static async Task<IResult> VerifyDiscovery(
         string token,
@@ -460,8 +464,8 @@ public class Program {
                 : $"[Redacted]:{request.ClientPort} -> [Redacted]"
         );
 
-        /* Host notification is now delayed until VerifyDiscovery is called by the client */
-        /* This ensures the host gets the actual external port for hole-punching */
+        /* Host notification is delayed until VerifyDisco   very returns the NAT-mapped port. */
+        /* The host is then notified over WebSocket with the externally visible endpoint. */
 
         // Fallback to queue for polling (legacy clients)
         lobby.PendingClients.Enqueue(
@@ -530,6 +534,7 @@ public class Program {
     /// <param name="HostToken">Secret token for host operations.</param>
     /// <param name="LobbyName">Name for the lobby.</param>
     /// <param name="LobbyCode">Human-readable invite code.</param>
+    /// <param name="HostDiscoveryToken">Discovery token used to confirm the host's external UDP port.</param>
     [UsedImplicitly]
     internal record CreateLobbyResponse(
         string ConnectionData,

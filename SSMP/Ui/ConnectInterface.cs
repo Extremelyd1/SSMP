@@ -1624,7 +1624,8 @@ internal class ConnectInterface {
     /// <param name="fallbackAddress">Optional fallback address (IP:Port) to attempt on failure.</param>
     public void OnFailedConnect(ConnectionFailedResult result, string? fallbackAddress = null) {
         // If we have a fallback connection to try, we do so now
-        if (!string.IsNullOrEmpty(fallbackAddress) && TryParseConnectionData(fallbackAddress, out var address, out var port)) {
+        if (!string.IsNullOrEmpty(fallbackAddress) &&
+            TryParseConnectionData(fallbackAddress, out var address, out var port)) {
             ShowFeedback(Color.yellow, "LAN failed, retrying Public...");
             Logger.Info($"ConnectInterface: LAN connection failed, retrying Public at {address}:{port}");
 
@@ -1655,7 +1656,7 @@ internal class ConnectInterface {
                 out username,
                 _feedbackHideCoroutine,
                 out var newCoroutine
-        )) {
+            )) {
             return true;
         }
 
@@ -1758,10 +1759,8 @@ internal class ConnectInterface {
 
         ShowFeedback(Color.yellow, "Mapping external port...");
 
-        var mmsHost = new Uri(MmsClient.BaseUrl).Host;
         var discoveryTask = MmsClient.PerformDiscoveryAsync(
             discoveryToken,
-            mmsHost,
             (data, endpoint) => { holePunchSocket.SendTo(data, endpoint); }
         );
 
@@ -1793,10 +1792,10 @@ internal class ConnectInterface {
         }
 
         ShowFeedback(Color.green, connectionInfo.Value.FeedbackMessage);
-        
+
         // Pass the pre-bound socket to the transport layer before connecting
         HolePunchEncryptedTransport.HolePunchSocket = holePunchSocket;
-        
+
         ConnectButtonPressed?.Invoke(
             connectionInfo.Value.PrimaryIp,
             connectionInfo.Value.PrimaryPort,
@@ -1809,17 +1808,17 @@ internal class ConnectInterface {
     /// <summary>
     /// Determines the optimal connection strategy (LAN first, then public).
     /// </summary>
-    private static ConnectionInfo? DetermineConnectionInfo(string publicConnectionData, string? lanConnectionData)
-    {
+    private static ConnectionInfo? DetermineConnectionInfo(string publicConnectionData, string? lanConnectionData) {
         // Public connection is required in all cases
         if (!TryParseConnectionData(publicConnectionData, out var publicIp, out var publicPort))
             return null;
 
         // Prefer LAN if available, using public as the fallback relay
         if (!string.IsNullOrEmpty(lanConnectionData) &&
-            TryParseConnectionData(lanConnectionData, out var lanIp, out var lanPort))
-        {
-            return new ConnectionInfo(lanIp, lanPort, $"{publicIp}:{publicPort}", $"Connecting to LAN {lanIp}:{lanPort}...");
+            TryParseConnectionData(lanConnectionData, out var lanIp, out var lanPort)) {
+            return new ConnectionInfo(
+                lanIp, lanPort, $"{publicIp}:{publicPort}", $"Connecting to LAN {lanIp}:{lanPort}..."
+            );
         }
 
         return new ConnectionInfo(publicIp, publicPort, null, $"Connecting to {publicIp}:{publicPort}...");
