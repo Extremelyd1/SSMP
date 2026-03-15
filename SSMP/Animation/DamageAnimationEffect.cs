@@ -1,7 +1,6 @@
 using SSMP.Internals;
 using UnityEngine;
 using UnityEngine.Events;
-using Logger = SSMP.Logging.Logger;
 
 namespace SSMP.Animation;
 
@@ -42,6 +41,10 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
         return damageHero;
     }
 
+    /// <summary>
+    /// Removes a <see cref="DamageHero"/> component from the given game object.
+    /// </summary>
+    /// <param name="target">The target game object to detatch the component to.</param>
     protected static void RemoveDamageHeroComponent(GameObject target) {
         var damageHero = target.GetComponent<DamageHero>();
         if (damageHero == null) {
@@ -51,6 +54,12 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
         Component.DestroyImmediate(damageHero);
     }
 
+    /// <summary>
+    /// Adds or removes a <see cref="DamageHero"/> component from the given game object,
+    /// depending on the PVP and team settings.
+    /// </summary>
+    /// <param name="target">The target game object to detatch the component to.</param>
+    /// <param name="damage">The number of mask of damage it should deal.</param>
     protected DamageHero? SetDamageHeroState(GameObject target, int damage = 1) {
         if (ServerSettings.IsPvpEnabled && ShouldDoDamage) {
             return AddDamageHeroComponent(target, damage);

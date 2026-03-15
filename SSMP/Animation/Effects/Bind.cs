@@ -25,6 +25,9 @@ internal class Bind : DamageAnimationEffect {
 
     public State BindState = State.Normal;
 
+    /// <summary>
+    /// Effect flags sent by the other player. Mostly items they have equipped.
+    /// </summary>
     protected class Flags {
         public bool BindBell = false;
         public bool BaseMirror = false;
@@ -49,8 +52,12 @@ internal class Bind : DamageAnimationEffect {
     /// </summary>
     protected static PlayMakerFSM? _bindFsm;
 
+    /// <summary>
+    /// Cached effects object for Hornet's bind ability.
+    /// </summary>
     protected static GameObject? _localBindEffects;
 
+    /// <inheritdoc/>
     public override void Play(GameObject playerObject, CrestType crestType, ushort playerId, byte[]? effectInfo) {
         Flags flags = new Flags(effectInfo);
 
@@ -123,7 +130,7 @@ internal class Bind : DamageAnimationEffect {
     /// Creates the bind bell
     /// </summary>
     private void StartBindBell(GameObject bindEffects) {
-        Logger.Debug("Starting bind bell");
+        Logger.Debug("Starting warding bell");
         var bindBell = bindEffects.FindGameObjectInChildren(BIND_BELL_NAME);
         
         if (bindBell == null) {
@@ -131,7 +138,7 @@ internal class Bind : DamageAnimationEffect {
             var localBell = allObjects.FirstOrDefault(o => o.name == "bind_bell_appear");
             
             if (localBell == null) {
-                Logger.Warn("Couldn't find bind bell object");
+                Logger.Warn("Couldn't find warding bell object");
                 return;
             }
 
@@ -250,7 +257,9 @@ internal class Bind : DamageAnimationEffect {
         silkAntic.SetActive(true);
     }
 
-
+    /// <summary>
+    /// Picks and plays a Shaman bind animation
+    /// </summary>
     private bool PickShamanAnimation(GameObject playerObject, GameObject bindEffects, Flags flags) {
         if (BindState == State.Normal) {
             PlayShamanFall(bindEffects);
@@ -283,6 +292,9 @@ internal class Bind : DamageAnimationEffect {
         shamanAntic.SetActive(true);
     }
 
+    /// <summary>
+    /// Plays the Shaman Crest 'failed to bind' animation
+    /// </summary>
     private void PlayShamanCancel(GameObject playerObject, GameObject bindEffects) {
         Logger.Debug("Playing Shaman Crest bind cancel/fail animation");
         var shamanAntic = bindEffects.FindGameObjectInChildren("Shaman_Bind_antic_silk");
@@ -401,7 +413,10 @@ internal class Bind : DamageAnimationEffect {
 
         return obj;
     }
-
+    
+    /// <summary>
+    /// Turns off all bind effects
+    /// </summary>
     public static void ForceStopAllEffects(GameObject bindEffects) {
         BindBurst.Instance.StopBindBell(bindEffects);
 

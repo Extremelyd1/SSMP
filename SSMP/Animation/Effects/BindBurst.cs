@@ -12,14 +12,24 @@ using Object = UnityEngine.Object;
 
 namespace SSMP.Animation.Effects;
 
+/// <summary>
+/// Class for the animation effect of a bind (healing) finishing.
+/// </summary>
 internal class BindBurst : Bind {
     /// <summary>
     /// Static instance for access by multiple animation clips in <see cref="AnimationManager"/>.
     /// </summary>
     private static BindBurst? _instance;
+
     /// <inheritdoc cref="_instance" />
     public static BindBurst Instance => _instance ??= new BindBurst();
+
+    /// <summary>
+    /// A set of players who recently binded while maggoted
+    /// </summary>
     public static HashSet<ushort> MaggotedPlayers = new HashSet<ushort>();
+
+    /// <inheritdoc/>
     public override void Play(GameObject playerObject, CrestType crestType, ushort playerId, byte[]? effectInfo) {
         // Set maggot info
         Flags flags = new Flags(effectInfo);
@@ -38,6 +48,7 @@ internal class BindBurst : Bind {
         // Stop regardless of if its on or not
         StopBindBell(bindEffects);
 
+        // Play crest-specific animations
         switch (crestType) {
             case CrestType.Beast:
                 if (!flags.Maggoted) {
@@ -71,13 +82,8 @@ internal class BindBurst : Bind {
         var maggotAudio = GetOrFindBindFsm().GetFirstAction<PlayAudioEvent>("Maggoted?");
 
         EffectUtils.SpawnGlobalPoolObject(maggotBurst, bindEffects.transform, 5f);
-        //if (maggotBurst != null) {
-            //maggotBurst.gameObject.Value.Spawn(bindEffects.transform, Vector3.zero);
-        //}
         EffectUtils.SpawnGlobalPoolObject(maggotFlash, bindEffects.transform, 5f);
-        //if (maggotFlash != null) {
-            //maggotFlash.gameObject.Value.Spawn(bindEffects.transform, Vector3.zero);
-        //}
+
         if (maggotAudio != null) {
             PlaySound(playerObject, maggotAudio);
         }
@@ -113,10 +119,12 @@ internal class BindBurst : Bind {
     /// Adds a damage component if appropriate.
     /// </summary>
     private void PlayMirror(GameObject playerObject, bool upgraded) {
-        Logger.Info("Playing Claw Mirror Animation");
+        // Get claw prefabs
+        Logger.Debug("Playing Claw Mirror Animation");
         var regularClaw = GetOrFindBindFsm().GetAction<SetGameObject>("Dazzle?", 3)!;
         var upgradedClaw = GetOrFindBindFsm().GetAction<SetGameObject>("Dazzle?", 4)!;
 
+        // Create the claw
         GameObject? claw;
         if (upgraded) claw = PrepareMirror(playerObject, upgradedClaw);
         else claw = PrepareMirror(playerObject, regularClaw);
@@ -127,6 +135,7 @@ internal class BindBurst : Bind {
 
         claw.SetActive(true);
         
+        // Add hitbox if appropriate
         if (ServerSettings.IsPvpEnabled && ShouldDoDamage) {
             var damagerParent = claw.FindGameObjectInChildren("Trobbio_dazzle_flash");
             var damager = damagerParent?.FindGameObjectInChildren("hero_dazzle_flash_damager");
@@ -147,9 +156,7 @@ internal class BindBurst : Bind {
     /// </summary>
     public void StopBindBell(GameObject bindEffects) {
         var bindBell = bindEffects.FindGameObjectInChildren(BIND_BELL_NAME);
-        if (bindBell != null) {
-            bindBell.SetActive(false);
-        }
+        bindBell?.SetActive(false);
     }
 
     /// <summary>
@@ -172,13 +179,13 @@ internal class BindBurst : Bind {
     }
 
     /// <summary>
-    /// Plays the Witch Crest tentancles animation
+    /// Plays the Witch Crest tentancles animation.
     /// Yes it's called Tentancles internally. Thanks TC.
     /// </summary>
     private void PlayWitchEnd(GameObject bindEffects) {
         var witchBind = bindEffects.FindGameObjectInChildren("Witch Bind");
         if (witchBind == null) {
-            var localWitchBind = _localBindEffects.FindGameObjectInChildren("Witch Bind");
+            var localWitchBind = _localBindEffects?.FindGameObjectInChildren("Witch Bind");
             if (localWitchBind == null) {
                 Logger.Warn("Unable to find local Witch Bind object");
                 return;
@@ -204,7 +211,7 @@ internal class BindBurst : Bind {
     }
 
     /// <summary>
-    /// Adds hero damage components to Witch Crest bind if PVP is on
+    /// Adds or removes hero damage components from Witch Crest bind
     /// </summary>
     private void SetWitchDamagers(GameObject witchBind) {
         for (var i = 0; i < witchBind.transform.childCount; i++) {
