@@ -149,8 +149,6 @@ internal class PlayerManager {
         // Create a player container prefab, used to spawn players
         _playerContainerPrefab = new GameObject(PlayerContainerPrefabName);
 
-        _playerContainerPrefab.AddComponent<Testing.PlayerAnimation>();
-
         _playerContainerPrefab.AddComponent<PredictiveInterpolation>();
 
         var playerPrefab = new GameObject(
