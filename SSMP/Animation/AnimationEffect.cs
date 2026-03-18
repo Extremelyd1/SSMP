@@ -43,14 +43,31 @@ internal abstract class AnimationEffect : IAnimationEffect {
         directionVar.Value = direction;
     }
 
+
+    /// <summary>
+    /// Plays a one-shot audio clip at the specified GameObject source.
+    /// </summary>
+    /// <param name="source">The object to play the sound at.</param>
+    /// <param name="audio">The audio clip to be played.</param>
     protected static void PlaySound(GameObject source, AudioPlayerOneShotSingle audio) {
         AudioUtil.PlayAudioOneShotSingleAtPlayerObject(audio, source);
     }
 
+    /// <summary>
+    /// Plays a specified audio event at the specified GameObject source.
+    /// </summary>
+    /// <param name="source">The object to play the sound at.</param>
+    /// <param name="audio">The FSM action with the audio clip to be played.</param>
     protected static void PlaySound(GameObject source, PlayAudioEvent audio) {
         AudioUtil.PlayAudioEventAtPlayerObject(audio, source);
     }
 
+    /// <summary>
+    /// Plays a random sound effect at the specified GameObject source
+    /// </summary>
+    /// <param name="source">The object to play the sound at.</param>
+    /// <param name="getAction">The FSM action with the audio table.</param>
+    /// <param name="playAction">The FSM action with the audio playing function.</param>
     protected static void PlaySound(GameObject source, GetRandomAudioClipFromTable getAction, PlayAudioEvent playAction) {
         AudioUtil.PlayAudioEventWithRandomAudioClipFromTableAtPlayerObject(
                 playAction,

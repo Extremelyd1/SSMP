@@ -343,7 +343,6 @@ internal class Bind : DamageAnimationEffect {
             (byte) ((ToolItemManager.IsToolEquipped("Reserve Bind") && !ToolItemManager.GetToolByName("Reserve Bind").IsEmpty) ? 1 : 0),
             (byte) (HeroController.instance.cState.isMaggoted ? 1 : 0)
         };
-        Logger.Info(HeroController.instance.cState.isMaggoted ? "MAGGOTS" : "NO MAGGOTS");
         return effectInfo;
     }
 

@@ -25,7 +25,7 @@ internal class AnimationManager {
     /// Whether to log debug messages about animations. For debugging purposes this can be enabled so that all
     /// animation events are logged.
     /// </summary>
-    private static bool _debugLogAnimations = true;
+    private static bool _debugLogAnimations = false;
     
     /// <summary>
     /// The distance threshold for playing certain effects.
