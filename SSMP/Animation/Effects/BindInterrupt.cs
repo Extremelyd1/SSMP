@@ -108,7 +108,7 @@ internal class BindInterrupt : Bind {
         // Remove camera control and haze
         var shaker = bindBell.GetComponentInChildren<CameraControlAnimationEvents>();
         if (shaker != null) {
-            Component.DestroyImmediate(shaker);
+            Object.DestroyImmediate(shaker);
         }
 
         var haze = bindBell.FindGameObjectInChildren("haze2 (1)");
