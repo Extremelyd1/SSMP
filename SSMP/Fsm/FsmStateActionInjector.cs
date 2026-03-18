@@ -5,7 +5,7 @@ using SSMP.Logging;
 
 namespace SSMP.Fsm;
 
-internal class FsmStateActionInjector : FsmStateAction {
+internal sealed class FsmStateActionInjector : FsmStateAction {
     private static Action? _onUninject;
     private Action<PlayMakerFSM>? _onStateEnter;
     private FsmStateActionInjector(FsmState state, Action<PlayMakerFSM> onEnter) {

@@ -860,7 +860,6 @@ internal class AnimationManager {
             animationEffect.Play(
                 playerObject,
                 crestType,
-                id,
                 effectInfo
             );
         }

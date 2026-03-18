@@ -23,7 +23,7 @@ internal class DashSlashAntic : DamageAnimationEffect {
     }
 
     /// <inheritdoc/>
-    public override void Play(GameObject playerObject, CrestType crestType, ushort playerId, byte[]? effectInfo) {
+    public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
         var sprintFsm = HeroController.instance.sprintFSM;
         PlayAudioEvent playAudioAction;
         switch (crestType) {

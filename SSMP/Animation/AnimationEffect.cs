@@ -16,7 +16,7 @@ internal abstract class AnimationEffect : IAnimationEffect {
     protected ServerSettings ServerSettings = null!;
 
     /// <inheritdoc/>
-    public abstract void Play(GameObject playerObject, CrestType crestType, ushort playerId, byte[]? effectInfo);
+    public abstract void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo);
 
     /// <inheritdoc/>
     public abstract byte[]? GetEffectInfo();

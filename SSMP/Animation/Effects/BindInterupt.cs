@@ -19,7 +19,7 @@ internal class BindInterupt : Bind {
     public static BindInterupt Instance => _instance ??= new BindInterupt();
 
     /// <inheritdoc/>
-    public override void Play(GameObject playerObject, CrestType crestType, ushort playerId, byte[]? effectInfo) {
+    public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
         Flags flags = new Flags(effectInfo);
 
         if (!CreateObjects(playerObject, out var bindEffects)) {

@@ -22,15 +22,17 @@ internal class BindBurst : Bind {
     /// <summary>
     /// A set of players who recently binded while maggoted
     /// </summary>
-    public static HashSet<ushort> MaggotedPlayers = new HashSet<ushort>();
+    public static readonly HashSet<int> MaggotedPlayers = new();
 
     /// <inheritdoc/>
-    public override void Play(GameObject playerObject, CrestType crestType, ushort playerId, byte[]? effectInfo) {
+    public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
         // Set maggot info
-        Flags flags = new Flags(effectInfo);
-        if (MaggotedPlayers.Contains(playerId)) {
+        var flags = new Flags(effectInfo);
+
+        var playerObjectIdentifier = playerObject.GetInstanceID();
+        if (MaggotedPlayers.Contains(playerObjectIdentifier)) {
             flags.Maggoted = true;
-            MaggotedPlayers.Remove(playerId);
+            MaggotedPlayers.Remove(playerObjectIdentifier);
         }
 
         if (!CreateObjects(playerObject, out var bindEffects)) {
@@ -40,7 +42,7 @@ internal class BindBurst : Bind {
         if (flags.BaseMirror || flags.UpgradedMirror) PlayMirror(playerObject, flags.UpgradedMirror);
         if (flags.Maggoted) PlayMaggotCleanse(bindEffects, playerObject);
 
-        // Stop regardless of if its on or not
+        // Stop regardless of if it's on or not
         StopBindBell(bindEffects);
 
         // Play crest-specific animations
@@ -60,8 +62,6 @@ internal class BindBurst : Bind {
             case CrestType.Shaman:
                 PlayShamanEnd(bindEffects);
                 break;
-            default:
-                break;
         }
 
         PlayNormalEnd(bindEffects);
@@ -70,7 +70,7 @@ internal class BindBurst : Bind {
     /// <summary>
     /// Plays the maggot cleanse animation
     /// </summary>
-    protected void PlayMaggotCleanse(GameObject bindEffects, GameObject playerObject) {
+    private void PlayMaggotCleanse(GameObject bindEffects, GameObject playerObject) {
         Logger.Info("Playing Maggot Animation");
         var maggotBurst = GetOrFindBindFsm().GetAction<SpawnObjectFromGlobalPool>("Maggoted?", 2);
         var maggotFlash = GetOrFindBindFsm().GetAction<SpawnObjectFromGlobalPool>("Maggoted?", 4);

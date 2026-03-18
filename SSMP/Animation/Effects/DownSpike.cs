@@ -11,7 +11,7 @@ namespace SSMP.Animation.Effects;
 /// </summary>
 internal class DownSpike : SlashBase {
     /// <inheritdoc/>
-    public override void Play(GameObject playerObject, CrestType crestType, ushort playerId, byte[]? effectInfo) {
+    public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
         if (effectInfo == null || effectInfo.Length < 1) {
             Logger.Error("Could not get null or empty effect info for SlashBase");
             return;

@@ -31,15 +31,16 @@ internal class Bind : DamageAnimationEffect {
     protected static GameObject? LocalBindEffects;
 
     /// <inheritdoc/>
-    public override void Play(GameObject playerObject, CrestType crestType, ushort playerId, byte[]? effectInfo) {
+    public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
         var flags = new Flags(effectInfo);
 
         // The maggot state is cleared by the time the bind burst is sent.
         // This method keeps track of it, although at a slight possible loss of consistancy
+        var playerObjectIdentifier = playerObject.GetInstanceID();
         if (flags.Maggoted && !(crestType == CrestType.Shaman && BindState == State.ShamanCancel)) {
-            BindBurst.MaggotedPlayers.Add(playerId);
+            BindBurst.MaggotedPlayers.Add(playerObjectIdentifier);
         } else {
-            BindBurst.MaggotedPlayers.Remove(playerId);
+            BindBurst.MaggotedPlayers.Remove(playerObjectIdentifier);
         }
 
         var randomClipAction = GetOrFindBindFsm().GetFirstAction<GetRandomAudioClipFromTable>("Bind Start");

@@ -9,7 +9,7 @@ namespace SSMP.Animation.Effects;
 /// </summary>
 internal class DashSlashReaper : SlashBase {
     /// <inheritdoc/>
-    public override void Play(GameObject playerObject, CrestType crestType, ushort playerId, byte[]? effectInfo) {
+    public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
         // Call the base function with the correct parameters
         Play(playerObject, crestType, effectInfo, SlashType.Dash);
         
