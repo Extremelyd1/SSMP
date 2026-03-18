@@ -1,12 +1,6 @@
-using System.Collections.Concurrent;
 using System.Net.WebSockets;
 
-namespace MMS.Models;
-
-/// <summary>
-/// Client waiting for NAT hole-punch.
-/// </summary>
-public record PendingClient(string ClientIp, int ClientPort, DateTime RequestedAt);
+namespace MMS.Models.Lobby;
 
 /// <summary>
 /// Game lobby. ConnectionData serves as both identifier and connection info.
@@ -19,7 +13,8 @@ public class Lobby(
     string lobbyName,
     string lobbyType = "matchmaking",
     string? hostLanIp = null,
-    bool isPublic = true
+    bool isPublic = true,
+    string? hostDiscoveryToken = null
 ) {
     /// <summary>Stable connection data used as the lobby identity and storage key.</summary>
     public string ConnectionData { get; } = connectionData;
@@ -45,9 +40,6 @@ public class Lobby(
     /// <summary>Timestamp of the last heartbeat from the host.</summary>
     public DateTime LastHeartbeat { get; set; } = DateTime.UtcNow;
 
-    /// <summary>Queue of clients waiting for NAT hole-punch.</summary>
-    public ConcurrentQueue<PendingClient> PendingClients { get; } = new();
-
     /// <summary>True if no heartbeat received in the last 60 seconds.</summary>
     public bool IsDead => DateTime.UtcNow - LastHeartbeat > TimeSpan.FromSeconds(60);
 
@@ -55,7 +47,7 @@ public class Lobby(
     public int? ExternalPort { get; internal set; }
 
     /// <summary>Token used for UDP port discovery.</summary>
-    public string? HostDiscoveryToken { get; init; }
+    public string? HostDiscoveryToken { get; } = hostDiscoveryToken;
 
     /// <summary>Connection data that should be advertised to clients.</summary>
     public string AdvertisedConnectionData {

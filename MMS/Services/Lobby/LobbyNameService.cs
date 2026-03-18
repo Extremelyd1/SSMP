@@ -4,7 +4,7 @@ using System.Resources;
 using System.Runtime.Serialization;
 using System.Text.Json;
 
-namespace MMS.Services;
+namespace MMS.Services.Lobby;
 
 /// <summary>
 /// Lobby name providing service that randomly generates lobby names from words in an embedded JSON.
@@ -42,11 +42,8 @@ public class LobbyNameService {
         var fileString = streamReader.ReadToEnd();
 
         var data = JsonSerializer.Deserialize<LobbyNameData>(fileString);
-        if (data == null) {
-            throw new SerializationException("Could not deserialize lobby name data from embedded resource");
-        }
 
-        _lobbyNameData = data;
+        _lobbyNameData = data ?? throw new SerializationException("Could not deserialize lobby name data from embedded resource");
     }
 
     /// <summary>
