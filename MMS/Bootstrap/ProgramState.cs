@@ -14,5 +14,8 @@ internal static class ProgramState {
     /// </summary>
     public static ILogger Logger { get; internal set; } = null!;
 
+    /// <summary>
+    /// Gets the fixed UDP port used for discovery packets.
+    /// </summary>
     public static int DiscoveryPort => 5001;
 }

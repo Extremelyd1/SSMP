@@ -17,9 +17,19 @@ namespace MMS.Services.Network;
 /// the hole-punch state machine for the corresponding host or client session.
 /// </remarks>
 public sealed class UdpDiscoveryService : BackgroundService {
+    /// <summary>
+    /// Service used to record discovered UDP ports and advance join session states.
+    /// </summary>
     private readonly JoinSessionService _joinSessionService;
+
+    /// <summary>
+    /// Logger instance for this service.
+    /// </summary>
     private readonly ILogger<UdpDiscoveryService> _logger;
 
+    /// <summary>
+    /// The fixed UDP port used for discovery packets.
+    /// </summary>
     private static readonly int Port = ProgramState.DiscoveryPort;
 
     /// <summary>
@@ -28,6 +38,11 @@ public sealed class UdpDiscoveryService : BackgroundService {
     /// </summary>
     private const int TokenByteLength = 32;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="UdpDiscoveryService"/> class.
+    /// </summary>
+    /// <param name="joinSessionService">Service used to record discovered UDP ports and advance join session states.</param>
+    /// <param name="logger">Logger instance for this service.</param>
     public UdpDiscoveryService(JoinSessionService joinSessionService, ILogger<UdpDiscoveryService> logger) {
         _joinSessionService = joinSessionService;
         _logger = logger;
@@ -89,6 +104,12 @@ public sealed class UdpDiscoveryService : BackgroundService {
     private static string FormatEndPoint(IPEndPoint remoteEndPoint) =>
         ProgramState.IsDevelopment ? remoteEndPoint.ToString() : "[Redacted]";
 
+    /// <summary>
+    /// Generates a short, non-reversible SHA-256 fingerprint for a session token.
+    /// Used for correlation in debug logs without exposing the full token.
+    /// </summary>
+    /// <param name="token">The token string whose fingerprint to generate.</param>
+    /// <returns>A 12-character hex string representing the fingerprint.</returns>
     private static string GetTokenFingerprint(string token) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)))[..12];
 }

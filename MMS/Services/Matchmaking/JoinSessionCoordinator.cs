@@ -10,12 +10,45 @@ namespace MMS.Services.Matchmaking;
 /// <summary>
 /// Coordinates join-session lifecycle, discovery routing, and NAT punch orchestration.
 /// </summary>
-public sealed class JoinSessionCoordinator(
-    JoinSessionStore store,
-    JoinSessionMessenger messenger,
-    LobbyService lobbyService,
-    ILogger<JoinSessionCoordinator> logger
-) {
+public sealed class JoinSessionCoordinator {
+    /// <summary>
+    /// Thread-safe in-memory store for active join sessions and discovery tokens.
+    /// </summary>
+    private readonly JoinSessionStore _store;
+
+    /// <summary>
+    /// Service for sending WebSocket and HTTP messages to clients and hosts.
+    /// </summary>
+    private readonly JoinSessionMessenger _messenger;
+
+    /// <summary>
+    /// Service for managing lobby state and metadata.
+    /// </summary>
+    private readonly LobbyService _lobbyService;
+
+    /// <summary>
+    /// Logger instance for this coordinator.
+    /// </summary>
+    private readonly ILogger<JoinSessionCoordinator> _logger;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="JoinSessionCoordinator"/> class.
+    /// </summary>
+    /// <param name="store">Thread-safe in-memory store for active join sessions.</param>
+    /// <param name="messenger">Service for sending session-related messages.</param>
+    /// <param name="lobbyService">Service for managing lobby state.</param>
+    /// <param name="logger">Logger instance for this coordinator.</param>
+    public JoinSessionCoordinator(
+        JoinSessionStore store,
+        JoinSessionMessenger messenger,
+        LobbyService lobbyService,
+        ILogger<JoinSessionCoordinator> logger
+    ) {
+        _store = store;
+        _messenger = messenger;
+        _lobbyService = lobbyService;
+        _logger = logger;
+    }
     /// <summary>
     /// Allocates a new join session for a client attempting to connect to <paramref name="lobby"/>.
     /// </summary>
@@ -35,8 +68,8 @@ public sealed class JoinSessionCoordinator(
             ClientDiscoveryToken = TokenGenerator.GenerateToken(32)
         };
 
-        store.Add(session);
-        store.UpsertDiscoveryToken(
+        _store.Add(session);
+        _store.UpsertDiscoveryToken(
             session.ClientDiscoveryToken,
             new DiscoveryTokenMetadata { JoinId = session.JoinId }
         );
@@ -53,7 +86,7 @@ public sealed class JoinSessionCoordinator(
     /// <param name="joinId">The join session identifier.</param>
     /// <returns>The session, or <see langword="null"/> if not found or expired.</returns>
     public JoinSession? GetJoinSession(string joinId) {
-        if (!store.TryGet(joinId, out var session) || session == null)
+        if (!_store.TryGet(joinId, out var session) || session == null)
             return null;
 
         if (session.ExpiresAtUtc >= DateTime.UtcNow)
@@ -88,10 +121,10 @@ public sealed class JoinSessionCoordinator(
     /// <param name="port">The external port observed by the server.</param>
     /// <param name="cancellationToken">Propagates notification that the operation should be cancelled.</param>
     public async Task SetDiscoveredPortAsync(string token, int port, CancellationToken cancellationToken = default) {
-        if (!store.TryGetDiscoveryMetadata(token, out var metadata) || metadata == null)
+        if (!_store.TryGetDiscoveryMetadata(token, out var metadata) || metadata == null)
             return;
 
-        if (!store.TrySetDiscoveredPort(token, port))
+        if (!_store.TrySetDiscoveredPort(token, port))
             return;
 
         if (metadata.HostConnectionData != null) {
@@ -108,7 +141,7 @@ public sealed class JoinSessionCoordinator(
     /// <see langword="null"/> if the port has not yet been recorded.
     /// </summary>
     /// <param name="token">The discovery token to query.</param>
-    public int? GetDiscoveredPort(string token) => store.GetDiscoveredPort(token);
+    public int? GetDiscoveredPort(string token) => _store.GetDiscoveredPort(token);
 
     /// <summary>
     /// Sends the <c>begin_client_mapping</c> message to the client identified by <paramref name="joinId"/>.
@@ -133,7 +166,7 @@ public sealed class JoinSessionCoordinator(
     public async Task<bool> SendHostRefreshRequestAsync(string joinId, CancellationToken cancellationToken) {
         var session = GetJoinSession(joinId);
         return session != null &&
-               await messenger.SendHostRefreshRequestAsync(joinId, session.LobbyConnectionData, cancellationToken);
+               await _messenger.SendHostRefreshRequestAsync(joinId, session.LobbyConnectionData, cancellationToken);
     }
 
     /// <summary>
@@ -153,13 +186,13 @@ public sealed class JoinSessionCoordinator(
         try {
             await JoinSessionMessenger.SendJoinFailedToClientAsync(session, reason, cancellationToken);
         } catch (Exception ex) when (IsSocketSendFailure(ex)) {
-            logger.LogDebug(ex, "Failed to notify join client for {JoinId}", joinId);
+            _logger.LogDebug(ex, "Failed to notify join client for {JoinId}", joinId);
         }
 
         try {
-            await messenger.SendJoinFailedToHostAsync(session.LobbyConnectionData, joinId, reason, cancellationToken);
+            await _messenger.SendJoinFailedToHostAsync(session.LobbyConnectionData, joinId, reason, cancellationToken);
         } catch (Exception ex) when (IsSocketSendFailure(ex)) {
-            logger.LogDebug(ex, "Failed to notify host about join failure for {JoinId}", joinId);
+            _logger.LogDebug(ex, "Failed to notify host about join failure for {JoinId}", joinId);
         }
 
         CleanupJoinSession(joinId);
@@ -175,11 +208,11 @@ public sealed class JoinSessionCoordinator(
     public void CleanupExpiredSessions() {
         var now = DateTime.UtcNow;
 
-        foreach (var joinId in store.GetExpiredJoinIds(now))
+        foreach (var joinId in _store.GetExpiredJoinIds(now))
             CleanupJoinSession(joinId);
 
-        foreach (var token in store.GetExpiredDiscoveryTokens(now.AddMinutes(-2)))
-            store.RemoveDiscoveryToken(token);
+        foreach (var token in _store.GetExpiredDiscoveryTokens(now.AddMinutes(-2)))
+            _store.RemoveDiscoveryToken(token);
     }
 
     /// <summary>
@@ -188,11 +221,11 @@ public sealed class JoinSessionCoordinator(
     /// </summary>
     /// <param name="lobby">The lobby being removed.</param>
     public void CleanupSessionsForLobby(_Lobby lobby) {
-        foreach (var joinId in store.GetJoinIdsForLobby(lobby.ConnectionData))
+        foreach (var joinId in _store.GetJoinIdsForLobby(lobby.ConnectionData))
             CleanupJoinSession(joinId);
 
         if (!string.IsNullOrEmpty(lobby.HostDiscoveryToken))
-            store.RemoveDiscoveryToken(lobby.HostDiscoveryToken);
+            _store.RemoveDiscoveryToken(lobby.HostDiscoveryToken);
     }
 
     /// <summary>
@@ -200,10 +233,10 @@ public sealed class JoinSessionCoordinator(
     /// This ensures the server can correlate the host's UDP packet with the correct lobby.
     /// </summary>
     private void RegisterHostDiscoveryTokenIfAbsent(_Lobby lobby) {
-        if (lobby.HostDiscoveryToken == null || store.ContainsDiscoveryToken(lobby.HostDiscoveryToken))
+        if (lobby.HostDiscoveryToken == null || _store.ContainsDiscoveryToken(lobby.HostDiscoveryToken))
             return;
 
-        store.UpsertDiscoveryToken(
+        _store.UpsertDiscoveryToken(
             lobby.HostDiscoveryToken,
             new DiscoveryTokenMetadata { HostConnectionData = lobby.ConnectionData }
         );
@@ -218,7 +251,7 @@ public sealed class JoinSessionCoordinator(
         int port,
         CancellationToken cancellationToken
     ) {
-        var lobby = lobbyService.GetLobby(lobbyConnectionData);
+        var lobby = _lobbyService.GetLobby(lobbyConnectionData);
         if (lobby == null) return;
 
         lobby.ExternalPort = port;
@@ -241,7 +274,7 @@ public sealed class JoinSessionCoordinator(
         session.ClientExternalPort = port;
         await JoinSessionMessenger.SendClientMappingReceivedAsync(session, port, cancellationToken);
 
-        var hostRefreshed = await messenger.SendHostRefreshRequestAsync(
+        var hostRefreshed = await _messenger.SendHostRefreshRequestAsync(
             joinId,
             session.LobbyConnectionData,
             cancellationToken
@@ -263,7 +296,7 @@ public sealed class JoinSessionCoordinator(
         string lobbyConnectionData,
         CancellationToken cancellationToken
     ) {
-        foreach (var joinId in store.GetJoinIdsForLobby(lobbyConnectionData))
+        foreach (var joinId in _store.GetJoinIdsForLobby(lobbyConnectionData))
             await TryStartJoinSessionAsync(joinId, cancellationToken);
     }
 
@@ -278,7 +311,7 @@ public sealed class JoinSessionCoordinator(
         var session = GetJoinSession(joinId);
         if (session?.ClientExternalPort == null) return;
 
-        var lobby = lobbyService.GetLobby(session.LobbyConnectionData);
+        var lobby = _lobbyService.GetLobby(session.LobbyConnectionData);
         if (lobby == null) {
             await FailJoinSessionAsync(joinId, "lobby_closed", cancellationToken);
             return;
@@ -331,7 +364,7 @@ public sealed class JoinSessionCoordinator(
                 return;
             }
         } catch (Exception ex) when (IsSocketSendFailure(ex)) {
-            logger.LogDebug(ex, "Failed to dispatch start_punch for join {JoinId}", joinId);
+            _logger.LogDebug(ex, "Failed to dispatch start_punch for join {JoinId}", joinId);
             await FailJoinSessionAsync(joinId, "host_unreachable", cancellationToken);
             return;
         }
@@ -344,9 +377,9 @@ public sealed class JoinSessionCoordinator(
     /// then performs a best-effort close of the client WebSocket.
     /// </summary>
     private void CleanupJoinSession(string joinId) {
-        if (!store.Remove(joinId, out var session) || session == null) return;
+        if (!_store.Remove(joinId, out var session) || session == null) return;
 
-        store.RemoveDiscoveryToken(session.ClientDiscoveryToken);
+        _store.RemoveDiscoveryToken(session.ClientDiscoveryToken);
 
         if (session.ClientWebSocket is { State: WebSocketState.Open } ws)
             _ = CloseJoinSocketAsync(ws, joinId);
@@ -362,7 +395,7 @@ public sealed class JoinSessionCoordinator(
             using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
             await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "join complete", timeoutCts.Token);
         } catch (Exception ex) when (IsSocketSendFailure(ex) || ex is OperationCanceledException) {
-            logger.LogDebug(ex, "Failed to close client join WebSocket for join {JoinId}", joinId);
+            _logger.LogDebug(ex, "Failed to close client join WebSocket for join {JoinId}", joinId);
         }
     }
 

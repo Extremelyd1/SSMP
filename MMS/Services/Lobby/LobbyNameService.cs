@@ -32,10 +32,16 @@ public class LobbyNameService {
     /// </summary>
     private readonly Random _random = new();
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="LobbyNameService"/> class.
+    /// Loads the lobby name data from the embedded JSON resource.
+    /// </summary>
+    /// <exception cref="MissingManifestResourceException">Thrown when the embedded JSON resource cannot be found.</exception>
+    /// <exception cref="SerializationException">Thrown when the JSON resource is malformed or empty.</exception>
     public LobbyNameService() {
         var resourceStream = Assembly.GetExecutingAssembly().GetManifestResourceStream(LobbyNameDataFilePath);
         if (resourceStream == null) {
-            throw new MissingManifestResourceException("Could not load lobby name data from embedded resource");
+            throw new MissingManifestResourceException($"Could not load lobby name data from embedded resource: {LobbyNameDataFilePath}");
         }
 
         using var streamReader = new StreamReader(resourceStream);

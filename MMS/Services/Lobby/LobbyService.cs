@@ -12,11 +12,39 @@ namespace MMS.Services.Lobby;
 /// NAT hole-punch coordination and join session management are delegated to
 /// <see cref="JoinSessionService"/>.
 /// </summary>
-public class LobbyService(LobbyNameService lobbyNameService) {
+public class LobbyService {
+    /// <summary>
+    /// The backing store for all active lobbies, keyed by their unique connection data.
+    /// </summary>
     private readonly ConcurrentDictionary<string, _Lobby> _lobbies = new();
+
+    /// <summary>
+    /// Map for looking up lobbies by their host authentication token.
+    /// </summary>
     private readonly ConcurrentDictionary<string, string> _tokenToConnectionData = new();
+
+    /// <summary>
+    /// Map for looking up lobbies by their short player-facing join code.
+    /// </summary>
     private readonly ConcurrentDictionary<string, string> _codeToConnectionData = new();
+
+    /// <summary>
+    /// Thread synchronization primitive for atomic lobby creation and cleanup.
+    /// </summary>
     private readonly Lock _createLobbyLock = new();
+
+    /// <summary>
+    /// Service used to generate random human-readable names for new lobbies.
+    /// </summary>
+    private readonly LobbyNameService _lobbyNameService;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="LobbyService"/> class.
+    /// </summary>
+    /// <param name="lobbyNameService">Service used to generate random human-readable names for new lobbies.</param>
+    public LobbyService(LobbyNameService lobbyNameService) {
+        _lobbyNameService = lobbyNameService;
+    }
 
     /// <summary>
     /// Creates and stores a new lobby.
@@ -50,7 +78,7 @@ public class LobbyService(LobbyNameService lobbyNameService) {
             if (_lobbies.TryGetValue(connectionData, out var existingLobby)) {
                 RemoveLobbyIndexes(existingLobby);
                 if (!string.IsNullOrEmpty(existingLobby.LobbyName))
-                    lobbyNameService.FreeLobbyName(existingLobby.LobbyName);
+                    _lobbyNameService.FreeLobbyName(existingLobby.LobbyName);
             }
 
             var lobbyCode = IsSteamLobby(lobbyType)
@@ -189,11 +217,13 @@ public class LobbyService(LobbyNameService lobbyNameService) {
         try {
             onRemoving?.Invoke(lobby);
         } catch (Exception ex) {
-            ProgramState.Logger.LogWarning(ex, "Lobby removal callback failed for {ConnectionData}", lobby.ConnectionData);
+            ProgramState.Logger.LogWarning(
+                ex, "Lobby removal callback failed for {ConnectionData}", lobby.ConnectionData
+            );
         } finally {
             _tokenToConnectionData.TryRemove(lobby.HostToken, out _);
             _codeToConnectionData.TryRemove(lobby.LobbyCode, out _);
-            lobbyNameService.FreeLobbyName(lobby.LobbyName);
+            _lobbyNameService.FreeLobbyName(lobby.LobbyName);
         }
 
         return true;

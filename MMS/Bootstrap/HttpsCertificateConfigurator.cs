@@ -7,11 +7,24 @@ namespace MMS.Bootstrap;
 /// Configures Kestrel HTTPS bindings from PEM certificate files in the working directory.
 /// </summary>
 internal static class HttpsCertificateConfigurator {
+    /// <summary>
+    /// The filename of the PEM-encoded certificate.
+    /// </summary>
     private const string CertFile = "cert.pem";
+
+    /// <summary>
+    /// The filename of the PEM-encoded private key.
+    /// </summary>
     private const string KeyFile = "key.pem";
 
+    /// <summary>
+    /// Static logger instance for the configurator.
+    /// </summary>
     private static readonly ILogger Logger;
 
+    /// <summary>
+    /// Initializes static members of the <see cref="HttpsCertificateConfigurator"/> class.
+    /// </summary>
     static HttpsCertificateConfigurator() {
         using var loggerFactory = LoggerFactory.Create(builder => builder.AddSimpleConsole(o => {
                     o.SingleLine = true;
@@ -94,7 +107,7 @@ internal static class HttpsCertificateConfigurator {
             var pkcs12 = ephemeralCertificate.Export(X509ContentType.Pkcs12);
             certificate = X509CertificateLoader.LoadPkcs12(
                 pkcs12,
-                password: (string?) null,
+                password: null,
                 X509KeyStorageFlags.PersistKeySet |
                 X509KeyStorageFlags.MachineKeySet |
                 X509KeyStorageFlags.Exportable

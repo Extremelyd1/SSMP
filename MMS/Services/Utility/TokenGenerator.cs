@@ -6,7 +6,11 @@ namespace MMS.Services.Utility;
 /// Generates random tokens and lobby codes using a cryptographically secure RNG.
 /// </summary>
 internal static class TokenGenerator {
+    
+    /// <summary>Characters used for host authentication tokens (lowercase alphanumeric).</summary>
     private const string TokenChars = "abcdefghijklmnopqrstuvwxyz0123456789";
+
+    /// <summary>Characters used for lobby codes (uppercase alphanumeric).</summary>
     private const string LobbyCodeChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
     /// <summary>Fixed length of all generated lobby codes.</summary>

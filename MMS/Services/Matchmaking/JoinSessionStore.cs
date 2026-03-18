@@ -9,10 +9,30 @@ namespace MMS.Services.Matchmaking;
 /// (e.g. removing a session and its token together).
 /// </summary>
 public sealed class JoinSessionStore {
+    /// <summary>
+    /// Thread-safe dictionary of active join sessions keyed by <see cref="JoinSession.JoinId"/>.
+    /// </summary>
     private readonly ConcurrentDictionary<string, JoinSession> _joinSessions = new();
+
+    /// <summary>
+    /// Metadata for active discovery tokens, used for correlating UDP discovery packets.
+    /// </summary>
     private readonly ConcurrentDictionary<string, DiscoveryTokenMetadata> _discoveryMetadata = new();
+
+    /// <summary>
+    /// Secondary index for efficient lookup of join sessions by lobby connection data.
+    /// Valus are dummy bytes to use <see cref="ConcurrentDictionary{TKey, TValue}"/> as a set.
+    /// </summary>
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, byte>> _joinIdsByLobby = new();
+
+    /// <summary>
+    /// Secondary index for efficient lookup of expired sessions.
+    /// </summary>
     private readonly SortedSet<(DateTime expiresAtUtc, string joinId)> _expiryIndex = new();
+
+    /// <summary>
+    /// Lock for thread-safe access to <see cref="_expiryIndex"/>.
+    /// </summary>
     private readonly Lock _indexLock = new();
 
     /// <summary>Adds or replaces the session keyed by <see cref="JoinSession.JoinId"/>.</summary>
@@ -110,6 +130,10 @@ public sealed class JoinSessionStore {
                           .Select(kvp => kvp.Key)
                           .ToList();
 
+    /// <summary>
+    /// Adds the session to the lobby and expiry indexes.
+    /// </summary>
+    /// <param name="session">The session to index.</param>
     private void AddIndexes(JoinSession session) {
         var lobbyJoinIds = _joinIdsByLobby.GetOrAdd(
             session.LobbyConnectionData, _ => new ConcurrentDictionary<string, byte>()
@@ -121,6 +145,10 @@ public sealed class JoinSessionStore {
         }
     }
 
+    /// <summary>
+    /// Removes the session from the lobby and expiry indexes.
+    /// </summary>
+    /// <param name="session">The session to de-index.</param>
     private void RemoveIndexes(JoinSession session) {
         if (_joinIdsByLobby.TryGetValue(session.LobbyConnectionData, out var lobbyJoinIds))
             lobbyJoinIds.TryRemove(session.JoinId, out _);
@@ -130,6 +158,11 @@ public sealed class JoinSessionStore {
         }
     }
 
+    /// <summary>
+    /// Creates a deep copy of the given discovery metadata.
+    /// </summary>
+    /// <param name="metadata">The metadata to clone.</param>
+    /// <returns>A new <see cref="DiscoveryTokenMetadata"/> instance with identical values.</returns>
     private static DiscoveryTokenMetadata CloneMetadata(DiscoveryTokenMetadata metadata) =>
         new() {
             JoinId = metadata.JoinId,
