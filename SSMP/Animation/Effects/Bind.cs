@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using HutongGames.PlayMaker.Actions;
 using SSMP.Internals;
@@ -15,51 +16,23 @@ namespace SSMP.Animation.Effects;
 /// </summary>
 internal class Bind : DamageAnimationEffect {
 
-    public enum State {
-        Normal,
-        ShamanCancel,
-        ShamanDoneFalling
-    }
-
-    protected const string BIND_BELL_NAME = "bind_bell_appear_instance";
+    protected const string BindBellName = "bind_bell_appear_instance";
 
     public State BindState = State.Normal;
 
     /// <summary>
-    /// Effect flags sent by the other player. Mostly items they have equipped.
-    /// </summary>
-    protected class Flags {
-        public bool BindBell = false;
-        public bool BaseMirror = false;
-        public bool UpgradedMirror = false;
-        public bool QuickBind = false;
-        public bool ReserveBind = false;
-        public bool Maggoted = false;
-
-        public Flags(byte[]? info) {
-            if (info == null) return;
-            BindBell = info[0] == 1;
-            BaseMirror = info[1] == 1;
-            UpgradedMirror = info[2] == 1;
-            QuickBind = info[3] == 1;
-            ReserveBind = info[4] == 1;
-            Maggoted = info[5] == 1;
-        }
-    }
-
-    /// <summary>
     /// Cached FSM for Hornet's bind ability.
     /// </summary>
-    protected static PlayMakerFSM? _bindFsm;
+    protected static PlayMakerFSM? BindFsm;
 
     /// <summary>
     /// Cached effects object for Hornet's bind ability.
     /// </summary>
-    protected static GameObject? _localBindEffects;
+    protected static GameObject? LocalBindEffects;
 
     /// <inheritdoc/>
     public override void Play(GameObject playerObject, CrestType crestType, ushort playerId, byte[]? effectInfo) {
-        Flags flags = new Flags(effectInfo);
+        var flags = new Flags(effectInfo);
 
         // The maggot state is cleared by the time the bind burst is sent.
         // This method keeps track of it, although at a slight possible loss of consistancy
@@ -69,42 +42,35 @@ internal class Bind : DamageAnimationEffect {
             BindBurst.MaggotedPlayers.Remove(playerId);
         }
 
-        MonoBehaviourUtil.Instance.StartCoroutine(PlayBindEffect(playerObject, crestType, flags));
-    }
-
-    private IEnumerator PlayBindEffect(GameObject playerObject, CrestType crestType, Flags flags) {
         var randomClipAction = GetOrFindBindFsm().GetFirstAction<GetRandomAudioClipFromTable>("Bind Start");
         var playAudioAction = GetOrFindBindFsm().GetFirstAction<PlayAudioEvent>("Bind Start");
 
         if (BindState == State.Normal) {
             PlaySound(playerObject, randomClipAction, playAudioAction);
-            
+
             var oneShotSingleAction = GetOrFindBindFsm().GetFirstAction<AudioPlayerOneShotSingle>("Check Grounded");
             PlaySound(playerObject, oneShotSingleAction);
         }
 
 
-        var created = CreateObjects(playerObject, out var bindEffects);
-        if (!created) {
-            yield break;
+        if (!CreateObjects(playerObject, out var bindEffects)) {
+            return;
         }
 
-        Logger.Info("Determining crest animation...");
-
-        switch(crestType) {
+        switch (crestType) {
             case CrestType.Beast:
                 PlayBeastBindStart(bindEffects);
                 break;
             case CrestType.Cursed:
                 PlayCursedFail(bindEffects);
-                yield break;
+                return;
             case CrestType.Witch:
                 PlayWitchAnimationAntic(bindEffects);
                 break;
             case CrestType.Shaman:
                 var shouldContinue = PickShamanAnimation(playerObject, bindEffects, flags);
                 if (!shouldContinue) {
-                    yield break;
+                    return;
                 }
                 break;
             default:
@@ -120,10 +86,6 @@ internal class Bind : DamageAnimationEffect {
         // TODO: If using reserve bind, use reserve bind animation?
 
         // TODO: Quick Craft animations
-
-        var playerAnimator = playerObject.GetComponent<tk2dSpriteAnimator>();
-        var currentClip = playerAnimator?.currentClip;
-        Logger.Info($"Player Animator current clip for Bind: {currentClip?.name}");
     }
 
     /// <summary>
@@ -131,7 +93,7 @@ internal class Bind : DamageAnimationEffect {
     /// </summary>
     private void StartBindBell(GameObject bindEffects) {
         Logger.Debug("Starting warding bell");
-        var bindBell = bindEffects.FindGameObjectInChildren(BIND_BELL_NAME);
+        var bindBell = bindEffects.FindGameObjectInChildren(BindBellName);
         
         if (bindBell == null) {
             var allObjects = Resources.FindObjectsOfTypeAll<GameObject>();
@@ -142,8 +104,8 @@ internal class Bind : DamageAnimationEffect {
                 return;
             }
 
-            bindBell = GameObject.Instantiate(localBell, bindEffects.transform);
-            bindBell.name = BIND_BELL_NAME;
+            bindBell = Object.Instantiate(localBell, bindEffects.transform);
+            bindBell.name = BindBellName;
             
             var follower = bindBell.GetComponent<FollowTransform>();
             follower.target = bindEffects.transform;
@@ -174,9 +136,11 @@ internal class Bind : DamageAnimationEffect {
 
         Logger.Info("Playing Bind Silk animation");
 
-        if (flags.QuickBind) bindSilkAnimator.Play(bindSilkAnimator.GetClipByName("Bind Silk Quick"));
-        else bindSilkAnimator.Play(bindSilkAnimator.GetClipByName("Bind Silk"));
-
+        if (flags.QuickBind) {
+            bindSilkAnimator.Play(bindSilkAnimator.GetClipByName("Bind Silk Quick"));
+        } else {
+            bindSilkAnimator.Play(bindSilkAnimator.GetClipByName("Bind Silk"));
+        }
         bindSilkObj.SetActive(false);
         bindSilkObj.SetActive(true);
     }
@@ -216,7 +180,7 @@ internal class Bind : DamageAnimationEffect {
                 return;
             }
 
-            failAntic = GameObject.Instantiate(localFailAntic, bindEffects.transform);
+            failAntic = Object.Instantiate(localFailAntic, bindEffects.transform);
             failAntic.name = "cursed_bind_fail";
             failAntic.transform.SetLocalPositionZ(failAntic.transform.localPosition.z - 0.25f);
 
@@ -267,12 +231,11 @@ internal class Bind : DamageAnimationEffect {
         } else if (BindState == State.ShamanCancel) {
             PlayShamanCancel(playerObject, bindEffects);
             return false;
-        } else {
-            PlayShamanFallEnd(bindEffects);
-            PlayNormalStart(bindEffects, flags);
-            return false;
         }
 
+        PlayShamanFallEnd(bindEffects);
+        PlayNormalStart(bindEffects, flags);
+        return false;
     }
     
     /// <summary>
@@ -347,21 +310,21 @@ internal class Bind : DamageAnimationEffect {
     }
 
     /// <summary>
-    /// Get or find the Bind FSM on the hero object. Will be cached to <see cref="_bindFsm"/>.
+    /// Get or find the Bind FSM on the hero object. Will be cached to <see cref="BindFsm"/>.
     /// </summary>
     /// <returns>The FSM for Bind.</returns>
     /// <exception cref="InvalidOperationException">Thrown if the FSM cannot be found, which shouldn't happen.
     /// </exception>
     protected PlayMakerFSM GetOrFindBindFsm() {
-        if (_bindFsm != null) {
-            return _bindFsm;
+        if (BindFsm != null) {
+            return BindFsm;
         }
 
         var heroFsms = HeroController.instance.GetComponents<PlayMakerFSM>();
         foreach (var heroFsm in heroFsms) {
             if (heroFsm.FsmName == "Bind") {
-                _bindFsm = heroFsm;
-                return _bindFsm;
+                BindFsm = heroFsm;
+                return BindFsm;
             }
         }
 
@@ -374,9 +337,9 @@ internal class Bind : DamageAnimationEffect {
     /// <param name="playerObject">The player's object.</param>
     /// <param name="bindEffects">The player's 'Bind Effects' object, or null if not found.</param>
     /// <returns>true if the 'Bind Effects' GameObject is successfully found and bound; otherwise, false.</returns>
-    protected bool CreateObjects(GameObject playerObject, out GameObject bindEffects) {
-        _localBindEffects ??= HeroController.instance.gameObject.FindGameObjectInChildren("Bind Effects");
-        if (_localBindEffects == null) {
+    protected bool CreateObjects(GameObject playerObject, [MaybeNullWhen(false)] out GameObject bindEffects) {
+        LocalBindEffects ??= HeroController.instance.gameObject.FindGameObjectInChildren("Bind Effects");
+        if (LocalBindEffects == null) {
             Logger.Warn("Could not find local Bind Effects object in hero object");
             bindEffects = null;
             return false;
@@ -400,7 +363,7 @@ internal class Bind : DamageAnimationEffect {
     protected GameObject? CreateEffectIfNotExists(GameObject bindEffects, string objectName) {
         var obj = bindEffects.FindGameObjectInChildren(objectName);
         if (obj == null) {
-            var localObj = _localBindEffects.FindGameObjectInChildren(objectName);
+            var localObj = LocalBindEffects!.FindGameObjectInChildren(objectName);
             if (localObj == null) {
                 Logger.Warn($"Could not find local {objectName} object, cannot play bind");
                 return null;
@@ -442,6 +405,38 @@ internal class Bind : DamageAnimationEffect {
         var bindSilkObj = bindEffects.FindGameObjectInChildren("Bind Silk");
         if (bindSilkObj != null) {
             bindSilkObj.SetActive(false);
+        }
+    }
+
+    /// <summary>
+    /// Shaman Crest has special animations depending on which animation is
+    /// sent, but they're all related to the bind starting
+    /// </summary>
+    public enum State {
+        Normal,
+        ShamanCancel,
+        ShamanDoneFalling
+    }
+
+    /// <summary>
+    /// Effect flags sent by the other player. Mostly items they have equipped.
+    /// </summary>
+    protected class Flags {
+        public bool BindBell = false;
+        public bool BaseMirror = false;
+        public bool UpgradedMirror = false;
+        public bool QuickBind = false;
+        public bool ReserveBind = false;
+        public bool Maggoted = false;
+
+        public Flags(byte[]? info) {
+            if (info == null) return;
+            BindBell = info[0] == 1;
+            BaseMirror = info[1] == 1;
+            UpgradedMirror = info[2] == 1;
+            QuickBind = info[3] == 1;
+            ReserveBind = info[4] == 1;
+            Maggoted = info[5] == 1;
         }
     }
 }

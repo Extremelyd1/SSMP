@@ -63,9 +63,9 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
     protected DamageHero? SetDamageHeroState(GameObject target, int damage = 1) {
         if (ServerSettings.IsPvpEnabled && ShouldDoDamage) {
             return AddDamageHeroComponent(target, damage);
-        } else {
-            RemoveDamageHeroComponent(target);
-            return null;
         }
+
+        RemoveDamageHeroComponent(target);
+        return null;
     }
 }

@@ -1,7 +1,5 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using HutongGames.PlayMaker;
 using SSMP.Logging;
 
@@ -34,6 +32,9 @@ internal class FsmStateActionInjector : FsmStateAction {
         actions.Remove(this);
         State.Actions = actions.ToArray();
         State.SaveActions();
+
+        _onStateEnter = null;
+        _onUninject -= Uninject;
     }
 
     /// <inheritdoc/>

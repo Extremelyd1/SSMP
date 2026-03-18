@@ -1,14 +1,9 @@
-using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using HutongGames.PlayMaker.Actions;
 using SSMP.Internals;
 using SSMP.Util;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
-using Object = UnityEngine.Object;
 
 namespace SSMP.Animation.Effects;
 
@@ -155,7 +150,7 @@ internal class BindBurst : Bind {
     /// Stops the bind bell animation
     /// </summary>
     public void StopBindBell(GameObject bindEffects) {
-        var bindBell = bindEffects.FindGameObjectInChildren(BIND_BELL_NAME);
+        var bindBell = bindEffects.FindGameObjectInChildren(BindBellName);
         bindBell?.SetActive(false);
     }
 
@@ -185,7 +180,7 @@ internal class BindBurst : Bind {
     private void PlayWitchEnd(GameObject bindEffects) {
         var witchBind = bindEffects.FindGameObjectInChildren("Witch Bind");
         if (witchBind == null) {
-            var localWitchBind = _localBindEffects?.FindGameObjectInChildren("Witch Bind");
+            var localWitchBind = LocalBindEffects?.FindGameObjectInChildren("Witch Bind");
             if (localWitchBind == null) {
                 Logger.Warn("Unable to find local Witch Bind object");
                 return;
