@@ -619,7 +619,7 @@ internal class AnimationManager {
 
         { "Witch Tentacles!", AnimationClip.WitchTentacles },
         { "Shaman Cancel", AnimationClip.ShamanCancel },
-        { "Bind Fail Burst", AnimationClip.BindInterupt }
+        { "Bind Fail Burst", AnimationClip.BindInterrupt }
     };
 
     /// <summary>
@@ -662,7 +662,7 @@ internal class AnimationManager {
     private static readonly Dictionary<AnimationClip, IAnimationEffect> SubAnimationEffects = new() {
         { AnimationClip.WitchTentacles, BindBurst.Instance },
         { AnimationClip.ShamanCancel, new Bind { BindState = Bind.State.ShamanCancel } },
-        { AnimationClip.BindInterupt, BindInterrupt.Instance }
+        { AnimationClip.BindInterrupt, BindInterrupt.Instance }
     };
 
     /// <summary>
@@ -1104,7 +1104,7 @@ internal class AnimationManager {
         OnAnimationEvent(dummyClip);
     }
     /// <summary>
-    /// Animation subanimation hook for interupted binds
+    /// Animation subanimation hook for interrupted binds
     /// </summary>
     private void OnBindInterrupt(PlayMakerFSM fsm) {
         var dummyClip = new tk2dSpriteAnimationClip();

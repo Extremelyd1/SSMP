@@ -31,14 +31,14 @@ internal class BindInterrupt : Bind {
         if (flags.BindBell) {
             PlayBellExplode(bindEffects);
         } else {
-            PlayBindInterupt(bindEffects);
+            PlayBindInterrupt(bindEffects);
         }
     }
 
     /// <summary>
     /// Plays the normal bind interput animation
     /// </summary>
-    private void PlayBindInterupt(GameObject bindEffects) {
+    private void PlayBindInterrupt(GameObject bindEffects) {
         // Find prefab
         var bindBurstSpawner = GetOrFindBindFsm().GetFirstAction<SpawnObjectFromGlobalPool>("Remove Silk?");
         if (bindBurstSpawner == null) {
