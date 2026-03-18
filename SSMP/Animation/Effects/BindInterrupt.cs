@@ -7,20 +7,20 @@ using Logger = SSMP.Logging.Logger;
 namespace SSMP.Animation.Effects;
 
 /// <summary>
-/// Class for the animation effect of a bind (healing) being interupted by an attack.
+/// Class for the animation effect of a bind (healing) being interrupted by an attack.
 /// </summary>
-internal class BindInterupt : Bind {
+internal class BindInterrupt : Bind {
     /// <summary>
     /// Static instance for access by multiple animation clips in <see cref="AnimationManager"/>.
     /// </summary>
-    private static BindInterupt? _instance;
+    private static BindInterrupt? _instance;
 
     /// <inheritdoc cref="_instance" />
-    public static BindInterupt Instance => _instance ??= new BindInterupt();
+    public static BindInterrupt Instance => _instance ??= new BindInterrupt();
 
     /// <inheritdoc/>
     public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
-        Flags flags = new Flags(effectInfo);
+        var flags = new Flags(effectInfo);
 
         if (!CreateObjects(playerObject, out var bindEffects)) {
             return;
@@ -60,12 +60,12 @@ internal class BindInterupt : Bind {
         // Remove haze and camera controls
         var haze = burst.FindGameObjectInChildren("haze2");
         if (haze != null) {
-            GameObject.Destroy(haze);
+            Object.Destroy(haze);
         }
 
         var shaker = burst.GetComponentInChildren<CameraControlAnimationEvents>();
         if (shaker != null) {
-            Component.DestroyImmediate(shaker);
+            Object.DestroyImmediate(shaker);
         }
     }
 
@@ -113,7 +113,7 @@ internal class BindInterupt : Bind {
 
         var haze = bindBell.FindGameObjectInChildren("haze2 (1)");
         if (haze != null) {
-            GameObject.Destroy(haze);
+            Object.Destroy(haze);
         }
 
         // Add hitbox if appropriate

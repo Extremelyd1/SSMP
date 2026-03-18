@@ -35,7 +35,7 @@ internal class Bind : DamageAnimationEffect {
         var flags = new Flags(effectInfo);
 
         // The maggot state is cleared by the time the bind burst is sent.
-        // This method keeps track of it, although at a slight possible loss of consistancy
+        // This method keeps track of it, although at a slight possible loss of consistency
         var playerObjectIdentifier = playerObject.GetInstanceID();
         if (flags.Maggoted && !(crestType == CrestType.Shaman && BindState == State.ShamanCancel)) {
             BindBurst.MaggotedPlayers.Add(playerObjectIdentifier);
@@ -279,7 +279,7 @@ internal class Bind : DamageAnimationEffect {
 
         EffectUtils.SpawnGlobalPoolObject(silkPuffSpawner, playerObject.transform, 5f);
 
-        BindBurst.Instance.StopBindBell(bindEffects);
+        BindBurst.StopBindBell(bindEffects);
     }
 
     /// <summary>
@@ -381,7 +381,7 @@ internal class Bind : DamageAnimationEffect {
     /// Turns off all bind effects
     /// </summary>
     public static void ForceStopAllEffects(GameObject bindEffects) {
-        BindBurst.Instance.StopBindBell(bindEffects);
+        BindBurst.StopBindBell(bindEffects);
 
         var shamanAntic = bindEffects.FindGameObjectInChildren("Shaman_Bind_antic_silk");
         if (shamanAntic != null) {
@@ -423,12 +423,12 @@ internal class Bind : DamageAnimationEffect {
     /// Effect flags sent by the other player. Mostly items they have equipped.
     /// </summary>
     protected class Flags {
-        public bool BindBell = false;
-        public bool BaseMirror = false;
-        public bool UpgradedMirror = false;
-        public bool QuickBind = false;
-        public bool ReserveBind = false;
-        public bool Maggoted = false;
+        public readonly bool BindBell = false;
+        public readonly bool BaseMirror = false;
+        public readonly bool UpgradedMirror = false;
+        public readonly bool QuickBind = false;
+        public readonly bool ReserveBind = false;
+        public bool Maggoted = false; // Needs to be writable by BindBurst
 
         public Flags(byte[]? info) {
             if (info == null) return;

@@ -88,8 +88,7 @@ internal class BindBurst : Bind {
     /// Creates the appropriate Claw Mirror object.
     /// The object will be destroyed after it finishes.
     /// </summary>
-    private GameObject? PrepareMirror(GameObject playerObject, SetGameObject mirrorSource) {
-
+    private static GameObject? PrepareMirror(GameObject playerObject, SetGameObject mirrorSource) {
         var mirror = EffectUtils.SpawnGlobalPoolObject(mirrorSource.gameObject.Value, playerObject.transform, 3f);
 
         if (mirror == null) {
@@ -98,12 +97,12 @@ internal class BindBurst : Bind {
 
         var shaker = mirror.GetComponentInChildren<CameraControlAnimationEvents>();
         if (shaker != null) {
-            Component.DestroyImmediate(shaker);
+            Object.DestroyImmediate(shaker);
         }
 
         var haze = mirror.FindGameObjectInChildren("haze2");
         if (haze != null) {
-            GameObject.Destroy(haze);
+            Object.Destroy(haze);
         }
 
         return mirror;
@@ -121,8 +120,11 @@ internal class BindBurst : Bind {
 
         // Create the claw
         GameObject? claw;
-        if (upgraded) claw = PrepareMirror(playerObject, upgradedClaw);
-        else claw = PrepareMirror(playerObject, regularClaw);
+        if (upgraded) {
+            claw = PrepareMirror(playerObject, upgradedClaw);
+        } else {
+            claw = PrepareMirror(playerObject, regularClaw);
+        }
 
         if (claw == null) {
             return;
@@ -149,7 +151,7 @@ internal class BindBurst : Bind {
     /// <summary>
     /// Stops the bind bell animation
     /// </summary>
-    public void StopBindBell(GameObject bindEffects) {
+    public static void StopBindBell(GameObject bindEffects) {
         var bindBell = bindEffects.FindGameObjectInChildren(BindBellName);
         bindBell?.SetActive(false);
     }
@@ -186,11 +188,11 @@ internal class BindBurst : Bind {
                 return;
             }
 
-            witchBind = GameObject.Instantiate(localWitchBind, bindEffects.transform);
+            witchBind = Object.Instantiate(localWitchBind, bindEffects.transform);
 
             var shaker = witchBind.GetComponent<CameraControlAnimationEvents>();
             if (shaker != null) {
-                Component.DestroyImmediate(shaker);
+                Object.DestroyImmediate(shaker);
             }
 
             SetWitchDamagers(witchBind);
@@ -222,7 +224,7 @@ internal class BindBurst : Bind {
     /// <summary>
     /// Stops the Shaman Crest specific silk animation
     /// </summary>
-    private void PlayShamanEnd(GameObject bindEffects) {
+    private static void PlayShamanEnd(GameObject bindEffects) {
         var shamanAntic = bindEffects.FindGameObjectInChildren("Shaman_Bind_antic_silk");
         if (shamanAntic == null) {
             return;

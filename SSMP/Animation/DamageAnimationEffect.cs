@@ -33,6 +33,7 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
     /// </summary>
     /// <param name="target">The target game object to attach the component to.</param>
     /// <param name="damage">The number of mask of damage it should deal.</param>
+    /// <returns>The <see cref="DamageHero"/> component that was added to the game object</returns>
     protected static DamageHero AddDamageHeroComponent(GameObject target, int damage = 1) {
         var damageHero = target.AddComponentIfNotPresent<DamageHero>();
         damageHero.damageDealt = damage;
@@ -51,7 +52,7 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
             return;
         }
 
-        Component.DestroyImmediate(damageHero);
+        Object.DestroyImmediate(damageHero);
     }
 
     /// <summary>
@@ -60,6 +61,7 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
     /// </summary>
     /// <param name="target">The target game object to detatch the component to.</param>
     /// <param name="damage">The number of mask of damage it should deal.</param>
+    /// <returns>The <see cref="DamageHero"/> component that was added if PVP was turned on</returns>
     protected DamageHero? SetDamageHeroState(GameObject target, int damage = 1) {
         if (ServerSettings.IsPvpEnabled && ShouldDoDamage) {
             return AddDamageHeroComponent(target, damage);

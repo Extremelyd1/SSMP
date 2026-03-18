@@ -19,7 +19,7 @@ internal static class EffectUtils {
             recycler.recycleTimerRunning = false;
             recycler.subbed = false;
 
-            Component.Destroy(recycler);
+            Object.Destroy(recycler);
         }
     }
 
@@ -42,22 +42,25 @@ internal static class EffectUtils {
 
     /// <inheritdoc cref="SpawnGlobalPoolObject(SpawnObjectFromGlobalPool?, Transform, float, bool)"/>
     /// <param name="globalObj">The GameObject to spawn</param>
-    /// <param name="spawnLocation"><inheritdoc/></param>
-    /// <param name="destroyAfterDelay"><inheritdoc/></param>
-    /// <param name="keepParent"><inheritdoc/></param>
+    /// <param name="spawnLocation">The location where the object will be spawned.</param>
+    /// <param name="destroyAfterDelay">The duration, in seconds, after which the spawned object will be destroyed.</param>
+    /// <param name="keepParent">Whether to keep the parent or unparent the new object</param>
+    /// <returns>A newly spawned GameObject from the global pool.</returns>
     public static GameObject? SpawnGlobalPoolObject(GameObject? globalObj, Transform spawnLocation, float destroyAfterDelay, bool keepParent = false) {
         if (globalObj == null) {
             Logger.Warn("Unable to find global pool object");
             return null;
         }
 
-        var newObj = GameObject.Instantiate(globalObj, spawnLocation);
+        // Regardless of if the parent is kept, the object needs to be moved outside
+        // of the HideAndDontSave flag, which can be done by moving to the other object's scene.
+        var newObj = Object.Instantiate(globalObj, spawnLocation);
         if (newObj == null) {
             Logger.Warn($"Unable to spawn global pool object {globalObj.name}");
             return null;
         }
 
-        // This is ugly and i hate it, but it works
+        // Now it can be orphaned if needed.
         if (!keepParent) {
             newObj.transform.SetParent(null);
             newObj.transform.position = spawnLocation.position;
