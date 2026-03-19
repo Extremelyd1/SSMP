@@ -13,21 +13,21 @@ internal class BindInterrupt : Bind {
     /// <summary>
     /// Static instance for access by multiple animation clips in <see cref="AnimationManager"/>.
     /// </summary>
-    private static BindInterrupt? _instance;
-
-    /// <inheritdoc cref="_instance" />
-    public static BindInterrupt Instance => _instance ??= new BindInterrupt();
+    public static readonly BindInterrupt Instance = new();
 
     /// <inheritdoc/>
     public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
         var flags = new Flags(effectInfo);
 
+        // Create bind effects object
         if (!CreateObjects(playerObject, out var bindEffects)) {
             return;
         }
 
+        // Stop any effects currently playing, this effect "interrupts" everything else
         ForceStopAllEffects(bindEffects);
 
+        // Play a warding bell explosion if they had it equipped, otherwise do the normal one
         if (flags.BindBell) {
             PlayBellExplode(bindEffects);
         } else {
@@ -36,25 +36,22 @@ internal class BindInterrupt : Bind {
     }
 
     /// <summary>
-    /// Plays the normal bind interput animation
+    /// Plays the normal bind interrupt animation
     /// </summary>
     private void PlayBindInterrupt(GameObject bindEffects) {
         // Find prefab
-        var bindBurstSpawner = GetOrFindBindFsm().GetFirstAction<SpawnObjectFromGlobalPool>("Remove Silk?");
-        if (bindBurstSpawner == null) {
-            Logger.Warn("Unable to find bind burst effect spawner");
-            return;
-        }
+        var stateName = "Remove Silk?";
+        var bindBurstSpawner = GetOrFindBindFsm().GetFirstAction<SpawnObjectFromGlobalPool>(stateName);
 
         // Spawn in effect
         var burst = EffectUtils.SpawnGlobalPoolObject(bindBurstSpawner, bindEffects.transform, 5f);
         if (burst == null) {
-            Logger.Warn("Unable to create bind burst effect");
+            Logger.Warn("Unable to create bind interrupt effect");
             return;
         }
 
         // Play audio
-        var audio = GetOrFindBindFsm().GetFirstAction<PlayAudioEvent>("Remove Silk?");
+        var audio = GetOrFindBindFsm().GetFirstAction<PlayAudioEvent>(stateName);
         PlaySound(bindEffects.transform.parent.gameObject, audio);
 
         // Remove haze and camera controls
@@ -75,24 +72,16 @@ internal class BindInterrupt : Bind {
     private void PlayBellExplode(GameObject bindEffects) {
         Logger.Debug("Playing Bell Burst");
         
-        // Initialize warding bell FSM if it isn't already.
-        // This fills it in with the template
+        // Locate warding bell FSM
         var bellFsm = HeroController.instance.bellBindFSM;
-        if (!bellFsm.fsm.initialized) {
-            HeroController.instance.bellBindFSM.Init();
-        }
 
         if (bellFsm == null) {
             Logger.Warn("Unable to find warding bell fsm");
             return;
         }
 
-        var spawner = bellFsm.GetFirstAction<SpawnObjectFromGlobalPool>("Burst");
-
-        if (spawner == null) {
-            Logger.Warn("Unable to find warding bell spawner");
-            return;
-        }
+        var stateName = "Burst";
+        var spawner = bellFsm.GetFirstAction<SpawnObjectFromGlobalPool>(stateName);
 
         // Spawn warding bell
         var bindBell = EffectUtils.SpawnGlobalPoolObject(spawner, bindEffects.transform, 5f);
@@ -101,7 +90,7 @@ internal class BindInterrupt : Bind {
         }
 
         // Play sound
-        var audio = bellFsm.GetFirstAction<PlayAudioEvent>("Burst");
+        var audio = bellFsm.GetFirstAction<PlayAudioEvent>(stateName);
         PlaySound(bindBell, audio);
 
 

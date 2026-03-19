@@ -11,16 +11,20 @@ namespace SSMP.Animation.Effects;
 /// Class for the animation effect of a bind (healing) finishing.
 /// </summary>
 internal class BindBurst : Bind {
+    // Effect object names
+    private const string BeastCrestRageObjectName = "crest rage_burst_effect(Clone)";
+    private const string WitchBindCleanseObjectName = "Witch Bind Maggot Cleanse";
+    private const string WitchBindObjectName = "Witch Bind";
+    private const string HealAnimObjectName = "Heal Anim";
+    private const string HealParticleObjectName = "Pt Heal";
+
     /// <summary>
     /// Static instance for access by multiple animation clips in <see cref="AnimationManager"/>.
     /// </summary>
-    private static BindBurst? _instance;
-
-    /// <inheritdoc cref="_instance" />
-    public static BindBurst Instance => _instance ??= new BindBurst();
+    public static readonly BindBurst Instance = new();
 
     /// <summary>
-    /// A set of players who recently binded while maggoted
+    /// A set of players who recently bound while maggoted
     /// </summary>
     public static readonly HashSet<int> MaggotedPlayers = new();
 
@@ -39,6 +43,7 @@ internal class BindBurst : Bind {
             return;
         }
 
+        // Play flag-specific effects
         if (flags.BaseMirror || flags.UpgradedMirror) PlayMirror(playerObject, flags.UpgradedMirror);
         if (flags.Maggoted) PlayMaggotCleanse(bindEffects, playerObject);
 
@@ -71,14 +76,17 @@ internal class BindBurst : Bind {
     /// Plays the maggot cleanse animation
     /// </summary>
     private void PlayMaggotCleanse(GameObject bindEffects, GameObject playerObject) {
-        Logger.Info("Playing Maggot Animation");
-        var maggotBurst = GetOrFindBindFsm().GetAction<SpawnObjectFromGlobalPool>("Maggoted?", 2);
-        var maggotFlash = GetOrFindBindFsm().GetAction<SpawnObjectFromGlobalPool>("Maggoted?", 4);
-        var maggotAudio = GetOrFindBindFsm().GetFirstAction<PlayAudioEvent>("Maggoted?");
+        // Grab assets from Maggoted state
+        var stateName = "Maggoted?";
+        var maggotBurst = GetOrFindBindFsm().GetAction<SpawnObjectFromGlobalPool>(stateName, 2);
+        var maggotFlash = GetOrFindBindFsm().GetAction<SpawnObjectFromGlobalPool>(stateName, 4);
+        var maggotAudio = GetOrFindBindFsm().GetFirstAction<PlayAudioEvent>(stateName);
 
+        // Spawn copies of those assets
         EffectUtils.SpawnGlobalPoolObject(maggotBurst, bindEffects.transform, 5f);
         EffectUtils.SpawnGlobalPoolObject(maggotFlash, bindEffects.transform, 5f);
 
+        // Play audio
         if (maggotAudio != null) {
             PlaySound(playerObject, maggotAudio);
         }
@@ -89,12 +97,14 @@ internal class BindBurst : Bind {
     /// The object will be destroyed after it finishes.
     /// </summary>
     private static GameObject? PrepareMirror(GameObject playerObject, SetGameObject mirrorSource) {
+        // Spawn mirror
         var mirror = EffectUtils.SpawnGlobalPoolObject(mirrorSource.gameObject.Value, playerObject.transform, 3f);
 
         if (mirror == null) {
             return null;
         }
 
+        // Remove camera and haze components
         var shaker = mirror.GetComponentInChildren<CameraControlAnimationEvents>();
         if (shaker != null) {
             Object.DestroyImmediate(shaker);
@@ -152,7 +162,8 @@ internal class BindBurst : Bind {
     /// Stops the bind bell animation
     /// </summary>
     public static void StopBindBell(GameObject bindEffects) {
-        var bindBell = bindEffects.FindGameObjectInChildren(BindBellName);
+        // Only bother turning it off if it's on
+        var bindBell = bindEffects.FindGameObjectInChildren(BindBellObjectName);
         bindBell?.SetActive(false);
     }
 
@@ -160,15 +171,22 @@ internal class BindBurst : Bind {
     /// Plays the Beast Crest specific rage animation
     /// </summary>
     private void PlayBeastRage(GameObject bindEffects) {
-        var beastRage = CreateEffectIfNotExists(bindEffects, "crest rage_burst_effect(Clone)");
-        beastRage?.SetActive(true);
+        // Create and reactivate the rage effect
+        var beastRage = CreateEffectIfNotExists(bindEffects, BeastCrestRageObjectName);
+
+        if (beastRage != null) {
+            beastRage.SetActive(false);
+            beastRage.SetActive(true);
+        }
     }
 
     /// <summary>
     /// Plays the witch maggot cleanse animation
     /// </summary>
     private void PlayWitchMaggoted(GameObject bindEffects) {
-        var maggotCleanse = CreateEffectIfNotExists(bindEffects, "Witch Bind Maggot Cleanse");
+        // Spawn in the special tentacles
+        var maggotCleanse = CreateEffectIfNotExists(bindEffects, WitchBindCleanseObjectName);
+
         if (maggotCleanse != null) {
             maggotCleanse.SetActive(false);
             maggotCleanse.SetActive(true);
@@ -180,24 +198,24 @@ internal class BindBurst : Bind {
     /// Yes it's called Tentancles internally. Thanks TC.
     /// </summary>
     private void PlayWitchEnd(GameObject bindEffects) {
-        var witchBind = bindEffects.FindGameObjectInChildren("Witch Bind");
+        // Get bind effect
+        var effectWasCreated = CreateEffectIfNotExists(bindEffects, WitchBindObjectName, out var witchBind);
         if (witchBind == null) {
-            var localWitchBind = LocalBindEffects?.FindGameObjectInChildren("Witch Bind");
-            if (localWitchBind == null) {
-                Logger.Warn("Unable to find local Witch Bind object");
-                return;
-            }
+            return;
+        }
 
-            witchBind = Object.Instantiate(localWitchBind, bindEffects.transform);
-
+        // Remove camera controls if object was created
+        if (effectWasCreated) {
             var shaker = witchBind.GetComponent<CameraControlAnimationEvents>();
             if (shaker != null) {
                 Object.DestroyImmediate(shaker);
             }
-
-            SetWitchDamagers(witchBind);
         }
 
+        // Toggle damage depending on if PVP is on or not
+        SetWitchDamagers(witchBind);
+
+        // Play tentacles audio
         var audio = GetOrFindBindFsm().GetFirstAction<PlayAudioEvent>("Witch Tentancles!");
         if (audio != null) {
             PlaySound(bindEffects.transform.parent.gameObject, audio);
@@ -211,12 +229,14 @@ internal class BindBurst : Bind {
     /// Adds or removes hero damage components from Witch Crest bind
     /// </summary>
     private void SetWitchDamagers(GameObject witchBind) {
+        // Loop through all children, looking for all the ones called "Damager"
         for (var i = 0; i < witchBind.transform.childCount; i++) {
             var child = witchBind.transform.GetChild(i);
             if (!child.name.StartsWith("Damager")) {
                 continue;
             }
 
+            // Add or remove damage component from Damager object
             SetDamageHeroState(child.gameObject);
         }
     }
@@ -225,7 +245,7 @@ internal class BindBurst : Bind {
     /// Stops the Shaman Crest specific silk animation
     /// </summary>
     private static void PlayShamanEnd(GameObject bindEffects) {
-        var shamanAntic = bindEffects.FindGameObjectInChildren("Shaman_Bind_antic_silk");
+        var shamanAntic = bindEffects.FindGameObjectInChildren(ShamanFallAnticObjectName);
         if (shamanAntic == null) {
             return;
         }
@@ -233,31 +253,32 @@ internal class BindBurst : Bind {
     }
 
     /// <summary>
-    /// Plays particles and shows a flash
+    /// Plays particles and shows a flash. Happens at the end of a normal bind.
     /// </summary>
     private void PlayNormalEnd(GameObject bindEffects) {
-        Logger.Info("Playing Heal Particles and Anim");
-        var healParticle = CreateEffectIfNotExists(bindEffects, "Pt Heal");
+        // Play particle effect
+        CreateEffectIfNotExists(bindEffects, HealParticleObjectName, out var healParticle);
         if (healParticle != null) {
             healParticle.GetComponent<ParticleSystem>().Play();
         }
         
-        var healAnim = CreateEffectIfNotExists(bindEffects, "Heal Anim");
+        // Play silk animation
+        var healAnim = CreateEffectIfNotExists(bindEffects, HealAnimObjectName);
         if (healAnim != null) {
             healAnim.SetActive(true);
         }
 
-        var bindSilkObj = bindEffects.FindGameObjectInChildren("Bind Silk");
+        // Disable mesh renderer because the game does that. Is this needed?
+        var bindSilkObj = bindEffects.FindGameObjectInChildren(BindSilkObjectName);
         if (bindSilkObj != null) {
             var bindSilkMeshRenderer = bindSilkObj.GetComponent<MeshRenderer>();
             bindSilkMeshRenderer.enabled = false;
         }
 
+        // Play audio
         var audio = GetOrFindBindFsm().GetFirstAction<AudioPlayerOneShotSingle>("Bind Burst");
         if (audio != null) {
             PlaySound(bindEffects.transform.parent.gameObject, audio);
         }
-
-
     }
 }

@@ -1054,7 +1054,14 @@ internal class AnimationManager {
     /// the Bind fsm once the HeroController is ready.
     /// </summary>
     private void CreateBindHooks(HeroController hc) {
-        HeroController.instance.bellBindFSM.Init();
+        // Initialize warding bell FSM if it isn't already.
+        // This fills it in with the template
+        var bellFsm = HeroController.instance.bellBindFSM;
+        if (!bellFsm.fsm.initialized) {
+            bellFsm.Init();
+        }
+
+        // Find bind FSM
         var heroFsms = hc.GetComponents<PlayMakerFSM>();
 
         var bindFsm = heroFsms.FirstOrDefault(fsm => fsm.FsmName == "Bind");
@@ -1063,25 +1070,15 @@ internal class AnimationManager {
             return;
         }
 
-        // Find witch crest tentacles
+        // Find FSM states to inject
         var tentacles = bindFsm.GetState("Witch Tentancles!"); // no that's not a typo... at least on my end
-        if (tentacles != null) {
-            FsmStateActionInjector.Inject(tentacles, OnWitchTentacles, 4);
-        } else {
-            Logger.Warn("Unable to find Witch Tentacles! state");
-        }
-
+        FsmStateActionInjector.Inject(tentacles, OnWitchTentacles, 4);
+        
         var shamanCancel = bindFsm.GetState("Shaman Air Cancel");
-        if (shamanCancel != null) {
-            FsmStateActionInjector.Inject(shamanCancel, OnShamanCancel);
-        } else {
-            Logger.Warn("Unable to find Shaman Air Cancel state");
-        }
+        FsmStateActionInjector.Inject(shamanCancel, OnShamanCancel);
 
         var bindInterrupt = bindFsm.GetState("Remove Silk?");
-        if (bindInterrupt != null) {
-            FsmStateActionInjector.Inject(bindInterrupt, OnBindInterrupt, 2);
-        }
+        FsmStateActionInjector.Inject(bindInterrupt, OnBindInterrupt, 2);
     }
 
     /// <summary>

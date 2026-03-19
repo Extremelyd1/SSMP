@@ -15,9 +15,17 @@ namespace SSMP.Animation.Effects;
 /// Class for the animation effect of bind (healing).
 /// </summary>
 internal class Bind : DamageAnimationEffect {
+    // Effect object names
+    protected const string BindBellObjectName = "bind_bell_appear_instance";
+    protected const string BindSilkObjectName = "Bind Silk";
+    protected const string ShamanFallAnticObjectName = "Shaman_Bind_antic_silk";
+    private const string BeastCrestAnticObjectName = "Warrior_Bind_antic_silk";
+    private const string CursedBindFailObjectName = "Cursed Bind Hornet";
+    private const string WitchBindObjectName = "Whip_Bind_silk_antic";
 
-    protected const string BindBellName = "bind_bell_appear_instance";
-
+    /// <summary>
+    /// Keeps track of special bind scenarios, mostly to do with Shaman Crest.
+    /// </summary>
     public State BindState = State.Normal;
 
     /// <summary>
@@ -94,7 +102,7 @@ internal class Bind : DamageAnimationEffect {
     /// </summary>
     private void StartBindBell(GameObject bindEffects) {
         Logger.Debug("Starting warding bell");
-        var bindBell = bindEffects.FindGameObjectInChildren(BindBellName);
+        var bindBell = bindEffects.FindGameObjectInChildren(BindBellObjectName);
         
         if (bindBell == null) {
             var allObjects = Resources.FindObjectsOfTypeAll<GameObject>();
@@ -106,7 +114,7 @@ internal class Bind : DamageAnimationEffect {
             }
 
             bindBell = Object.Instantiate(localBell, bindEffects.transform);
-            bindBell.name = BindBellName;
+            bindBell.name = BindBellObjectName;
             
             var follower = bindBell.GetComponent<FollowTransform>();
             follower.target = bindEffects.transform;
@@ -125,7 +133,7 @@ internal class Bind : DamageAnimationEffect {
     /// </summary>
     private void PlayNormalStart(GameObject bindEffects, Flags flags) {
         Logger.Debug("Playing normal bind start animation");
-        var bindSilkObj = CreateEffectIfNotExists(bindEffects, "Bind Silk");
+        var bindSilkObj = CreateEffectIfNotExists(bindEffects, BindSilkObjectName);
         if (bindSilkObj == null) {
             return;
         }
@@ -151,7 +159,7 @@ internal class Bind : DamageAnimationEffect {
     /// </summary>
     private void PlayBeastBindStart(GameObject bindEffects) {
         Logger.Debug("Playing Beast Crest start antic");
-        var beastAntic = CreateEffectIfNotExists(bindEffects, "Warrior_Bind_antic_silk");
+        var beastAntic = CreateEffectIfNotExists(bindEffects, BeastCrestAnticObjectName);
         if (beastAntic == null) {
             return;
         }
@@ -165,7 +173,7 @@ internal class Bind : DamageAnimationEffect {
     /// </summary>
     private void PlayCursedFail(GameObject bindEffects) {
         Logger.Debug("Playing Cursed Crest bind fail animation");
-        var failAntic = bindEffects.FindGameObjectInChildren("cursed_bind_fail");
+        var failAntic = bindEffects.FindGameObjectInChildren(CursedBindFailObjectName);
 
         tk2dSpriteAnimator animator;
         if (failAntic == null) {
@@ -175,14 +183,14 @@ internal class Bind : DamageAnimationEffect {
                 return;
             }
 
-            var localFailAntic = effects.FindGameObjectInChildren("Cursed Bind Hornet");
+            var localFailAntic = effects.FindGameObjectInChildren(CursedBindFailObjectName);
             if (localFailAntic == null) {
                 Logger.Warn("Unable to find local cursed bind object");
                 return;
             }
 
             failAntic = Object.Instantiate(localFailAntic, bindEffects.transform);
-            failAntic.name = "cursed_bind_fail";
+            failAntic.name = CursedBindFailObjectName;
             failAntic.transform.SetLocalPositionZ(failAntic.transform.localPosition.z - 0.25f);
 
             animator = failAntic.GetComponent<tk2dSpriteAnimator>();
@@ -213,7 +221,7 @@ internal class Bind : DamageAnimationEffect {
     /// </summary>
     private void PlayWitchAnimationAntic(GameObject bindEffects) {
         Logger.Debug("Playing Witch Crest bind antic");
-        var silkAntic = CreateEffectIfNotExists(bindEffects, "Whip_Bind_silk_antic");
+        var silkAntic = CreateEffectIfNotExists(bindEffects, WitchBindObjectName);
         if (silkAntic == null) {
             return;
         }
@@ -244,7 +252,7 @@ internal class Bind : DamageAnimationEffect {
     /// </summary>
     private void PlayShamanFall(GameObject bindEffects) {
         Logger.Debug("Playing Shaman Crest bind fall animation");
-        var shamanAntic = CreateEffectIfNotExists(bindEffects, "Shaman_Bind_antic_silk");
+        var shamanAntic = CreateEffectIfNotExists(bindEffects, ShamanFallAnticObjectName);
         if (shamanAntic == null) {
             return;
         }
@@ -261,22 +269,17 @@ internal class Bind : DamageAnimationEffect {
     /// </summary>
     private void PlayShamanCancel(GameObject playerObject, GameObject bindEffects) {
         Logger.Debug("Playing Shaman Crest bind cancel/fail animation");
-        var shamanAntic = bindEffects.FindGameObjectInChildren("Shaman_Bind_antic_silk");
+        var shamanAntic = bindEffects.FindGameObjectInChildren(ShamanFallAnticObjectName);
         if (shamanAntic != null) {
             shamanAntic.SetActive(false);
         }
 
-        var silkPuffSpawner = GetOrFindBindFsm().GetFirstAction<SpawnObjectFromGlobalPool>("Shaman Air Cancel");
-        if (silkPuffSpawner == null) {
-            Logger.Warn("Unable to find FSM action for Shaman Air Cancel");
-            return;
-        }
+        var cancelStateName = "Shaman Air Cancel";
+        var silkPuffSpawner = GetOrFindBindFsm().GetFirstAction<SpawnObjectFromGlobalPool>(cancelStateName);
 
-        var audio = GetOrFindBindFsm().GetFirstAction<PlayAudioEvent>("Shaman Air Cancel");
-        if (audio != null) {
-            PlaySound(playerObject, audio);
-        }
-
+        var audio = GetOrFindBindFsm().GetFirstAction<PlayAudioEvent>(cancelStateName);
+        PlaySound(playerObject, audio);
+        
         EffectUtils.SpawnGlobalPoolObject(silkPuffSpawner, playerObject.transform, 5f);
 
         BindBurst.StopBindBell(bindEffects);
@@ -287,7 +290,7 @@ internal class Bind : DamageAnimationEffect {
     /// </summary>
     private void PlayShamanFallEnd(GameObject bindEffects) {
         Logger.Debug("Playing Shaman Crest bind fall finished transition animation");
-        var shamanAntic = bindEffects.FindGameObjectInChildren("Shaman_Bind_antic_silk");
+        var shamanAntic = bindEffects.FindGameObjectInChildren(ShamanFallAnticObjectName);
         if (shamanAntic == null) {
             return;
         }
@@ -360,50 +363,63 @@ internal class Bind : DamageAnimationEffect {
     /// </summary>
     /// <param name="bindEffects">The player's Bind Effects object.</param>
     /// <param name="objectName">The name of the effect to find or create.</param>
-    /// <returns>The existing or new effect, or null if the effect cannot be found or created</returns>
-    protected GameObject? CreateEffectIfNotExists(GameObject bindEffects, string objectName) {
-        var obj = bindEffects.FindGameObjectInChildren(objectName);
-        if (obj == null) {
-            var localObj = LocalBindEffects!.FindGameObjectInChildren(objectName);
-            if (localObj == null) {
-                Logger.Warn($"Could not find local {objectName} object, cannot play bind");
-                return null;
-            }
-
-            obj = Object.Instantiate(localObj, bindEffects.transform);
-            obj.name = objectName;
+    /// <param name="effect">The effect that was found or created</param>
+    /// <returns>Returns true if the effect was created, false if it was found.</returns>
+    protected bool CreateEffectIfNotExists(GameObject bindEffects, string objectName, out GameObject? effect) {
+        effect = bindEffects.FindGameObjectInChildren(objectName);
+        if (effect != null) {
+            return false;
         }
 
-        return obj;
+        var localObj = LocalBindEffects!.FindGameObjectInChildren(objectName);
+        if (localObj == null) {
+            Logger.Warn($"Could not find local {objectName} object, cannot play bind effect");
+            return false;
+        }
+
+        effect = Object.Instantiate(localObj, bindEffects.transform);
+        effect.name = objectName;
+        return true;
     }
-    
+
+    /// <summary>
+    /// Finds and returns a bind effect with the specified name, creating it if it doesn't already exist.
+    /// </summary>
+    /// <param name="bindEffects">The player's Bind Effects object.</param>
+    /// <param name="objectName">The name of the effect to find or create.</param>
+    /// <returns>The effect that was found or created</returns>
+    protected GameObject? CreateEffectIfNotExists(GameObject bindEffects, string objectName) {
+        CreateEffectIfNotExists(bindEffects, objectName, out var effect);
+        return effect;
+    }
+
     /// <summary>
     /// Turns off all bind effects
     /// </summary>
     public static void ForceStopAllEffects(GameObject bindEffects) {
         BindBurst.StopBindBell(bindEffects);
 
-        var shamanAntic = bindEffects.FindGameObjectInChildren("Shaman_Bind_antic_silk");
+        var shamanAntic = bindEffects.FindGameObjectInChildren(ShamanFallAnticObjectName);
         if (shamanAntic != null) {
             shamanAntic.SetActive(false);
         }
 
-        var silkAntic = bindEffects.FindGameObjectInChildren("Whip_Bind_silk_antic");
+        var silkAntic = bindEffects.FindGameObjectInChildren(WitchBindObjectName);
         if (silkAntic != null) {
             silkAntic.SetActive(false);
         }
 
-        var cursedFailAntic = bindEffects.FindGameObjectInChildren("cursed_bind_fail");
+        var cursedFailAntic = bindEffects.FindGameObjectInChildren(CursedBindFailObjectName);
         if (cursedFailAntic != null) {
             cursedFailAntic.SetActive(false);
         }
 
-        var beastAntic = bindEffects.FindGameObjectInChildren("Warrior_Bind_antic_silk");
+        var beastAntic = bindEffects.FindGameObjectInChildren(BeastCrestAnticObjectName);
         if (beastAntic != null) {
             beastAntic.SetActive(false);
         }
 
-        var bindSilkObj = bindEffects.FindGameObjectInChildren("Bind Silk");
+        var bindSilkObj = bindEffects.FindGameObjectInChildren(BindSilkObjectName);
         if (bindSilkObj != null) {
             bindSilkObj.SetActive(false);
         }

@@ -41,7 +41,7 @@ internal sealed class FsmStateActionInjector : FsmStateAction {
     public override void OnEnter() {
         if (_onStateEnter != null) {
             try {
-                _onStateEnter?.Invoke(Fsm.FsmComponent);
+                _onStateEnter.Invoke(Fsm.FsmComponent);
             } catch (Exception e) {
                 Logger.Error(e.ToString());
             }
@@ -57,6 +57,10 @@ internal sealed class FsmStateActionInjector : FsmStateAction {
     /// <param name="actionIndex">The index at which to inject the action within the state's action list. Defaults to 0.</param>
     /// <returns>The injected action.</returns>
     public static FsmStateActionInjector Inject(FsmState state, Action<PlayMakerFSM> onEnter, int actionIndex = 0) {
+        if (state == null) {
+            throw new NullReferenceException("Received null state when injecting FSM");
+        }
+
         var action = new FsmStateActionInjector(state, onEnter);
         action.DoInjection(actionIndex);
 
