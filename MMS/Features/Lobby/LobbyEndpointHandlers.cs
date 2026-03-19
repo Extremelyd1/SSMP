@@ -5,6 +5,7 @@ using MMS.Features.Matchmaking;
 using MMS.Models;
 using MMS.Services.Lobby;
 using MMS.Services.Matchmaking;
+using MMS.Services.Utility;
 using static MMS.Contracts.Requests;
 using static MMS.Contracts.Responses;
 using _Lobby = MMS.Models.Lobby.Lobby;
@@ -62,7 +63,7 @@ internal static partial class LobbyEndpoints {
             lobby.LobbyName,
             lobby.LobbyType,
             lobby.IsPublic ? "Public" : "Private",
-            RedactInProduction(lobby.AdvertisedConnectionData),
+            PrivacyFormatter.Format(lobby.AdvertisedConnectionData),
             lobby.LobbyCode
         );
 
@@ -142,10 +143,9 @@ internal static partial class LobbyEndpoints {
             return clientIpError!;
 
         ProgramState.Logger.LogInformation(
-            "[JOIN] {ConnectionDetails}",
-            ProgramState.IsDevelopment
-                ? $"{clientIp}:{request.ClientPort} -> {lobby.AdvertisedConnectionData}"
-                : $"[Redacted]:{request.ClientPort} -> [Redacted]"
+            "[JOIN] {ClientEndPoint} -> {LobbyEndPoint}",
+            $"{PrivacyFormatter.Format(clientIp)}:{request.ClientPort}",
+            PrivacyFormatter.Format(lobby.AdvertisedConnectionData)
         );
 
         var lanConnectionData = TryResolveLanConnectionData(lobby, clientIp);
@@ -259,7 +259,7 @@ internal static partial class LobbyEndpoints {
 
         ProgramState.Logger.LogInformation(
             "[JOIN] Local network detected - returning LAN IP: {HostLanIp}",
-            lobby.HostLanIp
+            PrivacyFormatter.Format(lobby.HostLanIp)
         );
 
         return lobby.HostLanIp;
@@ -276,9 +276,4 @@ internal static partial class LobbyEndpoints {
             )
         );
 
-    /// <summary>
-    /// Returns the value as-is in development, or <c>[Redacted]</c> in production.
-    /// </summary>
-    private static string RedactInProduction(string value) =>
-        ProgramState.IsDevelopment ? value : "[Redacted]";
 }

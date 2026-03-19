@@ -73,7 +73,7 @@ public class JoinSessionService {
         _coordinator.FailJoinSessionAsync(joinId, reason, cancellationToken);
 
     /// <summary>Removes all expired sessions and purges stale discovery tokens.</summary>
-    public void CleanupExpiredSessions() =>
+    public int CleanupExpiredSessions() =>
         _coordinator.CleanupExpiredSessions();
 
     /// <summary>

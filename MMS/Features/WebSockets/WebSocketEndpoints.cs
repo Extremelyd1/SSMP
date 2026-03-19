@@ -7,8 +7,8 @@ using MMS.Models;
 using MMS.Models.Matchmaking;
 using MMS.Services.Lobby;
 using MMS.Services.Matchmaking;
+using MMS.Services.Utility;
 using static MMS.Contracts.Responses;
-using _Lobby = MMS.Models.Lobby.Lobby;
 
 namespace MMS.Features.WebSockets;
 
@@ -59,24 +59,24 @@ internal static class WebSocketEndpoints {
         using var webSocket = await context.WebSockets.AcceptWebSocketAsync();
         var previousSocket = lobby.HostWebSocket;
         if (previousSocket != null && !ReferenceEquals(previousSocket, webSocket))
-            await CloseReplacedHostSocketAsync(previousSocket, GetLobbyIdentifier(lobby), context.RequestAborted);
+            await CloseReplacedHostSocketAsync(previousSocket, PrivacyFormatter.Format(lobby.ConnectionData), context.RequestAborted);
 
         lobby.HostWebSocket = webSocket;
 
         ProgramState.Logger.LogInformation(
             "[WS] Host connected for lobby {LobbyIdentifier}",
-            GetLobbyIdentifier(lobby)
+            PrivacyFormatter.Format(lobby.ConnectionData)
         );
 
         try {
-            await DrainHostWebSocketAsync(webSocket, GetLobbyIdentifier(lobby));
+            await DrainHostWebSocketAsync(webSocket, PrivacyFormatter.Format(lobby.ConnectionData));
         } finally {
             if (ReferenceEquals(lobby.HostWebSocket, webSocket))
                 lobby.HostWebSocket = null;
 
             ProgramState.Logger.LogInformation(
                 "[WS] Host disconnected from lobby {LobbyIdentifier}",
-                GetLobbyIdentifier(lobby)
+                PrivacyFormatter.Format(lobby.ConnectionData)
             );
         }
     }
@@ -289,13 +289,4 @@ internal static class WebSocketEndpoints {
         }
     }
 
-    /// <summary>
-    /// Returns a lobby identifier appropriate for the current environment.
-    /// Uses <see cref="_Lobby.ConnectionData"/> in development for full diagnostic detail,
-    /// and <see cref="_Lobby.LobbyName"/> in production to avoid leaking connection info.
-    /// </summary>
-    /// <param name="lobby">The lobby to identify.</param>
-    /// <returns>A string identifier suitable for logging.</returns>
-    private static string GetLobbyIdentifier(_Lobby lobby) =>
-        ProgramState.IsDevelopment ? lobby.ConnectionData : lobby.LobbyName;
 }

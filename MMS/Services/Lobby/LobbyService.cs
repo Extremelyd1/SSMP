@@ -218,7 +218,7 @@ public class LobbyService {
             onRemoving?.Invoke(lobby);
         } catch (Exception ex) {
             ProgramState.Logger.LogWarning(
-                ex, "Lobby removal callback failed for {ConnectionData}", lobby.ConnectionData
+                ex, "Lobby removal callback failed for {ConnectionData}", PrivacyFormatter.Format(lobby.ConnectionData)
             );
         } finally {
             _tokenToConnectionData.TryRemove(lobby.HostToken, out _);

@@ -205,14 +205,22 @@ public sealed class JoinSessionCoordinator {
     /// Discovery tokens are considered stale after 2 minutes, giving them a longer
     /// grace period than sessions to handle timing edge cases.
     /// </remarks>
-    public void CleanupExpiredSessions() {
+    /// <returns>The number of expired sessions removed during this call.</returns>
+    public int CleanupExpiredSessions()
+    {
         var now = DateTime.UtcNow;
-
+        var removed = 0;
+    
         foreach (var joinId in _store.GetExpiredJoinIds(now))
+        {
             CleanupJoinSession(joinId);
+            removed++;
+        }
 
         foreach (var token in _store.GetExpiredDiscoveryTokens(now.AddMinutes(-2)))
             _store.RemoveDiscoveryToken(token);
+
+        return removed;
     }
 
     /// <summary>

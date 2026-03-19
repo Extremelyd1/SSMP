@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using MMS.Bootstrap;
 using MMS.Services.Matchmaking;
+using MMS.Services.Utility;
 
 namespace MMS.Services.Network;
 
@@ -83,7 +84,7 @@ public sealed class UdpDiscoveryService : BackgroundService {
         if (buffer.Length != TokenByteLength) {
             _logger.LogWarning(
                 "Received malformed discovery packet from {EndPoint} (length: {Length})",
-                FormatEndPoint(remoteEndPoint),
+                PrivacyFormatter.Format(remoteEndPoint),
                 buffer.Length
             );
             return;
@@ -94,15 +95,11 @@ public sealed class UdpDiscoveryService : BackgroundService {
         _logger.LogDebug(
             "Received discovery packet {TokenFingerprint} from {EndPoint}",
             GetTokenFingerprint(token),
-            FormatEndPoint(remoteEndPoint)
+            PrivacyFormatter.Format(remoteEndPoint)
         );
 
         await _joinSessionService.SetDiscoveredPortAsync(token, remoteEndPoint.Port, cancellationToken);
     }
-
-    /// <summary>Formats an endpoint for logging, redacting it in non-development environments.</summary>
-    private static string FormatEndPoint(IPEndPoint remoteEndPoint) =>
-        ProgramState.IsDevelopment ? remoteEndPoint.ToString() : "[Redacted]";
 
     /// <summary>
     /// Generates a short, non-reversible SHA-256 fingerprint for a session token.
