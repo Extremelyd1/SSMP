@@ -55,10 +55,7 @@ internal class BindInterrupt : Bind {
         PlaySound(bindEffects.transform.parent.gameObject, audio);
 
         // Remove haze and camera controls
-        var haze = burst.FindGameObjectInChildren("haze2");
-        if (haze != null) {
-            Object.Destroy(haze);
-        }
+        burst.DestroyGameObjectInChildren("haze2");
 
         var shaker = burst.GetComponentInChildren<CameraControlAnimationEvents>();
         if (shaker != null) {
@@ -100,10 +97,7 @@ internal class BindInterrupt : Bind {
             Object.DestroyImmediate(shaker);
         }
 
-        var haze = bindBell.FindGameObjectInChildren("haze2 (1)");
-        if (haze != null) {
-            Object.Destroy(haze);
-        }
+        bindBell.DestroyGameObjectInChildren("haze2 (1)");
 
         // Add hitbox if appropriate
         if (ServerSettings.IsPvpEnabled && ShouldDoDamage) {

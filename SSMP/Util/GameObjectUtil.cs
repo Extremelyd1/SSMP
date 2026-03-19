@@ -38,6 +38,26 @@ internal static class GameObjectUtil {
     }
 
     /// <summary>
+    /// Destroys a GameObject with the given name in the children of the given GameObject.
+    /// </summary>
+    /// <param name="gameObject">The GameObject to search in.</param>
+    /// <param name="name">The name of the GameObject to search for.</param>
+    /// <returns>Returns true if the object was destroyed, false otherwise.</returns>
+    public static bool DestroyGameObjectInChildren(this GameObject gameObject, string name) {
+        if (gameObject == null) {
+            return false;
+        }
+
+        var child = FindGameObjectInChildren(gameObject, name);
+        if (child != null) {
+            Object.Destroy(child.gameObject);
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Get a list of the children of the given GameObject.
     /// </summary>
     /// <param name="gameObject">The GameObject to get the children for.</param>

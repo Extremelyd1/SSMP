@@ -110,10 +110,7 @@ internal class BindBurst : Bind {
             Object.DestroyImmediate(shaker);
         }
 
-        var haze = mirror.FindGameObjectInChildren("haze2");
-        if (haze != null) {
-            Object.Destroy(haze);
-        }
+        mirror.DestroyGameObjectInChildren("haze2");
 
         return mirror;
     }
