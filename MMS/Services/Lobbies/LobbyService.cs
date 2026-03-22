@@ -1,10 +1,11 @@
 using System.Collections.Concurrent;
 using MMS.Bootstrap;
+using MMS.Models.Lobby;
 using MMS.Services.Matchmaking;
 using MMS.Services.Utility;
 using _Lobby = MMS.Models.Lobby.Lobby;
 
-namespace MMS.Services.Lobby;
+namespace MMS.Services.Lobbies;
 
 /// <summary>
 /// Thread-safe in-memory lobby store.
@@ -264,5 +265,5 @@ public class LobbyService {
 
     /// <summary>Returns <see langword="true"/> if <paramref name="lobby"/> is a matchmaking lobby.</summary>
     private static bool IsMatchmakingLobby(_Lobby lobby) =>
-        lobby.LobbyType.Equals("matchmaking", StringComparison.OrdinalIgnoreCase);
+        IsMatchmakingLobbyType(lobby.LobbyType);
 }

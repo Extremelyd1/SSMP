@@ -2,7 +2,7 @@ using System.Net;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
-using MMS.Services.Lobby;
+using MMS.Services.Lobbies;
 using MMS.Services.Matchmaking;
 using MMS.Services.Network;
 using static MMS.Contracts.Responses;
@@ -84,11 +84,15 @@ internal static class ServiceCollectionExtensions {
                     ForwardedHeaders.XForwardedHost |
                     ForwardedHeaders.XForwardedProto;
 
+                // Trust individual reverse-proxy IPs from configuration so ASP.NET Core
+                // accepts forwarded client IP/protocol/host headers from those addresses.
                 foreach (var proxy in configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? []) {
                     if (IPAddress.TryParse(proxy, out var address))
                         options.KnownProxies.Add(address);
                 }
 
+                // Trust whole proxy networks expressed as CIDR ranges. Invalid entries are
+                // ignored so a malformed value does not break startup.
                 foreach (var network in configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>() ??
                                         []) {
                     if (!TryParseNetwork(network, out var ipNetwork))

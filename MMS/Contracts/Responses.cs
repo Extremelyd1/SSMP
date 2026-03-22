@@ -5,8 +5,7 @@ namespace MMS.Contracts;
 /// <summary>
 /// Response DTOs returned by the MMS HTTP API.
 /// </summary>
-internal static class Responses
-{
+internal static class Responses {
     /// <summary>
     /// Response payload returned by the health check endpoint.
     /// </summary>

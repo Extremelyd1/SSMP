@@ -10,7 +10,9 @@ internal static class ProgramState {
     public static bool IsDevelopment { get; internal set; }
 
     /// <summary>
-    /// Gets or sets the application-level logger after the host has been built.
+    /// Gets or sets the shared application logger.
+    /// Assigned by <see cref="Program"/> before HTTPS configuration runs and
+    /// later replaced with the built host logger after application startup completes.
     /// </summary>
     public static ILogger Logger { get; internal set; } = null!;
 

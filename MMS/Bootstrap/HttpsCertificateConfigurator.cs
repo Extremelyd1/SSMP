@@ -18,25 +18,6 @@ internal static class HttpsCertificateConfigurator {
     private const string KeyFile = "key.pem";
 
     /// <summary>
-    /// Static logger instance for the configurator.
-    /// </summary>
-    private static readonly ILogger Logger;
-
-    /// <summary>
-    /// Initializes static members of the <see cref="HttpsCertificateConfigurator"/> class.
-    /// </summary>
-    static HttpsCertificateConfigurator() {
-        using var loggerFactory = LoggerFactory.Create(builder => builder.AddSimpleConsole(o => {
-                    o.SingleLine = true;
-                    o.IncludeScopes = false;
-                    o.TimestampFormat = "HH:mm:ss ";
-                }
-            )
-        );
-        Logger = loggerFactory.CreateLogger(nameof(HttpsCertificateConfigurator));
-    }
-
-    /// <summary>
     /// Reads <c>cert.pem</c> and <c>key.pem</c> from the working directory and configures
     /// Kestrel to terminate TLS with that certificate on port 5000.
     /// </summary>
@@ -71,12 +52,12 @@ internal static class HttpsCertificateConfigurator {
         pem = key = string.Empty;
 
         if (!File.Exists(CertFile)) {
-            Logger.LogError("Certificate file '{File}' does not exist", CertFile);
+            ProgramState.Logger.LogError("Certificate file '{File}' does not exist", CertFile);
             return false;
         }
 
         if (!File.Exists(KeyFile)) {
-            Logger.LogError("Key file '{File}' does not exist", KeyFile);
+            ProgramState.Logger.LogError("Key file '{File}' does not exist", KeyFile);
             return false;
         }
 
@@ -85,7 +66,7 @@ internal static class HttpsCertificateConfigurator {
             key = File.ReadAllText(KeyFile);
             return true;
         } catch (Exception e) {
-            Logger.LogError(e, "Could not read '{CertFile}' or '{KeyFile}'", CertFile, KeyFile);
+            ProgramState.Logger.LogError(e, "Could not read '{CertFile}' or '{KeyFile}'", CertFile, KeyFile);
             return false;
         }
     }
@@ -114,7 +95,7 @@ internal static class HttpsCertificateConfigurator {
             );
             return true;
         } catch (CryptographicException e) {
-            Logger.LogError(e, "Could not create certificate from PEM files");
+            ProgramState.Logger.LogError(e, "Could not create certificate from PEM files");
             return false;
         }
     }

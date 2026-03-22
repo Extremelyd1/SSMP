@@ -1,8 +1,8 @@
 using System.Net.WebSockets;
+using MMS.Models.Lobby;
 using MMS.Models.Matchmaking;
-using MMS.Services.Lobby;
+using MMS.Services.Lobbies;
 using MMS.Services.Network;
-using _Lobby = MMS.Models.Lobby.Lobby;
 
 namespace MMS.Services.Matchmaking;
 
@@ -69,7 +69,7 @@ public sealed class JoinSessionMessenger(LobbyService lobbyService) {
         );
 
     /// <summary>Notifies the host that its external UDP port has been observed.</summary>
-    public static Task SendHostMappingReceivedAsync(_Lobby lobby, int port, CancellationToken cancellationToken) =>
+    public static Task SendHostMappingReceivedAsync(Lobby lobby, int port, CancellationToken cancellationToken) =>
         SendToHostAsync(
             lobby,
             new {
@@ -115,7 +115,7 @@ public sealed class JoinSessionMessenger(LobbyService lobbyService) {
     /// Returns <see langword="false"/> if the host socket is not open.
     /// </summary>
     public static async Task<bool> SendStartPunchToHostAsync(
-        _Lobby lobby,
+        Lobby lobby,
         string joinId,
         string clientIp,
         int clientPort,
@@ -184,7 +184,7 @@ public sealed class JoinSessionMessenger(LobbyService lobbyService) {
 
     /// <summary>Sends <paramref name="payload"/> to the lobby's host WebSocket, if open.</summary>
     private static Task SendToHostAsync(
-        _Lobby lobby,
+        Lobby lobby,
         object payload,
         CancellationToken cancellationToken
     ) {

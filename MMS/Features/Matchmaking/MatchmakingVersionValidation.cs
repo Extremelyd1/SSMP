@@ -5,8 +5,7 @@ namespace MMS.Features.Matchmaking;
 /// <summary>
 /// Shared matchmaking protocol version validation helpers.
 /// </summary>
-internal static class MatchmakingVersionValidation
-{
+internal static class MatchmakingVersionValidation {
     /// <summary>
     /// Returns <see langword="true"/> if <paramref name="matchmakingVersion"/> matches the current protocol version.
     /// </summary>
@@ -21,5 +20,5 @@ internal static class MatchmakingVersionValidation
     /// <returns><see langword="true"/> if the version is present and matches the current protocol.</returns>
     public static bool TryValidate(string? matchmakingVersion) =>
         int.TryParse(matchmakingVersion, out var parsedVersion) &&
-        parsedVersion == MatchmakingProtocol.CurrentVersion;
+        Validate(parsedVersion);
 }

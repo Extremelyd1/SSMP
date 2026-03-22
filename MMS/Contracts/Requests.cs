@@ -5,8 +5,7 @@ namespace MMS.Contracts;
 /// <summary>
 /// Request DTOs accepted by the MMS HTTP API.
 /// </summary>
-internal static class Requests
-{
+internal static class Requests {
     /// <summary>
     /// Request payload for lobby creation.
     /// </summary>

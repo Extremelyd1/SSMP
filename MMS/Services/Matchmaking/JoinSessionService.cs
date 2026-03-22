@@ -1,6 +1,6 @@
 using System.Net.WebSockets;
+using MMS.Models.Lobby;
 using MMS.Models.Matchmaking;
-using _Lobby = MMS.Models.Lobby.Lobby;
 
 namespace MMS.Services.Matchmaking;
 
@@ -35,7 +35,7 @@ public class JoinSessionService {
     /// Allocates a new join session for a client attempting to connect to <paramref name="lobby"/>.
     /// Returns <see langword="null"/> for Steam lobbies.
     /// </summary>
-    public JoinSession? CreateJoinSession(_Lobby lobby, string clientIp) =>
+    public JoinSession? CreateJoinSession(Lobby lobby, string clientIp) =>
         _coordinator.CreateJoinSession(lobby, clientIp);
 
     /// <summary>Returns an active, non-expired session by its identifier, or <see langword="null"/> if not found or expired.</summary>
@@ -80,6 +80,6 @@ public class JoinSessionService {
     /// Removes all sessions belonging to <paramref name="lobby"/> and its host discovery token.
     /// Called when a lobby is closed or evicted.
     /// </summary>
-    internal void CleanupSessionsForLobby(_Lobby lobby) =>
+    internal void CleanupSessionsForLobby(Lobby lobby) =>
         _coordinator.CleanupSessionsForLobby(lobby);
 }

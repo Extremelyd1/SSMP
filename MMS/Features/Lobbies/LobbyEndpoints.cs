@@ -1,19 +1,18 @@
 using MMS.Http;
 
-namespace MMS.Features.Lobby;
+// ReSharper disable once CheckNamespace
+namespace MMS.Features.Lobbies;
 
 /// <summary>
 /// Maps lobby-oriented MMS HTTP endpoints.
 /// </summary>
-internal static partial class LobbyEndpoints
-{
+internal static partial class LobbyEndpoints {
     /// <summary>
     /// Maps lobby management and matchmaking HTTP endpoints.
     /// </summary>
     /// <param name="app">The web application to map non-lobby-root endpoints onto.</param>
     /// <param name="lobby">The grouped route builder for <c>/lobby</c> routes.</param>
-    public static void MapLobbyEndpoints(this WebApplication app, RouteGroupBuilder lobby)
-    {
+    public static void MapLobbyEndpoints(this WebApplication app, RouteGroupBuilder lobby) {
         app.Endpoint()
            .Get("/lobbies")
            .Handler(GetLobbies)

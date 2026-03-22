@@ -3,16 +3,14 @@ namespace MMS.Bootstrap;
 /// <summary>
 /// Extension methods for configuring the MMS middleware pipeline.
 /// </summary>
-internal static class WebApplicationExtensions
-{
+internal static class WebApplicationExtensions {
     /// <summary>
     /// Applies the MMS middleware pipeline and binds the listener URL.
     /// </summary>
     /// <param name="app">The web application to configure.</param>
     /// <param name="isDevelopment">Whether the app is running in development.</param>
     /// <returns>The same web application for chaining.</returns>
-    public static void UseMmsPipeline(this WebApplication app, bool isDevelopment)
-    {
+    public static void UseMmsPipeline(this WebApplication app, bool isDevelopment) {
         if (isDevelopment)
             app.UseHttpLogging();
         else

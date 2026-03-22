@@ -1,9 +1,9 @@
 using System.Net.WebSockets;
 using MMS.Models;
+using MMS.Models.Lobby;
 using MMS.Models.Matchmaking;
-using MMS.Services.Lobby;
+using MMS.Services.Lobbies;
 using MMS.Services.Utility;
-using _Lobby = MMS.Models.Lobby.Lobby;
 
 namespace MMS.Services.Matchmaking;
 
@@ -49,6 +49,7 @@ public sealed class JoinSessionCoordinator {
         _lobbyService = lobbyService;
         _logger = logger;
     }
+
     /// <summary>
     /// Allocates a new join session for a client attempting to connect to <paramref name="lobby"/>.
     /// </summary>
@@ -57,7 +58,7 @@ public sealed class JoinSessionCoordinator {
     /// <returns>
     /// The new <see cref="JoinSession"/>, or <see langword="null"/> for Steam lobbies
     /// </returns>
-    public JoinSession? CreateJoinSession(_Lobby lobby, string clientIp) {
+    public JoinSession? CreateJoinSession(Lobby lobby, string clientIp) {
         if (lobby.LobbyType.Equals("steam", StringComparison.OrdinalIgnoreCase))
             return null;
 
@@ -206,13 +207,11 @@ public sealed class JoinSessionCoordinator {
     /// grace period than sessions to handle timing edge cases.
     /// </remarks>
     /// <returns>The number of expired sessions removed during this call.</returns>
-    public int CleanupExpiredSessions()
-    {
+    public int CleanupExpiredSessions() {
         var now = DateTime.UtcNow;
         var removed = 0;
-    
-        foreach (var joinId in _store.GetExpiredJoinIds(now))
-        {
+
+        foreach (var joinId in _store.GetExpiredJoinIds(now)) {
             CleanupJoinSession(joinId);
             removed++;
         }
@@ -228,7 +227,7 @@ public sealed class JoinSessionCoordinator {
     /// Called when a lobby is closed or evicted.
     /// </summary>
     /// <param name="lobby">The lobby being removed.</param>
-    public void CleanupSessionsForLobby(_Lobby lobby) {
+    public void CleanupSessionsForLobby(Lobby lobby) {
         foreach (var joinId in _store.GetJoinIdsForLobby(lobby.ConnectionData))
             CleanupJoinSession(joinId);
 
@@ -240,7 +239,7 @@ public sealed class JoinSessionCoordinator {
     /// Registers the host discovery token for a lobby if it is not already tracked.
     /// This ensures the server can correlate the host's UDP packet with the correct lobby.
     /// </summary>
-    private void RegisterHostDiscoveryTokenIfAbsent(_Lobby lobby) {
+    private void RegisterHostDiscoveryTokenIfAbsent(Lobby lobby) {
         if (lobby.HostDiscoveryToken == null || _store.ContainsDiscoveryToken(lobby.HostDiscoveryToken))
             return;
 

@@ -5,7 +5,7 @@ using MMS.Features.Matchmaking;
 using MMS.Http;
 using MMS.Models;
 using MMS.Models.Matchmaking;
-using MMS.Services.Lobby;
+using MMS.Services.Lobbies;
 using MMS.Services.Matchmaking;
 using MMS.Services.Utility;
 using static MMS.Contracts.Responses;
@@ -194,7 +194,7 @@ internal static class WebSocketEndpoints {
 
     /// <summary>
     /// Validates the <c>matchmakingVersion</c> query parameter.
-    /// Writes a <c>426 Upgrade Required</c> response if validation fails.
+    /// Writes a <c>400 Bad Request</c> response if validation fails.
     /// </summary>
     /// <param name="context">The current HTTP context.</param>
     /// <returns>
@@ -204,7 +204,7 @@ internal static class WebSocketEndpoints {
         if (MatchmakingVersionValidation.TryValidate(context.Request.Query["matchmakingVersion"]))
             return true;
 
-        context.Response.StatusCode = StatusCodes.Status426UpgradeRequired;
+        context.Response.StatusCode = StatusCodes.Status400BadRequest;
         context.Response
                .WriteAsJsonAsync(
                    new ErrorResponse(

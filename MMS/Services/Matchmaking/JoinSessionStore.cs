@@ -21,14 +21,14 @@ public sealed class JoinSessionStore {
 
     /// <summary>
     /// Secondary index for efficient lookup of join sessions by lobby connection data.
-    /// Valus are dummy bytes to use <see cref="ConcurrentDictionary{TKey, TValue}"/> as a set.
+    /// Values are dummy bytes to use <see cref="ConcurrentDictionary{TKey, TValue}"/> as a set.
     /// </summary>
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, byte>> _joinIdsByLobby = new();
 
     /// <summary>
     /// Secondary index for efficient lookup of expired sessions.
     /// </summary>
-    private readonly SortedSet<(DateTime expiresAtUtc, string joinId)> _expiryIndex = new();
+    private readonly SortedSet<(DateTime expiresAtUtc, string joinId)> _expiryIndex = [];
 
     /// <summary>
     /// Lock for thread-safe access to <see cref="_expiryIndex"/>.

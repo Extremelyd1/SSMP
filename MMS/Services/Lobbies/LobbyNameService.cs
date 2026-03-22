@@ -4,7 +4,7 @@ using System.Resources;
 using System.Runtime.Serialization;
 using System.Text.Json;
 
-namespace MMS.Services.Lobby;
+namespace MMS.Services.Lobbies;
 
 /// <summary>
 /// Lobby name providing service that randomly generates lobby names from words in an embedded JSON.

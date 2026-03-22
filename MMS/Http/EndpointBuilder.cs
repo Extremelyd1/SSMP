@@ -3,8 +3,7 @@ namespace MMS.Http;
 /// <summary>
 /// Fluent builder for registering minimal API endpoints with a compact, readable syntax.
 /// </summary>
-public sealed class EndpointBuilder(IEndpointRouteBuilder routes)
-{
+public sealed class EndpointBuilder(IEndpointRouteBuilder routes) {
     private string _method = "GET";
     private string _route = "/";
     private Delegate? _handler;
@@ -16,8 +15,7 @@ public sealed class EndpointBuilder(IEndpointRouteBuilder routes)
     /// </summary>
     /// <param name="route">The route pattern to map.</param>
     /// <returns>The same builder for chaining.</returns>
-    public EndpointBuilder Get(string route)
-    {
+    public EndpointBuilder Get(string route) {
         _method = "GET";
         _route = route;
         return this;
@@ -28,8 +26,7 @@ public sealed class EndpointBuilder(IEndpointRouteBuilder routes)
     /// </summary>
     /// <param name="route">The route pattern to map.</param>
     /// <returns>The same builder for chaining.</returns>
-    public EndpointBuilder Post(string route)
-    {
+    public EndpointBuilder Post(string route) {
         _method = "POST";
         _route = route;
         return this;
@@ -40,8 +37,7 @@ public sealed class EndpointBuilder(IEndpointRouteBuilder routes)
     /// </summary>
     /// <param name="route">The route pattern to map.</param>
     /// <returns>The same builder for chaining.</returns>
-    public EndpointBuilder Delete(string route)
-    {
+    public EndpointBuilder Delete(string route) {
         _method = "DELETE";
         _route = route;
         return this;
@@ -52,8 +48,7 @@ public sealed class EndpointBuilder(IEndpointRouteBuilder routes)
     /// </summary>
     /// <param name="route">The route pattern to map.</param>
     /// <returns>The same builder for chaining.</returns>
-    public EndpointBuilder Map(string route)
-    {
+    public EndpointBuilder Map(string route) {
         _method = "MAP";
         _route = route;
         return this;
@@ -64,8 +59,7 @@ public sealed class EndpointBuilder(IEndpointRouteBuilder routes)
     /// </summary>
     /// <param name="handler">The delegate to invoke when the endpoint matches.</param>
     /// <returns>The same builder for chaining.</returns>
-    public EndpointBuilder Handler(Delegate handler)
-    {
+    public EndpointBuilder Handler(Delegate handler) {
         _handler = handler;
         return this;
     }
@@ -75,8 +69,7 @@ public sealed class EndpointBuilder(IEndpointRouteBuilder routes)
     /// </summary>
     /// <param name="name">The endpoint name.</param>
     /// <returns>The same builder for chaining.</returns>
-    public EndpointBuilder WithName(string name)
-    {
+    public EndpointBuilder WithName(string name) {
         _name = name;
         return this;
     }
@@ -86,8 +79,7 @@ public sealed class EndpointBuilder(IEndpointRouteBuilder routes)
     /// </summary>
     /// <param name="policyName">The name of the rate-limiting policy.</param>
     /// <returns>The same builder for chaining.</returns>
-    public EndpointBuilder RequireRateLimiting(string policyName)
-    {
+    public EndpointBuilder RequireRateLimiting(string policyName) {
         _rateLimitingPolicy = policyName;
         return this;
     }
@@ -96,12 +88,10 @@ public sealed class EndpointBuilder(IEndpointRouteBuilder routes)
     /// Builds and registers the configured endpoint.
     /// </summary>
     /// <returns>The same route builder that created this endpoint.</returns>
-    public void Build()
-    {
+    public void Build() {
         ArgumentNullException.ThrowIfNull(_handler);
 
-        var endpoint = _method switch
-        {
+        var endpoint = _method switch {
             "GET" => routes.MapGet(_route, _handler),
             "POST" => routes.MapPost(_route, _handler),
             "DELETE" => routes.MapDelete(_route, _handler),
@@ -120,8 +110,7 @@ public sealed class EndpointBuilder(IEndpointRouteBuilder routes)
 /// <summary>
 /// Extension methods for starting fluent endpoint registrations.
 /// </summary>
-internal static class FluentEndpointBuilderExtensions
-{
+internal static class FluentEndpointBuilderExtensions {
     /// <summary>
     /// Starts building an endpoint on a web application.
     /// </summary>

@@ -3,14 +3,15 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using MMS.Bootstrap;
 using MMS.Features.Matchmaking;
 using MMS.Models;
-using MMS.Services.Lobby;
+using MMS.Models.Lobby;
+using MMS.Services.Lobbies;
 using MMS.Services.Matchmaking;
 using MMS.Services.Utility;
 using static MMS.Contracts.Requests;
 using static MMS.Contracts.Responses;
-using _Lobby = MMS.Models.Lobby.Lobby;
 
-namespace MMS.Features.Lobby;
+// ReSharper disable once CheckNamespace
+namespace MMS.Features.Lobbies;
 
 /// <summary>
 /// Contains handler and validation logic for lobby-oriented MMS endpoints.
@@ -19,7 +20,7 @@ internal static partial class LobbyEndpoints {
     /// <summary>
     /// Returns all lobbies, optionally filtered by type.
     /// </summary>
-    private static IResult GetLobbies(LobbyService lobbyService, string? type = null) {
+    private static Ok<IEnumerable<LobbyResponse>> GetLobbies(LobbyService lobbyService, string? type = null) {
         var lobbies = lobbyService.GetLobbies(type)
                                   .Select(l => new LobbyResponse(
                                           l.AdvertisedConnectionData,
@@ -42,7 +43,7 @@ internal static partial class LobbyEndpoints {
     ) {
         var lobbyType = request.LobbyType ?? "matchmaking";
 
-        if (!string.Equals(lobbyType, "steam", StringComparison.OrdinalIgnoreCase) &&
+        if (string.Equals(lobbyType, "matchmaking", StringComparison.OrdinalIgnoreCase) &&
             !MatchmakingVersionValidation.Validate(request.MatchmakingVersion))
             return MatchmakingOutdatedResult();
 
@@ -184,6 +185,20 @@ internal static partial class LobbyEndpoints {
     /// <summary>
     /// Resolves the <c>connectionData</c> string for a lobby being created.
     /// </summary>
+    /// <param name="request">The create-lobby request.</param>
+    /// <param name="lobbyType">The resolved lobby type.</param>
+    /// <param name="context">The current HTTP context.</param>
+    /// <param name="connectionData">
+    /// When this method returns <see langword="true"/>, contains the resolved connection data string.
+    /// Otherwise, <see cref="string.Empty"/>.
+    /// </param>
+    /// <param name="error">
+    /// When this method returns <see langword="false"/>, contains the validation error result to return to the caller.
+    /// Otherwise, <see langword="null"/>.
+    /// </param>
+    /// <returns>
+    /// <see langword="true"/> when connection data was resolved successfully; otherwise <see langword="false"/>.
+    /// </returns>
     private static bool TryResolveConnectionData(
         CreateLobbyRequest request,
         string lobbyType,
@@ -249,7 +264,7 @@ internal static partial class LobbyEndpoints {
     /// <summary>
     /// Returns the host LAN address when the joining client shares the host's WAN IP.
     /// </summary>
-    private static string? TryResolveLanConnectionData(_Lobby lobby, string clientIp) {
+    private static string? TryResolveLanConnectionData(Lobby lobby, string clientIp) {
         if (string.IsNullOrEmpty(lobby.HostLanIp))
             return null;
 

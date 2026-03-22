@@ -1,4 +1,4 @@
-namespace MMS.Services.Lobby;
+namespace MMS.Services.Lobbies;
 
 using Matchmaking;
 

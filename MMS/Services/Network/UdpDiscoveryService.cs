@@ -51,7 +51,7 @@ public sealed class UdpDiscoveryService : BackgroundService {
 
     /// <summary>
     /// Binds a <see cref="UdpClient"/> to <see cref="Port"/> and enters a receive loop
-    /// until <paramref name="stoppingToken"/> is cancelled by the hosting infrastructure.
+    /// until <paramref name="stoppingToken"/> is canceled by the hosting infrastructure.
     /// </summary>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
         using var udpClient = new UdpClient(Port);

@@ -15,16 +15,16 @@ public class Program {
     public static void Main(string[] args) {
         var builder = WebApplication.CreateBuilder(args);
         var isDevelopment = builder.Environment.IsDevelopment();
+        using var startupLoggerFactory = CreateStartupLoggerFactory();
 
         ProgramState.IsDevelopment = isDevelopment;
+        ProgramState.Logger = startupLoggerFactory.CreateLogger(nameof(Program));
 
         builder.Services.AddMmsCoreServices();
         builder.Services.AddMmsInfrastructure(builder.Configuration, isDevelopment);
 
         if (!builder.TryConfigureMmsHttps(isDevelopment)) {
-            using var loggerFactory = LoggerFactory.Create(logging => logging.AddSimpleConsole());
-            loggerFactory.CreateLogger(nameof(Program))
-                         .LogCritical("MMS HTTPS configuration failed, exiting");
+            ProgramState.Logger.LogCritical("MMS HTTPS configuration failed, exiting");
             return;
         }
 
@@ -34,5 +34,19 @@ public class Program {
         app.UseMmsPipeline(isDevelopment);
         app.MapMmsEndpoints();
         app.Run();
+    }
+
+    /// <summary>
+    /// Creates the temporary logger factory used before the ASP.NET Core host logger is available.
+    /// </summary>
+    /// <returns>A simple console logger factory for early startup diagnostics.</returns>
+    private static ILoggerFactory CreateStartupLoggerFactory() {
+        return LoggerFactory.Create(logging => logging.AddSimpleConsole(options => {
+                    options.SingleLine = true;
+                    options.IncludeScopes = false;
+                    options.TimestampFormat = "HH:mm:ss ";
+                }
+            )
+        );
     }
 }
