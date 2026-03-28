@@ -308,8 +308,7 @@ internal class ChatBox : IChatBox {
         IsOpen = false;
         _scrollOffset = 0;
 
-        for (var i = 0; i < MaxMessages; i++) 
-            _messages[i]?.Hide();
+        UpdateMessageVisibility();
 
         _chatInput.SetActive(false);
         
