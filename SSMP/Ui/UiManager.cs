@@ -798,7 +798,7 @@ internal class UiManager : IUiManager {
     /// </summary>
     private void OnMultiplayerMenuRequested() {
         MultiplayerButtonPressed?.Invoke();
-        _multiplayerMenuChain();
+        _multiplayerMenuChain.Invoke();
     }
 
     #endregion

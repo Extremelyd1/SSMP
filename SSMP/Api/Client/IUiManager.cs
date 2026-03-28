@@ -13,7 +13,7 @@ public interface IUiManager {
 
     /// <summary>
     /// Fired when the multiplayer button is pressed, before any blocking hooks run.
-    /// Use this for fire-and-forget reactions such as logging or showing a notification?
+    /// Use this for fire-and-forget reactions such as logging or showing a notification.
     /// </summary>
     event Action? MultiplayerButtonPressed;
 
