@@ -142,6 +142,9 @@ internal class UiManager : IUiManager {
     /// </summary>
     public event Action? RequestClientDisconnectEvent;
 
+    /// <inheritdoc />
+    public event Action? MultiplayerButtonPressed;
+
     #endregion
 
     #region Fields
@@ -207,6 +210,12 @@ internal class UiManager : IUiManager {
     /// </summary>
     private bool _isSlotSelectionActive;
 
+    /// <summary>
+    /// The head of the multiplayer menu hook chain.
+    /// Starts as the bare transition; each registered hook wraps it.
+    /// </summary>
+    private Action _multiplayerMenuChain;
+
     #endregion
 
     #region Properties
@@ -243,6 +252,13 @@ internal class UiManager : IUiManager {
     public UiManager(ModSettings modSettings, NetClient netClient) {
         _modSettings = modSettings;
         _netClient = netClient;
+        _multiplayerMenuChain = () => UM.StartCoroutine(GoToMultiplayerMenu());
+    }
+
+    /// <inheritdoc />
+    public void RegisterMultiplayerMenuHook(Action<Action> hook) {
+        var previous = _multiplayerMenuChain;
+        _multiplayerMenuChain = () => hook(previous);
     }
 
     #endregion
@@ -738,7 +754,7 @@ internal class UiManager : IUiManager {
         if (eventTrigger == null) return;
 
         eventTrigger.triggers.Clear();
-        AddButtonTriggers(eventTrigger, () => UM.StartCoroutine(GoToMultiplayerMenu()));
+        AddButtonTriggers(eventTrigger, OnMultiplayerMenuRequested);
     }
 
     /// <summary>
@@ -775,6 +791,14 @@ internal class UiManager : IUiManager {
         if (selectOnUp != null) nav.selectOnUp = selectOnUp;
         if (selectOnDown != null) nav.selectOnDown = selectOnDown;
         button.navigation = nav;
+    }
+
+    /// <summary>
+    /// Handles the multiplayer menu request by firing the notification event, then invoking the hook chain.
+    /// </summary>
+    private void OnMultiplayerMenuRequested() {
+        MultiplayerButtonPressed?.Invoke();
+        _multiplayerMenuChain.Invoke();
     }
 
     #endregion
