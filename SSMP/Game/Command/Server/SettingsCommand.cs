@@ -4,6 +4,7 @@ using SSMP.Api.Command.Server;
 using SSMP.Game.Server;
 using SSMP.Game.Settings;
 using SSMP.Api.Command;
+using SSMP.Util;
 
 namespace SSMP.Game.Command.Server;
 
@@ -76,29 +77,31 @@ internal class SettingsCommand : IServerCommand, ICommandWithDescription {
 
         if (args.Length < 3) {
             // The user only supplied the name of the setting, so we print its value
-            var currentValue = settingProperty.GetValue(ServerSettings, null);
+            var displayedValue = ObservableReflection.GetUnwrappedPropertyValue(settingProperty, ServerSettings);
 
-            commandSender.SendMessage($"Setting '{propName}' currently has value: {currentValue}");
+            commandSender.SendMessage($"Setting '{propName}' currently has value: {displayedValue}");
             return;
         }
 
         var newValueString = args[2];
 
-        if (!settingProperty.CanWrite) {
+        var settingType = ObservableReflection.UnwrapType(settingProperty.PropertyType);
+
+        if (!settingProperty.CanWrite && !ObservableReflection.IsObservableType(settingProperty.PropertyType)) {
             commandSender.SendMessage($"Could not change value of setting with name: {propName} (non-writable)");
             return;
         }
 
         object newValueObject;
 
-        if (settingProperty.PropertyType == typeof(bool)) {
+        if (settingType == typeof(bool)) {
             if (!bool.TryParse(newValueString, out var newValueBool)) {
                 commandSender.SendMessage("Please provide a boolean value (true/false) for this setting");
                 return;
             }
 
             newValueObject = newValueBool;
-        } else if (settingProperty.PropertyType == typeof(byte)) {
+        } else if (settingType == typeof(byte)) {
             if (!byte.TryParse(newValueString, out var newValueByte)) {
                 commandSender.SendMessage("Please provide a byte value (>= 0 and <= 255) for this setting");
                 return;
@@ -111,12 +114,16 @@ internal class SettingsCommand : IServerCommand, ICommandWithDescription {
             return;
         }
 
-        if (settingProperty.GetValue(ServerSettings).Equals(newValueObject)) {
+        var existingValue = ObservableReflection.GetUnwrappedPropertyValue(settingProperty, ServerSettings);
+        if (Equals(existingValue, newValueObject)) {
             commandSender.SendMessage($"Setting '{propName}' already has value: {newValueObject}");
             return;
         }
 
-        settingProperty.SetValue(ServerSettings, newValueObject, null);
+        if (!ObservableReflection.TrySetPropertyValue(settingProperty, ServerSettings, newValueObject)) {
+            commandSender.SendMessage($"Could not change value of setting with name: {propName} (non-writable)");
+            return;
+        }
 
         commandSender.SendMessage($"Changed setting '{propName}' to: {newValueObject}");
 

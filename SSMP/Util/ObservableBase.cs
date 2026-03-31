@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using SSMP.Game.Settings;
 
 namespace SSMP.Util;
 
@@ -67,7 +68,7 @@ public abstract class ObservableBase {
                 // ReSharper disable once ForeachCanBePartlyConvertedToQueryUsingAnotherGetEnumerator
                 foreach (var m in result) {
                     var alias = m.GetCustomAttribute<SettingAliasAttribute>();
-                    var resolvedName = alias?.PropertyName ?? m.Name;
+                    var resolvedName = alias?.Aliases.FirstOrDefault() ?? m.Name;
                     if (!seen.Add(resolvedName)) {
                         throw new InvalidOperationException(
                             $"{type.Name} declares two observable members that both resolve to the name \"{resolvedName}\". " +
@@ -108,7 +109,7 @@ public abstract class ObservableBase {
         }
 
         var alias = member.GetCustomAttribute<SettingAliasAttribute>();
-        var name = alias?.PropertyName ?? member.Name;
+        var name = alias?.Aliases.FirstOrDefault() ?? member.Name;
 
         Subscribe(observable, name, memberType);
         _managedObservables.Add(observable);
@@ -191,20 +192,6 @@ public abstract class ObservableBase {
         foreach (var o in _managedObservables)
             o.AcceptChanges();
     }
-}
-
-/// <summary>
-/// Attribute used to mark a field or property as an observable member and explicitly map it to a
-/// change-event name. When absent, the name is derived automatically from the member name.
-/// </summary>
-/// <param name="propertyName">The name to surface in <see cref="ObservableBase.OnChanged"/>.</param>
-[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
-public abstract class SettingAliasAttribute(string propertyName) : Attribute {
-    /// <summary>
-    /// The name surfaced through <see cref="ObservableBase.OnChanged"/> in place of the
-    /// member's declared name.
-    /// </summary>
-    public string PropertyName { get; } = propertyName;
 }
 
 /// <summary>

@@ -129,13 +129,12 @@ public class ServerSettings : ObservableBase, IServerSettings, IEquatable<Server
     public void SetAllProperties(ServerSettings serverSettings) {
         // Use reflection to copy over all observable values into this object
         foreach (var prop in GetType().GetProperties()) {
-            if (!prop.CanRead || !prop.CanWrite) {
+            if (!prop.CanRead) {
                 continue;
             }
 
-            if (prop.GetValue(this) is IObservable myObs
-                && prop.GetValue(serverSettings) is IObservable otherObs)
-                myObs.Value = otherObs.Value;
+            var otherValue = ObservableReflection.GetUnwrappedPropertyValue(prop, serverSettings);
+            ObservableReflection.TrySetPropertyValue(prop, this, otherValue);
         }
     }
 
@@ -161,7 +160,7 @@ public class ServerSettings : ObservableBase, IServerSettings, IEquatable<Server
         }
     
         foreach (var prop in GetType().GetProperties()) {
-            if (!prop.CanRead) {
+            if (!ObservableReflection.IsSyncableProperty(prop)) {
                 continue;
             }
 
