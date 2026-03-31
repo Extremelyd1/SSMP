@@ -46,6 +46,11 @@ internal class ServerInfo : IPacketData {
     public bool FullSynchronisation { get; set; }
 
     /// <summary>
+    /// The ID assigned to the connecting client.
+    /// </summary>
+    public ushort SelfId { get; set; }
+
+    /// <summary>
     /// The save data currently used on the server.
     /// </summary>
     public CurrentSave CurrentSave { get; set; } = null!;
@@ -69,6 +74,7 @@ internal class ServerInfo : IPacketData {
             ServerSettingsUpdate.WriteData(packet);
             
             packet.Write(FullSynchronisation);
+            packet.Write(SelfId);
 
             // CurrentSave.WriteData(packet);
         
@@ -116,6 +122,7 @@ internal class ServerInfo : IPacketData {
             ServerSettingsUpdate.ReadData(packet);
 
             FullSynchronisation = packet.ReadBool();
+            SelfId = packet.ReadUShort();
 
             // CurrentSave = new CurrentSave();
             // CurrentSave.ReadData(packet);

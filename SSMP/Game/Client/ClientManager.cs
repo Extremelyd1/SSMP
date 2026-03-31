@@ -5,6 +5,7 @@ using GlobalEnums;
 using Steamworks;
 using SSMP.Animation;
 using SSMP.Api.Client;
+using SSMP.Api.Server;
 using SSMP.Eventing;
 using SSMP.Fsm;
 using SSMP.Game.Client.Entity;
@@ -59,6 +60,11 @@ internal class ClientManager : IClientManager {
     /// The loaded mod settings.
     /// </summary>
     private readonly ModSettings _modSettings;
+
+    /// <summary>
+    /// The mutable local copy of the current server settings.
+    /// </summary>
+    private readonly ServerSettings _serverSettings;
 
     /// <summary>
     /// The player manager instance.
@@ -163,12 +169,6 @@ internal class ClientManager : IClientManager {
     private bool _sceneHostDetermined;
 
     /// <summary>
-    /// Event for when the server settings change after being received from the server.
-    /// The parameter for the action is a copy of the last received server settings.
-    /// </summary>
-    public event Action<ServerSettings>? ServerSettingsChangedEvent;
-
-    /// <summary>
     /// Event for when the player's team changes after being received from the server.
     /// </summary>
     public event Action<Team>? TeamChangedEvent;
@@ -186,7 +186,7 @@ internal class ClientManager : IClientManager {
     public IMapManager MapManager => _mapManager;
     
     /// <inheritdoc />
-    public ServerSettings ServerSettings { get; }
+    public IServerSettings ServerSettings => _serverSettings;
 
     /// <inheritdoc />
     public ushort Id { get; private set; }
@@ -230,7 +230,7 @@ internal class ClientManager : IClientManager {
         _netClient = netClient;
         _packetManager = packetManager;
         _uiManager = uiManager;
-        ServerSettings = serverSettings;
+        _serverSettings = serverSettings;
         _modSettings = modSettings;
 
         _playerData = new Dictionary<ushort, ClientPlayerData>();
@@ -264,7 +264,7 @@ internal class ClientManager : IClientManager {
     /// </summary>
     public void Initialize(ServerManager serverManager) {
         _playerManager.Initialize();
-        _animationManager.Initialize(ServerSettings);
+        _animationManager.Initialize(_serverSettings);
         _mapManager.Initialize();
 
         // _entityManager.Initialize();
@@ -665,9 +665,7 @@ internal class ClientManager : IClientManager {
         Logger.Info("Received server info from server");
 
         // Update the locally stored server settings
-        ServerSettings.SetAllProperties(serverInfo.ServerSettingsUpdate.ServerSettings);
-        // Call the event that the settings were updated
-        ServerSettingsChangedEvent?.Invoke(serverInfo.ServerSettingsUpdate.ServerSettings);
+        _serverSettings.SetAllProperties(serverInfo.ServerSettingsUpdate.ServerSettings);
 
         // Note whether full synchronization is enabled
         _fullSynchronisation = serverInfo.FullSynchronisation;
@@ -710,12 +708,12 @@ internal class ClientManager : IClientManager {
             );
         }
 
+        Id = serverInfo.SelfId;
+        _playerData[Id] = new ClientPlayerData(Id, _username!);
+
         // Fill the player data dictionary with the info from the packet
         foreach (var (id, username) in serverInfo.PlayerInfo) {
             _playerData[id] = new ClientPlayerData(id, username);
-
-            // If the username matches our own, we found our ID
-            if (username == _username) Id = id;
         }
 
         // Add the username to the player if we are in-game already
@@ -1069,7 +1067,7 @@ internal class ClientManager : IClientManager {
         var newServerSettings = update.ServerSettings;
 
         // Check whether the PvP state changed
-        if (ServerSettings.IsPvpEnabled != newServerSettings.IsPvpEnabled) {
+        if (_serverSettings.IsPvpEnabled != newServerSettings.IsPvpEnabled) {
             var message = $"PvP is now {(newServerSettings.IsPvpEnabled ? "enabled" : "disabled")}";
 
             UiManager.InternalChatBox.AddMessage(message);
@@ -1077,7 +1075,7 @@ internal class ClientManager : IClientManager {
         }
 
         // Check whether the always show map icons state changed
-        if (ServerSettings.AlwaysShowMapIcons != newServerSettings.AlwaysShowMapIcons) {
+        if (_serverSettings.AlwaysShowMapIcons != newServerSettings.AlwaysShowMapIcons) {
             alwaysShowMapChanged = true;
 
             var message =
@@ -1088,7 +1086,7 @@ internal class ClientManager : IClientManager {
         }
 
         // Check whether the wayward compass broadcast state changed
-        if (ServerSettings.OnlyBroadcastMapIconWithCompass !=
+        if (_serverSettings.OnlyBroadcastMapIconWithCompass !=
             newServerSettings.OnlyBroadcastMapIconWithCompass) {
             onlyCompassChanged = true;
 
@@ -1100,7 +1098,7 @@ internal class ClientManager : IClientManager {
         }
 
         // Check whether the display names setting changed
-        if (ServerSettings.DisplayNames != newServerSettings.DisplayNames) {
+        if (_serverSettings.DisplayNames != newServerSettings.DisplayNames) {
             displayNamesChanged = true;
 
             var message = $"Names are {(newServerSettings.DisplayNames ? "now" : "no longer")} displayed";
@@ -1110,7 +1108,7 @@ internal class ClientManager : IClientManager {
         }
 
         // Check whether the teams enabled setting changed
-        if (ServerSettings.TeamsEnabled != newServerSettings.TeamsEnabled) {
+        if (_serverSettings.TeamsEnabled != newServerSettings.TeamsEnabled) {
             teamsChanged = true;
 
             var message = $"Teams are {(newServerSettings.TeamsEnabled ? "now" : "no longer")} enabled";
@@ -1120,7 +1118,7 @@ internal class ClientManager : IClientManager {
         }
 
         // Check whether allow skins setting changed
-        if (ServerSettings.AllowSkins != newServerSettings.AllowSkins) {
+        if (_serverSettings.AllowSkins != newServerSettings.AllowSkins) {
             allowSkinsChanged = true;
 
             var message = $"Skins are {(newServerSettings.AllowSkins ? "now" : "no longer")} enabled";
@@ -1130,9 +1128,7 @@ internal class ClientManager : IClientManager {
         }
 
         // Update the settings so callbacks can read updated values
-        ServerSettings.SetAllProperties(newServerSettings);
-        // Call the event that the settings were updated
-        ServerSettingsChangedEvent?.Invoke(newServerSettings);
+        _serverSettings.SetAllProperties(newServerSettings);
 
         // Only update the player manager if the either PvP or body damage have been changed
         if (displayNamesChanged) {
@@ -1140,7 +1136,7 @@ internal class ClientManager : IClientManager {
         }
 
         if (alwaysShowMapChanged || onlyCompassChanged) {
-            if (ServerSettings is { AlwaysShowMapIcons: false, OnlyBroadcastMapIconWithCompass: false }) {
+            if (_serverSettings is { AlwaysShowMapIcons: false, OnlyBroadcastMapIconWithCompass: false }) {
                 _mapManager.RemoveAllIcons();
             }
         }
@@ -1148,7 +1144,7 @@ internal class ClientManager : IClientManager {
         // If the teams setting changed, we invoke the registered event handler if they exist
         if (teamsChanged) {
             // If the team setting was disabled, we reset all teams and call the event
-            if (!ServerSettings.TeamsEnabled) {
+            if (!_serverSettings.TeamsEnabled) {
                 _playerManager.ResetAllTeams();
 
                 TeamChangedEvent?.Invoke(Team.None);
@@ -1159,7 +1155,7 @@ internal class ClientManager : IClientManager {
 
         // If the allow skins setting changed, and it is no longer allowed, we reset all existing skins and call the
         // event
-        if (allowSkinsChanged && !ServerSettings.AllowSkins) {
+        if (allowSkinsChanged && !_serverSettings.AllowSkins) {
             _playerManager.ResetAllPlayerSkins();
 
             SkinChangedEvent?.Invoke(0);
@@ -1305,6 +1301,9 @@ internal class ClientManager : IClientManager {
         if (settingUpdate.UpdateTypes.Contains(PlayerSettingUpdateType.Team)) {
             if (settingUpdate.Self) {
                 _playerManager.OnPlayerTeamUpdate(true, settingUpdate.Team);
+                if (_playerData.TryGetValue(Id, out var localPlayerData)) {
+                    localPlayerData.Team = settingUpdate.Team;
+                }
 
                 TeamChangedEvent?.Invoke(settingUpdate.Team);
             } else {
