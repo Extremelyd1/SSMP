@@ -1,5 +1,4 @@
 using System;
-using SSMP.Util;
 
 namespace SSMP.Api.Server;
 
@@ -15,32 +14,32 @@ public interface IServerSettings {
     /// <summary>
     /// Whether player vs. player damage is enabled.
     /// </summary>
-    public Observable<bool> IsPvpEnabled { get; }
+    public bool IsPvpEnabled { get; }
 
     /// <summary>
     /// Whether to always show map icons.
     /// </summary>
-    public Observable<bool> AlwaysShowMapIcons { get; }
+    public bool AlwaysShowMapIcons { get; }
 
     /// <summary>
     /// Whether to only broadcast the map icon of a player if they have wayward compass equipped.
     /// </summary>
-    public Observable<bool> OnlyBroadcastMapIconWithCompass { get; }
+    public bool OnlyBroadcastMapIconWithCompass { get; }
 
     /// <summary>
     /// Whether to display player names above the player objects.
     /// </summary>
-    public Observable<bool> DisplayNames { get; }
+    public bool DisplayNames { get; }
 
     /// <summary>
     /// Whether teams are enabled.
     /// </summary>
-    public Observable<bool> TeamsEnabled { get; }
+    public bool TeamsEnabled { get; }
 
     /// <summary>
     /// Whether skins are allowed.
     /// </summary>
-    public Observable<bool> AllowSkins { get; }
+    public bool AllowSkins { get; }
     
     // /// <summary>
     // /// Whether other player's attacks can be parried.

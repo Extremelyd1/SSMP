@@ -1140,7 +1140,7 @@ internal class ClientManager : IClientManager {
         }
 
         if (alwaysShowMapChanged || onlyCompassChanged) {
-            if (ServerSettings is { AlwaysShowMapIcons.Value: false, OnlyBroadcastMapIconWithCompass.Value: false }) {
+            if (ServerSettings is { AlwaysShowMapIcons: false, OnlyBroadcastMapIconWithCompass: false }) {
                 _mapManager.RemoveAllIcons();
             }
         }

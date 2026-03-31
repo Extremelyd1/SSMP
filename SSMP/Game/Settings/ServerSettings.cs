@@ -1,7 +1,6 @@
 using System;
 using SSMP.Api.Server;
 using SSMP.Ui.Menu;
-using SSMP.Util;
 
 // ReSharper disable UnusedAutoPropertyAccessor.Global
 // ReSharper disable AutoPropertyCanBeMadeGetOnly.Global
@@ -10,116 +9,81 @@ using SSMP.Util;
 namespace SSMP.Game.Settings;
 
 /// <inheritdoc cref="IServerSettings" />
-public class ServerSettings : ObservableBase, IServerSettings, IEquatable<ServerSettings> {
+public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
+    /// <inheritdoc />
+    public event Action<string>? OnChanged;
+
     /// <inheritdoc />
     [SettingAlias("pvp")]
     [ModMenuSetting("PvP", "Player versus Player damage")]
-    public Observable<bool> IsPvpEnabled { get; } = new(false);
+    public bool IsPvpEnabled {
+        get;
+        set {
+            if (field == value) return;
+            field = value;
+            OnChanged?.Invoke(nameof(IsPvpEnabled));
+        }
+    }
 
     /// <inheritdoc />
     [SettingAlias("globalmapicons")]
     [ModMenuSetting("Global Map Icons", "Always show map icons for all players")]
-    public Observable<bool> AlwaysShowMapIcons { get; } = new(false);
+    public bool AlwaysShowMapIcons {
+        get;
+        set {
+            if (field == value) return;
+            field = value;
+            OnChanged?.Invoke(nameof(AlwaysShowMapIcons));
+        }
+    }
 
     /// <inheritdoc />
     [SettingAlias("compassicon", "compassicons")]
     [ModMenuSetting("Compass Map Icons", "Only show map icons when Compass is equipped")]
-    public Observable<bool> OnlyBroadcastMapIconWithCompass { get; } = new(true);
+    public bool OnlyBroadcastMapIconWithCompass {
+        get;
+        init {
+            if (field == value) return;
+            field = value;
+            OnChanged?.Invoke(nameof(OnlyBroadcastMapIconWithCompass));
+        }
+    } = true;
 
     /// <inheritdoc />
     [SettingAlias("names")]
     [ModMenuSetting("Show Names", "Show names of player above their characters")]
-    public Observable<bool> DisplayNames { get; } = new(true);
+    public bool DisplayNames {
+        get;
+        init {
+            if (field == value) return;
+            field = value;
+            OnChanged?.Invoke(nameof(DisplayNames));
+        }
+    } = true;
 
     /// <inheritdoc />
     [SettingAlias("teams")]
     [ModMenuSetting("Teams", "Whether players can join teams")]
-    public Observable<bool> TeamsEnabled { get; } = new(false);
+    public bool TeamsEnabled {
+        get;
+        set {
+            if (field == value) return;
+            field = value;
+            OnChanged?.Invoke(nameof(TeamsEnabled));
+        }
+    }
 
     /// <inheritdoc />
     [SettingAlias("skins")]
     [ModMenuSetting("Skins", "Whether players can have skins")]
-    public Observable<bool> AllowSkins { get; } = new(true);
-
-    // /// <inheritdoc />
-    // [SettingAlias("parries")]
-    // [ModMenuSetting("Parries", "Whether parrying certain player attacks is possible")]
-    // public bool AllowParries { get; set; } = true;
-    //
-    // /// <inheritdoc />
-    // [SettingAlias("naildmg")]
-    // [ModMenuSetting("Nail Damage", "The number of masks of damage that a player's nail swing deals")]
-    // public byte NailDamage { get; set; } = 1;
-    //
-    // /// <inheritdoc />
-    // [SettingAlias("elegydmg")]
-    // [ModMenuSetting("Grubberfly's Elegy Damage", "The number of masks of damage that Grubberfly's Elegy deals")]
-    // public byte GrubberflyElegyDamage { get; set; } = 1;
-    //
-    // /// <inheritdoc />
-    // [SettingAlias("vsdmg", "fireballdamage", "fireballdmg")]
-    // [ModMenuSetting("Vengeful Spirit Damage", "The number of masks of damage that Vengeful Spirit deals")]
-    // public byte VengefulSpiritDamage { get; set; } = 1;
-    //
-    // /// <inheritdoc />
-    // [SettingAlias("shadesouldmg")]
-    // [ModMenuSetting("Shade Soul Damage", "The number of masks of damage that Shade Soul deals")]
-    // public byte ShadeSoulDamage { get; set; } = 2;
-    //
-    // /// <inheritdoc />
-    // [SettingAlias("desolatedivedmg", "ddivedmg")]
-    // [ModMenuSetting("Desolate Dive Damage", "The number of masks of damage that Desolate Dive deals")]
-    // public byte DesolateDiveDamage { get; set; } = 1;
-    //
-    // /// <inheritdoc />
-    // [SettingAlias("descendingdarkdmg", "ddarkdmg")]
-    // [ModMenuSetting("Descending Dark Damage", "The number of masks of damage that Descending Dark deals")]
-    // public byte DescendingDarkDamage { get; set; } = 2;
-    //
-    // /// <inheritdoc />
-    // [SettingAlias("howlingwraithsdamage", "howlingwraithsdmg", "wraithsdmg")]
-    // [ModMenuSetting("Howling Wraiths Damage", "The number of masks of damage that Howling Wraiths deals")]
-    // public byte HowlingWraithDamage { get; set; } = 1;
-    //
-    // /// <inheritdoc />
-    // [SettingAlias("abyssshriekdmg", "shriekdmg")]
-    // [ModMenuSetting("Abyss Shriek Damage", "The number of masks of damage that Abyss Shriek deals")]
-    // public byte AbyssShriekDamage { get; set; } = 2;
-    //
-    // /// <inheritdoc />
-    // [SettingAlias("greatslashdmg")]
-    // [ModMenuSetting("Great Slash Damage", "The number of masks of damage that Great Slash deals")]
-    // public byte GreatSlashDamage { get; set; } = 2;
-    //
-    // /// <inheritdoc />
-    // [SettingAlias("dashslashdmg")]
-    // [ModMenuSetting("Dash Slash Damage", "The number of masks of damage that Dash Slash deals")]
-    // public byte DashSlashDamage { get; set; } = 2;
-    //
-    // /// <inheritdoc />
-    // [SettingAlias("cycloneslashdmg", "cyclonedmg")]
-    // [ModMenuSetting("Cyclone Slash Damage", "The number of masks of damage that Cyclone Slash deals")]
-    // public byte CycloneSlashDamage { get; set; } = 1;
-    //
-    // /// <inheritdoc />
-    // [SettingAlias("sporeshroomdmg")]
-    // [ModMenuSetting("Spore Shroom Damage", "The number of masks of damage that a Spore Shroom cloud deals")]
-    // public byte SporeShroomDamage { get; set; } = 1;
-    //
-    // /// <inheritdoc />
-    // [SettingAlias("sporedungshroomdmg", "dungshroomdmg")]
-    // [ModMenuSetting("Spore-Dung Shroom Damage", "The number of masks of damage that a Spore Shroom cloud with Defender's Crest deals")]
-    // public byte SporeDungShroomDamage { get; set; } = 1;
-    //
-    // /// <inheritdoc />
-    // [SettingAlias("thornsofagonydamage", "thornsofagonydmg", "thornsdamage", "thornsdmg")]
-    // [ModMenuSetting("Thorns of Agongy Damage", "The number of masks of damage that the Thorns of Agony lash deals")]
-    // public byte ThornOfAgonyDamage { get; set; } = 1;
-    //
-    // /// <inheritdoc />
-    // [SettingAlias("sharpshadowdmg")]
-    // [ModMenuSetting("Sharp Shadow Damage", "The number of masks of damage that a Sharp Shadow dash deals")]
-    // public byte SharpShadowDamage { get; set; } = 1;
+    public bool AllowSkins {
+        get;
+        init {
+            if (field == value) return;
+            field = value;
+            OnChanged?.Invoke(nameof(AllowSkins));
+        }
+    } = true;
 
     /// <summary>
     /// Set all properties in this <see cref="ServerSettings"/> instance to the values from the given
@@ -127,14 +91,12 @@ public class ServerSettings : ObservableBase, IServerSettings, IEquatable<Server
     /// </summary>
     /// <param name="serverSettings">The instance to copy from.</param>
     public void SetAllProperties(ServerSettings serverSettings) {
-        // Use reflection to copy over all observable values into this object
         foreach (var prop in GetType().GetProperties()) {
-            if (!prop.CanRead) {
+            if (!prop.CanRead || !prop.CanWrite || prop.DeclaringType != typeof(ServerSettings)) {
                 continue;
             }
 
-            var otherValue = ObservableReflection.GetUnwrappedPropertyValue(prop, serverSettings);
-            ObservableReflection.TrySetPropertyValue(prop, this, otherValue);
+            prop.SetValue(this, prop.GetValue(serverSettings));
         }
     }
 
@@ -154,85 +116,76 @@ public class ServerSettings : ObservableBase, IServerSettings, IEquatable<Server
         if (ReferenceEquals(null, other)) {
             return false;
         }
-    
+
         if (ReferenceEquals(this, other)) {
             return true;
         }
-    
+
         foreach (var prop in GetType().GetProperties()) {
-            if (!ObservableReflection.IsSyncableProperty(prop)) {
+            if (!prop.CanRead || prop.DeclaringType != typeof(ServerSettings)) {
                 continue;
             }
 
-            var myValue = prop.GetValue(this);
-            var otherValue = prop.GetValue(other);
-            var myUnwrapped = myValue is IObservable myObs ? myObs.Value : myValue;
-            var otherUnwrapped = otherValue is IObservable otherObs ? otherObs.Value : otherValue;
-            if (!Equals(myUnwrapped, otherUnwrapped)) return false;
+            if (!Equals(prop.GetValue(this), prop.GetValue(other))) {
+                return false;
+            }
         }
-    
+
         return true;
     }
-    
+
     /// <inheritdoc />
     public override bool Equals(object? obj) {
         if (ReferenceEquals(null, obj)) {
             return false;
         }
-    
+
         if (ReferenceEquals(this, obj)) {
             return true;
         }
-    
+
         if (obj.GetType() != GetType()) {
             return false;
         }
-    
+
         return Equals((ServerSettings) obj);
     }
-    
+
     /// <inheritdoc />
     public override int GetHashCode() {
         unchecked {
             var hashCode = 0;
             var first = true;
             foreach (var prop in GetType().GetProperties()) {
-                if (!prop.CanRead) {
+                if (!prop.CanRead || prop.DeclaringType != typeof(ServerSettings)) {
                     continue;
                 }
 
-                var raw = prop.GetValue(this);
-                var propHashCode = (raw is IObservable obs ? obs.Value : raw)?.GetHashCode() ?? 0;
+                var propHashCode = prop.GetValue(this)?.GetHashCode() ?? 0;
 
                 if (first) {
                     hashCode = propHashCode;
                     first = false;
                     continue;
                 }
-    
+
                 hashCode = (hashCode * 397) ^ propHashCode;
             }
-    
+
             return hashCode;
         }
     }
-    
+
     /// <summary>
     /// Indicates whether one <see cref="ServerSettings"/> is equal to another <see cref="ServerSettings"/>.
     /// </summary>
-    /// <param name="left">The first <see cref="ServerSettings"/> to compare.</param>
-    /// <param name="right">The second <see cref="ServerSettings"/> to compare.</param>
-    /// <returns>true if <paramref name="left"/> is equal to <paramref name="right"/>; false otherwise.</returns>
     public static bool operator ==(ServerSettings? left, ServerSettings? right) {
         return Equals(left, right);
     }
-    
+
     /// <summary>
     /// Indicates whether one <see cref="ServerSettings"/> is not equal to another <see cref="ServerSettings"/>.
     /// </summary>
-    /// <param name="left">The first <see cref="ServerSettings"/> to compare.</param>
-    /// <param name="right">The second <see cref="ServerSettings"/> to compare.</param>
-    /// <returns>true if <paramref name="left"/> is not equal to <paramref name="right"/>; false otherwise.</returns>
     public static bool operator !=(ServerSettings? left, ServerSettings? right) {
         return !Equals(left, right);
     }

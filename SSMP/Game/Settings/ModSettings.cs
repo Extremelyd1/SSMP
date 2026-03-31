@@ -10,11 +10,13 @@ namespace SSMP.Game.Settings;
 /// <summary>
 /// Settings class that stores user preferences.
 /// </summary>
-internal class ModSettings : ObservableBase {
+internal class ModSettings {
     /// <summary>
     /// The name of the file containing the mod settings.
     /// </summary>
     private const string ModSettingsFileName = "modsettings.json";
+
+    public event System.Action<string>? OnChanged;
     
     /// <summary>
     /// The authentication key for the user.
@@ -30,22 +32,50 @@ internal class ModSettings : ObservableBase {
     /// <summary>
     /// The last used address to join a server.
     /// </summary>
-    public Observable<string> ConnectAddress { get; } = new("");
+    public string ConnectAddress {
+        get;
+        set {
+            if (field == value) return;
+            field = value;
+            OnChanged?.Invoke(nameof(ConnectAddress));
+        }
+    } = "";
 
     /// <summary>
     /// The last used port to join a server.
     /// </summary>
-    public Observable<int> ConnectPort { get; } = new(-1);
+    public int ConnectPort {
+        get;
+        set {
+            if (field == value) return;
+            field = value;
+            OnChanged?.Invoke(nameof(ConnectPort));
+        }
+    } = -1;
 
     /// <summary>
     /// The last used username to join a server.
     /// </summary>
-    public Observable<string> Username { get; } = new("");
+    public string Username {
+        get;
+        set {
+            if (field == value) return;
+            field = value;
+            OnChanged?.Invoke(nameof(Username));
+        }
+    } = "";
 
     /// <summary>
     /// Whether to display a UI element for the ping.
     /// </summary>
-    public Observable<bool> DisplayPing { get; } = new(true);
+    public bool DisplayPing {
+        get;
+        init {
+            if (field == value) return;
+            field = value;
+            OnChanged?.Invoke(nameof(DisplayPing));
+        }
+    } = true;
 
     /// <summary>
     /// Set of addon names for addons that are disabled by the user.
@@ -57,7 +87,14 @@ internal class ModSettings : ObservableBase {
     /// Whether full synchronization of bosses, enemies, worlds, and saves is enabled.
     /// </summary>
     // ReSharper disable once AutoPropertyCanBeMadeGetOnly.Global
-    public Observable<bool> FullSynchronisation { get; } = new(false);
+    public bool FullSynchronisation {
+        get;
+        set {
+            if (field == value) return;
+            field = value;
+            OnChanged?.Invoke(nameof(FullSynchronisation));
+        }
+    }
 
     /// <summary>
     /// The last used server settings in a hosted server.
@@ -83,8 +120,6 @@ internal class ModSettings : ObservableBase {
         // Try to load the mod settings from the file or construct a new instance if the util returns null
         var modSettings = FileUtil.LoadObjectFromJsonFile<ModSettings>(filePath);
 
-        modSettings?.AcceptChanges();
-
         return modSettings ?? New();
 
         ModSettings New() {
@@ -106,6 +141,5 @@ internal class ModSettings : ObservableBase {
         }
 
         FileUtil.WriteObjectToJsonFile(this, filePath);
-        AcceptChanges();
     }
 }
