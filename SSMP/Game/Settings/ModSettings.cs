@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
 using SSMP.Serialization;
@@ -10,7 +10,7 @@ namespace SSMP.Game.Settings;
 /// <summary>
 /// Settings class that stores user preferences.
 /// </summary>
-internal class ModSettings {
+internal class ModSettings : ObservableBase {
     /// <summary>
     /// The name of the file containing the mod settings.
     /// </summary>
@@ -25,27 +25,27 @@ internal class ModSettings {
     /// The keybinds for SSMP.
     /// </summary>
     [JsonConverter(typeof(PlayerActionSetConverter))]
-    public Keybinds Keybinds { get; set; } = new();
+    public Keybinds Keybinds { get; } = new();
 
     /// <summary>
     /// The last used address to join a server.
     /// </summary>
-    public string ConnectAddress { get; set; } = "";
+    public Observable<string> ConnectAddress { get; } = new("");
 
     /// <summary>
     /// The last used port to join a server.
     /// </summary>
-    public int ConnectPort { get; set; } = -1;
+    public Observable<int> ConnectPort { get; } = new(-1);
 
     /// <summary>
     /// The last used username to join a server.
     /// </summary>
-    public string Username { get; set; } = "";
+    public Observable<string> Username { get; } = new("");
 
     /// <summary>
     /// Whether to display a UI element for the ping.
     /// </summary>
-    public bool DisplayPing { get; set; } = true;
+    public Observable<bool> DisplayPing { get; } = new(true);
 
     /// <summary>
     /// Set of addon names for addons that are disabled by the user.
@@ -54,10 +54,10 @@ internal class ModSettings {
     public HashSet<string> DisabledAddons { get; set; } = [];
 
     /// <summary>
-    /// Whether full synchronisation of bosses, enemies, worlds, and saves is enabled.
+    /// Whether full synchronization of bosses, enemies, worlds, and saves is enabled.
     /// </summary>
     // ReSharper disable once AutoPropertyCanBeMadeGetOnly.Global
-    public bool FullSynchronisation { get; set; } = false;
+    public Observable<bool> FullSynchronisation { get; } = new(false);
 
     /// <summary>
     /// The last used server settings in a hosted server.
@@ -83,6 +83,8 @@ internal class ModSettings {
         // Try to load the mod settings from the file or construct a new instance if the util returns null
         var modSettings = FileUtil.LoadObjectFromJsonFile<ModSettings>(filePath);
 
+        modSettings?.AcceptChanges();
+
         return modSettings ?? New();
 
         ModSettings New() {
@@ -104,5 +106,6 @@ internal class ModSettings {
         }
 
         FileUtil.WriteObjectToJsonFile(this, filePath);
+        AcceptChanges();
     }
 }

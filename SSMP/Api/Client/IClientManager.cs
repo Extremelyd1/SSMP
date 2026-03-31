@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using SSMP.Game;
+using SSMP.Game.Settings;
 
 namespace SSMP.Api.Client;
 
@@ -19,6 +20,11 @@ public interface IClientManager {
     string Username { get; }
 
     /// <summary>
+    /// The unique ID assigned to the local player.
+    /// </summary>
+    ushort Id { get; }
+
+    /// <summary>
     /// The current team of the local player.
     /// </summary>
     Team Team { get; }
@@ -27,6 +33,16 @@ public interface IClientManager {
     /// A read-only collection of all connected players.
     /// </summary>
     IReadOnlyCollection<IClientPlayer> Players { get; }
+
+    /// <summary>
+    /// A read-only <see cref="ServerSettings"/> that contains the settings related to gameplay.
+    /// </summary>
+    ServerSettings ServerSettings { get; }
+
+    /// <summary>
+    /// Event that is called when the server settings change.
+    /// </summary>
+    event Action<ServerSettings> ServerSettingsChangedEvent;
 
     /// <summary>
     /// Disconnect the local client from the server.

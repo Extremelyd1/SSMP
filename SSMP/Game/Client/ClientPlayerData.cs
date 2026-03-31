@@ -1,3 +1,4 @@
+using System;
 using SSMP.Api.Client;
 using SSMP.Internals;
 using UnityEngine;
@@ -6,6 +7,9 @@ namespace SSMP.Game.Client;
 
 /// <inheritdoc />
 internal class ClientPlayerData : IClientPlayer {
+    /// <inheritdoc />
+    public event Action<Team>? OnTeamChanged;
+
     /// <inheritdoc />
     public ushort Id { get; }
 
@@ -22,7 +26,14 @@ internal class ClientPlayerData : IClientPlayer {
     public GameObject? PlayerObject { get; set; }
 
     /// <inheritdoc />
-    public Team Team { get; set; }
+    public Team Team {
+        get;
+        set {
+            if (field == value) return;
+            field = value;
+            OnTeamChanged?.Invoke(value);
+        }
+    }
 
     /// <inheritdoc />
     public byte SkinId { get; set; }

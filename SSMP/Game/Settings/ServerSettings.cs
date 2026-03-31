@@ -1,6 +1,7 @@
 using System;
 using SSMP.Api.Server;
 using SSMP.Ui.Menu;
+using SSMP.Util;
 
 // ReSharper disable UnusedAutoPropertyAccessor.Global
 // ReSharper disable AutoPropertyCanBeMadeGetOnly.Global
@@ -9,36 +10,36 @@ using SSMP.Ui.Menu;
 namespace SSMP.Game.Settings;
 
 /// <inheritdoc cref="IServerSettings" />
-public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
+public class ServerSettings : ObservableBase, IServerSettings, IEquatable<ServerSettings> {
     /// <inheritdoc />
     [SettingAlias("pvp")]
     [ModMenuSetting("PvP", "Player versus Player damage")]
-    public bool IsPvpEnabled { get; set; }
+    public Observable<bool> IsPvpEnabled { get; } = new(false);
 
     /// <inheritdoc />
     [SettingAlias("globalmapicons")]
     [ModMenuSetting("Global Map Icons", "Always show map icons for all players")]
-    public bool AlwaysShowMapIcons { get; set; }
+    public Observable<bool> AlwaysShowMapIcons { get; } = new(false);
 
     /// <inheritdoc />
     [SettingAlias("compassicon", "compassicons")]
     [ModMenuSetting("Compass Map Icons", "Only show map icons when Compass is equipped")]
-    public bool OnlyBroadcastMapIconWithCompass { get; set; } = true;
+    public Observable<bool> OnlyBroadcastMapIconWithCompass { get; } = new(true);
 
     /// <inheritdoc />
     [SettingAlias("names")]
     [ModMenuSetting("Show Names", "Show names of player above their characters")]
-    public bool DisplayNames { get; set; } = true;
+    public Observable<bool> DisplayNames { get; } = new(true);
 
     /// <inheritdoc />
     [SettingAlias("teams")]
     [ModMenuSetting("Teams", "Whether players can join teams")]
-    public bool TeamsEnabled { get; set; }
+    public Observable<bool> TeamsEnabled { get; } = new(false);
 
     /// <inheritdoc />
     [SettingAlias("skins")]
     [ModMenuSetting("Skins", "Whether players can have skins")]
-    public bool AllowSkins { get; set; } = true;
+    public Observable<bool> AllowSkins { get; } = new(true);
 
     // /// <inheritdoc />
     // [SettingAlias("parries")]
@@ -126,13 +127,15 @@ public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
     /// </summary>
     /// <param name="serverSettings">The instance to copy from.</param>
     public void SetAllProperties(ServerSettings serverSettings) {
-        // Use reflection to copy over all properties into this object
+        // Use reflection to copy over all observable values into this object
         foreach (var prop in GetType().GetProperties()) {
             if (!prop.CanRead || !prop.CanWrite) {
                 continue;
             }
 
-            prop.SetValue(this, prop.GetValue(serverSettings, null), null);
+            if (prop.GetValue(this) is IObservable myObs
+                && prop.GetValue(serverSettings) is IObservable otherObs)
+                myObs.Value = otherObs.Value;
         }
     }
 
@@ -161,10 +164,12 @@ public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
             if (!prop.CanRead) {
                 continue;
             }
-    
-            if (prop.GetValue(this) != prop.GetValue(other)) {
-                return false;
-            }
+
+            var myValue = prop.GetValue(this);
+            var otherValue = prop.GetValue(other);
+            var myUnwrapped = myValue is IObservable myObs ? myObs.Value : myValue;
+            var otherUnwrapped = otherValue is IObservable otherObs ? otherObs.Value : otherValue;
+            if (!Equals(myUnwrapped, otherUnwrapped)) return false;
         }
     
         return true;
@@ -196,9 +201,10 @@ public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
                 if (!prop.CanRead) {
                     continue;
                 }
-                
-                var propHashCode = prop.GetValue(this).GetHashCode();
-    
+
+                var raw = prop.GetValue(this);
+                var propHashCode = (raw is IObservable obs ? obs.Value : raw)?.GetHashCode() ?? 0;
+
                 if (first) {
                     hashCode = propHashCode;
                     first = false;

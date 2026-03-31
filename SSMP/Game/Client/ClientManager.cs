@@ -56,11 +56,6 @@ internal class ClientManager : IClientManager {
     private readonly UiManager _uiManager;
 
     /// <summary>
-    /// The current server settings.
-    /// </summary>
-    private readonly ServerSettings _serverSettings;
-
-    /// <summary>
     /// The loaded mod settings.
     /// </summary>
     private readonly ModSettings _modSettings;
@@ -189,6 +184,12 @@ internal class ClientManager : IClientManager {
 
     /// <inheritdoc />
     public IMapManager MapManager => _mapManager;
+    
+    /// <inheritdoc />
+    public ServerSettings ServerSettings { get; }
+
+    /// <inheritdoc />
+    public ushort Id { get; private set; }
 
     /// <inheritdoc />
     public string Username => !_netClient.IsConnected ? throw new Exception("Client is not connected, username is undefined") : _username!;
@@ -229,7 +230,7 @@ internal class ClientManager : IClientManager {
         _netClient = netClient;
         _packetManager = packetManager;
         _uiManager = uiManager;
-        _serverSettings = serverSettings;
+        ServerSettings = serverSettings;
         _modSettings = modSettings;
 
         _playerData = new Dictionary<ushort, ClientPlayerData>();
@@ -263,7 +264,7 @@ internal class ClientManager : IClientManager {
     /// </summary>
     public void Initialize(ServerManager serverManager) {
         _playerManager.Initialize();
-        _animationManager.Initialize(_serverSettings);
+        _animationManager.Initialize(ServerSettings);
         _mapManager.Initialize();
 
         // _entityManager.Initialize();
@@ -552,6 +553,7 @@ internal class ClientManager : IClientManager {
         Logger.Info("Disconnecting from server");
 
         _autoConnect = false;
+        Id = 0;
 
         _netClient.Disconnect();
 
@@ -663,11 +665,11 @@ internal class ClientManager : IClientManager {
         Logger.Info("Received server info from server");
 
         // Update the locally stored server settings
-        _serverSettings.SetAllProperties(serverInfo.ServerSettingsUpdate.ServerSettings);
+        ServerSettings.SetAllProperties(serverInfo.ServerSettingsUpdate.ServerSettings);
         // Call the event that the settings were updated
         ServerSettingsChangedEvent?.Invoke(serverInfo.ServerSettingsUpdate.ServerSettings);
 
-        // Note whether full synchronisation is enabled
+        // Note whether full synchronization is enabled
         _fullSynchronisation = serverInfo.FullSynchronisation;
 
         // Register hooks and packet handlers before we load into the game
@@ -711,6 +713,9 @@ internal class ClientManager : IClientManager {
         // Fill the player data dictionary with the info from the packet
         foreach (var (id, username) in serverInfo.PlayerInfo) {
             _playerData[id] = new ClientPlayerData(id, username);
+
+            // If the username matches our own, we found our ID
+            if (username == _username) Id = id;
         }
 
         // Add the username to the player if we are in-game already
@@ -1064,7 +1069,7 @@ internal class ClientManager : IClientManager {
         var newServerSettings = update.ServerSettings;
 
         // Check whether the PvP state changed
-        if (_serverSettings.IsPvpEnabled != newServerSettings.IsPvpEnabled) {
+        if (ServerSettings.IsPvpEnabled != newServerSettings.IsPvpEnabled) {
             var message = $"PvP is now {(newServerSettings.IsPvpEnabled ? "enabled" : "disabled")}";
 
             UiManager.InternalChatBox.AddMessage(message);
@@ -1072,7 +1077,7 @@ internal class ClientManager : IClientManager {
         }
 
         // Check whether the always show map icons state changed
-        if (_serverSettings.AlwaysShowMapIcons != newServerSettings.AlwaysShowMapIcons) {
+        if (ServerSettings.AlwaysShowMapIcons != newServerSettings.AlwaysShowMapIcons) {
             alwaysShowMapChanged = true;
 
             var message =
@@ -1083,7 +1088,7 @@ internal class ClientManager : IClientManager {
         }
 
         // Check whether the wayward compass broadcast state changed
-        if (_serverSettings.OnlyBroadcastMapIconWithCompass !=
+        if (ServerSettings.OnlyBroadcastMapIconWithCompass !=
             newServerSettings.OnlyBroadcastMapIconWithCompass) {
             onlyCompassChanged = true;
 
@@ -1095,7 +1100,7 @@ internal class ClientManager : IClientManager {
         }
 
         // Check whether the display names setting changed
-        if (_serverSettings.DisplayNames != newServerSettings.DisplayNames) {
+        if (ServerSettings.DisplayNames != newServerSettings.DisplayNames) {
             displayNamesChanged = true;
 
             var message = $"Names are {(newServerSettings.DisplayNames ? "now" : "no longer")} displayed";
@@ -1105,7 +1110,7 @@ internal class ClientManager : IClientManager {
         }
 
         // Check whether the teams enabled setting changed
-        if (_serverSettings.TeamsEnabled != newServerSettings.TeamsEnabled) {
+        if (ServerSettings.TeamsEnabled != newServerSettings.TeamsEnabled) {
             teamsChanged = true;
 
             var message = $"Teams are {(newServerSettings.TeamsEnabled ? "now" : "no longer")} enabled";
@@ -1115,7 +1120,7 @@ internal class ClientManager : IClientManager {
         }
 
         // Check whether allow skins setting changed
-        if (_serverSettings.AllowSkins != newServerSettings.AllowSkins) {
+        if (ServerSettings.AllowSkins != newServerSettings.AllowSkins) {
             allowSkinsChanged = true;
 
             var message = $"Skins are {(newServerSettings.AllowSkins ? "now" : "no longer")} enabled";
@@ -1125,7 +1130,7 @@ internal class ClientManager : IClientManager {
         }
 
         // Update the settings so callbacks can read updated values
-        _serverSettings.SetAllProperties(newServerSettings);
+        ServerSettings.SetAllProperties(newServerSettings);
         // Call the event that the settings were updated
         ServerSettingsChangedEvent?.Invoke(newServerSettings);
 
@@ -1135,7 +1140,7 @@ internal class ClientManager : IClientManager {
         }
 
         if (alwaysShowMapChanged || onlyCompassChanged) {
-            if (_serverSettings is { AlwaysShowMapIcons: false, OnlyBroadcastMapIconWithCompass: false }) {
+            if (ServerSettings is { AlwaysShowMapIcons.Value: false, OnlyBroadcastMapIconWithCompass.Value: false }) {
                 _mapManager.RemoveAllIcons();
             }
         }
@@ -1143,7 +1148,7 @@ internal class ClientManager : IClientManager {
         // If the teams setting changed, we invoke the registered event handler if they exist
         if (teamsChanged) {
             // If the team setting was disabled, we reset all teams and call the event
-            if (!_serverSettings.TeamsEnabled) {
+            if (!ServerSettings.TeamsEnabled) {
                 _playerManager.ResetAllTeams();
 
                 TeamChangedEvent?.Invoke(Team.None);
@@ -1154,7 +1159,7 @@ internal class ClientManager : IClientManager {
 
         // If the allow skins setting changed, and it is no longer allowed, we reset all existing skins and call the
         // event
-        if (allowSkinsChanged && !_serverSettings.AllowSkins) {
+        if (allowSkinsChanged && !ServerSettings.AllowSkins) {
             _playerManager.ResetAllPlayerSkins();
 
             SkinChangedEvent?.Invoke(0);
