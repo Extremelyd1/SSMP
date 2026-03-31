@@ -133,11 +133,6 @@ internal class ModMenu {
         _netClient = netClient;
 
         _serverSettingsChangedCallbacks = [];
-
-        // Subscribe to settings changes.
-        // Commented out since we don't have a way to update the
-        // setting from in-game currently.
-        // _modSettings.OnChanged += _=> { _modSettings.Save(); };
     }
 
     // /// <summary>
