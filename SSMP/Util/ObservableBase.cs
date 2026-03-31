@@ -63,6 +63,18 @@ public abstract class ObservableBase {
                 result.AddRange(fields.Where(f => IsObservableType(f.FieldType)));
                 result.AddRange(properties.Where(IsObservableProperty));
 
+                var seen = new HashSet<string>(result.Count);
+                // ReSharper disable once ForeachCanBePartlyConvertedToQueryUsingAnotherGetEnumerator
+                foreach (var m in result) {
+                    var alias = m.GetCustomAttribute<SettingAliasAttribute>();
+                    var resolvedName = alias?.PropertyName ?? m.Name;
+                    if (!seen.Add(resolvedName)) {
+                        throw new InvalidOperationException(
+                            $"{type.Name} declares two observable members that both resolve to the name \"{resolvedName}\". " +
+                            "Use [SettingAlias] to assign distinct names.");
+                    }
+                }
+
                 members = result.ToArray();
                 MemberCache[type] = members;
             }
@@ -162,7 +174,14 @@ public abstract class ObservableBase {
     /// <see cref="AcceptChanges"/> call.
     /// </summary>
     public bool IsModified {
-        get { return _managedObservables.Any(o => o.IsModified); }
+        get {
+            // ReSharper disable once ForCanBeConvertedToForeach
+            // ReSharper disable once LoopCanBeConvertedToQuery
+            for (var i = 0; i < _managedObservables.Count; i++) {
+                if (_managedObservables[i].IsModified) return true;
+            }
+            return false;
+        }
     }
 
     /// <summary>
