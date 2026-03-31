@@ -55,16 +55,16 @@ internal class ClientManager : IClientManager {
     /// The UI manager instance.
     /// </summary>
     private readonly UiManager _uiManager;
-
+    
+    /// <summary>
+    /// The current server settings.
+    /// </summary>
+    private readonly ServerSettings _serverSettings;
+    
     /// <summary>
     /// The loaded mod settings.
     /// </summary>
     private readonly ModSettings _modSettings;
-
-    /// <summary>
-    /// The mutable local copy of the current server settings.
-    /// </summary>
-    private readonly ServerSettings _serverSettings;
 
     /// <summary>
     /// The player manager instance.
