@@ -76,9 +76,9 @@ internal class SettingsCommand : IServerCommand, ICommandWithDescription {
 
         if (args.Length < 3) {
             // The user only supplied the name of the setting, so we print its value
-            var displayedValue = settingProperty.GetValue(ServerSettings, null);
+            var currentValue = settingProperty.GetValue(ServerSettings, null);
 
-            commandSender.SendMessage($"Setting '{propName}' currently has value: {displayedValue}");
+            commandSender.SendMessage($"Setting '{propName}' currently has value: {currentValue}");
             return;
         }
 
@@ -111,12 +111,13 @@ internal class SettingsCommand : IServerCommand, ICommandWithDescription {
             return;
         }
 
-        if (Equals(settingProperty.GetValue(ServerSettings), newValueObject)) {
+        if (settingProperty.GetValue(ServerSettings).Equals(newValueObject)) {
             commandSender.SendMessage($"Setting '{propName}' already has value: {newValueObject}");
             return;
         }
 
         settingProperty.SetValue(ServerSettings, newValueObject, null);
+
         commandSender.SendMessage($"Changed setting '{propName}' to: {newValueObject}");
 
         _serverManager.OnUpdateServerSettings();

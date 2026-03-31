@@ -152,8 +152,7 @@ public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
     //
     // /// <inheritdoc />
     // [SettingAlias("sporedungshroomdmg", "dungshroomdmg")]
-    // [ModMenuSetting("Spore-Dung Shroom Damage", "The number of masks of damage that a Spore Shroom cloud with
-    // Defender's Crest deals")]
+    // [ModMenuSetting("Spore-Dung Shroom Damage", "The number of masks of damage that a Spore Shroom cloud with Defender's Crest deals")]
     // public byte SporeDungShroomDamage { get; set; } = 1;
     //
     // /// <inheritdoc />
@@ -172,12 +171,13 @@ public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
     /// </summary>
     /// <param name="serverSettings">The instance to copy from.</param>
     public void SetAllProperties(ServerSettings serverSettings) {
+        // Use reflection to copy over all properties into this object
         foreach (var prop in GetType().GetProperties()) {
-            if (!prop.CanRead || !prop.CanWrite || prop.DeclaringType != typeof(ServerSettings)) {
+            if (!prop.CanRead || !prop.CanWrite) {
                 continue;
             }
 
-            prop.SetValue(this, prop.GetValue(serverSettings));
+            prop.SetValue(this, prop.GetValue(serverSettings, null), null);
         }
     }
 
@@ -197,76 +197,82 @@ public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
         if (ReferenceEquals(null, other)) {
             return false;
         }
-
+    
         if (ReferenceEquals(this, other)) {
             return true;
         }
-
+    
         foreach (var prop in GetType().GetProperties()) {
-            if (!prop.CanRead || prop.DeclaringType != typeof(ServerSettings)) {
+            if (!prop.CanRead) {
                 continue;
             }
-
-            if (!Equals(prop.GetValue(this), prop.GetValue(other))) {
+    
+            if (prop.GetValue(this) != prop.GetValue(other)) {
                 return false;
             }
         }
-
+    
         return true;
     }
-
+    
     /// <inheritdoc />
     public override bool Equals(object? obj) {
         if (ReferenceEquals(null, obj)) {
             return false;
         }
-
+    
         if (ReferenceEquals(this, obj)) {
             return true;
         }
-
+    
         if (obj.GetType() != GetType()) {
             return false;
         }
-
+    
         return Equals((ServerSettings) obj);
     }
-
+    
     /// <inheritdoc />
     public override int GetHashCode() {
         unchecked {
             var hashCode = 0;
             var first = true;
             foreach (var prop in GetType().GetProperties()) {
-                if (!prop.CanRead || prop.DeclaringType != typeof(ServerSettings)) {
+                if (!prop.CanRead) {
                     continue;
                 }
-
-                var propHashCode = prop.GetValue(this)?.GetHashCode() ?? 0;
-
+                
+                var propHashCode = prop.GetValue(this).GetHashCode();
+    
                 if (first) {
                     hashCode = propHashCode;
                     first = false;
                     continue;
                 }
-
+    
                 hashCode = (hashCode * 397) ^ propHashCode;
             }
-
+    
             return hashCode;
         }
     }
-
+    
     /// <summary>
     /// Indicates whether one <see cref="ServerSettings"/> is equal to another <see cref="ServerSettings"/>.
     /// </summary>
+    /// <param name="left">The first <see cref="ServerSettings"/> to compare.</param>
+    /// <param name="right">The second <see cref="ServerSettings"/> to compare.</param>
+    /// <returns>true if <paramref name="left"/> is equal to <paramref name="right"/>; false otherwise.</returns>
     public static bool operator ==(ServerSettings? left, ServerSettings? right) {
         return Equals(left, right);
     }
-
+    
     /// <summary>
     /// Indicates whether one <see cref="ServerSettings"/> is not equal to another <see cref="ServerSettings"/>.
     /// </summary>
+    /// <param name="left">The first <see cref="ServerSettings"/> to compare.</param>
+    /// <param name="right">The second <see cref="ServerSettings"/> to compare.</param>
+    /// <returns>true if <paramref name="left"/> is not equal to <paramref name="right"/>; false otherwise.</returns>
     public static bool operator !=(ServerSettings? left, ServerSettings? right) {
         return !Equals(left, right);
     }
