@@ -22,8 +22,9 @@ internal class ServerSettingsUpdate : IPacketData {
 
     /// <inheritdoc />
     public void WriteData(IPacket packet) {
+        // Use reflection to loop over all properties and write their values to the packet
         foreach (var prop in ServerSettings.GetType().GetProperties()) {
-            if (!prop.CanRead || !prop.CanWrite || prop.DeclaringType != typeof(ServerSettings)) {
+            if (!prop.CanRead) {
                 continue;
             }
 
@@ -32,7 +33,7 @@ internal class ServerSettingsUpdate : IPacketData {
             } else if (prop.PropertyType == typeof(byte)) {
                 packet.Write((byte) prop.GetValue(ServerSettings, null));
             } else {
-                Logger.Error($"No write handler for property type: {prop.PropertyType}");
+                Logger.Error($"No write handler for property type: {prop.GetType()}");
             }
         }
     }
@@ -41,17 +42,19 @@ internal class ServerSettingsUpdate : IPacketData {
     public void ReadData(IPacket packet) {
         ServerSettings = new ServerSettings();
 
+        // Use reflection to loop over all properties and set their value by reading from the packet
         foreach (var prop in ServerSettings.GetType().GetProperties()) {
-            if (!prop.CanRead || !prop.CanWrite || prop.DeclaringType != typeof(ServerSettings)) {
+            if (!prop.CanWrite) {
                 continue;
             }
 
+            // ReSharper disable once OperatorIsCanBeUsed
             if (prop.PropertyType == typeof(bool)) {
                 prop.SetValue(ServerSettings, packet.ReadBool(), null);
             } else if (prop.PropertyType == typeof(byte)) {
                 prop.SetValue(ServerSettings, packet.ReadByte(), null);
             } else {
-                Logger.Error($"No read handler for property type: {prop.PropertyType}");
+                Logger.Error($"No read handler for property type: {prop.GetType()}");
             }
         }
     }
