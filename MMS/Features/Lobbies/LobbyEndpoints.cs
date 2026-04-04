@@ -5,8 +5,10 @@ namespace MMS.Features.Lobbies;
 
 /// <summary>
 /// Maps lobby-oriented MMS HTTP endpoints.
+/// Pair this with <see cref="LobbyEndpointHandlers"/>, which contains the
+/// corresponding handler and validation logic for the routes defined here.
 /// </summary>
-internal static partial class LobbyEndpoints {
+internal static class LobbyEndpoints {
     /// <summary>
     /// Maps lobby management and matchmaking HTTP endpoints.
     /// </summary>
@@ -15,39 +17,39 @@ internal static partial class LobbyEndpoints {
     public static void MapLobbyEndpoints(this WebApplication app, RouteGroupBuilder lobby) {
         app.Endpoint()
            .Get("/lobbies")
-           .Handler(GetLobbies)
+           .Handler(LobbyEndpointHandlers.GetLobbies)
            .WithName("ListLobbies")
            .RequireRateLimiting("search")
            .Build();
 
         lobby.Endpoint()
              .Post("")
-             .Handler(CreateLobby)
+             .Handler(LobbyEndpointHandlers.CreateLobby)
              .WithName("CreateLobby")
              .RequireRateLimiting("create")
              .Build();
 
         lobby.Endpoint()
              .Delete("/{token}")
-             .Handler(CloseLobby)
+             .Handler(LobbyEndpointHandlers.CloseLobby)
              .WithName("CloseLobby")
              .Build();
 
         lobby.Endpoint()
              .Post("/heartbeat/{token}")
-             .Handler(Heartbeat)
+             .Handler(LobbyEndpointHandlers.Heartbeat)
              .WithName("Heartbeat")
              .Build();
 
         lobby.Endpoint()
              .Post("/discovery/verify/{token}")
-             .Handler(VerifyDiscovery)
+             .Handler(LobbyEndpointHandlers.VerifyDiscovery)
              .WithName("VerifyDiscovery")
              .Build();
 
         lobby.Endpoint()
              .Post("/{connectionData}/join")
-             .Handler(JoinLobby)
+             .Handler(LobbyEndpointHandlers.JoinLobby)
              .WithName("JoinLobby")
              .RequireRateLimiting("join")
              .Build();

@@ -15,12 +15,14 @@ namespace MMS.Features.Lobbies;
 
 /// <summary>
 /// Contains handler and validation logic for lobby-oriented MMS endpoints.
+/// Pair this with <see cref="LobbyEndpoints"/>, which owns route registration
+/// and delegates each mapped route to the handlers in this class.
 /// </summary>
-internal static partial class LobbyEndpoints {
+internal static class LobbyEndpointHandlers {
     /// <summary>
     /// Returns all lobbies, optionally filtered by type.
     /// </summary>
-    private static Ok<IEnumerable<LobbyResponse>> GetLobbies(LobbyService lobbyService, string? type = null) {
+    internal static Ok<IEnumerable<LobbyResponse>> GetLobbies(LobbyService lobbyService, string? type = null) {
         var lobbies = lobbyService.GetLobbies(type)
                                   .Select(l => new LobbyResponse(
                                           l.AdvertisedConnectionData,
@@ -35,7 +37,7 @@ internal static partial class LobbyEndpoints {
     /// <summary>
     /// Creates a new lobby (Steam or Matchmaking).
     /// </summary>
-    private static IResult CreateLobby(
+    internal static IResult CreateLobby(
         CreateLobbyRequest request,
         LobbyService lobbyService,
         LobbyNameService lobbyNameService,
@@ -87,7 +89,7 @@ internal static partial class LobbyEndpoints {
     /// Retained for compatibility. The active matchmaking client flow uses the WebSocket
     /// rendezvous instead of polling this endpoint.
     /// </remarks>
-    private static IResult VerifyDiscovery(string token, JoinSessionService joinService) {
+    internal static IResult VerifyDiscovery(string token, JoinSessionService joinService) {
         var port = joinService.GetDiscoveredPort(token);
         return port is null
             ? TypedResults.Ok(new StatusResponse("pending"))
@@ -97,7 +99,7 @@ internal static partial class LobbyEndpoints {
     /// <summary>
     /// Closes a lobby by host token.
     /// </summary>
-    private static Results<NoContent, NotFound<ErrorResponse>> CloseLobby(
+    internal static Results<NoContent, NotFound<ErrorResponse>> CloseLobby(
         string token,
         LobbyService lobbyService,
         JoinSessionService joinService
@@ -112,7 +114,7 @@ internal static partial class LobbyEndpoints {
     /// <summary>
     /// Refreshes the lobby heartbeat to prevent expiration.
     /// </summary>
-    private static Results<Ok<StatusResponse>, NotFound<ErrorResponse>> Heartbeat(
+    internal static Results<Ok<StatusResponse>, NotFound<ErrorResponse>> Heartbeat(
         string token,
         HeartbeatRequest request,
         LobbyService lobbyService
@@ -125,7 +127,7 @@ internal static partial class LobbyEndpoints {
     /// <summary>
     /// Registers a client join attempt, returning host connection info and rendezvous metadata.
     /// </summary>
-    private static IResult JoinLobby(
+    internal static IResult JoinLobby(
         string connectionData,
         JoinLobbyRequest request,
         LobbyService lobbyService,

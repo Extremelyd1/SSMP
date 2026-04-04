@@ -3,7 +3,6 @@ using MMS.Bootstrap;
 using MMS.Models.Lobby;
 using MMS.Services.Matchmaking;
 using MMS.Services.Utility;
-using _Lobby = MMS.Models.Lobby.Lobby;
 
 namespace MMS.Services.Lobbies;
 
@@ -17,7 +16,7 @@ public class LobbyService {
     /// <summary>
     /// The backing store for all active lobbies, keyed by their unique connection data.
     /// </summary>
-    private readonly ConcurrentDictionary<string, _Lobby> _lobbies = new();
+    private readonly ConcurrentDictionary<string, Lobby> _lobbies = new();
 
     /// <summary>
     /// Map for looking up lobbies by their host authentication token.
@@ -61,7 +60,7 @@ public class LobbyService {
     /// <param name="hostLanIp">Optional LAN address of the host, used for same-network fast-path.</param>
     /// <param name="isPublic">Whether the lobby appears in the public browser.</param>
     /// <returns>The newly created <see cref="Lobby"/> instance.</returns>
-    public _Lobby CreateLobby(
+    public Lobby CreateLobby(
         string connectionData,
         string lobbyName,
         string lobbyType = "matchmaking",
@@ -86,7 +85,7 @@ public class LobbyService {
                 ? ""
                 : ReserveLobbyCode(connectionData);
 
-            var lobby = new _Lobby(
+            var lobby = new Lobby(
                 connectionData,
                 hostToken,
                 lobbyCode,
@@ -108,7 +107,7 @@ public class LobbyService {
     /// Expired lobbies are removed lazily on access.
     /// </summary>
     /// <param name="connectionData">The connection identifier the lobby was registered under.</param>
-    public _Lobby? GetLobby(string connectionData) {
+    public Lobby? GetLobby(string connectionData) {
         if (!_lobbies.TryGetValue(connectionData, out var lobby)) return null;
         if (!lobby.IsDead) return lobby;
 
@@ -120,7 +119,7 @@ public class LobbyService {
     /// Returns the lobby owned by <paramref name="token"/>, or <see langword="null"/> if absent or expired.
     /// </summary>
     /// <param name="token">The host authentication token issued at lobby creation.</param>
-    public _Lobby? GetLobbyByToken(string token) {
+    public Lobby? GetLobbyByToken(string token) {
         if (!_tokenToConnectionData.TryGetValue(token, out var connData))
             return null;
 
@@ -133,7 +132,7 @@ public class LobbyService {
     /// The lookup is case-insensitive.
     /// </summary>
     /// <param name="code">The player-facing lobby code (e.g. <c>ABC123</c>).</param>
-    public _Lobby? GetLobbyByCode(string code) {
+    public Lobby? GetLobbyByCode(string code) {
         var normalizedCode = code.ToUpperInvariant();
         if (!_codeToConnectionData.TryGetValue(normalizedCode, out var connData)) return null;
 
@@ -150,7 +149,7 @@ public class LobbyService {
     /// Optional case-insensitive filter (e.g. <c>"matchmaking"</c> or <c>"steam"</c>).
     /// Pass <see langword="null"/> to return all types.
     /// </param>
-    public IEnumerable<_Lobby> GetLobbies(string? lobbyType = null) {
+    public IEnumerable<Lobby> GetLobbies(string? lobbyType = null) {
         var active = _lobbies.Values.Where(l => l is { IsDead: false, IsPublic: true });
         return string.IsNullOrEmpty(lobbyType)
             ? active
@@ -163,7 +162,7 @@ public class LobbyService {
     /// </summary>
     /// <remarks>
     /// When <paramref name="connectedPlayers"/> drops to zero on a matchmaking lobby,
-    /// <see cref="_Lobby.ExternalPort"/> is cleared so that stale NAT mappings are not
+    /// <see cref="Lobby.ExternalPort"/> is cleared so that stale NAT mappings are not
     /// reused for subsequent joins.
     /// </remarks>
     /// <param name="token">The host authentication token.</param>
@@ -190,17 +189,17 @@ public class LobbyService {
     /// <param name="token">The host authentication token issued at lobby creation.</param>
     /// <param name="onRemoving">Optional callback invoked with the lobby instance before it is removed from all indexes.</param>
     /// <returns><see langword="true"/> if the lobby was found and removed; <see langword="false"/> otherwise.</returns>
-    public bool RemoveLobbyByToken(string token, Action<_Lobby>? onRemoving = null) {
+    public bool RemoveLobbyByToken(string token, Action<Lobby>? onRemoving = null) {
         var lobby = GetLobbyByToken(token);
         return lobby != null && RemoveLobby(lobby, onRemoving);
     }
 
     /// <summary>
-    /// Removes all lobbies whose <see cref="_Lobby.IsDead"/> flag is set.
+    /// Removes all lobbies whose <see cref="Lobby.IsDead"/> flag is set.
     /// </summary>
     /// <param name="onRemoving">Optional callback invoked with each lobby instance before it is removed.</param>
     /// <returns>The number of lobbies removed.</returns>
-    public int CleanupDeadLobbies(Action<_Lobby>? onRemoving = null) {
+    public int CleanupDeadLobbies(Action<Lobby>? onRemoving = null) {
         var dead = _lobbies.Values.Where(l => l.IsDead).ToList();
         return dead.Count(lobby => RemoveLobby(lobby, onRemoving));
     }
@@ -211,8 +210,8 @@ public class LobbyService {
     /// <param name="lobby">The specific lobby instance to remove.</param>
     /// <param name="onRemoving">Optional callback invoked with the lobby instance before it is removed from all indexes.</param>
     /// <returns><see langword="false"/> if the lobby was not found (already removed).</returns>
-    private bool RemoveLobby(_Lobby lobby, Action<_Lobby>? onRemoving = null) {
-        if (!_lobbies.TryRemove(new KeyValuePair<string, _Lobby>(lobby.ConnectionData, lobby)))
+    private bool RemoveLobby(Lobby lobby, Action<Lobby>? onRemoving = null) {
+        if (!_lobbies.TryRemove(new KeyValuePair<string, Lobby>(lobby.ConnectionData, lobby)))
             return false;
 
         try {
@@ -253,7 +252,7 @@ public class LobbyService {
     /// and lobby code if one was assigned.
     /// </summary>
     /// <param name="lobby">The lobby whose indexes should be removed.</param>
-    private void RemoveLobbyIndexes(_Lobby lobby) {
+    private void RemoveLobbyIndexes(Lobby lobby) {
         _tokenToConnectionData.TryRemove(lobby.HostToken, out _);
         if (!string.IsNullOrEmpty(lobby.LobbyCode))
             _codeToConnectionData.TryRemove(lobby.LobbyCode, out _);
@@ -264,6 +263,6 @@ public class LobbyService {
         lobbyType.Equals("matchmaking", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Returns <see langword="true"/> if <paramref name="lobby"/> is a matchmaking lobby.</summary>
-    private static bool IsMatchmakingLobby(_Lobby lobby) =>
+    private static bool IsMatchmakingLobby(Lobby lobby) =>
         IsMatchmakingLobbyType(lobby.LobbyType);
 }
