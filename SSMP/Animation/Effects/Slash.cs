@@ -1,4 +1,4 @@
-﻿using SSMP.Internals;
+using SSMP.Internals;
 using UnityEngine;
 
 namespace SSMP.Animation.Effects;
