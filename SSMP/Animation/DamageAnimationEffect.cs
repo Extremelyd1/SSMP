@@ -45,7 +45,7 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
     /// <summary>
     /// Removes a <see cref="DamageHero"/> component from the given game object.
     /// </summary>
-    /// <param name="target">The target game object to detatch the component to.</param>
+    /// <param name="target">The target game object to detach the component from.</param>
     protected static void RemoveDamageHeroComponent(GameObject target) {
         var damageHero = target.GetComponent<DamageHero>();
         if (damageHero == null) {

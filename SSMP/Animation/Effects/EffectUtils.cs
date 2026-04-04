@@ -40,7 +40,7 @@ internal static class EffectUtils {
         return SpawnGlobalPoolObject(spawner.gameObject.Value, spawnLocation, destroyAfterDelay, keepParent);
     }
 
-    /// <inheritdoc cref="SpawnGlobalPoolObject(SpawnObjectFromGlobalPool?, Transform, float, bool)"/>
+    /// <inheritdoc cref="SpawnGlobalPoolObject(SpawnObjectFromGlobalPool?, Transform, float, bool)" path="/summary" />
     /// <param name="globalObj">The GameObject to spawn</param>
     /// <param name="spawnLocation">The location where the object will be spawned.</param>
     /// <param name="destroyAfterDelay">The duration, in seconds, after which the spawned object will be destroyed.</param>

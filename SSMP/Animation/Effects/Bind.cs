@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using HutongGames.PlayMaker.Actions;
@@ -31,12 +30,12 @@ internal class Bind : DamageAnimationEffect {
     /// <summary>
     /// Cached FSM for Hornet's bind ability.
     /// </summary>
-    protected static PlayMakerFSM? BindFsm;
+    private static PlayMakerFSM? _bindFsm;
 
     /// <summary>
     /// Cached effects object for Hornet's bind ability.
     /// </summary>
-    protected static GameObject? LocalBindEffects;
+    private static GameObject? _localBindEffects;
 
     /// <inheritdoc/>
     public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
@@ -55,10 +54,10 @@ internal class Bind : DamageAnimationEffect {
         var playAudioAction = GetOrFindBindFsm().GetFirstAction<PlayAudioEvent>("Bind Start");
 
         if (BindState == State.Normal) {
-            PlaySound(playerObject, randomClipAction, playAudioAction);
+            AudioUtil.PlayAudio(playAudioAction, randomClipAction, playerObject);
 
             var oneShotSingleAction = GetOrFindBindFsm().GetFirstAction<AudioPlayerOneShotSingle>("Check Grounded");
-            PlaySound(playerObject, oneShotSingleAction);
+            AudioUtil.PlayAudio(oneShotSingleAction, playerObject);
         }
 
 
@@ -278,7 +277,7 @@ internal class Bind : DamageAnimationEffect {
         var silkPuffSpawner = GetOrFindBindFsm().GetFirstAction<SpawnObjectFromGlobalPool>(cancelStateName);
 
         var audio = GetOrFindBindFsm().GetFirstAction<PlayAudioEvent>(cancelStateName);
-        PlaySound(playerObject, audio);
+        AudioUtil.PlayAudio(audio, playerObject);
         
         EffectUtils.SpawnGlobalPoolObject(silkPuffSpawner, playerObject.transform, 5f);
 
@@ -301,34 +300,34 @@ internal class Bind : DamageAnimationEffect {
 
 
     /// <inheritdoc/>
-    public override byte[]? GetEffectInfo() {
-        byte[] effectInfo = {
+    public override byte[] GetEffectInfo() {
+        byte[] effectInfo = [
             (byte) ((ToolItemManager.IsToolEquipped("Bell Bind") && !ToolItemManager.GetToolByName("Bell Bind").IsEmpty) ? 1 : 0),
             (byte) (ToolItemManager.IsToolEquipped("Dazzle Bind") ? 1 : 0),
             (byte) (ToolItemManager.IsToolEquipped("Dazzle Bind Upgraded") ? 1 : 0),
             (byte) (ToolItemManager.IsToolEquipped("Quickbind") ? 1 : 0),
             (byte) ((ToolItemManager.IsToolEquipped("Reserve Bind") && !ToolItemManager.GetToolByName("Reserve Bind").IsEmpty) ? 1 : 0),
             (byte) (HeroController.instance.cState.isMaggoted ? 1 : 0)
-        };
+        ];
         return effectInfo;
     }
 
     /// <summary>
-    /// Get or find the Bind FSM on the hero object. Will be cached to <see cref="BindFsm"/>.
+    /// Get or find the Bind FSM on the hero object. Will be cached to <see cref="_bindFsm"/>.
     /// </summary>
     /// <returns>The FSM for Bind.</returns>
     /// <exception cref="InvalidOperationException">Thrown if the FSM cannot be found, which shouldn't happen.
     /// </exception>
     protected PlayMakerFSM GetOrFindBindFsm() {
-        if (BindFsm != null) {
-            return BindFsm;
+        if (_bindFsm != null) {
+            return _bindFsm;
         }
 
         var heroFsms = HeroController.instance.GetComponents<PlayMakerFSM>();
         foreach (var heroFsm in heroFsms) {
             if (heroFsm.FsmName == "Bind") {
-                BindFsm = heroFsm;
-                return BindFsm;
+                _bindFsm = heroFsm;
+                return _bindFsm;
             }
         }
 
@@ -342,8 +341,8 @@ internal class Bind : DamageAnimationEffect {
     /// <param name="bindEffects">The player's 'Bind Effects' object, or null if not found.</param>
     /// <returns>true if the 'Bind Effects' GameObject is successfully found and bound; otherwise, false.</returns>
     protected bool CreateObjects(GameObject playerObject, [MaybeNullWhen(false)] out GameObject bindEffects) {
-        LocalBindEffects ??= HeroController.instance.gameObject.FindGameObjectInChildren("Bind Effects");
-        if (LocalBindEffects == null) {
+        _localBindEffects ??= HeroController.instance.gameObject.FindGameObjectInChildren("Bind Effects");
+        if (_localBindEffects == null) {
             Logger.Warn("Could not find local Bind Effects object in hero object");
             bindEffects = null;
             return false;
@@ -371,7 +370,7 @@ internal class Bind : DamageAnimationEffect {
             return false;
         }
 
-        var localObj = LocalBindEffects!.FindGameObjectInChildren(objectName);
+        var localObj = _localBindEffects!.FindGameObjectInChildren(objectName);
         if (localObj == null) {
             Logger.Warn($"Could not find local {objectName} object, cannot play bind effect");
             return false;
@@ -439,12 +438,12 @@ internal class Bind : DamageAnimationEffect {
     /// Effect flags sent by the other player. Mostly items they have equipped.
     /// </summary>
     protected class Flags {
-        public readonly bool BindBell = false;
-        public readonly bool BaseMirror = false;
-        public readonly bool UpgradedMirror = false;
-        public readonly bool QuickBind = false;
-        public readonly bool ReserveBind = false;
-        public bool Maggoted = false; // Needs to be writable by BindBurst
+        public readonly bool BindBell;
+        public readonly bool BaseMirror;
+        public readonly bool UpgradedMirror;
+        public readonly bool QuickBind;
+        public readonly bool ReserveBind;
+        public bool Maggoted; // Needs to be writable by BindBurst
 
         public Flags(byte[]? info) {
             if (info == null) return;

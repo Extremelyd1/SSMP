@@ -26,7 +26,7 @@ internal class BindBurst : Bind {
     /// <summary>
     /// A set of players who recently bound while maggoted
     /// </summary>
-    public static readonly HashSet<int> MaggotedPlayers = new();
+    public static readonly HashSet<int> MaggotedPlayers = [];
 
     /// <inheritdoc/>
     public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
@@ -87,9 +87,7 @@ internal class BindBurst : Bind {
         EffectUtils.SpawnGlobalPoolObject(maggotFlash, bindEffects.transform, 5f);
 
         // Play audio
-        if (maggotAudio != null) {
-            PlaySound(playerObject, maggotAudio);
-        }
+        AudioUtil.PlayAudio(maggotAudio, playerObject);
     }
 
     /// <summary>
@@ -214,9 +212,7 @@ internal class BindBurst : Bind {
 
         // Play tentacles audio
         var audio = GetOrFindBindFsm().GetFirstAction<PlayAudioEvent>("Witch Tentancles!");
-        if (audio != null) {
-            PlaySound(bindEffects.transform.parent.gameObject, audio);
-        }
+        AudioUtil.PlayAudio(audio, bindEffects.transform.parent.gameObject);
 
         witchBind.SetActive(false);
         witchBind.SetActive(true);
@@ -274,8 +270,6 @@ internal class BindBurst : Bind {
 
         // Play audio
         var audio = GetOrFindBindFsm().GetFirstAction<AudioPlayerOneShotSingle>("Bind Burst");
-        if (audio != null) {
-            PlaySound(bindEffects.transform.parent.gameObject, audio);
-        }
+        AudioUtil.PlayAudio(audio, bindEffects.transform.parent.gameObject);
     }
 }

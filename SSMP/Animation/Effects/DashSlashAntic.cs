@@ -30,23 +30,23 @@ internal class DashSlashAntic : DamageAnimationEffect {
             case CrestType.Hunter:
             case CrestType.Witch:
                 playAudioAction = sprintFsm.GetFirstAction<PlayAudioEvent>("Attack Antic");
-                AudioUtil.PlayAudioEventAtPlayerObject(playAudioAction, playerObject);
+                AudioUtil.PlayAudio(playAudioAction, playerObject);
                 break;
             case CrestType.Reaper:
                 var playRandomAudioClipAction = sprintFsm.GetFirstAction<PlayRandomAudioClipTableV2>("Reaper Antic");
-                AudioUtil.PlayRandomAudioClipAtPlayerObject(playRandomAudioClipAction, playerObject);
+                AudioUtil.PlayAudio(playRandomAudioClipAction, playerObject);
                 break;
             case CrestType.Beast:
                 playAudioAction = sprintFsm.GetFirstAction<PlayAudioEvent>("Warrior Antic");
-                AudioUtil.PlayAudioEventAtPlayerObject(playAudioAction, playerObject);
+                AudioUtil.PlayAudio(playAudioAction, playerObject);
                 break;
             case CrestType.Architect:
                 playAudioAction = sprintFsm.GetFirstAction<PlayAudioEvent>("Drill Charge Start");
-                AudioUtil.PlayAudioEventAtPlayerObject(playAudioAction, playerObject);
+                AudioUtil.PlayAudio(playAudioAction, playerObject);
                 break;
             case CrestType.Shaman:
                 playAudioAction = sprintFsm.GetFirstAction<PlayAudioEvent>("Shaman Antic");
-                AudioUtil.PlayAudioEventAtPlayerObject(playAudioAction, playerObject);
+                AudioUtil.PlayAudio(playAudioAction, playerObject);
                 break;
             default:
                 return;

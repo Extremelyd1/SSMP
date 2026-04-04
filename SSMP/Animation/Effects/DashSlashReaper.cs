@@ -16,6 +16,6 @@ internal class DashSlashReaper : SlashBase {
         // Also play an additional sound from the Sprint FSM
         var sprintFsm = HeroController.instance.sprintFSM;
         var playAudioAction = sprintFsm.GetFirstAction<PlayAudioEvent>("Reaper Upper");
-        AudioUtil.PlayAudioEventAtPlayerObject(playAudioAction, playerObject);
+        AudioUtil.PlayAudio(playAudioAction, playerObject);
     }
 }

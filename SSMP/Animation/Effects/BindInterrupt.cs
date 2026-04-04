@@ -52,7 +52,7 @@ internal class BindInterrupt : Bind {
 
         // Play audio
         var audio = GetOrFindBindFsm().GetFirstAction<PlayAudioEvent>(stateName);
-        PlaySound(bindEffects.transform.parent.gameObject, audio);
+        AudioUtil.PlayAudio(audio, bindEffects.transform.parent.gameObject);
 
         // Remove haze and camera controls
         burst.DestroyGameObjectInChildren("haze2");
@@ -88,7 +88,7 @@ internal class BindInterrupt : Bind {
 
         // Play sound
         var audio = bellFsm.GetFirstAction<PlayAudioEvent>(stateName);
-        PlaySound(bindBell, audio);
+        AudioUtil.PlayAudio(audio, bindBell);
 
 
         // Remove camera control and haze
