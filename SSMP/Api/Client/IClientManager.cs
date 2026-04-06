@@ -60,6 +60,16 @@ public interface IClientManager {
     bool TryGetPlayer(ushort id, out IClientPlayer? player);
 
     /// <summary>
+    /// Event that is called when the local player's team changes.
+    /// </summary>
+    event Action<Team>? LocalPlayerTeamChangedEvent;
+
+    /// <summary>
+    /// Event that is called when any player's (including the local player's) team changes.
+    /// </summary>
+    event Action<IClientPlayer, Team>? PlayerTeamChangedEvent;
+
+    /// <summary>
     /// Event that is called when the local user connects to a server.
     /// </summary>
     event Action ConnectEvent;

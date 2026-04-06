@@ -169,9 +169,14 @@ internal class ClientManager : IClientManager {
     private bool _sceneHostDetermined;
 
     /// <summary>
-    /// Event for when the player's team changes after being received from the server.
+    /// Event for when the local player's team changes after being received from the server.
     /// </summary>
-    public event Action<Team>? TeamChangedEvent;
+    public event Action<Team>? LocalPlayerTeamChangedEvent;
+
+    /// <summary>
+    /// Event for when any player's team changes after being received from the server.
+    /// </summary>
+    public event Action<IClientPlayer, Team>? PlayerTeamChangedEvent;
 
     /// <summary>
     /// Event for when the player's skin changes after being received from the server.
@@ -1143,7 +1148,10 @@ internal class ClientManager : IClientManager {
             if (!_serverSettings.TeamsEnabled) {
                 _playerManager.ResetAllTeams();
 
-                TeamChangedEvent?.Invoke(Team.None);
+                LocalPlayerTeamChangedEvent?.Invoke(Team.None);
+                foreach (var player in _playerData.Values) {
+                    PlayerTeamChangedEvent?.Invoke(player, Team.None);
+                }
             }
 
             // _uiManager.OnTeamSettingChange();
@@ -1297,9 +1305,12 @@ internal class ClientManager : IClientManager {
         if (settingUpdate.UpdateTypes.Contains(PlayerSettingUpdateType.Team)) {
             if (settingUpdate.Self) {
                 _playerManager.OnPlayerTeamUpdate(true, settingUpdate.Team);
-                TeamChangedEvent?.Invoke(settingUpdate.Team);
+                LocalPlayerTeamChangedEvent?.Invoke(settingUpdate.Team);
             } else {
                 _playerManager.OnPlayerTeamUpdate(false, settingUpdate.Team, settingUpdate.Id);
+                if (TryGetPlayer(settingUpdate.Id, out var player)) {
+                    PlayerTeamChangedEvent?.Invoke(player!, settingUpdate.Team);
+                }
             }
         }
 
