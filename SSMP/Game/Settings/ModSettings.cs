@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
+using SSMP.Api.Client;
 using SSMP.Serialization;
 using SSMP.Ui.Menu;
 using SSMP.Util;
@@ -10,13 +11,16 @@ namespace SSMP.Game.Settings;
 /// <summary>
 /// Settings class that stores user preferences.
 /// </summary>
-internal class ModSettings {
+internal class ModSettings : IModSettings {
     /// <summary>
     /// The name of the file containing the mod settings.
     /// </summary>
     private const string ModSettingsFileName = "modsettings.json";
 
-    public event System.Action<string>? OnChanged;
+    /// <summary>
+    /// Event triggered whenever any of the mod settings are changed.
+    /// </summary>
+    public event System.Action<string>? ChangedEvent;
     
     /// <summary>
     /// The authentication key for the user.
@@ -37,7 +41,7 @@ internal class ModSettings {
         set {
             if (field == value) return;
             field = value;
-            OnChanged?.Invoke(nameof(ConnectAddress));
+            ChangedEvent?.Invoke(nameof(ConnectAddress));
         }
     } = "";
 
@@ -49,7 +53,7 @@ internal class ModSettings {
         set {
             if (field == value) return;
             field = value;
-            OnChanged?.Invoke(nameof(ConnectPort));
+            ChangedEvent?.Invoke(nameof(ConnectPort));
         }
     } = -1;
 
@@ -61,7 +65,7 @@ internal class ModSettings {
         set {
             if (field == value) return;
             field = value;
-            OnChanged?.Invoke(nameof(Username));
+            ChangedEvent?.Invoke(nameof(Username));
         }
     } = "";
 
@@ -73,7 +77,7 @@ internal class ModSettings {
         init {
             if (field == value) return;
             field = value;
-            OnChanged?.Invoke(nameof(DisplayPing));
+            ChangedEvent?.Invoke(nameof(DisplayPing));
         }
     } = true;
 
@@ -92,7 +96,7 @@ internal class ModSettings {
         set {
             if (field == value) return;
             field = value;
-            OnChanged?.Invoke(nameof(FullSynchronisation));
+            ChangedEvent?.Invoke(nameof(FullSynchronisation));
         }
     }
 

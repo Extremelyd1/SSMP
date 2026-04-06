@@ -12,7 +12,7 @@ public interface IServerPlayer {
     /// <summary>
     /// Event triggered when the player changes their team.
     /// </summary>
-    public event Action<Team>? OnTeamChanged;
+    public event Action<Team>? TeamChangedEvent;
 
     /// <summary>
     /// The ID of the player.

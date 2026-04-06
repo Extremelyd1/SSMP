@@ -9,7 +9,7 @@ public interface IServerSettings {
     /// <summary>
     /// Event triggered whenever any of the server settings are changed.
     /// </summary>
-    public event Action<string>? OnChanged;
+    public event Action<string>? ChangedEvent;
 
     /// <summary>
     /// Whether player vs. player damage is enabled.

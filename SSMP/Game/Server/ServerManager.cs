@@ -1427,13 +1427,15 @@ internal abstract class ServerManager : IServerManager {
         };
 
         serverInfo.FullSynchronisation = FullSynchronisation;
-        serverInfo.SelfId = netServerClient.Id;
         
         // Construct the player info to send to the new client in the server info
         var playerInfo = new List<(ushort, string)>();
 
         foreach (var idPlayerDataPair in _playerData) {
             var otherId = idPlayerDataPair.Key;
+            if (otherId == netServerClient.Id) {
+                continue;
+            }
             
             var otherPd = idPlayerDataPair.Value;
 

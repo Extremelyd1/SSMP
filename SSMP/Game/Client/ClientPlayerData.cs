@@ -8,7 +8,7 @@ namespace SSMP.Game.Client;
 /// <inheritdoc />
 internal class ClientPlayerData : IClientPlayer {
     /// <inheritdoc />
-    public event Action<Team>? OnTeamChanged;
+    public event Action<Team>? TeamChangedEvent;
 
     /// <inheritdoc />
     public ushort Id { get; }
@@ -31,7 +31,7 @@ internal class ClientPlayerData : IClientPlayer {
         set {
             if (field == value) return;
             field = value;
-            OnTeamChanged?.Invoke(value);
+            TeamChangedEvent?.Invoke(value);
         }
     }
 

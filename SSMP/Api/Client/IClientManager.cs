@@ -20,11 +20,6 @@ public interface IClientManager {
     string Username { get; }
 
     /// <summary>
-    /// The unique ID assigned to the local player.
-    /// </summary>
-    ushort Id { get; }
-
-    /// <summary>
     /// The current team of the local player.
     /// </summary>
     Team Team { get; }
@@ -38,6 +33,11 @@ public interface IClientManager {
     /// A read-only <see cref="IServerSettings"/> that contains the settings related to gameplay.
     /// </summary>
     IServerSettings ServerSettings { get; }
+
+    /// <summary>
+    /// A read-only <see cref="IModSettings"/> that contains the settings related to the client.
+    /// </summary>
+    IModSettings ModSettings { get; }
 
     /// <summary>
     /// Disconnect the local client from the server.

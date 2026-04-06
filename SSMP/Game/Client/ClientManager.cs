@@ -189,7 +189,7 @@ internal class ClientManager : IClientManager {
     public IServerSettings ServerSettings => _serverSettings;
 
     /// <inheritdoc />
-    public ushort Id { get; private set; }
+    public IModSettings ModSettings => _modSettings;
 
     /// <inheritdoc />
     public string Username => !_netClient.IsConnected ? throw new Exception("Client is not connected, username is undefined") : _username!;
@@ -553,7 +553,6 @@ internal class ClientManager : IClientManager {
         Logger.Info("Disconnecting from server");
 
         _autoConnect = false;
-        Id = 0;
 
         _netClient.Disconnect();
 
@@ -707,9 +706,6 @@ internal class ClientManager : IClientManager {
                 crestType: CrestTypeExt.FromInternal(PlayerData.instance.CurrentCrestID)
             );
         }
-
-        Id = serverInfo.SelfId;
-        _playerData[Id] = new ClientPlayerData(Id, _username!);
 
         // Fill the player data dictionary with the info from the packet
         foreach (var (id, username) in serverInfo.PlayerInfo) {
@@ -1301,10 +1297,6 @@ internal class ClientManager : IClientManager {
         if (settingUpdate.UpdateTypes.Contains(PlayerSettingUpdateType.Team)) {
             if (settingUpdate.Self) {
                 _playerManager.OnPlayerTeamUpdate(true, settingUpdate.Team);
-                if (_playerData.TryGetValue(Id, out var localPlayerData)) {
-                    localPlayerData.Team = settingUpdate.Team;
-                }
-
                 TeamChangedEvent?.Invoke(settingUpdate.Team);
             } else {
                 _playerManager.OnPlayerTeamUpdate(false, settingUpdate.Team, settingUpdate.Id);

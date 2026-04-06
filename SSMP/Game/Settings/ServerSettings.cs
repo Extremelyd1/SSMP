@@ -11,7 +11,7 @@ namespace SSMP.Game.Settings;
 /// <inheritdoc cref="IServerSettings" />
 public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
     /// <inheritdoc />
-    public event Action<string>? OnChanged;
+    public event Action<string>? ChangedEvent;
 
     /// <inheritdoc />
     [SettingAlias("pvp")]
@@ -21,7 +21,7 @@ public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
         set {
             if (field == value) return;
             field = value;
-            OnChanged?.Invoke(nameof(IsPvpEnabled));
+            ChangedEvent?.Invoke(nameof(IsPvpEnabled));
         }
     }
 
@@ -33,7 +33,7 @@ public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
         set {
             if (field == value) return;
             field = value;
-            OnChanged?.Invoke(nameof(AlwaysShowMapIcons));
+            ChangedEvent?.Invoke(nameof(AlwaysShowMapIcons));
         }
     }
 
@@ -45,7 +45,7 @@ public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
         init {
             if (field == value) return;
             field = value;
-            OnChanged?.Invoke(nameof(OnlyBroadcastMapIconWithCompass));
+            ChangedEvent?.Invoke(nameof(OnlyBroadcastMapIconWithCompass));
         }
     } = true;
 
@@ -57,7 +57,7 @@ public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
         init {
             if (field == value) return;
             field = value;
-            OnChanged?.Invoke(nameof(DisplayNames));
+            ChangedEvent?.Invoke(nameof(DisplayNames));
         }
     } = true;
 
@@ -69,7 +69,7 @@ public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
         set {
             if (field == value) return;
             field = value;
-            OnChanged?.Invoke(nameof(TeamsEnabled));
+            ChangedEvent?.Invoke(nameof(TeamsEnabled));
         }
     }
 
@@ -81,7 +81,7 @@ public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
         init {
             if (field == value) return;
             field = value;
-            OnChanged?.Invoke(nameof(AllowSkins));
+            ChangedEvent?.Invoke(nameof(AllowSkins));
         }
     } = true;
 

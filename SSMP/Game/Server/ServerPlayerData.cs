@@ -9,7 +9,7 @@ namespace SSMP.Game.Server;
 /// <inheritdoc />
 internal class ServerPlayerData : IServerPlayer {
     /// <inheritdoc />
-    public event Action<Team>? OnTeamChanged;
+    public event Action<Team>? TeamChangedEvent;
 
     /// <inheritdoc />
     public ushort Id { get; }
@@ -50,7 +50,7 @@ internal class ServerPlayerData : IServerPlayer {
         set {
             if (field == value) return;
             field = value;
-            OnTeamChanged?.Invoke(value);
+            TeamChangedEvent?.Invoke(value);
         }
     } = Team.None;
 
