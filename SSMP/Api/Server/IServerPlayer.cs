@@ -1,4 +1,3 @@
-using System;
 using SSMP.Game;
 using SSMP.Internals;
 using SSMP.Math;
@@ -9,11 +8,6 @@ namespace SSMP.Api.Server;
 /// A class containing all the relevant data managed by the server about a player.
 /// </summary>
 public interface IServerPlayer {
-    /// <summary>
-    /// Event triggered when the player changes their team.
-    /// </summary>
-    public event Action<Team>? TeamChangedEvent;
-
     /// <summary>
     /// The ID of the player.
     /// </summary>

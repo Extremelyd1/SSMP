@@ -1,4 +1,3 @@
-using System;
 using SSMP.Api.Server;
 using SSMP.Game.Server.Auth;
 using SSMP.Internals;
@@ -8,9 +7,6 @@ namespace SSMP.Game.Server;
 
 /// <inheritdoc />
 internal class ServerPlayerData : IServerPlayer {
-    /// <inheritdoc />
-    public event Action<Team>? TeamChangedEvent;
-
     /// <inheritdoc />
     public ushort Id { get; }
 
@@ -45,14 +41,7 @@ internal class ServerPlayerData : IServerPlayer {
     public ushort AnimationId { get; set; }
 
     /// <inheritdoc />
-    public Team Team {
-        get;
-        set {
-            if (field == value) return;
-            field = value;
-            TeamChangedEvent?.Invoke(value);
-        }
-    } = Team.None;
+    public Team Team { get; set; } = Team.None;
 
     /// <inheritdoc />
     public byte SkinId { get; set; }

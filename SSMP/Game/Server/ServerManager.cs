@@ -176,6 +176,9 @@ internal abstract class ServerManager : IServerManager {
     public event Action<IServerPlayer>? PlayerLeaveSceneEvent;
 
     /// <inheritdoc />
+    public event Action<IServerPlayer, Team>? PlayerTeamChangedEvent;
+
+    /// <inheritdoc />
     public event Action<IPlayerChatEvent>? PlayerChatEvent;
 
     /// <inheritdoc />
@@ -1189,6 +1192,13 @@ internal abstract class ServerManager : IServerManager {
             return false;
         }
 
+        if (playerData.Team == team) {
+            Logger.Info("  Team is the same as current, won't update team");
+
+            reason = "Already in team   ";
+            return false;
+        }
+
         // Update the team in the player data
         playerData.Team = team;
 
@@ -1204,6 +1214,8 @@ internal abstract class ServerManager : IServerManager {
                 team: team
             );
         }
+        
+        PlayerTeamChangedEvent?.Invoke(playerData, team);
 
         reason = null;
         return true;

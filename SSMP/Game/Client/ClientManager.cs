@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using GlobalEnums;
 using Steamworks;
 using SSMP.Animation;
@@ -1146,12 +1147,12 @@ internal class ClientManager : IClientManager {
         if (teamsChanged) {
             // If the team setting was disabled, we reset all teams and call the event
             if (!_serverSettings.TeamsEnabled) {
+                var oldLocalTeam = _playerManager.LocalPlayerTeam;
+                var playersWithTeams = _playerData.Values.Where(player => player.Team != Team.None).ToList();
                 _playerManager.ResetAllTeams();
-
-                LocalPlayerTeamChangedEvent?.Invoke(Team.None);
-                foreach (var player in _playerData.Values) {
-                    PlayerTeamChangedEvent?.Invoke(player, Team.None);
-                }
+                if (oldLocalTeam != Team.None) 
+                    LocalPlayerTeamChangedEvent?.Invoke(Team.None);
+                playersWithTeams.ForEach(p => PlayerTeamChangedEvent?.Invoke(p, Team.None));
             }
 
             // _uiManager.OnTeamSettingChange();
@@ -1304,13 +1305,15 @@ internal class ClientManager : IClientManager {
     private void OnPlayerSettingUpdate(ClientPlayerSettingUpdate settingUpdate) {
         if (settingUpdate.UpdateTypes.Contains(PlayerSettingUpdateType.Team)) {
             if (settingUpdate.Self) {
+                var oldTeam = _playerManager.LocalPlayerTeam;
                 _playerManager.OnPlayerTeamUpdate(true, settingUpdate.Team);
-                LocalPlayerTeamChangedEvent?.Invoke(settingUpdate.Team);
+                if (oldTeam != settingUpdate.Team) 
+                    LocalPlayerTeamChangedEvent?.Invoke(settingUpdate.Team);
             } else {
+                var oldTeam = TryGetPlayer(settingUpdate.Id, out var player) ? player!.Team : (Team?) null;
                 _playerManager.OnPlayerTeamUpdate(false, settingUpdate.Team, settingUpdate.Id);
-                if (TryGetPlayer(settingUpdate.Id, out var player)) {
+                if (oldTeam != null && oldTeam != settingUpdate.Team) 
                     PlayerTeamChangedEvent?.Invoke(player!, settingUpdate.Team);
-                }
             }
         }
 
