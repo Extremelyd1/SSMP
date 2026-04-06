@@ -1,5 +1,5 @@
 using System.Net.WebSockets;
-using MMS.Models.Lobby;
+using MMS.Models.Lobbies;
 using MMS.Models.Matchmaking;
 
 namespace MMS.Services.Matchmaking;

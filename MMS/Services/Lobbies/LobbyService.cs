@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 using MMS.Bootstrap;
-using MMS.Models.Lobby;
+using MMS.Models.Lobbies;
 using MMS.Services.Matchmaking;
 using MMS.Services.Utility;
 

@@ -1,6 +1,6 @@
 using System.Net.WebSockets;
 using MMS.Models;
-using MMS.Models.Lobby;
+using MMS.Models.Lobbies;
 using MMS.Models.Matchmaking;
 using MMS.Services.Lobbies;
 using MMS.Services.Utility;

@@ -1,6 +1,6 @@
 using System.Net.WebSockets;
 
-namespace MMS.Models.Lobby;
+namespace MMS.Models.Lobbies;
 
 /// <summary>
 /// Game lobby. ConnectionData serves as both identifier and connection info.

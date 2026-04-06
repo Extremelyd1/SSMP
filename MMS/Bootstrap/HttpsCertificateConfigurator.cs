@@ -72,8 +72,10 @@ internal static class HttpsCertificateConfigurator {
     }
 
     /// <summary>
-    /// Attempts to construct an <see cref="X509Certificate2"/> from PEM-encoded certificate
-    /// and key material.
+    /// Attempts to construct an <see cref="X509Certificate2"/> from PEM-encoded certificate and key material.
+    /// We export and re-import to force the private key into Windows-backed key storage (if using Windows). On Windows
+    /// PEM-created certificates can have the ephemeral private key that works in code but is unreliable for TLS.
+    /// Re-importing as `PKCS#12` with key storage flags transforms the key in a form Kestrel can use without issues.
     /// </summary>
     /// <param name="pem">The PEM-encoded certificate.</param>
     /// <param name="key">The PEM-encoded private key.</param>

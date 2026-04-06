@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using MMS.Bootstrap;
 using MMS.Features.Matchmaking;
 using MMS.Models;
-using MMS.Models.Lobby;
+using MMS.Models.Lobbies;
 using MMS.Services.Lobbies;
 using MMS.Services.Matchmaking;
 using MMS.Services.Utility;
