@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using GlobalEnums;
 using Steamworks;
 using SSMP.Animation;
@@ -56,12 +55,12 @@ internal class ClientManager : IClientManager {
     /// The UI manager instance.
     /// </summary>
     private readonly UiManager _uiManager;
-    
+
     /// <summary>
     /// The current server settings.
     /// </summary>
     private readonly ServerSettings _serverSettings;
-    
+
     /// <summary>
     /// The loaded mod settings.
     /// </summary>
@@ -169,24 +168,12 @@ internal class ClientManager : IClientManager {
     /// </summary>
     private bool _sceneHostDetermined;
 
-    /// <summary>
-    /// Event for when the local player's team changes after being received from the server.
-    /// </summary>
-    public event Action<Team>? LocalPlayerTeamChangedEvent;
-
-    /// <summary>
-    /// Event for when any player's team changes after being received from the server.
-    /// </summary>
-    public event Action<IClientPlayer, Team>? PlayerTeamChangedEvent;
-
-    /// <summary>
-    /// Event for when the player's skin changes after being received from the server.
-    /// </summary>
-    public event Action<byte>? SkinChangedEvent;
-
     #endregion
 
     #region IClientManager properties
+
+    /// <inheritdoc />
+    public IPlayerManager PlayerManager => _playerManager;
 
     /// <inheritdoc />
     public IMapManager MapManager => _mapManager;
@@ -1147,12 +1134,7 @@ internal class ClientManager : IClientManager {
         if (teamsChanged) {
             // If the team setting was disabled, we reset all teams and call the event
             if (!_serverSettings.TeamsEnabled) {
-                var oldLocalTeam = _playerManager.LocalPlayerTeam;
-                var playersWithTeams = _playerData.Values.Where(player => player.Team != Team.None).ToList();
                 _playerManager.ResetAllTeams();
-                if (oldLocalTeam != Team.None) 
-                    LocalPlayerTeamChangedEvent?.Invoke(Team.None);
-                playersWithTeams.ForEach(p => PlayerTeamChangedEvent?.Invoke(p, Team.None));
             }
 
             // _uiManager.OnTeamSettingChange();
@@ -1162,8 +1144,6 @@ internal class ClientManager : IClientManager {
         // event
         if (allowSkinsChanged && !_serverSettings.AllowSkins) {
             _playerManager.ResetAllPlayerSkins();
-
-            SkinChangedEvent?.Invoke(0);
         }
     }
 
@@ -1305,23 +1285,15 @@ internal class ClientManager : IClientManager {
     private void OnPlayerSettingUpdate(ClientPlayerSettingUpdate settingUpdate) {
         if (settingUpdate.UpdateTypes.Contains(PlayerSettingUpdateType.Team)) {
             if (settingUpdate.Self) {
-                var oldTeam = _playerManager.LocalPlayerTeam;
                 _playerManager.OnPlayerTeamUpdate(true, settingUpdate.Team);
-                if (oldTeam != settingUpdate.Team) 
-                    LocalPlayerTeamChangedEvent?.Invoke(settingUpdate.Team);
             } else {
-                var oldTeam = TryGetPlayer(settingUpdate.Id, out var player) ? player!.Team : (Team?) null;
                 _playerManager.OnPlayerTeamUpdate(false, settingUpdate.Team, settingUpdate.Id);
-                if (oldTeam != null && oldTeam != settingUpdate.Team) 
-                    PlayerTeamChangedEvent?.Invoke(player!, settingUpdate.Team);
             }
         }
 
         if (settingUpdate.UpdateTypes.Contains(PlayerSettingUpdateType.Skin)) {
             if (settingUpdate.Self) {
                 _playerManager.OnPlayerSkinUpdate(true, settingUpdate.SkinId);
-
-                SkinChangedEvent?.Invoke(settingUpdate.SkinId);
             } else {
                 _playerManager.OnPlayerSkinUpdate(false, settingUpdate.SkinId, settingUpdate.Id);
             }

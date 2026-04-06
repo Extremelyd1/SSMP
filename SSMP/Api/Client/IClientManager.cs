@@ -10,6 +10,11 @@ namespace SSMP.Api.Client;
 /// </summary>
 public interface IClientManager {
     /// <summary>
+    /// Class that handles information about players.
+    /// </summary>
+    IPlayerManager PlayerManager { get; }
+
+    /// <summary>
     /// Class that manages player locations on the in-game map.
     /// </summary>
     IMapManager MapManager { get; }
@@ -22,6 +27,7 @@ public interface IClientManager {
     /// <summary>
     /// The current team of the local player.
     /// </summary>
+    [Obsolete("Use PlayerManager.LocalPlayerTeam instead.")]
     Team Team { get; }
 
     /// <summary>
@@ -58,16 +64,6 @@ public interface IClientManager {
     /// <param name="player">The parameter that will contain the player if it exists.</param>
     /// <returns>True if the player was found, false otherwise.</returns>
     bool TryGetPlayer(ushort id, out IClientPlayer? player);
-
-    /// <summary>
-    /// Event that is called when the local player's team changes.
-    /// </summary>
-    event Action<Team>? LocalPlayerTeamChangedEvent;
-
-    /// <summary>
-    /// Event that is called when any player's (including the local player's) team changes.
-    /// </summary>
-    event Action<IClientPlayer, Team>? PlayerTeamChangedEvent;
 
     /// <summary>
     /// Event that is called when the local user connects to a server.

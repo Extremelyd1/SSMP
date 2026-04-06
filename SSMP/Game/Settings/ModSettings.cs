@@ -17,9 +17,7 @@ internal class ModSettings : IModSettings {
     /// </summary>
     private const string ModSettingsFileName = "modsettings.json";
 
-    /// <summary>
-    /// Event triggered whenever any of the mod settings are changed.
-    /// </summary>
+    /// <inheritdoc/>
     public event System.Action<string>? ChangedEvent;
     
     /// <summary>
@@ -33,9 +31,7 @@ internal class ModSettings : IModSettings {
     [JsonConverter(typeof(PlayerActionSetConverter))]
     public Keybinds Keybinds { get; } = new();
 
-    /// <summary>
-    /// The last used address to join a server.
-    /// </summary>
+    /// <inheritdoc/>
     public string ConnectAddress {
         get;
         set {
@@ -45,9 +41,7 @@ internal class ModSettings : IModSettings {
         }
     } = "";
 
-    /// <summary>
-    /// The last used port to join a server.
-    /// </summary>
+    /// <inheritdoc/>
     public int ConnectPort {
         get;
         set {
@@ -57,9 +51,7 @@ internal class ModSettings : IModSettings {
         }
     } = -1;
 
-    /// <summary>
-    /// The last used username to join a server.
-    /// </summary>
+    /// <inheritdoc/>
     public string Username {
         get;
         set {
@@ -69,9 +61,7 @@ internal class ModSettings : IModSettings {
         }
     } = "";
 
-    /// <summary>
-    /// Whether to display a UI element for the ping.
-    /// </summary>
+    /// <inheritdoc/>
     public bool DisplayPing {
         get;
         init {
@@ -87,9 +77,7 @@ internal class ModSettings : IModSettings {
     // ReSharper disable once AutoPropertyCanBeMadeGetOnly.Global
     public HashSet<string> DisabledAddons { get; set; } = [];
 
-    /// <summary>
-    /// Whether full synchronization of bosses, enemies, worlds, and saves is enabled.
-    /// </summary>
+    /// <inheritdoc/>
     // ReSharper disable once AutoPropertyCanBeMadeGetOnly.Global
     public bool FullSynchronisation {
         get;

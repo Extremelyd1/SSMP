@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 
 namespace SSMP.Api.Client;
 
@@ -23,7 +22,7 @@ public interface IModSettings {
     int ConnectPort { get; }
 
     /// <summary>
-    /// The username of the player.
+    /// The last used username to join a server.
     /// </summary>
     string Username { get; }
 
@@ -33,7 +32,7 @@ public interface IModSettings {
     bool DisplayPing { get; }
 
     /// <summary>
-    /// Whether full synchronization of bosses, enemies, worlds, and saves is enabled.
+    /// Whether full synchronisation of bosses, enemies, worlds, and saves is enabled.
     /// </summary>
     bool FullSynchronisation { get; }
 }

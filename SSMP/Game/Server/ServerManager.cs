@@ -1195,7 +1195,7 @@ internal abstract class ServerManager : IServerManager {
         if (playerData.Team == team) {
             Logger.Info("  Team is the same as current, won't update team");
 
-            reason = "Already in team   ";
+            reason = "Already in team";
             return false;
         }
 
@@ -1214,7 +1214,7 @@ internal abstract class ServerManager : IServerManager {
                 team: team
             );
         }
-        
+
         PlayerTeamChangedEvent?.Invoke(playerData, team);
 
         reason = null;
@@ -1448,7 +1448,7 @@ internal abstract class ServerManager : IServerManager {
             if (otherId == netServerClient.Id) {
                 continue;
             }
-            
+
             var otherPd = idPlayerDataPair.Value;
 
             playerInfo.Add((otherId, otherPd.Username));
