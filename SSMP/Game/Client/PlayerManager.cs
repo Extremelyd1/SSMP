@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using SSMP.Api.Client;
 using SSMP.Fsm;
 using SSMP.Game.Client.Skin;
 using SSMP.Game.Settings;
@@ -17,7 +18,7 @@ namespace SSMP.Game.Client;
 /// <summary>
 /// Class that manages player objects, spawning and recycling thereof.
 /// </summary>
-internal class PlayerManager {
+internal class PlayerManager : IPlayerManager {
     /// <summary>
     /// The name of the game object for the player container prefab.
     /// </summary>
@@ -60,11 +61,6 @@ internal class PlayerManager {
     private readonly Dictionary<ushort, ClientPlayerData> _playerData;
 
     /// <summary>
-    /// The team that our local player is on.
-    /// </summary>
-    public Team LocalPlayerTeam { get; private set; } = Team.None;
-
-    /// <summary>
     /// The player container prefab GameObject.
     /// </summary>
     private GameObject? _playerContainerPrefab;
@@ -78,6 +74,19 @@ internal class PlayerManager {
     /// The collection of active players spawned from and not in the player pool.
     /// </summary>
     private readonly Dictionary<ushort, GameObject> _activePlayers;
+
+    /// <inheritdoc/>
+    public Team LocalPlayerTeam { get; private set; } = Team.None;
+
+    /// <summary>
+    /// Event for when the local player's team changes after being received from the server.
+    /// </summary>
+    public event Action<Team>? LocalPlayerTeamChangeEvent;
+
+    /// <summary>
+    /// Event for when any player's team changes after being received from the server.
+    /// </summary>
+    public event Action<IClientPlayer, Team>? PlayerTeamChangeEvent;
 
     public PlayerManager(
         ServerSettings serverSettings,
@@ -573,6 +582,9 @@ internal class PlayerManager {
             Logger.Debug($"Tried to update team for ID {id} while player data did not exists");
             return;
         }
+        
+        // Store the old team for invoking the event later
+        var oldTeam = playerData.Team;
 
         // Update the team in the player data
         playerData.Team = team;
@@ -590,6 +602,10 @@ internal class PlayerManager {
         var textMeshObject = nameObject.GetComponent<TextMeshPro>();
 
         ChangeNameColor(textMeshObject, team);
+
+        if (oldTeam != team) {
+            PlayerTeamChangeEvent?.Invoke(playerData, team);
+        }
     }
 
     /// <summary>
@@ -597,6 +613,7 @@ internal class PlayerManager {
     /// </summary>
     /// <param name="team">The new team of the local player.</param>
     private void UpdateLocalPlayerTeam(Team team) {
+        var oldTeam = LocalPlayerTeam;
         LocalPlayerTeam = team;
 
         var nameObject = HeroController.instance.gameObject.FindGameObjectInChildren(UsernameObjectName);
@@ -608,6 +625,10 @@ internal class PlayerManager {
 
         var textMeshObject = nameObject.GetComponent<TextMeshPro>();
         ChangeNameColor(textMeshObject, team);
+
+        if (oldTeam != team) {
+            LocalPlayerTeamChangeEvent?.Invoke(team);
+        }
     }
 
     /// <summary>

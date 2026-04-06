@@ -5,6 +5,7 @@ using GlobalEnums;
 using Steamworks;
 using SSMP.Animation;
 using SSMP.Api.Client;
+using SSMP.Api.Server;
 using SSMP.Eventing;
 using SSMP.Fsm;
 using SSMP.Game.Client.Entity;
@@ -167,28 +168,21 @@ internal class ClientManager : IClientManager {
     /// </summary>
     private bool _sceneHostDetermined;
 
-    /// <summary>
-    /// Event for when the server settings change after being received from the server.
-    /// The parameter for the action is a copy of the last received server settings.
-    /// </summary>
-    public event Action<ServerSettings>? ServerSettingsChangedEvent;
-
-    /// <summary>
-    /// Event for when the player's team changes after being received from the server.
-    /// </summary>
-    public event Action<Team>? TeamChangedEvent;
-
-    /// <summary>
-    /// Event for when the player's skin changes after being received from the server.
-    /// </summary>
-    public event Action<byte>? SkinChangedEvent;
-
     #endregion
 
     #region IClientManager properties
 
     /// <inheritdoc />
+    public IPlayerManager PlayerManager => _playerManager;
+
+    /// <inheritdoc />
     public IMapManager MapManager => _mapManager;
+    
+    /// <inheritdoc />
+    public IServerSettings ServerSettings => _serverSettings;
+
+    /// <inheritdoc />
+    public IModSettings ModSettings => _modSettings;
 
     /// <inheritdoc />
     public string Username => !_netClient.IsConnected ? throw new Exception("Client is not connected, username is undefined") : _username!;
@@ -664,10 +658,8 @@ internal class ClientManager : IClientManager {
 
         // Update the locally stored server settings
         _serverSettings.SetAllProperties(serverInfo.ServerSettingsUpdate.ServerSettings);
-        // Call the event that the settings were updated
-        ServerSettingsChangedEvent?.Invoke(serverInfo.ServerSettingsUpdate.ServerSettings);
 
-        // Note whether full synchronisation is enabled
+        // Note whether full synchronization is enabled
         _fullSynchronisation = serverInfo.FullSynchronisation;
 
         // Register hooks and packet handlers before we load into the game
@@ -1126,8 +1118,6 @@ internal class ClientManager : IClientManager {
 
         // Update the settings so callbacks can read updated values
         _serverSettings.SetAllProperties(newServerSettings);
-        // Call the event that the settings were updated
-        ServerSettingsChangedEvent?.Invoke(newServerSettings);
 
         // Only update the player manager if the either PvP or body damage have been changed
         if (displayNamesChanged) {
@@ -1145,8 +1135,6 @@ internal class ClientManager : IClientManager {
             // If the team setting was disabled, we reset all teams and call the event
             if (!_serverSettings.TeamsEnabled) {
                 _playerManager.ResetAllTeams();
-
-                TeamChangedEvent?.Invoke(Team.None);
             }
 
             // _uiManager.OnTeamSettingChange();
@@ -1156,8 +1144,6 @@ internal class ClientManager : IClientManager {
         // event
         if (allowSkinsChanged && !_serverSettings.AllowSkins) {
             _playerManager.ResetAllPlayerSkins();
-
-            SkinChangedEvent?.Invoke(0);
         }
     }
 
@@ -1300,8 +1286,6 @@ internal class ClientManager : IClientManager {
         if (settingUpdate.UpdateTypes.Contains(PlayerSettingUpdateType.Team)) {
             if (settingUpdate.Self) {
                 _playerManager.OnPlayerTeamUpdate(true, settingUpdate.Team);
-
-                TeamChangedEvent?.Invoke(settingUpdate.Team);
             } else {
                 _playerManager.OnPlayerTeamUpdate(false, settingUpdate.Team, settingUpdate.Id);
             }
@@ -1310,8 +1294,6 @@ internal class ClientManager : IClientManager {
         if (settingUpdate.UpdateTypes.Contains(PlayerSettingUpdateType.Skin)) {
             if (settingUpdate.Self) {
                 _playerManager.OnPlayerSkinUpdate(true, settingUpdate.SkinId);
-
-                SkinChangedEvent?.Invoke(settingUpdate.SkinId);
             } else {
                 _playerManager.OnPlayerSkinUpdate(false, settingUpdate.SkinId, settingUpdate.Id);
             }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using SSMP.Api.Server;
 using SSMP.Game;
 
 namespace SSMP.Api.Client;
@@ -8,6 +9,11 @@ namespace SSMP.Api.Client;
 /// Client manager that handles the local client and related data.
 /// </summary>
 public interface IClientManager {
+    /// <summary>
+    /// Class that handles information about players.
+    /// </summary>
+    IPlayerManager PlayerManager { get; }
+
     /// <summary>
     /// Class that manages player locations on the in-game map.
     /// </summary>
@@ -21,12 +27,23 @@ public interface IClientManager {
     /// <summary>
     /// The current team of the local player.
     /// </summary>
+    [Obsolete("Use PlayerManager.LocalPlayerTeam instead.")]
     Team Team { get; }
 
     /// <summary>
     /// A read-only collection of all connected players.
     /// </summary>
     IReadOnlyCollection<IClientPlayer> Players { get; }
+
+    /// <summary>
+    /// A read-only <see cref="IServerSettings"/> that contains the settings related to gameplay.
+    /// </summary>
+    IServerSettings ServerSettings { get; }
+
+    /// <summary>
+    /// A read-only <see cref="IModSettings"/> that contains the settings related to the client.
+    /// </summary>
+    IModSettings ModSettings { get; }
 
     /// <summary>
     /// Disconnect the local client from the server.

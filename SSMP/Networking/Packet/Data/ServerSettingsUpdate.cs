@@ -1,4 +1,4 @@
-﻿using SSMP.Game.Settings;
+using SSMP.Game.Settings;
 using SSMP.Logging;
 
 namespace SSMP.Networking.Packet.Data;

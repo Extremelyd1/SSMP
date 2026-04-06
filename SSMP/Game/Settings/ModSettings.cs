@@ -1,6 +1,7 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
+using SSMP.Api.Client;
 using SSMP.Serialization;
 using SSMP.Ui.Menu;
 using SSMP.Util;
@@ -10,11 +11,14 @@ namespace SSMP.Game.Settings;
 /// <summary>
 /// Settings class that stores user preferences.
 /// </summary>
-internal class ModSettings {
+internal class ModSettings : IModSettings {
     /// <summary>
     /// The name of the file containing the mod settings.
     /// </summary>
     private const string ModSettingsFileName = "modsettings.json";
+
+    /// <inheritdoc/>
+    public event System.Action<string>? ChangedEvent;
     
     /// <summary>
     /// The authentication key for the user.
@@ -25,27 +29,47 @@ internal class ModSettings {
     /// The keybinds for SSMP.
     /// </summary>
     [JsonConverter(typeof(PlayerActionSetConverter))]
-    public Keybinds Keybinds { get; set; } = new();
+    public Keybinds Keybinds { get; } = new();
 
-    /// <summary>
-    /// The last used address to join a server.
-    /// </summary>
-    public string ConnectAddress { get; set; } = "";
+    /// <inheritdoc/>
+    public string ConnectAddress {
+        get;
+        set {
+            if (field == value) return;
+            field = value;
+            ChangedEvent?.Invoke(nameof(ConnectAddress));
+        }
+    } = "";
 
-    /// <summary>
-    /// The last used port to join a server.
-    /// </summary>
-    public int ConnectPort { get; set; } = -1;
+    /// <inheritdoc/>
+    public int ConnectPort {
+        get;
+        set {
+            if (field == value) return;
+            field = value;
+            ChangedEvent?.Invoke(nameof(ConnectPort));
+        }
+    } = -1;
 
-    /// <summary>
-    /// The last used username to join a server.
-    /// </summary>
-    public string Username { get; set; } = "";
+    /// <inheritdoc/>
+    public string Username {
+        get;
+        set {
+            if (field == value) return;
+            field = value;
+            ChangedEvent?.Invoke(nameof(Username));
+        }
+    } = "";
 
-    /// <summary>
-    /// Whether to display a UI element for the ping.
-    /// </summary>
-    public bool DisplayPing { get; set; } = true;
+    /// <inheritdoc/>
+    public bool DisplayPing {
+        get;
+        init {
+            if (field == value) return;
+            field = value;
+            ChangedEvent?.Invoke(nameof(DisplayPing));
+        }
+    } = true;
 
     /// <summary>
     /// Set of addon names for addons that are disabled by the user.
@@ -53,11 +77,16 @@ internal class ModSettings {
     // ReSharper disable once AutoPropertyCanBeMadeGetOnly.Global
     public HashSet<string> DisabledAddons { get; set; } = [];
 
-    /// <summary>
-    /// Whether full synchronisation of bosses, enemies, worlds, and saves is enabled.
-    /// </summary>
+    /// <inheritdoc/>
     // ReSharper disable once AutoPropertyCanBeMadeGetOnly.Global
-    public bool FullSynchronisation { get; set; } = false;
+    public bool FullSynchronisation {
+        get;
+        set {
+            if (field == value) return;
+            field = value;
+            ChangedEvent?.Invoke(nameof(FullSynchronisation));
+        }
+    }
 
     /// <summary>
     /// The last used server settings in a hosted server.

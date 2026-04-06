@@ -27,7 +27,7 @@ internal abstract class AddonLoader {
     ];
 
     /// <summary>
-    /// Get the paths for all assembly files in the HKMP directory.
+    /// Get the paths for all assembly files in the SSMP directory.
     /// </summary>
     /// <returns>A string array containing file paths.</returns>
     private static string[] GetAssemblyPaths() {
