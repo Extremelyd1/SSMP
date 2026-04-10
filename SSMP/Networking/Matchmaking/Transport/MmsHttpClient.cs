@@ -18,6 +18,8 @@ internal static class MmsHttpClient {
     private static readonly HttpClient Http = CreateHttpClient();
 
     static MmsHttpClient() {
+        // Note: ProcessExit only fires on graceful shutdown. 
+        // Hard crashes will bypass this, meaning the OS will clean up the socket.
         AppDomain.CurrentDomain.ProcessExit += (_, _) => Http.Dispose();
     }
 
@@ -26,7 +28,7 @@ internal static class MmsHttpClient {
     /// </summary>
     public static async Task<MmsHttpResponse> GetAsync(string url) {
         try {
-            using var response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+            using var response = await Http.GetAsync(url);
             var body = await response.Content.ReadAsStringAsync();
             return new MmsHttpResponse(
                 response.IsSuccessStatusCode,
@@ -86,14 +88,10 @@ internal static class MmsHttpClient {
     private static MatchmakingError InspectErrorBody(HttpStatusCode status, string? body) {
         if ((int) status < 400 || body == null) return MatchmakingError.None;
 
-        try {
-            var errorCode = MmsJsonParser.ExtractValue(body.AsSpan(), MmsFields.ErrorCode);
-            return errorCode == MmsProtocol.UpdateRequiredErrorCode
-                ? MatchmakingError.UpdateRequired
-                : MatchmakingError.NetworkFailure;
-        } catch (FormatException) {
-            return MatchmakingError.NetworkFailure;
-        }
+        var errorCode = MmsJsonParser.ExtractValue(body.AsSpan(), MmsFields.ErrorCode);
+        return errorCode == MmsProtocol.UpdateRequiredErrorCode
+            ? MatchmakingError.UpdateRequired
+            : MatchmakingError.NetworkFailure;
     }
 
     /// <summary>

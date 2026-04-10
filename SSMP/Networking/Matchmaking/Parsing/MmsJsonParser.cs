@@ -36,10 +36,20 @@ internal static class MmsJsonParser {
             var relative = json[searchStart..].IndexOf(searchKey, StringComparison.Ordinal);
             if (relative == -1) return null;
 
-            var keyEnd = searchStart + relative + searchKey.Length;
+            var matchPos = searchStart + relative;
+
+            // Verify this is a full key match at a JSON field boundary:
+            // the character before the opening quote must not be alphanumeric
+            // (guards against "1gameVersion" matching a search for "gameVersion").
+            if (matchPos > 0 && char.IsLetterOrDigit(json[matchPos - 1])) {
+                searchStart = matchPos + 1;
+                continue;
+            }
+
+            var keyEnd = matchPos + searchKey.Length;
             var valueStart = MmsUtilities.SkipWhitespace(json, keyEnd);
             if (valueStart >= json.Length || json[valueStart] != ':') {
-                searchStart = searchStart + relative + 1;
+                searchStart = matchPos + 1;
                 continue;
             }
 
@@ -65,6 +75,10 @@ internal static class MmsJsonParser {
     /// <param name="lobbyType">The type of the lobby.</param>
     /// <param name="hostLanIp">Optional local IP address.</param>
     /// <returns>A tuple containing the buffer and the number of characters written.</returns>
+    /// <remarks>
+    /// The <c>HostLanIp</c> field is serialized as <c>"ip:port"</c> (a socket address)
+    /// because the MMS server expects both values combined in a single string field.
+    /// </remarks>
     public static (char[] buffer, int length) FormatCreateLobbyJson(
         int port,
         bool isPublic,
@@ -75,13 +89,18 @@ internal static class MmsJsonParser {
         var escapedGameVersion = MmsUtilities.EscapeJsonString(gameVersion);
         var escapedHostLanIp = hostLanIp == null ? null : MmsUtilities.EscapeJsonString(hostLanIp);
         var lobbyTypeValue = lobbyType == PublicLobbyType.Matchmaking ? "matchmaking" : "steam";
+        // 96: fixed JSON structure overhead (braces, key names, quotes, colons, commas)
+        // 16: HostLanIp wrapper (key + colon + port digits)
+        // 24: MatchmakingVersion wrapper (key + colon + version digits)
+        // 32: safety margin for edge cases
         var estimatedLength =
             96 +
             escapedGameVersion.Length +
             lobbyTypeValue.Length +
             (escapedHostLanIp?.Length ?? 0) +
             (hostLanIp != null ? 16 : 0) +
-            (lobbyType == PublicLobbyType.Matchmaking ? 24 : 0);
+            (lobbyType == PublicLobbyType.Matchmaking ? 24 : 0) +
+            32;
 
         var buffer = CharPool.Rent(estimatedLength);
         var span = buffer.AsSpan();
@@ -165,7 +184,8 @@ internal static class MmsJsonParser {
                         i += 4;
                         break;
                     default:
-                        throw new FormatException($"Invalid JSON escape sequence \\{escape} at index {i}.");
+                        // Unknown escape sequence; treat as unparseable
+                        return null; 
                 }
 
                 segmentStart = i + 1;
@@ -190,8 +210,13 @@ internal static class MmsJsonParser {
     /// </summary>
     private static string ExtractNumericValue(ReadOnlySpan<char> json, int start) {
         var end = start;
+
+        // A leading minus sign is valid only at the first character position.
+        if (end < json.Length && json[end] == '-')
+            end++;
+
         while (end < json.Length &&
-               (char.IsDigit(json[end]) || json[end] == '.' || json[end] == '-')) {
+               (char.IsDigit(json[end]) || json[end] == '.')) {
             end++;
         }
 

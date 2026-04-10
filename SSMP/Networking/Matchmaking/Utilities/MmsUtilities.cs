@@ -57,30 +57,34 @@ internal static class MmsUtilities {
     /// A tuple containing the terminal frame type and the decoded text payload.
     /// Non-text messages and close frames return <see langword="null"/> as the payload.
     /// </returns>
+    /// <exception cref="InvalidOperationException">Thrown if the assembled message exceeds <paramref name="maxMessageBytes"/>.</exception>
     public static async Task<(WebSocketMessageType messageType, string? message)> ReceiveTextMessageAsync(
         ClientWebSocket socket,
         CancellationToken cancellationToken,
         int maxMessageBytes = 16 * 1024
     ) {
         const int chunkSize = 1024;
-
-        var buffer = new byte[chunkSize];
+        var buffer = ArrayPool<byte>.Shared.Rent(chunkSize);
         var writer = new ArrayBufferWriter<byte>();
 
-        while (true) {
-            var frame = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken);
-            if (frame.MessageType == WebSocketMessageType.Close)
-                return (frame.MessageType, null);
+        try {
+            while (true) {
+                var frame = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken);
+                if (frame.MessageType == WebSocketMessageType.Close)
+                    return (frame.MessageType, null);
 
-            AppendFrame(writer, buffer, frame.Count, maxMessageBytes);
+                AppendFrame(writer, buffer, frame.Count, maxMessageBytes);
 
-            if (!frame.EndOfMessage)
-                continue;
+                if (!frame.EndOfMessage)
+                    continue;
 
-            return frame.MessageType != WebSocketMessageType.Text
-                ? (frame.MessageType, null)
-                : (frame.MessageType,
-                    writer.WrittenCount == 0 ? string.Empty : Encoding.UTF8.GetString(writer.WrittenSpan));
+                return frame.MessageType != WebSocketMessageType.Text
+                    ? (frame.MessageType, null)
+                    : (frame.MessageType,
+                        writer.WrittenCount == 0 ? string.Empty : Encoding.UTF8.GetString(writer.WrittenSpan));
+            }
+        } finally {
+            ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 
@@ -97,7 +101,8 @@ internal static class MmsUtilities {
             using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, 0);
             socket.Connect("8.8.8.8", 65530);
             return (socket.LocalEndPoint as IPEndPoint)?.Address.ToString();
-        } catch {
+        } catch (Exception ex) {
+            Logger.Debug($"MmsUtilities: GetLocalIpAddress failed: {ex.Message}");
             return null;
         }
     }

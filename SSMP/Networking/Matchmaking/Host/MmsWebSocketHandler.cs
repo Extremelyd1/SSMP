@@ -133,7 +133,15 @@ internal sealed class MmsWebSocketHandler : IDisposable {
     /// <param name="cancellationToken">Cancellation token that ends the receive loop.</param>
     private async Task ReceiveLoopAsync(ClientWebSocket socket, CancellationToken cancellationToken) {
         while (socket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested) {
-            var (messageType, message) = await MmsUtilities.ReceiveTextMessageAsync(socket, cancellationToken);
+            WebSocketMessageType messageType;
+            string? message;
+            try {
+                (messageType, message) = await MmsUtilities.ReceiveTextMessageAsync(socket, cancellationToken);
+            } catch (InvalidOperationException ex) {
+                Logger.Error($"MmsWebSocketHandler: disconnecting - {ex.Message}");
+                break;
+            }
+
             if (messageType == WebSocketMessageType.Close) break;
             if (messageType != WebSocketMessageType.Text || string.IsNullOrEmpty(message)) continue;
 

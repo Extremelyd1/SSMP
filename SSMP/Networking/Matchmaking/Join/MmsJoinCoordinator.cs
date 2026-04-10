@@ -161,7 +161,15 @@ internal sealed class MmsJoinCoordinator {
         Action<string> onJoinFailed
     ) {
         while (socket.State == WebSocketState.Open && !timeoutCts.Token.IsCancellationRequested) {
-            var (messageType, message) = await MmsUtilities.ReceiveTextMessageAsync(socket, timeoutCts.Token);
+            WebSocketMessageType messageType;
+            string? message;
+            try {
+                (messageType, message) = await MmsUtilities.ReceiveTextMessageAsync(socket, timeoutCts.Token);
+            } catch (InvalidOperationException ex) {
+                onJoinFailed($"Matchmaking error: {ex.Message}");
+                break;
+            }
+
             if (messageType == WebSocketMessageType.Close) {
                 onJoinFailed("Connection closed prematurely by server.");
                 break;

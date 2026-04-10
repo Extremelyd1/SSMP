@@ -5,6 +5,7 @@ using SSMP.Logging;
 using SSMP.Networking.Matchmaking.Parsing;
 using SSMP.Networking.Matchmaking.Protocol;
 using SSMP.Networking.Matchmaking.Transport;
+using SSMP.Networking.Matchmaking.Utilities;
 
 namespace SSMP.Networking.Matchmaking.Query;
 
@@ -44,7 +45,10 @@ internal sealed class MmsLobbyQueryService {
         if (!response.Success || response.Body == null)
             return (null, response.Error);
 
-        return (ParseAndLogJoinResult(lobbyId, response.Body), MatchmakingError.None);
+        var result = ParseAndLogJoinResult(lobbyId, response.Body);
+        return result == null 
+            ? (null, MatchmakingError.NetworkFailure) 
+            : (result, MatchmakingError.None);
     }
 
     /// <summary>
@@ -65,9 +69,17 @@ internal sealed class MmsLobbyQueryService {
     ) {
         var url = BuildPublicLobbiesUrl(lobbyType);
         var response = await MmsHttpClient.GetAsync(url);
-        return !response.Success || response.Body == null
-            ? (null, response.Error)
-            : (MmsResponseParser.ParsePublicLobbies(response.Body), MatchmakingError.None);
+        if (!response.Success || response.Body == null) {
+            return (null, response.Error);
+        }
+
+        var startIdx = MmsUtilities.SkipWhitespace(response.Body.AsSpan(), 0);
+        if (startIdx >= response.Body.Length || response.Body[startIdx] != '[') {
+            Logger.Warn($"MmsLobbyQueryService: GetPublicLobbiesAsync received malformed non-array response (length={response.Body.Length}).");
+            return (null, MatchmakingError.NetworkFailure);
+        }
+
+        return (MmsResponseParser.ParsePublicLobbies(response.Body), MatchmakingError.None);
     }
 
     /// <summary>
@@ -88,7 +100,8 @@ internal sealed class MmsLobbyQueryService {
     ///   <item>
     ///     <term><c>error</c></term>
     ///     <description>
-    ///       <see cref="MatchmakingError.None"/> on success or unreachable server;
+    ///       <see cref="MatchmakingError.None"/> on success;
+    ///       Passes through the underlying <see cref="MatchmakingError"/> if the server could not be reached;
     ///       <see cref="MatchmakingError.NetworkFailure"/> if the response lacked a valid version field;
     ///       <see cref="MatchmakingError.UpdateRequired"/> if the protocol versions differ.
     ///     </description>
@@ -128,13 +141,15 @@ internal sealed class MmsLobbyQueryService {
     private static JoinLobbyResult? ParseAndLogJoinResult(string lobbyId, string response) {
         var joinResult = MmsResponseParser.ParseJoinLobbyResult(response);
         if (joinResult == null) {
+            var hasJoinId = MmsJsonParser.ExtractValue(response.AsSpan(), MmsFields.JoinId) != null;
+            var hasConnectionData = MmsJsonParser.ExtractValue(response.AsSpan(), MmsFields.ConnectionData) != null;
             Logger.Error(
-                $"MmsLobbyQueryService: invalid JoinLobby response (length={response.Length}, hasJoinId={response.Contains(MmsFields.JoinId)}, hasConnectionData={response.Contains(MmsFields.ConnectionData)})"
+                $"MmsLobbyQueryService: invalid JoinLobby response (length={response.Length}, hasJoinId={hasJoinId}, hasConnectionData={hasConnectionData})."
             );
             return null;
         }
 
-        Logger.Info($"MmsLobbyQueryService: joined lobby {lobbyId}, type={joinResult.LobbyType}");
+        Logger.Info($"MmsLobbyQueryService: joined lobby {lobbyId}, type={joinResult.LobbyType}.");
         return joinResult;
     }
 
@@ -149,7 +164,7 @@ internal sealed class MmsLobbyQueryService {
         var versionString = MmsJsonParser.ExtractValue(response.AsSpan(), MmsFields.Version);
         if (int.TryParse(versionString, out serverVersion)) return true;
 
-        Logger.Warn("MmsLobbyQueryService: MMS health response did not include a valid protocol version");
+        Logger.Warn("MmsLobbyQueryService: MMS health response did not include a valid protocol version.");
         return false;
     }
 
@@ -169,7 +184,7 @@ internal sealed class MmsLobbyQueryService {
 
         Logger.Warn(
             $"MmsLobbyQueryService: MMS protocol mismatch " +
-            $"(client={MmsProtocol.CurrentVersion}, server={serverVersion})"
+            $"(client={MmsProtocol.CurrentVersion}, server={serverVersion})."
         );
         return (false, MatchmakingError.UpdateRequired);
     }
@@ -187,7 +202,8 @@ internal sealed class MmsLobbyQueryService {
         var url = $"{_baseUrl}{MmsRoutes.Lobbies}";
         if (lobbyType == null) return url;
 
-        url += $"?{MmsQueryKeys.Type}={lobbyType.ToString()!.ToLowerInvariant()}";
+        var typeString = lobbyType == PublicLobbyType.Matchmaking ? "matchmaking" : "steam";
+        url += $"?{MmsQueryKeys.Type}={typeString}";
         if (lobbyType == PublicLobbyType.Matchmaking)
             url += $"&{MmsQueryKeys.MatchmakingVersion}={MmsProtocol.CurrentVersion}";
 

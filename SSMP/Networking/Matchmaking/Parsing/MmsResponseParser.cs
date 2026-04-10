@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using SSMP.Logging;
 using SSMP.Networking.Matchmaking.Protocol;
 
 namespace SSMP.Networking.Matchmaking.Parsing;
@@ -10,6 +11,9 @@ namespace SSMP.Networking.Matchmaking.Parsing;
 /// <see cref="ReadOnlySpan{T}"/> slices via <see cref="MmsJsonParser"/>.
 /// </summary>
 internal static class MmsResponseParser {
+    /// <summary>
+    /// Lookup key for scanning lobby object boundaries.
+    /// </summary>
     private const string ConnectionDataKey = $"\"{MmsFields.ConnectionData}\":";
 
     /// <summary>
@@ -88,6 +92,11 @@ internal static class MmsResponseParser {
     /// A list of <see cref="PublicLobbyInfo"/> entries. Returns an empty list if the
     /// response contains no parseable lobbies.
     /// </returns>
+    /// <remarks>
+    /// Lobby objects are limited by scanning for successive <c>"connectionData":</c> keys.
+    /// This assumes <c>connectionData</c> is the first field in each lobby object and that
+    /// no other field values contain the literal string <c>"connectionData":</c>.
+    /// </remarks>
     public static List<PublicLobbyInfo> ParsePublicLobbies(string response) {
         var result = new List<PublicLobbyInfo>();
         var span = response.AsSpan();
@@ -95,7 +104,11 @@ internal static class MmsResponseParser {
 
         while (TryFindNextLobbySlice(span, ref idx, out var slice)) {
             var entry = TryParsePublicLobbyEntry(slice);
-            if (entry != null) result.Add(entry);
+            if (entry != null) {
+                result.Add(entry);
+            } else {
+                Logger.Debug($"MmsResponseParser: Skipped unparseable lobby entry at index {idx}.");
+            }
         }
 
         return result;
@@ -140,7 +153,11 @@ internal static class MmsResponseParser {
             return false;
         }
 
-        return Enum.TryParse(lobbyTypeString, true, out lobbyType);
+        // Default to Matchmaking for unknown lobby types, consistent with TryParsePublicLobbyEntry
+        if (!Enum.TryParse(lobbyTypeString, true, out lobbyType))
+            lobbyType = PublicLobbyType.Matchmaking;
+
+        return true;
     }
 
     /// <summary>
