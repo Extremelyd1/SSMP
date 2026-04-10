@@ -1,3 +1,4 @@
+using System;
 
 namespace SSMP.Api.Server;
 
@@ -6,34 +7,39 @@ namespace SSMP.Api.Server;
 /// </summary>
 public interface IServerSettings {
     /// <summary>
+    /// Event triggered whenever any of the server settings are changed.
+    /// </summary>
+    event Action<string>? ChangeEvent;
+
+    /// <summary>
     /// Whether player vs. player damage is enabled.
     /// </summary>
-    public bool IsPvpEnabled { get; }
+    bool IsPvpEnabled { get; }
 
     /// <summary>
     /// Whether to always show map icons.
     /// </summary>
-    public bool AlwaysShowMapIcons { get; }
+    bool AlwaysShowMapIcons { get; }
 
     /// <summary>
     /// Whether to only broadcast the map icon of a player if they have wayward compass equipped.
     /// </summary>
-    public bool OnlyBroadcastMapIconWithCompass { get; }
+    bool OnlyBroadcastMapIconWithCompass { get; }
 
     /// <summary>
     /// Whether to display player names above the player objects.
     /// </summary>
-    public bool DisplayNames { get; }
+    bool DisplayNames { get; }
 
     /// <summary>
     /// Whether teams are enabled.
     /// </summary>
-    public bool TeamsEnabled { get; }
+    bool TeamsEnabled { get; }
 
     /// <summary>
     /// Whether skins are allowed.
     /// </summary>
-    public bool AllowSkins { get; }
+    bool AllowSkins { get; }
     
     // /// <summary>
     // /// Whether other player's attacks can be parried.

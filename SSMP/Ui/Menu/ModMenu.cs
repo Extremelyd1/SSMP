@@ -20,7 +20,7 @@ using UnityEngine.UI;
 namespace SSMP.Ui.Menu;
 
 /// <summary>
-/// Class for building the HKMP mod menu.
+/// Class for building the SSMP mod menu.
 /// </summary>
 internal class ModMenu {
     /// <summary>
@@ -30,7 +30,7 @@ internal class ModMenu {
     private const float SettingApplyDelay = 1.5f;
 
     /// <summary>
-    /// The HKMP mod settings instance.
+    /// The SSMP mod settings instance.
     /// </summary>
     private readonly ModSettings _modSettings;
     
@@ -55,9 +55,9 @@ internal class ModMenu {
     private readonly List<Action<ServerSettings>> _serverSettingsChangedCallbacks;
     
     /// <summary>
-    /// The top-level HKMP mod menu.
+    /// The top-level SSMP mod menu.
     /// </summary>
-    private MenuScreen _hkmpMenu;
+    private MenuScreen _ssmpMenu;
     /// <summary>
     /// The menu containing the client settings. Needs to be a static variable here to allow it to be accessed by
     /// lambdas and modified.
@@ -74,7 +74,7 @@ internal class ModMenu {
     /// A local copy of the server settings for modification through the menu that will be used to either network to
     /// the server or modify our own hosted servers.
     /// </summary>
-    private ServerSettings _localServerSettings;
+    private readonly ServerSettings _localServerSettings;
 
     /// <summary>
     /// Coroutine that delays applying new server settings until no more changes are made within a certain time period.

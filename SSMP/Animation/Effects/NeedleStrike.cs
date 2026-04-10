@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using SSMP.Internals;
 using SSMP.Networking.Packet;
 using SSMP.Util;
@@ -165,7 +165,7 @@ internal class NeedleStrike : DamageAnimationEffect {
             }
 
             _reaperAudioEvent ??= GetOrFindNailArtsFsm().GetFirstAction<PlayAudioEvent>("Antic Rpr");
-            AudioUtil.PlayAudioEventAtPlayerObject(_reaperAudioEvent, playerObject);
+            AudioUtil.PlayAudio(_reaperAudioEvent, playerObject);
 
             var strikeObj = Object.Instantiate(_chargeSlashScythe, playerAttacks.transform);
             strikeObj.layer = 17;
@@ -198,7 +198,7 @@ internal class NeedleStrike : DamageAnimationEffect {
                 strikeObj.SetActive(true);
 
                 _wandererAudioEvent ??= GetOrFindNailArtsFsm().GetFirstAction<PlayAudioEvent>("Wanderer Attack");
-                AudioUtil.PlayAudioEventAtPlayerObject(_wandererAudioEvent, playerObject);
+                AudioUtil.PlayAudio(_wandererAudioEvent, playerObject);
             }, 0.1666667f);
 
             strikeObj.DestroyAfterTime(5f);
@@ -214,7 +214,7 @@ internal class NeedleStrike : DamageAnimationEffect {
 
             AnimationUtil.ExecuteActionAfterDelay(() => {
                 _beastLeapAudioEvent ??= GetOrFindNailArtsFsm().GetFirstAction<PlayAudioEvent>("Warrior2 Leap");
-                AudioUtil.PlayAudioEventAtPlayerObject(_beastLeapAudioEvent, playerObject);
+                AudioUtil.PlayAudio(_beastLeapAudioEvent, playerObject);
             }, 0.1666667f);
 
             AnimationUtil.ExecuteActionAfterDelay(() => {
@@ -254,7 +254,7 @@ internal class NeedleStrike : DamageAnimationEffect {
                 strikeObj.SetActive(true);
 
                 _beastSlashAudioEvent ??= GetOrFindNailArtsFsm().GetFirstAction<PlayAudioEvent>("Warrior2 Slash");
-                AudioUtil.PlayAudioEventAtPlayerObject(_beastSlashAudioEvent, playerObject);
+                AudioUtil.PlayAudio(_beastSlashAudioEvent, playerObject);
             }, 0.4166667f);
 
             return;
@@ -289,7 +289,7 @@ internal class NeedleStrike : DamageAnimationEffect {
             ModifyDamagingSlashObject(strikeObj.FindGameObjectInChildren("damager 02"), damage);
 
             AnimationUtil.ExecuteActionAfterDelay(() => {
-                AudioUtil.PlayAudioEventAtPlayerObject(_witchAudioEvent, playerObject);
+                AudioUtil.PlayAudio(_witchAudioEvent, playerObject);
                 strikeObj.SetActive(true);
             }, 0.08f);
 
@@ -324,7 +324,7 @@ internal class NeedleStrike : DamageAnimationEffect {
             );
 
             AnimationUtil.ExecuteActionAfterDelay(() => {
-                AudioUtil.PlayAudioEventAtPlayerObject(_architectAudioEvent, playerObject);
+                AudioUtil.PlayAudio(_architectAudioEvent, playerObject);
                 strikeObj.SetActive(true);
             }, 0.2777778f);
 

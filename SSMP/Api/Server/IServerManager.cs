@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using SSMP.Api.Eventing.ServerEvents;
+using SSMP.Game;
 using SSMP.Game.Settings;
 using SSMP.Networking.Packet.Data;
 
@@ -96,6 +97,11 @@ public interface IServerManager {
     /// Event that is called when a player leaves a scene.
     /// </summary>
     event Action<IServerPlayer> PlayerLeaveSceneEvent;
+
+    /// <summary>
+    /// Event that is called when a player's team changes.
+    /// </summary>
+    event Action<IServerPlayer, Team> PlayerTeamChangedEvent;
 
     /// <summary>
     /// Event that is called when a player sends a chat message.

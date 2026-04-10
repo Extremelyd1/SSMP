@@ -1,4 +1,4 @@
-﻿using SSMP.Game.Settings;
+using SSMP.Game.Settings;
 using SSMP.Internals;
 using UnityEngine;
 

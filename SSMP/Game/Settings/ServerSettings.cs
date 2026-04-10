@@ -11,34 +11,79 @@ namespace SSMP.Game.Settings;
 /// <inheritdoc cref="IServerSettings" />
 public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
     /// <inheritdoc />
+    public event Action<string>? ChangeEvent;
+
+    /// <inheritdoc />
     [SettingAlias("pvp")]
     [ModMenuSetting("PvP", "Player versus Player damage")]
-    public bool IsPvpEnabled { get; set; }
+    public bool IsPvpEnabled {
+        get;
+        set {
+            if (field == value) return;
+            field = value;
+            ChangeEvent?.Invoke(nameof(IsPvpEnabled));
+        }
+    }
 
     /// <inheritdoc />
     [SettingAlias("globalmapicons")]
     [ModMenuSetting("Global Map Icons", "Always show map icons for all players")]
-    public bool AlwaysShowMapIcons { get; set; }
+    public bool AlwaysShowMapIcons {
+        get;
+        set {
+            if (field == value) return;
+            field = value;
+            ChangeEvent?.Invoke(nameof(AlwaysShowMapIcons));
+        }
+    }
 
     /// <inheritdoc />
     [SettingAlias("compassicon", "compassicons")]
     [ModMenuSetting("Compass Map Icons", "Only show map icons when Compass is equipped")]
-    public bool OnlyBroadcastMapIconWithCompass { get; set; } = true;
+    public bool OnlyBroadcastMapIconWithCompass {
+        get;
+        init {
+            if (field == value) return;
+            field = value;
+            ChangeEvent?.Invoke(nameof(OnlyBroadcastMapIconWithCompass));
+        }
+    } = true;
 
     /// <inheritdoc />
     [SettingAlias("names")]
     [ModMenuSetting("Show Names", "Show names of player above their characters")]
-    public bool DisplayNames { get; set; } = true;
+    public bool DisplayNames {
+        get;
+        init {
+            if (field == value) return;
+            field = value;
+            ChangeEvent?.Invoke(nameof(DisplayNames));
+        }
+    } = true;
 
     /// <inheritdoc />
     [SettingAlias("teams")]
     [ModMenuSetting("Teams", "Whether players can join teams")]
-    public bool TeamsEnabled { get; set; }
+    public bool TeamsEnabled {
+        get;
+        set {
+            if (field == value) return;
+            field = value;
+            ChangeEvent?.Invoke(nameof(TeamsEnabled));
+        }
+    }
 
     /// <inheritdoc />
     [SettingAlias("skins")]
     [ModMenuSetting("Skins", "Whether players can have skins")]
-    public bool AllowSkins { get; set; } = true;
+    public bool AllowSkins {
+        get;
+        init {
+            if (field == value) return;
+            field = value;
+            ChangeEvent?.Invoke(nameof(AllowSkins));
+        }
+    } = true;
 
     // /// <inheritdoc />
     // [SettingAlias("parries")]

@@ -1,3 +1,4 @@
+using System;
 using SSMP.Api.Client;
 using SSMP.Internals;
 using UnityEngine;

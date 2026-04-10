@@ -33,9 +33,41 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
     /// </summary>
     /// <param name="target">The target game object to attach the component to.</param>
     /// <param name="damage">The number of mask of damage it should deal.</param>
-    protected static void AddDamageHeroComponent(GameObject target, int damage = 1) {
-        var damageHero = target.AddComponent<DamageHero>();
+    /// <returns>The <see cref="DamageHero"/> component that was added to the game object</returns>
+    protected static DamageHero AddDamageHeroComponent(GameObject target, int damage = 1) {
+        var damageHero = target.AddComponentIfNotPresent<DamageHero>();
         damageHero.damageDealt = damage;
         damageHero.OnDamagedHero = new UnityEvent();
+
+        return damageHero;
+    }
+
+    /// <summary>
+    /// Removes a <see cref="DamageHero"/> component from the given game object.
+    /// </summary>
+    /// <param name="target">The target game object to detach the component from.</param>
+    protected static void RemoveDamageHeroComponent(GameObject target) {
+        var damageHero = target.GetComponent<DamageHero>();
+        if (damageHero == null) {
+            return;
+        }
+
+        Object.DestroyImmediate(damageHero);
+    }
+
+    /// <summary>
+    /// Adds or removes a <see cref="DamageHero"/> component from the given game object,
+    /// depending on the PVP and team settings.
+    /// </summary>
+    /// <param name="target">The target game object to detatch the component to.</param>
+    /// <param name="damage">The number of mask of damage it should deal.</param>
+    /// <returns>The <see cref="DamageHero"/> component that was added if PVP was turned on</returns>
+    protected DamageHero? SetDamageHeroState(GameObject target, int damage = 1) {
+        if (ServerSettings.IsPvpEnabled && ShouldDoDamage) {
+            return AddDamageHeroComponent(target, damage);
+        }
+
+        RemoveDamageHeroComponent(target);
+        return null;
     }
 }

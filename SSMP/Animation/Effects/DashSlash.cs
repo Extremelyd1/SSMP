@@ -1,4 +1,4 @@
-﻿using SSMP.Internals;
+using SSMP.Internals;
 using SSMP.Networking.Packet;
 using SSMP.Util;
 using UnityEngine;
@@ -124,7 +124,7 @@ internal class DashSlash : SlashBase {
             // TODO: Add charged dash stab/slash, see alternative states in Sprint FSM for Architect/Toolmaster
             var playAudioEvent = sprintFsm.GetFirstAction<PlayAudioEvent>("Drill Attack Unch");
 
-            AudioUtil.PlayAudioEventAtPlayerObject(playAudioEvent, playerObject);
+            AudioUtil.PlayAudio(playAudioEvent, playerObject);
         }
     }
 

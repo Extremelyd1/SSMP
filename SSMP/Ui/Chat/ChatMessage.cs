@@ -30,6 +30,16 @@ internal class ChatMessage {
     private Coroutine? _fadeCoroutine;
 
     /// <summary>
+    /// The current elapsed wait time.
+    /// </summary>
+    private float _waitElapsed;
+
+    /// <summary>
+    /// The current elapsed fade time.
+    /// </summary>
+    private float _fadeElapsed;
+
+    /// <summary>
     /// The current alpha of the message.
     /// </summary>
     private float _alpha = 1f;
@@ -69,6 +79,9 @@ internal class ChatMessage {
     public void Display(bool chatOpen) {
         _chatOpen = chatOpen;
         _textComponent.SetActive(true);
+        _waitElapsed = 0f;
+        _fadeElapsed = 0f;
+        _isFadedOut = false;
         StartFadeRoutine();
     }
 
@@ -77,7 +90,9 @@ internal class ChatMessage {
     /// </summary>
     public void Hide() {
         _isFadedOut = true;
-        SetAlpha(1f);
+        _waitElapsed = MessageStayTime;
+        _fadeElapsed = MessageFadeTime;
+        SetAlpha(0f);
         _textComponent.SetActive(false);
         StopFadeRoutine();
     }
@@ -176,21 +191,19 @@ internal class ChatMessage {
     /// </summary>
     private IEnumerator FadeRoutine() {
         // Wait at full opacity, pausing while chat is open
-        var waitElapsed = 0f;
-        while (waitElapsed < MessageStayTime) {
+        while (_waitElapsed < MessageStayTime) {
             if (!_chatOpen) {
-                waitElapsed += Time.deltaTime;
+                _waitElapsed += Time.deltaTime;
             }
 
             yield return null;
         }
 
         // Gradually fade out, pausing while chat is open
-        var elapsed = 0f;
-        while (elapsed < MessageFadeTime) {
+        while (_fadeElapsed < MessageFadeTime) {
             if (!_chatOpen) {
-                elapsed += Time.deltaTime;
-                SetAlpha(1f - (elapsed / MessageFadeTime));
+                _fadeElapsed += Time.deltaTime;
+                SetAlpha(1f - (_fadeElapsed / MessageFadeTime));
             }
 
             yield return null;

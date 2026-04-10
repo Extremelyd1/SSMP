@@ -31,7 +31,7 @@ internal static class AudioUtil {
     /// <param name="playAudioEvent">The PlayAudioEvent instance from an FSM.</param>
     /// <param name="getRandomAudioClipFromTable">The action to get a random audio clip from.</param>
     /// <param name="playerObject">The player object to play the audio at.</param>
-    public static void PlayAudioEventWithRandomAudioClipFromTableAtPlayerObject(
+    public static void PlayAudio(
         PlayAudioEvent playAudioEvent,
         GetRandomAudioClipFromTable getRandomAudioClipFromTable,
         GameObject playerObject
@@ -53,7 +53,7 @@ internal static class AudioUtil {
     /// </summary>
     /// <param name="playAudioEvent">The PlayAudioEvent instance from an FSM.</param>
     /// <param name="playerObject">The player object to play the audio at.</param>
-    public static void PlayAudioEventAtPlayerObject(PlayAudioEvent playAudioEvent, GameObject playerObject) {
+    public static void PlayAudio(PlayAudioEvent playAudioEvent, GameObject playerObject) {
         var audioClip = playAudioEvent.audioClip.value as AudioClip;
         if (audioClip == null) {
             Logger.Warn("Audio clip for PlayAudioEvent is null");
@@ -99,7 +99,7 @@ internal static class AudioUtil {
     /// </summary>
     /// <param name="playAudioClip">The action instance from an FSM.</param>
     /// <param name="playerObject">The player object to play the audio at.</param>
-    public static void PlayRandomAudioClipAtPlayerObject(
+    public static void PlayAudio(
         PlayRandomAudioClipTableV2 playAudioClip,
         GameObject playerObject
     ) {
@@ -127,7 +127,7 @@ internal static class AudioUtil {
     /// </summary>
     /// <param name="action">The audio player action.</param>
     /// <param name="playerObject">The game object for the player.</param>
-    public static void PlayAudioOneShotSingleAtPlayerObject(
+    public static void PlayAudio(
         AudioPlayerOneShotSingle action,
         GameObject playerObject
     ) {
