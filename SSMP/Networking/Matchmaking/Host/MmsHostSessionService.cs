@@ -25,6 +25,7 @@ internal sealed class MmsHostSessionService {
     /// </summary>
     private readonly string? _discoveryHost;
 
+    /// <summary>Synchronization lock for thread-safe access to session state (tokens, lobby IDs).</summary>
     private readonly object _sessionLock = new();
 
     /// <summary>WebSocket handler that receives real-time MMS server events.</summary>
@@ -81,7 +82,7 @@ internal sealed class MmsHostSessionService {
 
     /// <summary>
     /// Raised when MMS requests a host-mapping refresh.
-    /// Provides the discovery token, peer address, and a correlation timestamp.
+    /// Provides the join ID, host discovery token, and a server correlation timestamp.
     /// Forwarded directly from <see cref="MmsWebSocketHandler.RefreshHostMappingRequested"/>.
     /// </summary>
     public event Action<string, string, long>? RefreshHostMappingRequested {
@@ -100,7 +101,7 @@ internal sealed class MmsHostSessionService {
 
     /// <summary>
     /// Raised when MMS instructs this host to begin NAT hole-punching toward a client.
-    /// Provides the peer token, peer address, port, punch ID, and a correlation timestamp.
+    /// Provides the join ID, client IP, client port, host port, and a startTimeMs correlation timestamp.
     /// Forwarded directly from <see cref="MmsWebSocketHandler.StartPunchRequested"/>.
     /// </summary>
     public event Action<string, string, int, int, long>? StartPunchRequested {
@@ -119,6 +120,8 @@ internal sealed class MmsHostSessionService {
         var previous = Interlocked.Exchange(ref _connectedPlayers, normalized);
         if (previous == normalized) return;
 
+        // Note: _hostToken can be nulled concurrently after this check,
+        // but SendHeartbeat safely re-checks it under _sessionLock.
         if (_hostToken != null) SendHeartbeat(state: null);
     }
 
@@ -191,7 +194,6 @@ internal sealed class MmsHostSessionService {
         if (!TryActivateLobby(response.Body, "RegisterSteamLobby", out _, out var lobbyCode, out _))
             return (null, MatchmakingError.NetworkFailure);
 
-        Logger.Info($"MmsHostSessionService: registered Steam lobby {steamLobbyId} as MMS lobby {lobbyCode}");
         return (lobbyCode, MatchmakingError.None);
     }
 
@@ -220,7 +222,7 @@ internal sealed class MmsHostSessionService {
     /// from MMS. Requires an active lobby (<see cref="CreateLobbyAsync"/> must have
     /// succeeded first).
     /// </summary>
-    public void StartPendingClientPolling() {
+    public void StartWebSocketConnection() {
         if (_hostToken == null) {
             Logger.Error("MmsHostSessionService: cannot start WebSocket without a host token");
             return;
@@ -259,6 +261,8 @@ internal sealed class MmsHostSessionService {
     /// <summary>
     /// Cancels the active UDP discovery refresh task, if any.
     /// Safe to call when no refresh is running.
+    /// Note: The CancellationTokenSource is not disposed here; disposal is deferred
+    /// to the finally block of RunHostDiscoveryRefreshAsync.
     /// </summary>
     public void StopHostDiscoveryRefresh() {
         _hostDiscoveryRefreshCts?.Cancel();
@@ -296,6 +300,7 @@ internal sealed class MmsHostSessionService {
     /// Captures the current session token and lobby ID, then clears both fields.
     /// Called during <see cref="CloseLobby"/> to ensure the delete request uses
     /// the correct values even if state is mutated concurrently.
+    /// IMPORTANT: Must be called while holding _sessionLock, and with _hostToken non-null.
     /// </summary>
     /// <returns>
     /// A tuple of <c>(hostToken, lobbyId)</c> holding the values that were active
@@ -425,6 +430,7 @@ internal sealed class MmsHostSessionService {
         CancellationTokenSource cts
     ) {
         try {
+            // Defensive check; normal flow is already guarded in StartHostDiscoveryRefresh
             if (_discoveryHost == null) return;
 
             await UdpDiscoveryService.SendUntilCancelledAsync(

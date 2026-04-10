@@ -166,7 +166,7 @@ internal class MmsClient {
     /// Starts the WebSocket listener for host push events (pending clients / start-punch).
     /// Must be called after creating a lobby.
     /// </summary>
-    public void StartPendingClientPolling() => _hostSession.StartPendingClientPolling();
+    public void StartWebSocketConnection() => _hostSession.StartWebSocketConnection();
 
     /// <summary>
     /// Fires off a background UDP discovery refresh for the given host token.

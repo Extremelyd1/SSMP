@@ -112,8 +112,7 @@ internal static class MmsHttpClient {
         var handler = new HttpClientHandler {
             UseProxy = false,
             UseCookies = false,
-            AllowAutoRedirect = false,
-            MaxConnectionsPerServer = 10
+            AllowAutoRedirect = false
         };
 
         var client = new HttpClient(handler) {

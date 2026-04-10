@@ -12,6 +12,8 @@ namespace SSMP.Networking.Matchmaking.Host;
 /// <summary>
 /// Manages the persistent WebSocket connection between a lobby host and MMS.
 /// MMS pushes control events over this channel to coordinate matchmaking flow.
+/// Note: There is no automatic reconnection logic. If the connection drops mid-session,
+/// it must be restarted explicitly by the caller via <see cref="Start"/>.
 /// </summary>
 internal sealed class MmsWebSocketHandler : IDisposable {
     /// <summary>The base WebSocket URL of the MMS service.</summary>
@@ -26,7 +28,10 @@ internal sealed class MmsWebSocketHandler : IDisposable {
     /// <summary>Cancellation source for the background listening loop.</summary>
     private CancellationTokenSource? _cts;
 
-    /// <summary>Monotonic version used to invalidate older background runs.</summary>
+    /// <summary>
+    /// Generation counter used to invalidate older background runs.
+    /// Wraps around on overflow; collision probability is negligible in practice.
+    /// </summary>
     private int _runVersion;
 
     /// <summary>
@@ -211,6 +216,9 @@ internal sealed class MmsWebSocketHandler : IDisposable {
             case MmsActions.StartPunch: HandleStartPunch(span); break;
             case MmsActions.HostMappingReceived: HandleHostMappingReceived(); break;
             case MmsActions.JoinFailed: HandleJoinFailed(message); break;
+            default:
+                Logger.Debug($"MmsWebSocketHandler: unknown action '{new string(action)}' mapped to message dropping");
+                break;
         }
     }
 

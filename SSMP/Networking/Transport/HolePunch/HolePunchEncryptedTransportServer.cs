@@ -78,7 +78,7 @@ internal class HolePunchEncryptedTransportServer : IEncryptedTransportServer {
         
         _dtlsServer.Start(port, socket);
 
-        _mmsClient?.StartPendingClientPolling();
+        _mmsClient?.StartWebSocketConnection();
     }
 
     /// <inheritdoc />
