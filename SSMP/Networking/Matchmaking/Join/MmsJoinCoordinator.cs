@@ -50,9 +50,9 @@ internal sealed class MmsJoinCoordinator {
         /// </summary>
         public CancellationTokenSource? Cts;
 
-        /// <summary>Cancels and nulls <see cref="Cts"/> if it is set.</summary>
+        /// <summary>Cancels <see cref="Cts"/> without disposing it.</summary>
         public void Cancel() {
-            Dispose();
+            Cts?.Cancel();
         }
 
         /// <summary>Cancels and disposes <see cref="Cts"/> if it is set.</summary>
@@ -86,6 +86,7 @@ internal sealed class MmsJoinCoordinator {
     /// Invoked with a human-readable reason string whenever the join attempt fails
     /// (timeout, server rejection, or WebSocket error). Never invoked on success.
     /// </param>
+    /// <param name="cancellationToken">Cancellation token that allows backing out of matchmaking mid-flow.</param>
     /// <returns>
     /// A <see cref="MatchmakingJoinStartResult"/> containing peer address and timing
     /// information, or <c>null</c> if the attempt failed or timed out.
@@ -93,21 +94,23 @@ internal sealed class MmsJoinCoordinator {
     public async Task<MatchmakingJoinStartResult?> CoordinateAsync(
         string joinId,
         Action<byte[], IPEndPoint> sendRawAction,
-        Action<string> onJoinFailed
+        Action<string> onJoinFailed,
+        CancellationToken cancellationToken
     ) {
         if (_discoveryHost == null)
             Logger.Warn("MmsJoinCoordinator: discovery host unknown; UDP mapping will be skipped");
 
         using var socket = new ClientWebSocket();
-        using var timeoutCts =
+        using var sessionCts =
             new CancellationTokenSource(TimeSpan.FromMilliseconds(MmsProtocol.MatchmakingWebSocketTimeoutMs));
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(sessionCts.Token, cancellationToken);
         var discovery = new DiscoverySession();
 
         try {
             await ConnectAsync(socket, joinId, timeoutCts.Token);
             return await RunMessageLoopAsync(socket, timeoutCts, sendRawAction, discovery, onJoinFailed);
         } catch (OperationCanceledException) {
-            onJoinFailed("timeout");
+            onJoinFailed("Timeout.");
         } catch (WebSocketException ex) {
             onJoinFailed(ex.Message);
             Logger.Error($"MmsJoinCoordinator: matchmaking WebSocket error: {ex.Message}");
@@ -159,7 +162,10 @@ internal sealed class MmsJoinCoordinator {
     ) {
         while (socket.State == WebSocketState.Open && !timeoutCts.Token.IsCancellationRequested) {
             var (messageType, message) = await MmsUtilities.ReceiveTextMessageAsync(socket, timeoutCts.Token);
-            if (messageType == WebSocketMessageType.Close) break;
+            if (messageType == WebSocketMessageType.Close) {
+                onJoinFailed("Connection closed prematurely by server.");
+                break;
+            }
             if (messageType != WebSocketMessageType.Text || string.IsNullOrEmpty(message)) continue;
 
             var outcome = await HandleMessage(message, timeoutCts, sendRaw, discovery, onJoinFailed);
@@ -198,7 +204,7 @@ internal sealed class MmsJoinCoordinator {
                 break;
 
             case MmsActions.StartPunch:
-                var joinStart = await HandleStartPunchAsync(message, timeoutCts, discovery);
+                var joinStart = await HandleStartPunchAsync(message, timeoutCts, discovery, onJoinFailed);
                 return (true, joinStart);
 
             case MmsActions.ClientMappingReceived:
@@ -208,6 +214,10 @@ internal sealed class MmsJoinCoordinator {
             case MmsActions.JoinFailed:
                 HandleJoinFailed(message, onJoinFailed);
                 return (true, null);
+
+            default:
+                Logger.Debug($"MmsJoinCoordinator: Unknown action '{new string(action)}' mapped to message dropping");
+                break;
         }
 
         return (false, null);
@@ -237,6 +247,7 @@ internal sealed class MmsJoinCoordinator {
     /// <param name="message">Raw message text containing the punch payload fields.</param>
     /// <param name="timeoutCts">Used as the cancellation token for the start-time delay.</param>
     /// <param name="discovery">Cancelled immediately on entry.</param>
+    /// <param name="onJoinFailed">Invoked if payload parsing fails.</param>
     /// <returns>
     /// The parsed <see cref="MatchmakingJoinStartResult"/>, or <c>null</c> if the
     /// payload could not be parsed.
@@ -244,12 +255,17 @@ internal sealed class MmsJoinCoordinator {
     private static async Task<MatchmakingJoinStartResult?> HandleStartPunchAsync(
         string message,
         CancellationTokenSource timeoutCts,
-        DiscoverySession discovery
+        DiscoverySession discovery,
+        Action<string> onJoinFailed
     ) {
         discovery.Cancel();
 
         var joinStart = MmsResponseParser.ParseStartPunch(message.AsSpan());
-        if (joinStart == null) return null;
+        if (joinStart == null) {
+            Logger.Warn($"MmsJoinCoordinator: Failed to parse start punch payload: {message}");
+            onJoinFailed("Invalid start_punch payload received from server.");
+            return null;
+        }
 
         await DelayUntilAsync(joinStart.StartTimeMs, timeoutCts.Token);
         return joinStart;
@@ -267,7 +283,12 @@ internal sealed class MmsJoinCoordinator {
     /// task, or <c>null</c> if discovery was not started.
     /// </returns>
     private CancellationTokenSource? StartDiscovery(string? token, Action<byte[], IPEndPoint> sendRaw) {
-        if (string.IsNullOrEmpty(token) || _discoveryHost == null)
+        if (string.IsNullOrEmpty(token)) {
+            Logger.Warn("MmsJoinCoordinator: begin_client_mapping missing token");
+            return null;
+        }
+
+        if (_discoveryHost == null)
             return null;
 
         var cts = new CancellationTokenSource(TimeSpan.FromSeconds(MmsProtocol.DiscoveryDurationSeconds));
@@ -281,7 +302,8 @@ internal sealed class MmsJoinCoordinator {
 
     /// <summary>
     /// Waits until the specified Unix timestamp (in milliseconds) before returning.
-    /// Returns immediately if the target time is already in the past.
+    /// Returns immediately if the target time is already in the past. If the target time
+    /// is far in the future, the delay will simply block until <paramref name="ct"/> fires.
     /// </summary>
     /// <param name="targetUnixMs">Target time expressed as milliseconds since the Unix epoch (UTC).</param>
     /// <param name="ct">Cancellation token that can abort the wait early.</param>

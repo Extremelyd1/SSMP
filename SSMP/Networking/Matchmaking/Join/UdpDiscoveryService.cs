@@ -15,6 +15,10 @@ namespace SSMP.Networking.Matchmaking.Join;
 /// which it then shares with the peer to enable NAT hole-punching.
 /// </summary>
 internal static class UdpDiscoveryService {
+    /// <summary>
+    /// The expected length of the discovery token in bytes. 
+    /// This corresponds to a 32-character hexadecimal UUID.
+    /// </summary>
     private const int ExpectedTokenByteLength = 32;
 
     /// <summary>
@@ -31,12 +35,14 @@ internal static class UdpDiscoveryService {
         if (endpoint is null) return;
 
         var tokenBytes = EncodeToken(token);
-        if (tokenBytes.Length != ExpectedTokenByteLength)
-            throw new InvalidOperationException(
-                $"UdpDiscoveryService: discovery token encoded to {tokenBytes.Length} bytes; expected {ExpectedTokenByteLength}."
+        if (tokenBytes.Length != ExpectedTokenByteLength) {
+            Logger.Error(
+                $"UdpDiscoveryService: discovery token encoded to {tokenBytes.Length} bytes; expected {ExpectedTokenByteLength}. Aborting discovery."
             );
+            return;
+        }
 
-        await RunDiscoveryLoopAsync(sendRaw, tokenBytes, endpoint, cancellationToken);
+        await RunDiscoveryLoopAsync(sendRaw, tokenBytes, endpoint, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -48,8 +54,16 @@ internal static class UdpDiscoveryService {
         try {
             var addresses = await Dns.GetHostAddressesAsync(host).ConfigureAwait(false);
 
-            if (addresses is { Length: > 0 })
-                return new IPEndPoint(addresses[0], MmsProtocol.DiscoveryPort);
+            if (addresses is { Length: > 0 }) {
+                var address = addresses[0];
+                foreach (var a in addresses) {
+                    if (a.AddressFamily != AddressFamily.InterNetwork)
+                        continue;
+                    address = a;
+                    break;
+                }
+                return new IPEndPoint(address, MmsProtocol.DiscoveryPort);
+            }
 
             Logger.Error($"UdpDiscoveryService: could not resolve host '{host}'");
             return null;
@@ -75,7 +89,7 @@ internal static class UdpDiscoveryService {
         CancellationToken cancellationToken
     ) {
         while (!cancellationToken.IsCancellationRequested) {
-            if (!TrySend(sendRaw, tokenBytes, endpoint)) return;
+            TrySend(sendRaw, tokenBytes, endpoint);
 
             if (!await TryDelayAsync(cancellationToken).ConfigureAwait(false)) return;
         }
@@ -84,17 +98,15 @@ internal static class UdpDiscoveryService {
     /// <summary>
     /// Attempts a single send. Returns <c>false</c> (and logs a warning) on failure.
     /// </summary>
-    private static bool TrySend(
+    private static void TrySend(
         Action<byte[], IPEndPoint> sendRaw,
         byte[] tokenBytes,
         IPEndPoint endpoint
     ) {
         try {
             sendRaw(tokenBytes, endpoint);
-            return true;
         } catch (Exception ex) when (ex is not OperationCanceledException) {
             Logger.Warn($"UdpDiscoveryService: send error, aborting – {ex}");
-            return false;
         }
     }
 

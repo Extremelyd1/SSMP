@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 using SSMP.Logging;
 using SSMP.Networking.Matchmaking.Host;
@@ -130,10 +131,11 @@ internal class MmsClient {
     /// </summary>
     public async Task<MatchmakingJoinStartResult?> CoordinateMatchmakingJoinAsync(
         string joinId,
-        Action<byte[], IPEndPoint> sendRawAction
+        Action<byte[], IPEndPoint> sendRawAction,
+        CancellationToken cancellationToken = default
     ) {
         ClearErrors();
-        return await _joinCoordinator.CoordinateAsync(joinId, sendRawAction, SetJoinFailed);
+        return await _joinCoordinator.CoordinateAsync(joinId, sendRawAction, SetJoinFailed, cancellationToken);
     }
 
     /// <summary>
