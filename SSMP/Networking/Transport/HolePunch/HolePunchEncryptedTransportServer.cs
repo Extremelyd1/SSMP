@@ -2,7 +2,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
-using System.Threading;
 using System.Threading.Tasks;
 using SSMP.Logging;
 using SSMP.Networking.Matchmaking;
@@ -67,27 +66,33 @@ internal class HolePunchEncryptedTransportServer : IEncryptedTransportServer {
     /// <inheritdoc />
     public void Start(int port) {
         Logger.Info($"HolePunch Server: Starting on port {port}");
-        
-        // Subscribe to punch coordination
-        MmsClient.PunchClientRequested += OnPunchClientRequested;
+
+        if (_mmsClient != null) {
+            _mmsClient.RefreshHostMappingRequested += OnHostMappingRefreshRequested;
+            _mmsClient.HostMappingReceived += OnHostMappingReceived;
+            _mmsClient.StartPunchRequested += OnStartPunchRequested;
+        }
         
         var socket = PreBoundSocket;
         PreBoundSocket = null;
         
         _dtlsServer.Start(port, socket);
+
+        _mmsClient?.StartPendingClientPolling();
     }
 
     /// <inheritdoc />
     public void Stop() {
         Logger.Info("HolePunch Server: Stopping");
-        
-        // Close MMS lobby if we have an MMS client
-        _mmsClient?.CloseLobby();
-        _mmsClient = null;
-        
-        // Unsubscribe from punch coordination
-        MmsClient.PunchClientRequested -= OnPunchClientRequested;
-        
+
+        if (_mmsClient != null) {
+            _mmsClient.RefreshHostMappingRequested -= OnHostMappingRefreshRequested;
+            _mmsClient.HostMappingReceived -= OnHostMappingReceived;
+            _mmsClient.StartPunchRequested -= OnStartPunchRequested;
+            _mmsClient.CloseLobby();
+            _mmsClient = null;
+        }
+
         _dtlsServer.Stop();
         _clients.Clear();
     }
@@ -95,13 +100,14 @@ internal class HolePunchEncryptedTransportServer : IEncryptedTransportServer {
     /// <summary>
     /// Called when MMS notifies us of a client needing punch-back.
     /// </summary>
-    private void OnPunchClientRequested(string clientIp, int clientPort) {
+    private void OnStartPunchRequested(string joinId, string clientIp, int clientPort, int hostPort, long startTimeMs) {
+        _mmsClient?.StopHostDiscoveryRefresh();
         if (!IPAddress.TryParse(clientIp, out var ip)) {
             Logger.Warn($"HolePunch Server: Invalid client IP: {clientIp}");
             return;
         }
-        
-        PunchToClient(new IPEndPoint(ip, clientPort));
+
+        _ = PunchToClientAsync(new IPEndPoint(ip, clientPort), startTimeMs);
     }
 
     /// <inheritdoc />
@@ -111,25 +117,6 @@ internal class HolePunchEncryptedTransportServer : IEncryptedTransportServer {
         
         _dtlsServer.DisconnectClient(hpClient.EndPoint);
         _clients.TryRemove(hpClient.EndPoint, out _);
-    }
-
-    /// <summary>
-    /// Initiates hole punch to a client that wants to connect.
-    /// Uses the DTLS server's socket so the punch comes from the correct port.
-    /// </summary>
-    /// <param name="clientEndpoint">The client's public endpoint.</param>
-    private void PunchToClient(IPEndPoint clientEndpoint) {
-        // Run on background thread to avoid blocking the calling thread for 5 seconds
-        Task.Run(() => {
-            Logger.Debug($"HolePunch Server: Punching to client at {clientEndpoint}");
-            
-            for (var i = 0; i < PunchPacketCount; i++) {
-                _dtlsServer.SendRaw(PunchPacket, clientEndpoint);
-                Thread.Sleep(PunchPacketDelayMs);
-            }
-            
-            Logger.Info($"HolePunch Server: Punch packets sent to {clientEndpoint}");
-        });
     }
 
     /// <summary>
@@ -143,5 +130,45 @@ internal class HolePunchEncryptedTransportServer : IEncryptedTransportServer {
         });
 
         client.RaiseDataReceived(data, length);
+    }
+    
+    /// <summary>
+    /// Called when MMS asks the host to refresh its matchmaking mapping on the live UDP server socket.
+    /// </summary>
+    private void OnHostMappingRefreshRequested(string joinId, string hostDiscoveryToken, long serverTimeMs) {
+        Logger.Info($"HolePunch Server: Refreshing host mapping for join {joinId}");
+        _mmsClient?.StartHostDiscoveryRefresh(hostDiscoveryToken, (data, endpoint) => _dtlsServer.SendRaw(data, endpoint));
+    }
+
+    /// <summary>
+    /// Called when MMS confirms it has learned the host's current external mapping.
+    /// </summary>
+    private void OnHostMappingReceived() {
+        Logger.Info("HolePunch Server: Host mapping learned by MMS, stopping refresh");
+        _mmsClient?.StopHostDiscoveryRefresh();
+    }
+
+    /// <summary>
+    /// Sends <see cref="PunchPacketCount"/> UDP packets to <paramref name="clientEndpoint"/>,
+    /// spaced <see cref="PunchPacketDelayMs"/> ms apart, starting at <paramref name="startTimeMs"/>.
+    /// Exceptions are caught and logged rather than propagated, since this runs fire-and-forget.
+    /// </summary>
+    private async Task PunchToClientAsync(IPEndPoint clientEndpoint, long startTimeMs)
+    {
+        try
+        {
+            Logger.Debug($"HolePunch Server: Punching to client at {clientEndpoint}");
+            var delay = startTimeMs - DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            if (delay > 0) await Task.Delay(TimeSpan.FromMilliseconds(delay));
+
+            for (var i = 0; i < PunchPacketCount; i++)
+            {
+                _dtlsServer.SendRaw(PunchPacket, clientEndpoint);
+                await Task.Delay(PunchPacketDelayMs);
+            }
+
+            Logger.Info($"HolePunch Server: Punch complete to {clientEndpoint}");
+        }
+        catch (Exception ex) { Logger.Error($"HolePunch Server: Punch to {clientEndpoint} failed – {ex.Message}"); }
     }
 }
