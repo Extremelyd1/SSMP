@@ -1,18 +1,18 @@
 using System;
 using System.Collections.Generic;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using SSMP.Logging;
 using SSMP.Networking.Matchmaking.Protocol;
 
 namespace SSMP.Networking.Matchmaking.Parsing;
 
-/// <summary>Typed models parser for MMS JSON. Minimal allocations via <see cref="ReadOnlySpan{T}"/>.</summary>
+/// <summary>Builds Matchmaking models from raw MMS response payloads.</summary>
 internal static class MmsResponseParser {
     /// <summary>
-    /// Lookup key for scanning lobby object boundaries.
+    /// Reads the create-lobby response fields needed to start a host session.
+    /// Returns false when any required field is missing.
     /// </summary>
-    private const string ConnectionDataKey = $"\"{MmsFields.ConnectionData}\":";
-
-    /// <summary>Parses lobby activation fields. Returns true if core fields present.</summary>
     public static bool TryParseLobbyActivation(
         string response,
         out string? lobbyId,
@@ -21,187 +21,149 @@ internal static class MmsResponseParser {
         out string? lobbyCode,
         out string? hostDiscoveryToken
     ) {
-        var span = response.AsSpan();
-        lobbyId = MmsJsonParser.ExtractValue(span, MmsFields.ConnectionData);
-        hostToken = MmsJsonParser.ExtractValue(span, MmsFields.HostToken);
-        lobbyName = MmsJsonParser.ExtractValue(span, MmsFields.LobbyName);
-        lobbyCode = MmsJsonParser.ExtractValue(span, MmsFields.LobbyCode);
-        hostDiscoveryToken = MmsJsonParser.ExtractValue(span, MmsFields.HostDiscoveryToken);
+        var root = ParseJsonObject(response);
+        lobbyId = root?.Value<string>(MmsFields.ConnectionData);
+        hostToken = root?.Value<string>(MmsFields.HostToken);
+        lobbyName = root?.Value<string>(MmsFields.LobbyName);
+        lobbyCode = root?.Value<string>(MmsFields.LobbyCode);
+        hostDiscoveryToken = root?.Value<string>(MmsFields.HostDiscoveryToken);
+
         return lobbyId != null && hostToken != null && lobbyName != null && lobbyCode != null;
     }
 
     /// <summary>
-    /// Parses a <c>/lobby/{id}/join</c> response into a <see cref="JoinLobbyResult"/>.
+    /// Parses the join response into the local result model.
+    /// Returns null when MMS omits the required connection fields.
     /// </summary>
-    /// <param name="response">Raw JSON response body from the MMS join endpoint.</param>
-    /// <returns>
-    /// A populated <see cref="JoinLobbyResult"/> on success, or <c>null</c> if
-    /// <c>connectionData</c> or <c>lobbyType</c> are missing, or if <c>lobbyType</c>
-    /// cannot be mapped to a known <see cref="PublicLobbyType"/> value.
-    /// </returns>
     public static JoinLobbyResult? ParseJoinLobbyResult(string response) {
-        var span = response.AsSpan();
+        var root = ParseJsonObject(response);
+        if (root == null) {
+            return null;
+        }
 
-        return !TryExtractJoinRequiredFields(span, out var connectionData, out var lobbyType)
-            ? null
-            : BuildJoinLobbyResult(span, connectionData!, lobbyType);
+        var connectionData = root.Value<string>(MmsFields.ConnectionData);
+        var lobbyTypeString = root.Value<string>(MmsFields.LobbyType);
+
+        if (connectionData == null || lobbyTypeString == null) {
+            return null;
+        }
+
+        return new JoinLobbyResult {
+            ConnectionData = connectionData,
+            LobbyType = ParseLobbyType(lobbyTypeString),
+            LanConnectionData = root.Value<string>(MmsFields.LanConnectionData),
+            JoinId = root.Value<string>(MmsFields.JoinId)
+        };
     }
 
-    /// <summary>Scans JSON array for lobby objects by "connectionData" key boundaries.</summary>
+    /// <summary>
+    /// Parses the public lobby listing returned by MMS.
+    /// Returns an empty list when the payload is malformed.
+    /// </summary>
     public static List<PublicLobbyInfo> ParsePublicLobbies(string response) {
-        var result = new List<PublicLobbyInfo>();
-        var span = response.AsSpan();
-        var idx = 0;
+        try {
+            var lobbies = ParseLobbiesAsArray(response);
+            return ExtractValidLobbies(lobbies);
+        } catch (JsonReaderException) {
+            Logger.Debug("MmsResponseParser: Failed to parse public lobbies JSON.");
+            return [];
+        }
+    }
 
-        while (TryFindNextLobbySlice(span, ref idx, out var slice)) {
-            var entry = TryParsePublicLobbyEntry(slice);
-            if (entry != null) {
-                result.Add(entry);
+    /// <summary>
+    /// Parses the start-punch message sent before synchronized hole punching.
+    /// Returns null when the host endpoint or timestamp is missing.
+    /// </summary>
+    private static MatchmakingJoinStartResult? ParseStartPunch(string json) {
+        var root = ParseJsonObject(json);
+        if (root == null) {
+            return null;
+        }
+
+        var hostIp = root.Value<string>(MmsFields.HostIp);
+        var hostPort = root.Value<int?>(MmsFields.HostPort);
+        var startTime = root.Value<long?>(MmsFields.StartTimeMs);
+
+        if (hostIp == null || hostPort == null || startTime == null) {
+            return null;
+        }
+
+        return new MatchmakingJoinStartResult {
+            HostIp = hostIp,
+            HostPort = hostPort.Value,
+            StartTimeMs = startTime.Value
+        };
+    }
+
+    /// <summary>Span-based wrapper for callers that already work with message spans.</summary>
+    public static MatchmakingJoinStartResult? ParseStartPunch(ReadOnlySpan<char> span) =>
+        ParseStartPunch(span.ToString());
+
+    /// <summary>Normalizes lobby-list payloads so callers can always iterate a JSON array.</summary>
+    private static JArray ParseLobbiesAsArray(string response) {
+        return JToken.Parse(response) switch {
+            JArray array => array,
+            JObject obj => [obj],
+            _ => []
+        };
+    }
+
+    /// <summary>Filters malformed lobby entries and converts the valid ones to models.</summary>
+    private static List<PublicLobbyInfo> ExtractValidLobbies(JArray lobbies) {
+        var result = new List<PublicLobbyInfo>(lobbies.Count);
+
+        foreach (var token in lobbies) {
+            if (token is not JObject lobbyObject) {
+                Logger.Debug("MmsResponseParser: Skipped non-object lobby entry.");
+                continue;
+            }
+
+            var lobby = TryParseLobbyEntry(lobbyObject);
+            if (lobby != null) {
+                result.Add(lobby);
             } else {
-                Logger.Debug($"MmsResponseParser: Skipped unparseable lobby entry at index {idx}.");
+                Logger.Debug("MmsResponseParser: Skipped unparseable lobby entry.");
             }
         }
 
         return result;
     }
 
-    /// <summary>Parses punch start payload. Returns null if required fields missing.</summary>
-    public static MatchmakingJoinStartResult? ParseStartPunch(ReadOnlySpan<char> span) {
-        return !TryExtractPunchFields(span, out var hostIp, out var hostPort, out var startTimeMs)
-            ? null
-            : new MatchmakingJoinStartResult { HostIp = hostIp!, HostPort = hostPort, StartTimeMs = startTimeMs };
-    }
+    /// <summary>Parses one lobby entry from the public lobby list.</summary>
+    private static PublicLobbyInfo? TryParseLobbyEntry(JObject lobby) {
+        var connectionData = lobby.Value<string>(MmsFields.ConnectionData);
+        var name = lobby.Value<string>(MmsFields.Name);
 
-    /// <summary>
-    /// Extracts and validates the two required fields for a join response:
-    /// <c>connectionData</c> and a parseable <c>lobbyType</c>.
-    /// </summary>
-    /// <param name="span">Span over the raw response text.</param>
-    /// <param name="connectionData">Receives the connection string, or <c>null</c> on failure.</param>
-    /// <param name="lobbyType">Receives the parsed <see cref="PublicLobbyType"/> on success.</param>
-    /// <returns><c>true</c> if both fields were present and valid; <c>false</c> otherwise.</returns>
-    private static bool TryExtractJoinRequiredFields(
-        ReadOnlySpan<char> span,
-        out string? connectionData,
-        out PublicLobbyType lobbyType
-    ) {
-        connectionData = MmsJsonParser.ExtractValue(span, MmsFields.ConnectionData);
-        var lobbyTypeString = MmsJsonParser.ExtractValue(span, MmsFields.LobbyType);
-
-        if (connectionData == null || lobbyTypeString == null) {
-            lobbyType = default;
-            return false;
+        if (connectionData == null || name == null) {
+            return null;
         }
 
-        // Default to Matchmaking for unknown lobby types, consistent with TryParsePublicLobbyEntry
-        if (!Enum.TryParse(lobbyTypeString, true, out lobbyType))
-            lobbyType = PublicLobbyType.Matchmaking;
+        var lobbyTypeString = lobby.Value<string>(MmsFields.LobbyType);
+        var lobbyType = lobbyTypeString != null
+            ? ParseLobbyType(lobbyTypeString)
+            : PublicLobbyType.Matchmaking;
 
-        return true;
+        var lobbyCode = lobby.Value<string>(MmsFields.LobbyCode) ?? string.Empty;
+
+        return new PublicLobbyInfo(connectionData, name, lobbyType, lobbyCode);
     }
 
-    /// <summary>
-    /// Constructs a <see cref="JoinLobbyResult"/> from a validated span, populating
-    /// all optional fields alongside the required ones.
-    /// </summary>
-    /// <param name="span">Span over the raw response text.</param>
-    /// <param name="connectionData">Pre-validated connection string.</param>
-    /// <param name="lobbyType">Pre-validated lobby type.</param>
-    private static JoinLobbyResult BuildJoinLobbyResult(
-        ReadOnlySpan<char> span,
-        string connectionData,
-        PublicLobbyType lobbyType
-    ) => new() {
-        ConnectionData = connectionData,
-        LobbyType = lobbyType,
-        LanConnectionData = MmsJsonParser.ExtractValue(span, MmsFields.LanConnectionData),
-        JoinId = MmsJsonParser.ExtractValue(span, MmsFields.JoinId)
-    };
-
-    /// <summary>
-    /// Advances <paramref name="idx"/> to the next <c>"connectionData":</c> key in
-    /// <paramref name="span"/> and returns the sub-span starting at that key.
-    /// </summary>
-    /// <param name="span">The full response span being scanned.</param>
-    /// <param name="idx">
-    /// Current scan position. Updated to one character past the found key so the
-    /// next call advances past the current entry.
-    /// </param>
-    /// <param name="slice">
-    /// Receives a sub-span beginning at the found key, suitable for field extraction.
-    /// Empty when the method returns <c>false</c>.
-    /// </param>
-    /// <returns><c>true</c> if another entry was found; <c>false</c> when the scan is exhausted.</returns>
-    private static bool TryFindNextLobbySlice(
-        ReadOnlySpan<char> span,
-        ref int idx,
-        out ReadOnlySpan<char> slice
-    ) {
-        var relative = span[idx..].IndexOf(ConnectionDataKey, StringComparison.Ordinal);
-        if (relative == -1) {
-            slice = default;
-            return false;
+    /// <summary>Parses a lobby type string and defaults unknown values to Matchmaking.</summary>
+    private static PublicLobbyType ParseLobbyType(string lobbyTypeString) {
+        if (Enum.TryParse(lobbyTypeString, ignoreCase: true, out PublicLobbyType lobbyType)) {
+            return lobbyType;
         }
 
-        var start = idx + relative;
-        var nextRelative = span[(start + ConnectionDataKey.Length)..]
-            .IndexOf(ConnectionDataKey, StringComparison.Ordinal);
-        var end = nextRelative == -1 ? span.Length : start + ConnectionDataKey.Length + nextRelative;
-        slice = span[start..end];
-        idx = end;
-        return true;
+        Logger.Debug($"MmsResponseParser: Unknown lobby type '{lobbyTypeString}', defaulting to Matchmaking.");
+        return PublicLobbyType.Matchmaking;
     }
 
-    /// <summary>
-    /// Parses a single lobby object from a span that starts at its
-    /// <c>"connectionData":</c> key. Returns <c>null</c> if either
-    /// <c>connectionData</c> or <c>name</c> are absent.
-    /// An unrecognised <c>lobbyType</c> defaults to <see cref="PublicLobbyType.Matchmaking"/>.
-    /// </summary>
-    /// <param name="slice">Sub-span starting at the lobby object's <c>connectionData</c> key.</param>
-    /// <returns>A <see cref="PublicLobbyInfo"/>, or <c>null</c> if required fields are missing.</returns>
-    private static PublicLobbyInfo? TryParsePublicLobbyEntry(ReadOnlySpan<char> slice) {
-        var connectionData = MmsJsonParser.ExtractValue(slice, MmsFields.ConnectionData);
-        var name = MmsJsonParser.ExtractValue(slice, MmsFields.Name);
-
-        if (connectionData == null || name == null) return null;
-
-        var typeString = MmsJsonParser.ExtractValue(slice, MmsFields.LobbyType);
-        var code = MmsJsonParser.ExtractValue(slice, MmsFields.LobbyCode);
-
-        var type = PublicLobbyType.Matchmaking;
-        if (typeString != null) Enum.TryParse(typeString, true, out type);
-
-        return new PublicLobbyInfo(connectionData, name, type, code ?? "");
-    }
-
-    /// <summary>
-    /// Extracts and validates all three required fields from a <c>start_punch</c>
-    /// message: <c>hostIp</c>, <c>hostPort</c>, and <c>startTimeMs</c>.
-    /// </summary>
-    /// <param name="span">Span over the raw message text.</param>
-    /// <param name="hostIp">Receives the host IP string, or <c>null</c> on failure.</param>
-    /// <param name="hostPort">Receives the parsed host port on success; 0 on failure.</param>
-    /// <param name="startTimeMs">Receives the parsed start timestamp on success; 0 on failure.</param>
-    /// <returns><c>true</c> if all three fields were present and parseable; <c>false</c> otherwise.</returns>
-    private static bool TryExtractPunchFields(
-        ReadOnlySpan<char> span,
-        out string? hostIp,
-        out int hostPort,
-        out long startTimeMs
-    ) {
-        hostIp = MmsJsonParser.ExtractValue(span, MmsFields.HostIp);
-        var hostPortStr = MmsJsonParser.ExtractValue(span, MmsFields.HostPort);
-        var startTimeStr = MmsJsonParser.ExtractValue(span, MmsFields.StartTimeMs);
-
-        if (hostIp == null ||
-            !int.TryParse(hostPortStr, out hostPort) ||
-            !long.TryParse(startTimeStr, out startTimeMs)) {
-            hostPort = 0;
-            startTimeMs = 0;
-            return false;
+    /// <summary>Parses a JSON object root and returns null when the payload is invalid.</summary>
+    private static JObject? ParseJsonObject(string json) {
+        try {
+            return JObject.Parse(json);
+        } catch (JsonReaderException) {
+            return null;
         }
-
-        return true;
     }
 }

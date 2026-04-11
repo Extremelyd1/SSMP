@@ -1,58 +1,42 @@
 using System;
 using System.Buffers;
 using System.Globalization;
-using System.Text;
+using System.Linq;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using SSMP.Networking.Matchmaking.Protocol;
-using SSMP.Networking.Matchmaking.Utilities;
 
 namespace SSMP.Networking.Matchmaking.Parsing;
 
-/// <summary>Minimal JSON reader/writer for MMS payloads. Assumes well-formed input; supports strings and numbers.</summary>
+/// <summary>Reads and writes the small JSON payloads used by MMS.</summary>
 internal static class MmsJsonParser {
-    /// <summary>Shared pool for minimizing character buffer allocations.</summary>
+    /// <summary>Reuses temporary char buffers while serializing request payloads.</summary>
     private static readonly ArrayPool<char> CharPool = ArrayPool<char>.Shared;
 
-    /// <summary>Extracts quoted string or unquoted numeric value for <paramref name="key"/>.</summary>
-    public static string? ExtractValue(ReadOnlySpan<char> json, string key) {
-        Span<char> searchKey = stackalloc char[key.Length + 2];
-        searchKey[0] = '"';
-        key.AsSpan().CopyTo(searchKey[1..]);
-        searchKey[key.Length + 1] = '"';
-
-        var searchStart = 0;
-        while (searchStart < json.Length) {
-            var relative = json[searchStart..].IndexOf(searchKey, StringComparison.Ordinal);
-            if (relative == -1) return null;
-
-            var matchPos = searchStart + relative;
-
-            // Verify this is a full key match at a JSON field boundary:
-            // the character before the opening quote must not be alphanumeric
-            // (guards against "1gameVersion" matching a search for "gameVersion").
-            if (matchPos > 0 && char.IsLetterOrDigit(json[matchPos - 1])) {
-                searchStart = matchPos + 1;
-                continue;
-            }
-
-            var keyEnd = matchPos + searchKey.Length;
-            var valueStart = MmsUtilities.SkipWhitespace(json, keyEnd);
-            if (valueStart >= json.Length || json[valueStart] != ':') {
-                searchStart = matchPos + 1;
-                continue;
-            }
-
-            valueStart = MmsUtilities.SkipWhitespace(json, valueStart + 1);
-            if (valueStart >= json.Length) return null;
-
-            return json[valueStart] == '"'
-                ? ExtractStringValue(json, valueStart)
-                : ExtractNumericValue(json, valueStart);
+    /// <summary>
+    /// Parses a JSON string and returns the first property with the requested key.
+    /// Returns null when the payload is invalid or the key is missing.
+    /// </summary>
+    private static string? ExtractValue(string json, string key) {
+        try {
+            var token = JToken.Parse(json);
+            var property = FindPropertyRecursive(token, key);
+            return property == null ? null : ConvertTokenToString(property.Value);
+        } catch (JsonReaderException) {
+            return null;
         }
-
-        return null;
     }
 
-    /// <summary>Writes CreateLobby JSON to rented buffer. Caller MUST return buffer to pool.</summary>
+    /// <summary>
+    /// Span-based wrapper for callers that already have a message buffer.
+    /// Converts once, then reuses the string overload.
+    /// </summary>
+    public static string? ExtractValue(ReadOnlySpan<char> json, string key) => ExtractValue(json.ToString(), key);
+
+    /// <summary>
+    /// Serializes the create-lobby payload into a rented char buffer.
+    /// The caller must return that buffer with <see cref="ReturnBuffer"/>.
+    /// </summary>
     public static (char[] buffer, int length) FormatCreateLobbyJson(
         int port,
         bool isPublic,
@@ -60,165 +44,88 @@ internal static class MmsJsonParser {
         PublicLobbyType lobbyType,
         string? hostLanIp
     ) {
-        var escapedGameVersion = MmsUtilities.EscapeJsonString(gameVersion);
-        var escapedHostLanIp = hostLanIp == null ? null : MmsUtilities.EscapeJsonString(hostLanIp);
-        var lobbyTypeValue = lobbyType == PublicLobbyType.Matchmaking ? "matchmaking" : "steam";
-        // 96: fixed JSON structure overhead (braces, key names, quotes, colons, commas)
-        // 16: HostLanIp wrapper (key + colon + port digits)
-        // 24: MatchmakingVersion wrapper (key + colon + version digits)
-        // 32: safety margin for edge cases
-        var estimatedLength =
-            96 +
-            escapedGameVersion.Length +
-            lobbyTypeValue.Length +
-            (escapedHostLanIp?.Length ?? 0) +
-            (hostLanIp != null ? 16 : 0) +
-            (lobbyType == PublicLobbyType.Matchmaking ? 24 : 0) +
-            32;
-
-        var buffer = CharPool.Rent(estimatedLength);
-        var span = buffer.AsSpan();
-        var written = 0;
-
-        Write(span, ref written, "{\"");
-        Write(span, ref written, MmsFields.HostPortRequest);
-        Write(span, ref written, "\":");
-        Write(span, ref written, port);
-        Write(span, ref written, ",\"");
-        Write(span, ref written, MmsFields.IsPublicRequest);
-        Write(span, ref written, "\":");
-        Write(span, ref written, MmsUtilities.BoolToJson(isPublic));
-        Write(span, ref written, ",\"");
-        Write(span, ref written, MmsFields.GameVersionRequest);
-        Write(span, ref written, "\":\"");
-        Write(span, ref written, escapedGameVersion);
-        Write(span, ref written, "\",\"");
-        Write(span, ref written, MmsFields.LobbyTypeRequest);
-        Write(span, ref written, "\":\"");
-        Write(span, ref written, lobbyTypeValue);
-        Write(span, ref written, "\"");
+        var payload = new JObject {
+            [MmsFields.HostPortRequest] = port,
+            [MmsFields.IsPublicRequest] = isPublic,
+            [MmsFields.GameVersionRequest] = gameVersion,
+            [MmsFields.LobbyTypeRequest] = SerializeLobbyType(lobbyType)
+        };
 
         if (hostLanIp != null) {
-            Write(span, ref written, ",\"");
-            Write(span, ref written, MmsFields.HostLanIpRequest);
-            Write(span, ref written, "\":\"");
-            Write(span, ref written, escapedHostLanIp!);
-            Write(span, ref written, ":");
-            Write(span, ref written, port);
-            Write(span, ref written, "\"");
+            payload[MmsFields.HostLanIpRequest] = $"{hostLanIp}:{port}";
         }
 
+        // Matchmaking lobbies carry a protocol version so MMS can reject stale clients.
         if (lobbyType == PublicLobbyType.Matchmaking) {
-            Write(span, ref written, ",\"");
-            Write(span, ref written, MmsFields.MatchmakingVersionRequest);
-            Write(span, ref written, "\":");
-            Write(span, ref written, MmsProtocol.CurrentVersion);
+            payload[MmsFields.MatchmakingVersionRequest] = MmsProtocol.CurrentVersion;
         }
 
-        Write(span, ref written, "}");
-        return (buffer, written);
+        var json = payload.ToString(Formatting.None);
+        var buffer = CharPool.Rent(json.Length);
+        json.AsSpan().CopyTo(buffer);
+        return (buffer, json.Length);
     }
 
-    /// <summary>
-    /// Returns a char buffer to the shared array pool.
-    /// </summary>
+    /// <summary>Returns a previously rented char buffer back to the shared pool.</summary>
     public static void ReturnBuffer(char[] buffer) => CharPool.Return(buffer);
 
-    /// <summary>
-    /// Extracts a quoted string value starting at the opening <c>"</c>.
-    /// Returns <c>null</c> if the closing quote is missing.
-    /// </summary>
-    private static string? ExtractStringValue(ReadOnlySpan<char> json, int openQuoteIndex) {
-        var segmentStart = openQuoteIndex + 1;
-        StringBuilder? builder = null;
+    /// <summary>Walks nested objects and arrays until it finds a matching property name.</summary>
+    private static JProperty? FindPropertyRecursive(JToken token, string key) {
+        switch (token.Type) {
+            case JTokenType.Object: {
+                foreach (var property in token.Children<JProperty>()) {
+                    if (string.Equals(property.Name, key, StringComparison.Ordinal)) {
+                        return property;
+                    }
 
-        for (var i = segmentStart; i < json.Length; i++) {
-            if (json[i] == '\\') {
-                if (i + 1 >= json.Length) return null;
-                if (builder == null) builder = new StringBuilder(json.Slice(segmentStart, i - segmentStart).ToString());
-                else builder.Append(json.Slice(segmentStart, i - segmentStart));
-                var escape = json[++i];
-                switch (escape) {
-                    case '"': builder.Append('"'); break;
-                    case '\\': builder.Append('\\'); break;
-                    case '/': builder.Append('/'); break;
-                    case 'b': builder.Append('\b'); break;
-                    case 'f': builder.Append('\f'); break;
-                    case 'n': builder.Append('\n'); break;
-                    case 'r': builder.Append('\r'); break;
-                    case 't': builder.Append('\t'); break;
-                    case 'u':
-                        if (i + 4 >= json.Length) return null;
-
-                        var hex = json.Slice(i + 1, 4);
-                        if (!ushort.TryParse(hex, NumberStyles.HexNumber, null, out var codePoint))
-                            return null;
-
-                        builder.Append((char) codePoint);
-                        i += 4;
-                        break;
-                    default:
-                        // Unknown escape sequence; treat as unparseable
-                        return null; 
+                    var nestedMatch = FindPropertyRecursive(property.Value, key);
+                    if (nestedMatch != null) {
+                        return nestedMatch;
+                    }
                 }
 
-                segmentStart = i + 1;
-                continue;
+                break;
             }
-
-            if (json[i] != '"') continue;
-
-            if (builder == null)
-                return json.Slice(openQuoteIndex + 1, i - openQuoteIndex - 1).ToString();
-
-            builder.Append(json.Slice(segmentStart, i - segmentStart));
-            return builder.ToString();
+            case JTokenType.Array:
+                return token.Children().Select(child => FindPropertyRecursive(child, key)).OfType<JProperty>()
+                            .FirstOrDefault();
+            case JTokenType.None:
+            case JTokenType.Constructor:
+            case JTokenType.Property:
+            case JTokenType.Comment:
+            case JTokenType.Integer:
+            case JTokenType.Float:
+            case JTokenType.String:
+            case JTokenType.Boolean:
+            case JTokenType.Null:
+            case JTokenType.Undefined:
+            case JTokenType.Date:
+            case JTokenType.Raw:
+            case JTokenType.Bytes:
+            case JTokenType.Guid:
+            case JTokenType.Uri:
+            case JTokenType.TimeSpan:
+            default:
+                throw new ArgumentOutOfRangeException();
         }
 
         return null;
     }
 
-    /// <summary>
-    /// Extracts an unquoted numeric value (digits, <c>.</c>, <c>-</c>) starting at
-    /// <paramref name="start"/>. Returns an empty string if no numeric characters are found.
-    /// </summary>
-    private static string ExtractNumericValue(ReadOnlySpan<char> json, int start) {
-        var end = start;
+    /// <summary>Maps the local enum to the lowercase lobby type string MMS expects.</summary>
+    private static string SerializeLobbyType(PublicLobbyType lobbyType) => lobbyType switch {
+        PublicLobbyType.Matchmaking => "matchmaking",
+        PublicLobbyType.Steam => "steam",
+        _ => "matchmaking"
+    };
 
-        // A leading minus sign is valid only at the first character position.
-        if (end < json.Length && json[end] == '-')
-            end++;
-
-        while (end < json.Length &&
-               (char.IsDigit(json[end]) || json[end] == '.')) {
-            end++;
-        }
-
-        return json.Slice(start, end - start).ToString();
-    }
-
-    /// <summary>
-    /// Copies a string value into the destination buffer at the current write position.
-    /// </summary>
-    /// <param name="destination">The character buffer to write into.</param>
-    /// <param name="written">The current write position; incremented by the length of <paramref name="value"/>.</param>
-    /// <param name="value">The string value to copy.</param>
-    private static void Write(Span<char> destination, ref int written, ReadOnlySpan<char> value) {
-        value.CopyTo(destination[written..]);
-        written += value.Length;
-    }
-
-    /// <summary>
-    /// Formats an integer value into the destination buffer at the current write position.
-    /// </summary>
-    /// <param name="destination">The character buffer to write into.</param>
-    /// <param name="written">The current write position; incremented by the number of characters written.</param>
-    /// <param name="value">The integer value to format.</param>
-    /// <exception cref="InvalidOperationException">Thrown when the integer cannot be formatted into the remaining buffer space.</exception>
-    private static void Write(Span<char> destination, ref int written, int value) {
-        if (!value.TryFormat(destination[written..], out var charsWritten))
-            throw new InvalidOperationException("Could not format MMS JSON integer.");
-
-        written += charsWritten;
-    }
+    /// <summary>Converts a JSON token into the string shape expected by existing callers.</summary>
+    private static string? ConvertTokenToString(JToken token) => token.Type switch {
+        JTokenType.Null => null,
+        JTokenType.String => token.Value<string>(),
+        JTokenType.Integer => token.Value<long>().ToString(CultureInfo.InvariantCulture),
+        JTokenType.Float => token.Value<double>().ToString(CultureInfo.InvariantCulture),
+        JTokenType.Boolean => token.Value<bool>() ? "true" : "false",
+        _ => token.ToString(Formatting.None)
+    };
 }
