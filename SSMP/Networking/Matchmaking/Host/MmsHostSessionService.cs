@@ -11,31 +11,28 @@ using SSMP.Networking.Matchmaking.Utilities;
 
 namespace SSMP.Networking.Matchmaking.Host;
 
-/// <summary>
-/// Manages the full lifecycle of the local host's MMS lobby session, including
-/// lobby creation, heartbeat keep-alive, UDP discovery refresh, and clean teardown.
-/// </summary>
-internal sealed class MmsHostSessionService {
+/// <summary>Host lobby lifecycle: creation, heartbeat, UDP discovery, and teardown.</summary>
+internal sealed class MmsHostSessionService : IDisposable {
     /// <summary>The base HTTP URL of the MMS server (e.g. <c>https://mms.example.com</c>).</summary>
     private readonly string _baseUrl;
 
-    /// <summary>
-    /// Hostname used for UDP NAT hole-punch discovery, or <c>null</c> if discovery
-    /// is disabled for this session.
-    /// </summary>
+    /// <summary>NAT discovery hostname; null if disabled.</summary>
     private readonly string? _discoveryHost;
 
     /// <summary>Synchronization lock for thread-safe access to session state (tokens, lobby IDs).</summary>
     private readonly object _sessionLock = new();
 
+    /// <summary>Prevents concurrent lobby creation.</summary>
+    private int _creationLock;
+
+    /// <summary>Whether this service instance has been disposed.</summary>
+    private volatile bool _disposed;
+
     /// <summary>WebSocket handler that receives real-time MMS server events.</summary>
     private readonly MmsWebSocketHandler _webSocket;
 
-    /// <summary>
-    /// Bearer token issued by MMS when the lobby was created. Used to authenticate
-    /// heartbeat and delete requests. <c>null</c> when no lobby is active.
-    /// </summary>
-    private string? _hostToken;
+    /// <summary>MMS session bearer token; null if no active lobby.</summary>
+    private volatile string? _hostToken;
 
     /// <summary>
     /// The MMS lobby ID of the currently active session, or <c>null</c> when no
@@ -43,11 +40,13 @@ internal sealed class MmsHostSessionService {
     /// </summary>
     private string? _currentLobbyId;
 
-    /// <summary>
-    /// Timer that fires <see cref="SendHeartbeat"/> at regular intervals to keep
-    /// the MMS lobby alive. <c>null</c> when no lobby is active.
-    /// </summary>
+    /// <summary>MMS lobby keep-alive timer.</summary>
     private Timer? _heartbeatTimer;
+
+    /// <summary>
+    /// Cancellation source to suppress in-flight heartbeat continuations after the lobby is closed.
+    /// </summary>
+    private CancellationTokenSource? _heartbeatCts;
 
     /// <summary>The number of players currently connected to this host's session.</summary>
     private int _connectedPlayers;
@@ -109,33 +108,20 @@ internal sealed class MmsHostSessionService {
         remove => _webSocket.StartPunchRequested -= value;
     }
 
-    /// <summary>
-    /// Updates the number of players connected to this host and immediately sends
-    /// a heartbeat to MMS if the count has changed and a lobby is active.
-    /// Negative values are clamped to zero.
-    /// </summary>
-    /// <param name="count">New connected-player count.</param>
+    /// <summary>Updates player count; triggers immediate heartbeat if changed.</summary>
     public void SetConnectedPlayers(int count) {
-        var normalized = System.Math.Max(0, count);
-        var previous = Interlocked.Exchange(ref _connectedPlayers, normalized);
-        if (previous == normalized) return;
+        if (_disposed) throw new ObjectDisposedException(nameof(MmsHostSessionService));
 
-        // Note: _hostToken can be nulled concurrently after this check,
-        // but SendHeartbeat safely re-checks it under _sessionLock.
+        if (count < 0)
+            throw new ArgumentOutOfRangeException(nameof(count), count, "Connected player count cannot be negative.");
+
+        var previous = Interlocked.Exchange(ref _connectedPlayers, count);
+        if (previous == count) return;
+
         if (_hostToken != null) SendHeartbeat(state: null);
     }
 
-    /// <summary>
-    /// Creates a new UDP lobby on MMS and activates the local session on success.
-    /// </summary>
-    /// <param name="hostPort">UDP port this host is listening on.</param>
-    /// <param name="isPublic">Whether the lobby should appear in public listings.</param>
-    /// <param name="gameVersion">Game version string used for matchmaking compatibility checks.</param>
-    /// <param name="lobbyType">Lobby subtype (e.g. casual, ranked).</param>
-    /// <returns>
-    /// A tuple of <c>(lobbyCode, lobbyName, hostDiscoveryToken)</c> on success,
-    /// or <c>(null, null, null)</c> if the request failed or the response was invalid.
-    /// </returns>
+    /// <summary>Creates lobby on MMS and activates session.</summary>
     public async
         Task<((string? lobbyCode, string? lobbyName, string? hostDiscoveryToken) result, MatchmakingError error)>
         CreateLobbyAsync(
@@ -144,28 +130,42 @@ internal sealed class MmsHostSessionService {
             string gameVersion,
             PublicLobbyType lobbyType
         ) {
-        var (buffer, length) = MmsJsonParser.FormatCreateLobbyJson(
-            hostPort, isPublic, gameVersion, lobbyType, MmsUtilities.GetLocalIpAddress()
-        );
-        try {
-            var response = await MmsHttpClient.PostJsonAsync(
-                $"{_baseUrl}{MmsRoutes.Lobby}",
-                new string(buffer, 0, length)
-            );
-            if (!response.Success || response.Body == null)
-                return ((null, null, null), response.Error);
+        if (_disposed) throw new ObjectDisposedException(nameof(MmsHostSessionService));
 
-            return TryActivateLobby(
-                response.Body,
-                "CreateLobby",
-                out var lobbyName,
-                out var lobbyCode,
-                out var hostDiscoveryToken
-            )
-                ? ((lobbyCode, lobbyName, hostDiscoveryToken), MatchmakingError.None)
-                : ((null, null, null), MatchmakingError.NetworkFailure);
+        if (Interlocked.CompareExchange(ref _creationLock, 1, 0) != 0)
+            return ((null, null, null), MatchmakingError.NetworkFailure);
+
+        try {
+            lock (_sessionLock) {
+                if (_disposed) throw new ObjectDisposedException(nameof(MmsHostSessionService));
+                if (_hostToken != null) return ((null, null, null), MatchmakingError.NetworkFailure);
+            }
+
+            var (buffer, length) = MmsJsonParser.FormatCreateLobbyJson(
+                hostPort, isPublic, gameVersion, lobbyType, MmsUtilities.GetLocalIpAddress()
+            );
+            try {
+                var response = await MmsHttpClient.PostJsonAsync(
+                    $"{_baseUrl}{MmsRoutes.Lobby}",
+                    new string(buffer, 0, length)
+                );
+                if (!response.Success || response.Body == null)
+                    return ((null, null, null), response.Error);
+
+                return TryActivateLobby(
+                    response.Body,
+                    "CreateLobby",
+                    out var lobbyName,
+                    out var lobbyCode,
+                    out var hostDiscoveryToken
+                )
+                    ? ((lobbyCode, lobbyName, hostDiscoveryToken), MatchmakingError.None)
+                    : ((null, null, null), MatchmakingError.NetworkFailure);
+            } finally {
+                MmsJsonParser.ReturnBuffer(buffer);
+            }
         } finally {
-            MmsJsonParser.ReturnBuffer(buffer);
+            Interlocked.Exchange(ref _creationLock, 0);
         }
     }
 
@@ -176,40 +176,48 @@ internal sealed class MmsHostSessionService {
     /// <param name="isPublic">Whether the lobby should appear in public MMS listings.</param>
     /// <param name="gameVersion">Game version string for matchmaking compatibility.</param>
     /// <returns>
-    /// The MMS lobby code on success, or <c>null</c> if the request failed or the
-    /// response was invalid.
+    /// Returns the MMS lobby code on success; otherwise returns null along with a MatchmakingError describing the failure.
     /// </returns>
     public async Task<(string? lobbyCode, MatchmakingError error)> RegisterSteamLobbyAsync(
         string steamLobbyId,
         bool isPublic,
         string gameVersion
     ) {
-        var response = await MmsHttpClient.PostJsonAsync(
-            $"{_baseUrl}{MmsRoutes.Lobby}",
-            BuildSteamLobbyJson(steamLobbyId, isPublic, gameVersion)
-        );
-        if (!response.Success || response.Body == null)
-            return (null, response.Error);
+        if (_disposed) throw new ObjectDisposedException(nameof(MmsHostSessionService));
 
-        if (!TryActivateLobby(response.Body, "RegisterSteamLobby", out _, out var lobbyCode, out _))
+        if (Interlocked.CompareExchange(ref _creationLock, 1, 0) != 0)
             return (null, MatchmakingError.NetworkFailure);
 
-        return (lobbyCode, MatchmakingError.None);
+        try {
+            lock (_sessionLock) {
+                if (_disposed) throw new ObjectDisposedException(nameof(MmsHostSessionService));
+                if (_hostToken != null) return (null, MatchmakingError.NetworkFailure);
+            }
+
+            var response = await MmsHttpClient.PostJsonAsync(
+                $"{_baseUrl}{MmsRoutes.Lobby}",
+                BuildSteamLobbyJson(steamLobbyId, isPublic, gameVersion)
+            );
+            if (!response.Success || response.Body == null)
+                return (null, response.Error);
+
+            return !TryActivateLobby(response.Body, "RegisterSteamLobby", out _, out var lobbyCode, out _)
+                ? (null, MatchmakingError.NetworkFailure)
+                : (lobbyCode, MatchmakingError.None);
+        } finally {
+            Interlocked.Exchange(ref _creationLock, 0);
+        }
     }
 
-    /// <summary>
-    /// Tears down the active lobby: stops the heartbeat timer, cancels UDP discovery,
-    /// closes the WebSocket connection, and sends a DELETE to MMS in the background.
-    /// Does nothing if no lobby is currently active.
-    /// </summary>
+    /// <summary>Stops session: heartbeat, discovery, and socket. Deletes lobby on MMS.</summary>
     public void CloseLobby() {
         (string token, string? lobbyId)? snapshot;
         lock (_sessionLock) {
             if (_hostToken == null) return;
             snapshot = SnapshotAndClearSessionUnsafe();
+            StopHeartbeat();
         }
 
-        StopHeartbeat();
         StopHostDiscoveryRefresh();
         _webSocket.Stop();
 
@@ -219,37 +227,41 @@ internal sealed class MmsHostSessionService {
 
     /// <summary>
     /// Starts the WebSocket connection that receives pending-client and punch events
-    /// from MMS. Requires an active lobby (<see cref="CreateLobbyAsync"/> must have
-    /// succeeded first).
+    /// from MMS. Requires an active lobby; logs an error and returns if no host token is available.
     /// </summary>
     public void StartWebSocketConnection() {
+        if (_disposed) throw new ObjectDisposedException(nameof(MmsHostSessionService));
+
         if (_hostToken == null) {
-            Logger.Error("MmsHostSessionService: cannot start WebSocket without a host token");
+            Logger.Error("MmsHostSessionService: cannot start WebSocket without a host token.");
             return;
         }
 
         _webSocket.Start(_hostToken);
     }
 
-    /// <summary>
-    /// Starts a background task that sends periodic UDP discovery packets to MMS
-    /// for the duration of <see cref="MmsProtocol.DiscoveryDurationSeconds"/>,
-    /// enabling MMS to learn this host's external IP and port for NAT hole-punching.
-    /// Any previously running refresh is stopped first.
-    /// Does nothing if <see cref="_discoveryHost"/> is <c>null</c>.
-    /// </summary>
+    /// <summary>Starts periodic background UDP discovery for external IP learning.</summary>
     /// <param name="hostDiscoveryToken">Session token sent inside each UDP packet.</param>
     /// <param name="sendRawAction">
     /// Callback that writes raw bytes through the caller's UDP socket to the given endpoint.
     /// </param>
     public void StartHostDiscoveryRefresh(string hostDiscoveryToken, Action<byte[], IPEndPoint> sendRawAction) {
+        if (_disposed) throw new ObjectDisposedException(nameof(MmsHostSessionService));
+
         if (_discoveryHost == null) return;
 
-        StopHostDiscoveryRefresh();
+        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(MmsProtocol.DiscoveryDurationSeconds));
 
-        _hostDiscoveryRefreshCts =
-            new CancellationTokenSource(TimeSpan.FromSeconds(MmsProtocol.DiscoveryDurationSeconds));
-        var cts = _hostDiscoveryRefreshCts;
+        var oldCts = Interlocked.Exchange(ref _hostDiscoveryRefreshCts, cts);
+        if (oldCts != null) {
+            try {
+                oldCts.Cancel();
+            } catch (ObjectDisposedException) {
+                /*ignored*/
+            }
+
+            oldCts.Dispose();
+        }
 
         MmsUtilities.RunBackground(
             RunHostDiscoveryRefreshAsync(hostDiscoveryToken, sendRawAction, cts),
@@ -261,12 +273,18 @@ internal sealed class MmsHostSessionService {
     /// <summary>
     /// Cancels the active UDP discovery refresh task, if any.
     /// Safe to call when no refresh is running.
-    /// Note: The CancellationTokenSource is not disposed here; disposal is deferred
-    /// to the finally block of RunHostDiscoveryRefreshAsync.
     /// </summary>
     public void StopHostDiscoveryRefresh() {
-        _hostDiscoveryRefreshCts?.Cancel();
-        _hostDiscoveryRefreshCts = null;
+        var cts = Interlocked.Exchange(ref _hostDiscoveryRefreshCts, null);
+        if (cts == null)
+            return;
+        try {
+            cts.Cancel();
+        } catch (ObjectDisposedException) {
+            /*ignored*/
+        }
+
+        cts.Dispose();
     }
 
     /// <summary>
@@ -282,19 +300,6 @@ internal sealed class MmsHostSessionService {
         $"\"{MmsFields.GameVersionRequest}\":\"{MmsUtilities.EscapeJsonString(gameVersion)}\"," +
         $"\"{MmsFields.LobbyTypeRequest}\":\"steam\"}}";
 
-    /// <summary>
-    /// Records the active lobby ID and host token, then starts the heartbeat timer.
-    /// </summary>
-    /// <param name="lobbyId">MMS lobby identifier.</param>
-    /// <param name="hostToken">Bearer token for authenticating subsequent MMS requests.</param>
-    private void ActivateLobby(string lobbyId, string hostToken) {
-        lock (_sessionLock) {
-            _hostToken = hostToken;
-            _currentLobbyId = lobbyId;
-        }
-
-        StartHeartbeat();
-    }
 
     /// <summary>
     /// Captures the current session token and lobby ID, then clears both fields.
@@ -307,16 +312,14 @@ internal sealed class MmsHostSessionService {
     /// at the moment of the snapshot.
     /// </returns>
     private (string token, string? lobbyId) SnapshotAndClearSessionUnsafe() {
+        System.Diagnostics.Debug.Assert(Monitor.IsEntered(_sessionLock));
         var snapshot = (_hostToken!, _currentLobbyId);
         _hostToken = null;
         _currentLobbyId = null;
         return snapshot;
     }
 
-    /// <summary>
-    /// Parses an MMS lobby-activation response and, on success, calls
-    /// <see cref="ActivateLobby"/> and logs the result.
-    /// </summary>
+    /// <summary>Validates and records lobby activation. Deletes if disposed mid-flight.</summary>
     /// <param name="response">Raw JSON response body from MMS.</param>
     /// <param name="operation">Human-readable operation name used in log messages.</param>
     /// <param name="lobbyName">Receives the lobby display name, or <c>null</c> on failure.</param>
@@ -338,21 +341,34 @@ internal sealed class MmsHostSessionService {
                 out lobbyCode,
                 out hostDiscoveryToken
             )) {
-            Logger.Error($"MmsHostSessionService: invalid {operation} response (length={response.Length})");
+            Logger.Error($"MmsHostSessionService: Invalid {operation} response (length={response.Length}).");
             return false;
         }
 
-        ActivateLobby(lobbyId!, hostToken!);
-        Logger.Info($"MmsHostSessionService: {operation} succeeded for lobby {lobbyCode}");
+        lock (_sessionLock) {
+            if (_disposed) {
+                _ = SafeDeleteLobbyAsync(hostToken!, lobbyId);
+                return false;
+            }
+
+            _hostToken = hostToken;
+            _currentLobbyId = lobbyId;
+            _heartbeatFailureCount = 0;
+            StartHeartbeat();
+        }
+
+        Logger.Info($"MmsHostSessionService: {operation} succeeded for lobby {lobbyCode}.");
         return true;
     }
 
     /// <summary>
     /// Stops any existing heartbeat timer and starts a new one that fires
     /// <see cref="SendHeartbeat"/> every <see cref="MmsProtocol.HeartbeatIntervalMs"/>.
+    /// IMPORTANT: Caller must hold _sessionLock.
     /// </summary>
     private void StartHeartbeat() {
         StopHeartbeat();
+        _heartbeatCts = new CancellationTokenSource();
         _heartbeatTimer = new Timer(
             SendHeartbeat, null, MmsProtocol.HeartbeatIntervalMs, MmsProtocol.HeartbeatIntervalMs
         );
@@ -360,34 +376,51 @@ internal sealed class MmsHostSessionService {
 
     /// <summary>
     /// Disposes the heartbeat timer. Safe to call when no timer is active.
+    /// IMPORTANT: Caller must hold _sessionLock.
     /// </summary>
     private void StopHeartbeat() {
         _heartbeatTimer?.Dispose();
         _heartbeatTimer = null;
+        if (_heartbeatCts == null)
+            return;
+        try {
+            _heartbeatCts.Cancel();
+        } catch (ObjectDisposedException) {
+            /*ignored*/
+        }
+
+        _heartbeatCts.Dispose();
+        _heartbeatCts = null;
     }
 
     /// <summary>
     /// Timer callback that POSTs the current connected-player count to the MMS
-    /// heartbeat endpoint. Fire-and-forget; failures are silently dropped.
+    /// heartbeat endpoint. Fire-and-forget with a continuation that tracks and logs consecutive failures.
+    /// Failures are not retried but are logged and tracked via a consecutive failure counter.
     /// </summary>
     /// <param name="state">Unused timer state; always <c>null</c>.</param>
     private void SendHeartbeat(object? state) {
         string? token;
+        CancellationToken cancellationToken;
         lock (_sessionLock) {
             token = _hostToken;
+            if (token == null || _heartbeatCts == null)
+                return;
+            cancellationToken = _heartbeatCts.Token;
         }
 
-        if (token == null) return;
-
+        var players = Interlocked.CompareExchange(ref _connectedPlayers, 0, 0);
         var heartbeatTask = MmsHttpClient.PostJsonAsync(
             $"{_baseUrl}{MmsRoutes.LobbyHeartbeat(token)}",
-            BuildHeartbeatJson(_connectedPlayers)
+            BuildHeartbeatJson(players)
         );
         heartbeatTask.ContinueWith(
             task => {
+                if (cancellationToken.IsCancellationRequested) return;
+
                 if (task.IsFaulted) {
                     var failures = Interlocked.Increment(ref _heartbeatFailureCount);
-                    Logger.Debug($"MmsHostSessionService: heartbeat send faulted ({failures} consecutive failures)");
+                    Logger.Debug($"MmsHostSessionService: heartbeat send faulted ({failures} consecutive failures).");
                     return;
                 }
 
@@ -398,7 +431,7 @@ internal sealed class MmsHostSessionService {
 
                 var rejectedFailures = Interlocked.Increment(ref _heartbeatFailureCount);
                 Logger.Debug(
-                    $"MmsHostSessionService: heartbeat rejected or failed ({rejectedFailures} consecutive failures)"
+                    $"MmsHostSessionService: heartbeat rejected or failed ({rejectedFailures} consecutive failures)."
                 );
             },
             TaskScheduler.Default
@@ -415,15 +448,11 @@ internal sealed class MmsHostSessionService {
 
     /// <summary>
     /// Backing task for <see cref="StartHostDiscoveryRefresh"/>. Runs
-    /// <see cref="UdpDiscoveryService.SendUntilCancelledAsync"/> and disposes
-    /// <paramref name="cts"/> when it completes, regardless of outcome.
+    /// <see cref="UdpDiscoveryService.SendUntilCancelledAsync"/>.
     /// </summary>
     /// <param name="hostDiscoveryToken">Token forwarded to <see cref="UdpDiscoveryService"/>.</param>
     /// <param name="sendRawAction">UDP send callback forwarded to <see cref="UdpDiscoveryService"/>.</param>
-    /// <param name="cts">
-    /// The <see cref="CancellationTokenSource"/> that governs this refresh's lifetime.
-    /// Disposed here after the task ends.
-    /// </param>
+    /// <param name="cts">The active cancellation token source.</param>
     private async Task RunHostDiscoveryRefreshAsync(
         string hostDiscoveryToken,
         Action<byte[], IPEndPoint> sendRawAction,
@@ -440,9 +469,13 @@ internal sealed class MmsHostSessionService {
                 cts.Token
             );
         } finally {
-            cts.Dispose();
-            if (ReferenceEquals(_hostDiscoveryRefreshCts, cts))
-                _hostDiscoveryRefreshCts = null;
+            // If StopHostDiscoveryRefresh or a new Start request was called concurrently,
+            // they will have already swapped out _hostDiscoveryRefreshCts and disposed this cts.
+            // CompareExchange checks if we still own it; if so, we clear the field and dispose it ourselves.
+            var currentCts = Interlocked.CompareExchange(ref _hostDiscoveryRefreshCts, null, cts);
+            if (ReferenceEquals(currentCts, cts)) {
+                cts.Dispose();
+            }
         }
     }
 
@@ -456,10 +489,22 @@ internal sealed class MmsHostSessionService {
     private async Task SafeDeleteLobbyAsync(string hostToken, string? lobbyId) {
         var response = await MmsHttpClient.DeleteAsync($"{_baseUrl}{MmsRoutes.LobbyDelete(hostToken)}");
         if (response.Success) {
-            Logger.Info($"MmsHostSessionService: closed lobby {lobbyId}");
+            Logger.Info($"MmsHostSessionService: closed lobby {lobbyId}.");
             return;
         }
 
-        Logger.Warn($"MmsHostSessionService: CloseLobby DELETE failed for lobby {lobbyId}");
+        Logger.Warn($"MmsHostSessionService: CloseLobby DELETE failed for lobby {lobbyId}.");
+    }
+
+    /// <summary>
+    /// Marks the service as disposed, prevents further lobby creation, and closes the active lobby if present.
+    /// </summary>
+    public void Dispose() {
+        Interlocked.Exchange(ref _creationLock, 1);
+        lock (_sessionLock) {
+            _disposed = true;
+        }
+
+        CloseLobby();
     }
 }

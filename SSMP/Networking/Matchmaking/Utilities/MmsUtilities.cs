@@ -10,15 +10,9 @@ using SSMP.Logging;
 
 namespace SSMP.Networking.Matchmaking.Utilities;
 
-/// <summary>
-/// General-purpose utility helpers shared across MMS components.
-/// All methods are stateless and free of side-effects.
-/// </summary>
+/// <summary>Stateless helpers for MMS protocol handling.</summary>
 internal static class MmsUtilities {
-    /// <summary>
-    /// Converts an HTTP or HTTPS URL to its WebSocket equivalent.
-    /// <c>http://</c> -> <c>ws://</c> and <c>https://</c> -> <c>wss://</c>.
-    /// </summary>
+    /// <summary>Converts http(s) to ws(s). Throws if not absolute.</summary>
     public static string ToWebSocketUrl(string httpUrl) {
         if (!Uri.TryCreate(httpUrl, UriKind.Absolute, out var uri))
             throw new ArgumentException("Matchmaking URL must be an absolute URI.", nameof(httpUrl));
@@ -33,31 +27,17 @@ internal static class MmsUtilities {
         return builder.Uri.AbsoluteUri.TrimEnd('/');
     }
 
-    /// <summary>
-    /// Returns the JSON literal for a boolean value: <c>"true"</c> or <c>"false"</c>.
-    /// </summary>
+    /// <summary>Returns JSON literal for boolean.</summary>
     public static string BoolToJson(bool value) => value ? "true" : "false";
 
-    /// <summary>
-    /// Observes a fire-and-forget task and logs unexpected failures.
-    /// </summary>
+    /// <summary>Logs unexpected failures in fire-and-forget task.</summary>
     /// <param name="task">The task to monitor.</param>
     /// <param name="owner">Component name included in failure logs.</param>
     /// <param name="operationName">Human-readable operation label for diagnostics.</param>
-    public static void RunBackground(Task task, string owner, string operationName) =>
-        _ = ObserveAsync(task, owner, operationName);
+    public static Task RunBackground(Task task, string owner, string operationName) =>
+        ObserveAsync(task, owner, operationName);
 
-    /// <summary>
-    /// Reads one complete text message from a <see cref="ClientWebSocket"/>, assembling fragmented frames.
-    /// </summary>
-    /// <param name="socket">The connected client WebSocket to read from.</param>
-    /// <param name="cancellationToken">Cancellation token for the receive loop.</param>
-    /// <param name="maxMessageBytes">Maximum allowed payload size before the read fails.</param>
-    /// <returns>
-    /// A tuple containing the terminal frame type and the decoded text payload.
-    /// Non-text messages and close frames return <see langword="null"/> as the payload.
-    /// </returns>
-    /// <exception cref="InvalidOperationException">Thrown if the assembled message exceeds <paramref name="maxMessageBytes"/>.</exception>
+    /// <summary>Assembles text frames from WebSocket. Returns null payload for non-text/close.</summary>
     public static async Task<(WebSocketMessageType messageType, string? message)> ReceiveTextMessageAsync(
         ClientWebSocket socket,
         CancellationToken cancellationToken,
@@ -88,14 +68,7 @@ internal static class MmsUtilities {
         }
     }
 
-    /// <summary>
-    /// Determines the local machine's outbound IPv4 address by connecting a
-    /// disposable UDP socket to a known external address. Does not transmit any data.
-    /// </summary>
-    /// <returns>
-    /// The local IP address as a string, or <c>null</c> if the address could not
-    /// be determined (e.g. no network interface available).
-    /// </returns>
+    /// <summary>Deterministically identifies outbound IPv4 via dummy UDP connect.</summary>
     public static string? GetLocalIpAddress() {
         try {
             using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, 0);

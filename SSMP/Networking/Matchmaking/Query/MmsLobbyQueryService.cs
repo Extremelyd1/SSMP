@@ -9,33 +9,17 @@ using SSMP.Networking.Matchmaking.Utilities;
 
 namespace SSMP.Networking.Matchmaking.Query;
 
-/// <summary>
-/// Handles non-host MMS queries: joining an existing lobby, browsing public lobbies,
-/// and probing server compatibility before attempting matchmaking.
-/// </summary>
+/// <summary>Non-host queries: joining, browsing public lobbies, and health/version probes.</summary>
 internal sealed class MmsLobbyQueryService {
     /// <summary>Base HTTP URL of the MMS server (e.g. <c>https://mms.example.com</c>).</summary>
     private readonly string _baseUrl;
-
-    /// <summary>
-    /// Initializes a new <see cref="MmsLobbyQueryService"/>.
-    /// </summary>
-    /// <param name="baseUrl">Base HTTP URL of the MMS server.</param>
+    
+    /// <summary>Initializes a new <see cref="MmsLobbyQueryService"/>.</summary>
     public MmsLobbyQueryService(string baseUrl) {
         _baseUrl = baseUrl;
     }
 
-    /// <summary>
-    /// Sends a join request for <paramref name="lobbyId"/> to MMS, advertising
-    /// the client's local UDP port so MMS can facilitate NAT hole-punching.
-    /// </summary>
-    /// <param name="lobbyId">The MMS lobby identifier to join.</param>
-    /// <param name="clientPort">The local UDP port this client is listening on.</param>
-    /// <returns>
-    /// A <see cref="JoinLobbyResult"/> containing the lobby type, connection data,
-    /// and join ID needed for the subsequent WebSocket rendezvous, or <c>null</c>
-    /// if the request failed or the response could not be parsed.
-    /// </returns>
+    /// <summary>Sends join request with local UDP port for NAT mapping.</summary>
     public async Task<(JoinLobbyResult? result, MatchmakingError error)>
         JoinLobbyAsync(string lobbyId, int clientPort) {
         var response = await MmsHttpClient.PostJsonAsync(
@@ -51,19 +35,7 @@ internal sealed class MmsLobbyQueryService {
             : (result, MatchmakingError.None);
     }
 
-    /// <summary>
-    /// Retrieves the list of currently open public lobbies from MMS, optionally
-    /// filtered by lobby type.
-    /// </summary>
-    /// <param name="lobbyType">
-    /// When non-<c>null</c>, restricts results to lobbies of the specified
-    /// <see cref="PublicLobbyType"/>. When <c>null</c>, all public lobbies are returned.
-    /// Matchmaking lobbies are additionally filtered by <see cref="MmsProtocol.CurrentVersion"/>.
-    /// </param>
-    /// <returns>
-    /// A list of <see cref="PublicLobbyInfo"/> entries, or <c>null</c> if the
-    /// request failed or the response could not be parsed.
-    /// </returns>
+    /// <summary>Retrieves public lobbies, filtered by type and protocol version.</summary>
     public async Task<(List<PublicLobbyInfo>? lobbies, MatchmakingError error)> GetPublicLobbiesAsync(
         PublicLobbyType? lobbyType = null
     ) {
@@ -82,32 +54,7 @@ internal sealed class MmsLobbyQueryService {
         return (MmsResponseParser.ParsePublicLobbies(response.Body), MatchmakingError.None);
     }
 
-    /// <summary>
-    /// Probes the MMS server's health endpoint to verify that the client and server
-    /// are running a compatible protocol version.
-    /// </summary>
-    /// <returns>
-    /// A tuple of:
-    /// <list type="bullet">
-    ///   <item>
-    ///     <term><c>isCompatible</c></term>
-    ///     <description>
-    ///       <c>true</c> if the server version matches <see cref="MmsProtocol.CurrentVersion"/>;
-    ///       <c>false</c> if a version mismatch was detected;
-    ///       <c>null</c> if the server could not be reached or returned an unparseable response.
-    ///     </description>
-    ///   </item>
-    ///   <item>
-    ///     <term><c>error</c></term>
-    ///     <description>
-    ///       <see cref="MatchmakingError.None"/> on success;
-    ///       Passes through the underlying <see cref="MatchmakingError"/> if the server could not be reached;
-    ///       <see cref="MatchmakingError.NetworkFailure"/> if the response lacked a valid version field;
-    ///       <see cref="MatchmakingError.UpdateRequired"/> if the protocol versions differ.
-    ///     </description>
-    ///   </item>
-    /// </list>
-    /// </returns>
+    /// <summary>Probes server health and protocol compatibility.</summary>
     public async Task<(bool? isCompatible, MatchmakingError error)> ProbeMatchmakingCompatibilityAsync() {
         var response = await MmsHttpClient.GetAsync($"{_baseUrl}{MmsRoutes.Root}");
         if (!response.Success || response.Body == null)

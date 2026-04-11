@@ -5,47 +5,14 @@ using SSMP.Networking.Matchmaking.Protocol;
 
 namespace SSMP.Networking.Matchmaking.Parsing;
 
-/// <summary>
-/// Parses raw MMS JSON response bodies into typed matchmaking models.
-/// All methods are allocation-minimal where possible, operating on
-/// <see cref="ReadOnlySpan{T}"/> slices via <see cref="MmsJsonParser"/>.
-/// </summary>
+/// <summary>Typed models parser for MMS JSON. Minimal allocations via <see cref="ReadOnlySpan{T}"/>.</summary>
 internal static class MmsResponseParser {
     /// <summary>
     /// Lookup key for scanning lobby object boundaries.
     /// </summary>
     private const string ConnectionDataKey = $"\"{MmsFields.ConnectionData}\":";
 
-    /// <summary>
-    /// Parses a lobby creation or Steam-lobby registration response into the
-    /// fields required to activate a host session.
-    /// </summary>
-    /// <param name="response">Raw JSON response body from the MMS <c>/lobby</c> endpoint.</param>
-    /// <param name="lobbyId">
-    /// Receives the lobby's connection data string (used internally as the lobby ID),
-    /// or <c>null</c> if absent.
-    /// </param>
-    /// <param name="hostToken">
-    /// Receives the bearer token used to authenticate subsequent heartbeat and delete
-    /// requests, or <c>null</c> if absent.
-    /// </param>
-    /// <param name="lobbyName">
-    /// Receives the human-readable lobby display name, or <c>null</c> if absent.
-    /// </param>
-    /// <param name="lobbyCode">
-    /// Receives the short alphanumeric join code shown to players, or <c>null</c> if absent.
-    /// </param>
-    /// <param name="hostDiscoveryToken">
-    /// Receives the UDP discovery token sent during NAT hole-punch mapping,
-    /// or <c>null</c> if the server did not include one (e.g. for Steam lobbies).
-    /// </param>
-    /// <returns>
-    /// <c>true</c> if all required fields (<paramref name="lobbyId"/>,
-    /// <paramref name="hostToken"/>, <paramref name="lobbyName"/>, and
-    /// <paramref name="lobbyCode"/>) were present; <c>false</c> otherwise.
-    /// Note that <paramref name="hostDiscoveryToken"/> being <c>null</c> does not
-    /// cause a failure.
-    /// </returns>
+    /// <summary>Parses lobby activation fields. Returns true if core fields present.</summary>
     public static bool TryParseLobbyActivation(
         string response,
         out string? lobbyId,
@@ -80,23 +47,7 @@ internal static class MmsResponseParser {
             : BuildJoinLobbyResult(span, connectionData!, lobbyType);
     }
 
-    /// <summary>
-    /// Parses the public lobby list response from the MMS <c>/lobbies</c> endpoint.
-    /// Entries are extracted by scanning for successive <c>"connectionData"</c> keys,
-    /// treating each occurrence as the start of a new lobby object.
-    /// Entries missing <c>connectionData</c> or <c>name</c> are silently skipped.
-    /// An unrecognised <c>lobbyType</c> defaults to <see cref="PublicLobbyType.Matchmaking"/>.
-    /// </summary>
-    /// <param name="response">Raw JSON response body containing a JSON array of lobby objects.</param>
-    /// <returns>
-    /// A list of <see cref="PublicLobbyInfo"/> entries. Returns an empty list if the
-    /// response contains no parseable lobbies.
-    /// </returns>
-    /// <remarks>
-    /// Lobby objects are limited by scanning for successive <c>"connectionData":</c> keys.
-    /// This assumes <c>connectionData</c> is the first field in each lobby object and that
-    /// no other field values contain the literal string <c>"connectionData":</c>.
-    /// </remarks>
+    /// <summary>Scans JSON array for lobby objects by "connectionData" key boundaries.</summary>
     public static List<PublicLobbyInfo> ParsePublicLobbies(string response) {
         var result = new List<PublicLobbyInfo>();
         var span = response.AsSpan();
@@ -114,18 +65,7 @@ internal static class MmsResponseParser {
         return result;
     }
 
-    /// <summary>
-    /// Parses the <c>start_punch</c> WebSocket message received during the join
-    /// rendezvous phase, extracting the host endpoint and the scheduled punch start time.
-    /// </summary>
-    /// <param name="span">
-    /// A <see cref="ReadOnlySpan{T}"/> over the raw UTF-8 decoded message text.
-    /// </param>
-    /// <returns>
-    /// A <see cref="MatchmakingJoinStartResult"/> containing the host IP, port, and
-    /// Unix-millisecond start timestamp, or <c>null</c> if any required field
-    /// (<c>hostIp</c>, <c>hostPort</c>, <c>startTimeMs</c>) is missing or unparseable.
-    /// </returns>
+    /// <summary>Parses punch start payload. Returns null if required fields missing.</summary>
     public static MatchmakingJoinStartResult? ParseStartPunch(ReadOnlySpan<char> span) {
         return !TryExtractPunchFields(span, out var hostIp, out var hostPort, out var startTimeMs)
             ? null

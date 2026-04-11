@@ -10,11 +10,7 @@ using SSMP.Networking.Matchmaking.Utilities;
 
 namespace SSMP.Networking.Matchmaking.Join;
 
-/// <summary>
-/// Coordinates the client-side MMS matchmaking flow over a WebSocket connection.
-/// Drives UDP mapping refresh when instructed by the server and returns the
-/// synchronized punch-start data needed to begin NAT hole-punching.
-/// </summary>
+/// <summary>Client-side matchmaking coordinator. Drives UDP mapping and awaits hole-punch signals.</summary>
 internal sealed class MmsJoinCoordinator {
     /// <summary>Base HTTP URL of the MMS server (e.g. <c>https://mms.example.com</c>).</summary>
     private readonly string _baseUrl;
@@ -63,34 +59,7 @@ internal sealed class MmsJoinCoordinator {
         }
     }
 
-    /// <summary>
-    /// Connects to the MMS join WebSocket for <paramref name="joinId"/>, processes
-    /// server-driven UDP mapping messages, and returns the punch-start payload once
-    /// the server signals it is time to begin hole-punching.
-    /// <para>
-    /// The method drives the following server message sequence:
-    /// <list type="bullet">
-    ///   <item><term><c>begin_client_mapping</c></term><description>Starts (or restarts) UDP discovery with the supplied client token.</description></item>
-    ///   <item><term><c>client_mapping_received</c></term><description>Stops the active UDP discovery task.</description></item>
-    ///   <item><term><c>start_punch</c></term><description>Stops discovery, parses the punch payload, waits until the scheduled start time, then returns.</description></item>
-    ///   <item><term><c>join_failed</c></term><description>Invokes <paramref name="onJoinFailed"/> with the server reason and returns <c>null</c>.</description></item>
-    /// </list>
-    /// </para>
-    /// </summary>
-    /// <param name="joinId">Unique identifier for this join attempt, used to build the WebSocket URL.</param>
-    /// <param name="sendRawAction">
-    /// Callback that writes raw bytes through the caller's UDP socket to the given endpoint.
-    /// Forwarded to <see cref="UdpDiscoveryService"/> during the mapping phase.
-    /// </param>
-    /// <param name="onJoinFailed">
-    /// Invoked with a human-readable reason string whenever the join attempt fails
-    /// (timeout, server rejection, or WebSocket error). Never invoked on success.
-    /// </param>
-    /// <param name="cancellationToken">Cancellation token that allows backing out of matchmaking mid-flow.</param>
-    /// <returns>
-    /// A <see cref="MatchmakingJoinStartResult"/> containing peer address and timing
-    /// information, or <c>null</c> if the attempt failed or timed out.
-    /// </returns>
+    /// <summary>Connects to join WebSocket and drives server-directed UDP mapping flow.</summary>
     public async Task<MatchmakingJoinStartResult?> CoordinateAsync(
         string joinId,
         Action<byte[], IPEndPoint> sendRawAction,
@@ -124,13 +93,7 @@ internal sealed class MmsJoinCoordinator {
         return null;
     }
 
-    /// <summary>
-    /// Connects <paramref name="socket"/> to the MMS join WebSocket URL for
-    /// <paramref name="joinId"/>.
-    /// </summary>
-    /// <param name="socket">The WebSocket client to connect.</param>
-    /// <param name="joinId">Join session ID appended to the WebSocket path.</param>
-    /// <param name="ct">Cancellation token; typically the session timeout.</param>
+    /// <summary>Connects <paramref name="socket"/> to the MMS join WebSocket URL.</summary>
     private async Task ConnectAsync(ClientWebSocket socket, string joinId, CancellationToken ct) {
         var wsUrl =
             $"{MmsUtilities.ToWebSocketUrl(_baseUrl)}{MmsRoutes.JoinWebSocket(joinId)}" +
@@ -139,20 +102,7 @@ internal sealed class MmsJoinCoordinator {
         await socket.ConnectAsync(new Uri(wsUrl), ct);
     }
 
-    /// <summary>
-    /// Reads text frames from <paramref name="socket"/> and dispatches each to
-    /// <see cref="HandleMessage"/> until the connection closes, the timeout fires,
-    /// or a terminal action (<c>start_punch</c> or <c>join_failed</c>) is received.
-    /// </summary>
-    /// <param name="socket">The connected WebSocket client.</param>
-    /// <param name="timeoutCts">Cancellation source governing the overall session timeout.</param>
-    /// <param name="sendRaw">UDP send callback forwarded to discovery tasks.</param>
-    /// <param name="discovery">Mutable holder for the active discovery CTS.</param>
-    /// <param name="onJoinFailed">Failure callback invoked when the server sends a terminal rejection reason.</param>
-    /// <returns>
-    /// A <see cref="MatchmakingJoinStartResult"/> if <c>start_punch</c> was received
-    /// and parsed successfully; <c>null</c> if the loop ended without a result.
-    /// </returns>
+    /// <summary>Reads WebSocket frames until terminal signal or timeout.</summary>
     private async Task<MatchmakingJoinStartResult?> RunMessageLoopAsync(
         ClientWebSocket socket,
         CancellationTokenSource timeoutCts,
@@ -183,20 +133,7 @@ internal sealed class MmsJoinCoordinator {
         return null;
     }
 
-    /// <summary>
-    /// Extracts the <c>action</c> field from <paramref name="message"/> and routes
-    /// it to the appropriate handler. Returns a result tuple indicating whether
-    /// the loop should terminate.
-    /// </summary>
-    /// <param name="message">Decoded UTF-8 text frame from MMS.</param>
-    /// <param name="timeoutCts">Session timeout source, passed through to <c>start_punch</c> handling.</param>
-    /// <param name="sendRaw">UDP send callback, passed through to <c>begin_client_mapping</c> handling.</param>
-    /// <param name="discovery">Mutable holder for the active discovery CTS.</param>
-    /// <param name="onJoinFailed">Failure callback invoked when the message encodes a terminal join failure.</param>
-    /// <returns>
-    /// <c>(true, result)</c> when the loop should exit and return the parsed result;
-    /// <c>(false, null)</c> to continue reading.
-    /// </returns>
+    /// <summary>Routes message actions to handlers.</summary>
     private async Task<(bool hasResult, MatchmakingJoinStartResult? result)> HandleMessage(
         string message,
         CancellationTokenSource timeoutCts,
@@ -231,13 +168,7 @@ internal sealed class MmsJoinCoordinator {
         return (false, null);
     }
 
-    /// <summary>
-    /// Handles a <c>begin_client_mapping</c> message by extracting the client
-    /// discovery token and restarting the UDP discovery task.
-    /// </summary>
-    /// <param name="message">Raw message text containing the <c>clientDiscoveryToken</c> field.</param>
-    /// <param name="sendRaw">UDP send callback forwarded to the new discovery task.</param>
-    /// <param name="discovery">Updated with the new discovery CTS.</param>
+    /// <summary>Restarts UDP discovery with new token.</summary>
     private void RestartDiscovery(
         string message,
         Action<byte[], IPEndPoint> sendRaw,
@@ -248,18 +179,7 @@ internal sealed class MmsJoinCoordinator {
         discovery.Cts = StartDiscovery(token, sendRaw);
     }
 
-    /// <summary>
-    /// Handles a <c>start_punch</c> message by cancelling discovery, parsing the
-    /// punch payload, and waiting until the scheduled start time.
-    /// </summary>
-    /// <param name="message">Raw message text containing the punch payload fields.</param>
-    /// <param name="timeoutCts">Used as the cancellation token for the start-time delay.</param>
-    /// <param name="discovery">Cancelled immediately on entry.</param>
-    /// <param name="onJoinFailed">Invoked if payload parsing fails.</param>
-    /// <returns>
-    /// The parsed <see cref="MatchmakingJoinStartResult"/>, or <c>null</c> if the
-    /// payload could not be parsed.
-    /// </returns>
+    /// <summary>Stops discovery, parses payload, and delays until <paramref name="message"/> start time.</summary>
     private static async Task<MatchmakingJoinStartResult?> HandleStartPunchAsync(
         string message,
         CancellationTokenSource timeoutCts,

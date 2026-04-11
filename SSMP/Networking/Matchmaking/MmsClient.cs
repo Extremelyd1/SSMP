@@ -12,25 +12,14 @@ using SSMP.Networking.Matchmaking.Utilities;
 
 namespace SSMP.Networking.Matchmaking;
 
-/// <summary>
-/// High-level facade for MatchMaking Service (MMS) operations.
-/// Keeps the existing public surface stable while delegating work to focused collaborators.
-///
-/// Core collaborators:
-/// <list type="bullet">
-///   <item><see cref="MmsHostSessionService"/> for host lifecycle</item>
-///   <item><see cref="MmsLobbyQueryService"/> for query/read operations</item>
-///   <item><see cref="MmsJoinCoordinator"/> for client join rendezvous</item>
-/// </list>
-/// </summary>
+/// <summary>Public entry point for MMS coordination. Delegates to specialized services.</summary>
 internal sealed class MmsClient {
     private readonly MmsHostSessionService _hostSession;
     private readonly MmsLobbyQueryService _queries;
     private readonly MmsJoinCoordinator _joinCoordinator;
-    private MatchmakingError _lastError = MatchmakingError.None;
 
-    /// <summary>The last matchmaking error from the most recent operation.</summary>
-    public MatchmakingError LastMatchmakingError => _lastError;
+    /// <summary>Last error from most recent operation.</summary>
+    public MatchmakingError LastMatchmakingError { get; private set; } = MatchmakingError.None;
 
     /// <inheritdoc cref="MmsHostSessionService.RefreshHostMappingRequested"/>
     public event Action<string, string, long>? RefreshHostMappingRequested {
@@ -73,16 +62,10 @@ internal sealed class MmsClient {
         _joinCoordinator = joinCoordinator ?? new MmsJoinCoordinator(normalizedBaseUrl, discoveryHost);
     }
 
-    /// <summary>
-    /// Updates the number of connected remote players.
-    /// Immediately sends a heartbeat if the count changed and a lobby is active,
-    /// so MMS can clear stale host mappings as soon as the last player disconnects.
-    /// </summary>
+    /// <summary>Updates connected players; triggers heartbeat if count changes.</summary>
     public void SetConnectedPlayers(int count) => _hostSession.SetConnectedPlayers(count);
 
-    /// <summary>
-    /// Creates a new lobby on MMS and starts the heartbeat and host WebSocket.
-    /// </summary>
+    /// <summary>Creates lobby and starts host services.</summary>
     /// <returns>Lobby code, lobby name, and host discovery token; all null on failure.</returns>
     public async Task<(string? lobbyCode, string? lobbyName, string? hostDiscoveryToken)> CreateLobbyAsync(
         int hostPort,
@@ -92,13 +75,11 @@ internal sealed class MmsClient {
     ) {
         ClearErrors();
         var result = await _hostSession.CreateLobbyAsync(hostPort, isPublic, gameVersion, lobbyType);
-        _lastError = result.error;
+        LastMatchmakingError = result.error;
         return result.result;
     }
 
-    /// <summary>
-    /// Registers an existing Steam lobby with MMS for discovery.
-    /// </summary>
+    /// <summary>Registers existing Steam lobby for discovery.</summary>
     /// <returns>MMS lobby code, or null on failure.</returns>
     public async Task<string?> RegisterSteamLobbyAsync(
         string steamLobbyId,
@@ -107,26 +88,22 @@ internal sealed class MmsClient {
     ) {
         ClearErrors();
         var result = await _hostSession.RegisterSteamLobbyAsync(steamLobbyId, isPublic, gameVersion);
-        _lastError = result.error;
+        LastMatchmakingError = result.error;
         return result.lobbyCode;
     }
 
-    /// <summary>Closes the active lobby and deregisters it from MMS.</summary>
+    /// <summary>Closes active lobby and deregisters from MMS.</summary>
     public void CloseLobby() => _hostSession.CloseLobby();
 
-    /// <summary>Looks up lobby join details from MMS.</summary>
+    /// <summary>Retrieves join details from MMS.</summary>
     public async Task<JoinLobbyResult?> JoinLobbyAsync(string lobbyId, int clientPort) {
         ClearErrors();
         var result = await _queries.JoinLobbyAsync(lobbyId, clientPort);
-        _lastError = result.error;
+        LastMatchmakingError = result.error;
         return result.result;
     }
 
-    /// <summary>
-    /// Drives the client-side matchmaking WebSocket handshake.
-    /// Sends UDP discovery packets to establish the NAT mapping, then waits
-    /// for MMS to signal when both sides should begin simultaneous hole-punch.
-    /// </summary>
+    /// <summary>Drives UDP discovery and WebSocket hole-punch signal wait.</summary>
     public async Task<MatchmakingJoinStartResult?> CoordinateMatchmakingJoinAsync(
         string joinId,
         Action<byte[], IPEndPoint> sendRawAction,
@@ -136,48 +113,30 @@ internal sealed class MmsClient {
         return await _joinCoordinator.CoordinateAsync(joinId, sendRawAction, SetJoinFailed, cancellationToken);
     }
 
-    /// <summary>
-    /// Fetches a list of public lobbies from MMS.
-    /// </summary>
+    /// <summary>Fetches public lobbies from MMS.</summary>
     public async Task<List<PublicLobbyInfo>?> GetPublicLobbiesAsync(PublicLobbyType? lobbyType = null) {
         ClearErrors();
         var result = await _queries.GetPublicLobbiesAsync(lobbyType);
-        _lastError = result.error;
+        LastMatchmakingError = result.error;
         return result.lobbies;
     }
 
-    /// <summary>
-    /// Contacts MMS and verifies that its advertised matchmaking protocol version
-    /// matches the client's expected version.
-    /// </summary>
-    /// <returns>
-    /// <see langword="true"/> when MMS is reachable and compatible,
-    /// <see langword="false"/> when MMS is reachable but requires an update,
-    /// or <see langword="null"/> when MMS could not be contacted.
-    /// </returns>
+    /// <summary>Checks server reaching and version compatibility.</summary>
     public async Task<bool?> ProbeMatchmakingCompatibilityAsync() {
         ClearErrors();
         var (isCompatible, error) = await _queries.ProbeMatchmakingCompatibilityAsync();
-        _lastError = error;
+        LastMatchmakingError = error;
         return isCompatible;
     }
 
-    /// <summary>
-    /// Starts the WebSocket listener for host push events (pending clients / start-punch).
-    /// Must be called after creating a lobby.
-    /// </summary>
+    /// <summary>Starts host push event listener. Call after creating lobby.</summary>
     public void StartWebSocketConnection() => _hostSession.StartWebSocketConnection();
 
-    /// <summary>
-    /// Fires off a background UDP discovery refresh for the given host token.
-    /// Runs for up to <see cref="MmsProtocol.DiscoveryDurationSeconds"/> seconds.
-    /// </summary>
+    /// <summary>Triggers background UDP discovery refresh for given token.</summary>
     public void StartHostDiscoveryRefresh(string hostDiscoveryToken, Action<byte[], IPEndPoint> sendRawAction) =>
         _hostSession.StartHostDiscoveryRefresh(hostDiscoveryToken, sendRawAction);
 
-    /// <summary>
-    /// Stops the active host discovery refresh loop, if one is running.
-    /// </summary>
+    /// <summary>Stops active host discovery refresh loop.</summary>
     public void StopHostDiscoveryRefresh() => _hostSession.StopHostDiscoveryRefresh();
 
     /// <summary>
@@ -185,13 +144,13 @@ internal sealed class MmsClient {
     /// </summary>
     private void SetJoinFailed(string reason) {
         Logger.Warn($"MmsClient: matchmaking join failed – {reason}");
-        _lastError = MatchmakingError.JoinFailed;
+        LastMatchmakingError = MatchmakingError.JoinFailed;
     }
 
     /// <summary>
     /// Clears the internal and HTTP error states.
     /// </summary>
     private void ClearErrors() {
-        _lastError = MatchmakingError.None;
+        LastMatchmakingError = MatchmakingError.None;
     }
 }

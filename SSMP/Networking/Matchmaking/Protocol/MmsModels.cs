@@ -1,8 +1,6 @@
 namespace SSMP.Networking.Matchmaking.Protocol;
 
-/// <summary>
-/// Constants and configuration for the MatchMaking Service (MMS) protocol.
-/// </summary>
+/// <summary>MatchMaking Service (MMS) protocol constants.</summary>
 internal static class MmsProtocol {
     /// <summary>The current version of the matchmaking protocol.</summary>
     public const int CurrentVersion = 1;
@@ -29,9 +27,7 @@ internal static class MmsProtocol {
     public const int DiscoveryIntervalMs = 500;
 }
 
-/// <summary>
-/// Represents errors that can occur during matchmaking operations.
-/// </summary>
+/// <summary>Matchmaking error classification.</summary>
 internal enum MatchmakingError {
     /// <summary>No error.</summary>
     None,
@@ -46,9 +42,7 @@ internal enum MatchmakingError {
     NetworkFailure
 }
 
-/// <summary>
-/// Defines the types of lobbies supported by MMS.
-/// </summary>
+/// <summary>Supported MMS lobby subtypes.</summary>
 public enum PublicLobbyType {
     /// <summary>Standalone matchmaking through MMS.</summary>
     Matchmaking,
@@ -57,9 +51,7 @@ public enum PublicLobbyType {
     Steam
 }
 
-/// <summary>
-/// Result of a successful lobby join request.
-/// </summary>
+/// <summary>Lobby join request metadata.</summary>
 internal sealed class JoinLobbyResult {
     /// <summary>The connection string for the lobby (e.g. "IP:Port" or Steam ID).</summary>
     public required string ConnectionData { get; init; }
@@ -74,9 +66,7 @@ internal sealed class JoinLobbyResult {
     public string? JoinId { get; init; }
 }
 
-/// <summary>
-/// Result of a matchmaking join coordination.
-/// </summary>
+/// <summary>NAT hole-punch peer data and synchronized start time.</summary>
 internal sealed class MatchmakingJoinStartResult {
     /// <summary>The resolved public IP of the host.</summary>
     public required string HostIp { get; init; }
@@ -88,9 +78,7 @@ internal sealed class MatchmakingJoinStartResult {
     public required long StartTimeMs { get; init; }
 }
 
-/// <summary>
-/// Public lobby information for the lobby browser.
-/// </summary>
+/// <summary>Registry entry for the lobby browser.</summary>
 /// <param name="ConnectionData"> The connection string for the lobby (e.g. "IP:Port" or Steam ID). </param>
 /// <param name="Name"> The display name of the lobby. </param>
 /// <param name="LobbyType"> The type of the lobby (e.g. Matchmaking or Steam). </param>

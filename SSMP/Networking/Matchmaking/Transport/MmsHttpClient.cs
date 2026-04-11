@@ -8,11 +8,7 @@ using SSMP.Networking.Matchmaking.Protocol;
 
 namespace SSMP.Networking.Matchmaking.Transport;
 
-/// <summary>
-/// Thin HTTP transport layer for MMS API calls.
-/// Owns a single shared <see cref="HttpClient"/> instance for connection-pool reuse
-/// and surfaces typed success/error results to callers.
-/// </summary>
+/// <summary>HTTP transport for MMS; shared <see cref="HttpClient"/> for pool reuse.</summary>
 internal static class MmsHttpClient {
     /// <summary>Shared HTTP client instance for connection pooling.</summary>
     private static readonly HttpClient Http = CreateHttpClient();
@@ -58,14 +54,7 @@ internal static class MmsHttpClient {
         }
     }
 
-    /// <summary>
-    /// Performs a DELETE request.
-    /// </summary>
-    /// <remarks>
-    /// Returns per-call HTTP metadata and matchmaking error classification for both
-    /// successful and failed requests. Transport failures are reported as
-    /// <see cref="MatchmakingError.NetworkFailure"/> without throwing.
-    /// </remarks>
+    /// <summary>Returns HTTP metadata and classified matchmaking errors without throwing.</summary>
     public static async Task<MmsHttpResponse> DeleteAsync(string url) {
         try {
             using var response = await Http.DeleteAsync(url);

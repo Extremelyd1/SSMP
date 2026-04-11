@@ -9,22 +9,12 @@ using SSMP.Networking.Matchmaking.Protocol;
 
 namespace SSMP.Networking.Matchmaking.Join;
 
-/// <summary>
-/// Sends periodic UDP packets carrying a discovery token to the MMS discovery port.
-/// MMS uses the incoming packets to learn the sender's external IP and port,
-/// which it then shares with the peer to enable NAT hole-punching.
-/// </summary>
+/// <summary>Sends UDP discovery pulses to learn external IP/port for NAT hole-punching.</summary>
 internal static class UdpDiscoveryService {
-    /// <summary>
-    /// The expected length of the discovery token in bytes. 
-    /// This corresponds to a 32-character hexadecimal UUID.
-    /// </summary>
+    /// <summary>Expected discovery token length in bytes.</summary>
     private const int ExpectedTokenByteLength = 32;
 
-    /// <summary>
-    /// Resolves the MMS discovery endpoint and sends token bytes every
-    /// <see cref="MmsProtocol.DiscoveryIntervalMs"/> until cancellation.
-    /// </summary>
+    /// <summary>Resolves endpoint and sends token pulses until cancellation.</summary>
     public static async Task SendUntilCancelledAsync(
         string discoveryHost,
         string token,

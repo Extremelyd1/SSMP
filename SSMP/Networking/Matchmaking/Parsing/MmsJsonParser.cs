@@ -7,24 +7,12 @@ using SSMP.Networking.Matchmaking.Utilities;
 
 namespace SSMP.Networking.Matchmaking.Parsing;
 
-/// <summary>
-/// Lightweight JSON helpers for reading and writing MMS API payloads.
-/// These avoid a full JSON library dependency and are intentionally simple:
-/// they assume well-formed server responses and handle only the small set
-/// of value types (quoted strings, integers) that MMS actually returns.
-/// </summary>
+/// <summary>Minimal JSON reader/writer for MMS payloads. Assumes well-formed input; supports strings and numbers.</summary>
 internal static class MmsJsonParser {
     /// <summary>Shared pool for minimizing character buffer allocations.</summary>
     private static readonly ArrayPool<char> CharPool = ArrayPool<char>.Shared;
 
-    /// <summary>
-    /// Finds <c>"key":value</c> in <paramref name="json"/> and returns the value as a string.
-    /// Supports both quoted string values and unquoted numeric values.
-    /// Returns <c>null</c> when the key is absent.
-    /// </summary>
-    /// <param name="json">The JSON span to search.</param>
-    /// <param name="key">The key to find.</param>
-    /// <returns>The extracted value or <c>null</c>.</returns>
+    /// <summary>Extracts quoted string or unquoted numeric value for <paramref name="key"/>.</summary>
     public static string? ExtractValue(ReadOnlySpan<char> json, string key) {
         Span<char> searchKey = stackalloc char[key.Length + 2];
         searchKey[0] = '"';
@@ -64,21 +52,7 @@ internal static class MmsJsonParser {
         return null;
     }
 
-    /// <summary>
-    /// Writes the CreateLobby JSON payload into a rented char buffer.
-    /// Returns the number of characters written.
-    /// The caller must return the buffer to <see cref="ArrayPool{T}.Shared"/> after use.
-    /// </summary>
-    /// <param name="port">The host port.</param>
-    /// <param name="isPublic">Whether the lobby is public.</param>
-    /// <param name="gameVersion">The game version string.</param>
-    /// <param name="lobbyType">The type of the lobby.</param>
-    /// <param name="hostLanIp">Optional local IP address.</param>
-    /// <returns>A tuple containing the buffer and the number of characters written.</returns>
-    /// <remarks>
-    /// The <c>HostLanIp</c> field is serialized as <c>"ip:port"</c> (a socket address)
-    /// because the MMS server expects both values combined in a single string field.
-    /// </remarks>
+    /// <summary>Writes CreateLobby JSON to rented buffer. Caller MUST return buffer to pool.</summary>
     public static (char[] buffer, int length) FormatCreateLobbyJson(
         int port,
         bool isPublic,
