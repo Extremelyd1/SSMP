@@ -1,6 +1,7 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading.Tasks;
 using System.Threading;
 using SSMP.Logging;
 using SSMP.Networking.Client;
@@ -55,6 +56,11 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     /// 50ms provides good balance between NAT mapping refresh and network overhead.
     /// </summary>
     private const int PunchPacketDelayMs = 50;
+
+    /// <summary>
+    /// Small synchronous burst sent before DTLS starts so port-restricted NATs see the peer endpoint immediately.
+    /// </summary>
+    private const int InitialPunchPacketCount = 5;
 
     /// <summary>
     /// The IP address used for self-connecting (host connecting to own server).
@@ -235,9 +241,10 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     /// Hole-punching sequence:
     /// 1. Reuse pre-bound socket from STUN discovery (or create new one)
     /// 2. Configure socket to ignore ICMP Port Unreachable errors
-    /// 3. Send 100 "PUNCH" packets over 5 seconds to open NAT mapping
+    /// 3. Send a short priming burst to open the NAT mapping
     /// 4. Connect socket to peer endpoint
-    /// 5. Return socket for DTLS handshake
+    /// 5. Continue punching in the background while DTLS handshakes
+    /// 6. Return socket for DTLS handshake
     /// </remarks>
     private static Socket PerformHolePunch(string address, int port) {
         // Attempt to reuse the socket passed from ConnectInterface
@@ -266,14 +273,11 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
             // Parse target endpoint
             var endpoint = new IPEndPoint(IPAddress.Parse(address), port);
 
-            Logger.Debug($"HolePunch: Sending {PunchPacketCount} punch packets to {endpoint}");
+            Logger.Debug($"HolePunch: Sending initial punch burst ({InitialPunchPacketCount} packets) to {endpoint}");
 
-            // Send punch packets to create/maintain NAT mapping
-            // Each packet refreshes the NAT timer and increases chance of success
-            for (var i = 0; i < PunchPacketCount; i++) {
+            // Prime the NAT mapping immediately before DTLS begins.
+            for (var i = 0; i < InitialPunchPacketCount; i++) {
                 socket.SendTo(PunchPacket, endpoint);
-
-                // Wait between packets to spread them over time
                 Thread.Sleep(PunchPacketDelayMs);
             }
 
@@ -281,6 +285,7 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
             // This is important for DTLS which expects point-to-point communication
             socket.Connect(endpoint);
 
+            StartBackgroundPunchBurst(socket, endpoint);
             Logger.Info($"HolePunch: NAT traversal complete, socket connected to {endpoint}");
             return socket;
         } catch (Exception ex) {
@@ -288,6 +293,31 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
             socket.Dispose();
             throw new InvalidOperationException($"Hole punch failed: {ex.Message}", ex);
         }
+    }
+
+    /// <summary>
+    /// Continues sending punch packets while DTLS handshakes so stricter NATs keep the mapping alive.
+    /// </summary>
+    private static void StartBackgroundPunchBurst(Socket socket, IPEndPoint endpoint) {
+        _ = Task.Run(() => {
+            try {
+                Logger.Debug(
+                    $"HolePunch: Continuing background punch burst ({PunchPacketCount - InitialPunchPacketCount} packets) to {endpoint}"
+                );
+                for (var i = InitialPunchPacketCount; i < PunchPacketCount; i++) {
+                    socket.Send(PunchPacket);
+                    Thread.Sleep(PunchPacketDelayMs);
+                }
+
+                Logger.Debug($"HolePunch: Background punch burst complete to {endpoint}");
+            } catch (ObjectDisposedException) {
+                // Socket closed during disconnect or failed handshake.
+            } catch (SocketException ex) {
+                Logger.Debug($"HolePunch: Background punch burst stopped for {endpoint}: {ex.Message}");
+            } catch (Exception ex) {
+                Logger.Warn($"HolePunch: Background punch burst failed for {endpoint}: {ex.Message}");
+            }
+        });
     }
 
     /// <summary>

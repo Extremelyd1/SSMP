@@ -130,16 +130,14 @@ internal sealed class MmsWebSocketHandler : IDisposable, IAsyncDisposable {
 
         try {
             await ConnectAsync(socket, hostToken, cts.Token);
+            var drainTask = DrainEventQueueAsync(eq);
             await ReceiveLoopAsync(socket, cts.Token, eq);
+            // Signal the dispatcher to stop after all queued callbacks are posted.
+            eq.Enqueue(null);
+            await drainTask;
         } catch (Exception ex) when (ex is not OperationCanceledException) {
             Logger.Error($"MmsWebSocketHandler: error - {ex.Message}");
         } finally {
-            // Enqueue a null sentinel so DrainEventQueueAsync exits its wait loop.
-            eq.Enqueue(null);
-            // Runs unconditionally to the null sentinel; 
-            // no cancellation so queued events
-            // are never dropped on shutdown.
-            await DrainEventQueueAsync(eq);
             eq.Dispose();
             await TearDownSocket(runVersion, socket, cts);
         }
