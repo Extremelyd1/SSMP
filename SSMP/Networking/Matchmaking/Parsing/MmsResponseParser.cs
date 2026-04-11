@@ -13,6 +13,11 @@ internal static class MmsResponseParser {
     /// Reads the create-lobby response fields needed to start a host session.
     /// Returns false when any required field is missing.
     /// </summary>
+    /// <remarks>
+    /// <paramref name="hostDiscoveryToken"/> is intentionally excluded from the required-field
+    /// check: MMS omits it for non-matchmaking lobbies, so null is a valid server response and
+    /// callers must guard against it rather than treating it as a parse failure.
+    /// </remarks>
     public static bool TryParseLobbyActivation(
         string response,
         out string? lobbyId,
@@ -22,11 +27,11 @@ internal static class MmsResponseParser {
         out string? hostDiscoveryToken
     ) {
         var root = ParseJsonObject(response);
-        lobbyId = root?.Value<string>(MmsFields.ConnectionData);
-        hostToken = root?.Value<string>(MmsFields.HostToken);
-        lobbyName = root?.Value<string>(MmsFields.LobbyName);
-        lobbyCode = root?.Value<string>(MmsFields.LobbyCode);
-        hostDiscoveryToken = root?.Value<string>(MmsFields.HostDiscoveryToken);
+        lobbyId             = root?.Value<string>(MmsFields.ConnectionData);
+        hostToken           = root?.Value<string>(MmsFields.HostToken);
+        lobbyName           = root?.Value<string>(MmsFields.LobbyName);
+        lobbyCode           = root?.Value<string>(MmsFields.LobbyCode);
+        hostDiscoveryToken  = root?.Value<string>(MmsFields.HostDiscoveryToken);
 
         return lobbyId != null && hostToken != null && lobbyName != null && lobbyCode != null;
     }
@@ -41,18 +46,18 @@ internal static class MmsResponseParser {
             return null;
         }
 
-        var connectionData = root.Value<string>(MmsFields.ConnectionData);
-        var lobbyTypeString = root.Value<string>(MmsFields.LobbyType);
+        var connectionData   = root.Value<string>(MmsFields.ConnectionData);
+        var lobbyTypeString  = root.Value<string>(MmsFields.LobbyType);
 
         if (connectionData == null || lobbyTypeString == null) {
             return null;
         }
 
         return new JoinLobbyResult {
-            ConnectionData = connectionData,
-            LobbyType = ParseLobbyType(lobbyTypeString),
+            ConnectionData    = connectionData,
+            LobbyType         = ParseLobbyType(lobbyTypeString),
             LanConnectionData = root.Value<string>(MmsFields.LanConnectionData),
-            JoinId = root.Value<string>(MmsFields.JoinId)
+            JoinId            = root.Value<string>(MmsFields.JoinId)
         };
     }
 
@@ -80,7 +85,7 @@ internal static class MmsResponseParser {
             return null;
         }
 
-        var hostIp = root.Value<string>(MmsFields.HostIp);
+        var hostIp   = root.Value<string>(MmsFields.HostIp);
         var hostPort = root.Value<int?>(MmsFields.HostPort);
         var startTime = root.Value<long?>(MmsFields.StartTimeMs);
 
@@ -89,8 +94,8 @@ internal static class MmsResponseParser {
         }
 
         return new MatchmakingJoinStartResult {
-            HostIp = hostIp,
-            HostPort = hostPort.Value,
+            HostIp      = hostIp,
+            HostPort    = hostPort.Value,
             StartTimeMs = startTime.Value
         };
     }
@@ -102,10 +107,15 @@ internal static class MmsResponseParser {
     /// <summary>Normalizes lobby-list payloads so callers can always iterate a JSON array.</summary>
     private static JArray ParseLobbiesAsArray(string response) {
         return JToken.Parse(response) switch {
-            JArray array => array,
-            JObject obj => [obj],
-            _ => []
+            JArray  array => array,
+            JObject obj   => [obj],
+            var other     => LogAndReturnEmpty(other)
         };
+
+        static JArray LogAndReturnEmpty(JToken other) {
+            Logger.Debug($"MmsResponseParser: Unexpected lobby payload token type '{other.Type}', expected array or object.");
+            return [];
+        }
     }
 
     /// <summary>Filters malformed lobby entries and converts the valid ones to models.</summary>
@@ -132,9 +142,12 @@ internal static class MmsResponseParser {
     /// <summary>Parses one lobby entry from the public lobby list.</summary>
     private static PublicLobbyInfo? TryParseLobbyEntry(JObject lobby) {
         var connectionData = lobby.Value<string>(MmsFields.ConnectionData);
-        var name = lobby.Value<string>(MmsFields.Name);
+        var name           = lobby.Value<string>(MmsFields.Name);
+        var lobbyCode      = lobby.Value<string>(MmsFields.LobbyCode);
 
-        if (connectionData == null || name == null) {
+        // All three fields are required: a missing lobby code would break client-side
+        // code entry and is not a valid state a well-formed MMS response can produce.
+        if (connectionData == null || name == null || lobbyCode == null) {
             return null;
         }
 
@@ -142,8 +155,6 @@ internal static class MmsResponseParser {
         var lobbyType = lobbyTypeString != null
             ? ParseLobbyType(lobbyTypeString)
             : PublicLobbyType.Matchmaking;
-
-        var lobbyCode = lobby.Value<string>(MmsFields.LobbyCode) ?? string.Empty;
 
         return new PublicLobbyInfo(connectionData, name, lobbyType, lobbyCode);
     }

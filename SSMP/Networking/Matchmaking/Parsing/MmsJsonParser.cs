@@ -10,8 +10,38 @@ namespace SSMP.Networking.Matchmaking.Parsing;
 
 /// <summary>Reads and writes the small JSON payloads used by MMS.</summary>
 internal static class MmsJsonParser {
-    /// <summary>Reuses temporary char buffers while serializing request payloads.</summary>
-    private static readonly ArrayPool<char> CharPool = ArrayPool<char>.Shared;
+    /// <summary>
+    /// A scoped rental of a pooled char buffer. Disposing returns the buffer to the shared
+    /// pool, making double-return safe and ensuring the caller cannot forget to release.
+    /// </summary>
+    internal sealed class CharLease : IDisposable {
+        private static readonly ArrayPool<char> Pool = ArrayPool<char>.Shared;
+        private char[]? _buffer;
+
+        /// <summary>The number of valid characters in <see cref="Span"/>.</summary>
+        private int Length { get; }
+
+        /// <summary>The serialized JSON content, valid only while this lease is undisposed.</summary>
+        public ReadOnlySpan<char> Span => _buffer != null
+            ? _buffer.AsSpan(0, Length)
+            : ReadOnlySpan<char>.Empty;
+
+        internal CharLease(char[] buffer, int length) {
+            _buffer = buffer;
+            Length  = length;
+        }
+
+        /// <summary>Returns the rented buffer to the pool. Safe to call more than once.</summary>
+        public void Dispose() {
+            var buf = _buffer;
+            if (buf == null) {
+                return;
+            }
+
+            _buffer = null;
+            Pool.Return(buf);
+        }
+    }
 
     /// <summary>
     /// Parses a JSON string and returns the first property with the requested key.
@@ -34,10 +64,10 @@ internal static class MmsJsonParser {
     public static string? ExtractValue(ReadOnlySpan<char> json, string key) => ExtractValue(json.ToString(), key);
 
     /// <summary>
-    /// Serializes the create-lobby payload into a rented char buffer.
-    /// The caller must return that buffer with <see cref="ReturnBuffer"/>.
+    /// Serializes the create-lobby payload into a scoped <see cref="CharLease"/>.
+    /// Dispose the returned lease (e.g. with <c>using</c>) to return the buffer to the pool.
     /// </summary>
-    public static (char[] buffer, int length) FormatCreateLobbyJson(
+    public static CharLease FormatCreateLobbyJson(
         int port,
         bool isPublic,
         string gameVersion,
@@ -45,10 +75,10 @@ internal static class MmsJsonParser {
         string? hostLanIp
     ) {
         var payload = new JObject {
-            [MmsFields.HostPortRequest] = port,
-            [MmsFields.IsPublicRequest] = isPublic,
+            [MmsFields.HostPortRequest]    = port,
+            [MmsFields.IsPublicRequest]    = isPublic,
             [MmsFields.GameVersionRequest] = gameVersion,
-            [MmsFields.LobbyTypeRequest] = SerializeLobbyType(lobbyType)
+            [MmsFields.LobbyTypeRequest]   = SerializeLobbyType(lobbyType)
         };
 
         if (hostLanIp != null) {
@@ -60,14 +90,11 @@ internal static class MmsJsonParser {
             payload[MmsFields.MatchmakingVersionRequest] = MmsProtocol.CurrentVersion;
         }
 
-        var json = payload.ToString(Formatting.None);
-        var buffer = CharPool.Rent(json.Length);
+        var json   = payload.ToString(Formatting.None);
+        var buffer = ArrayPool<char>.Shared.Rent(json.Length);
         json.AsSpan().CopyTo(buffer);
-        return (buffer, json.Length);
+        return new CharLease(buffer, json.Length);
     }
-
-    /// <summary>Returns a previously rented char buffer back to the shared pool.</summary>
-    public static void ReturnBuffer(char[] buffer) => CharPool.Return(buffer);
 
     /// <summary>Walks nested objects and arrays until it finds a matching property name.</summary>
     private static JProperty? FindPropertyRecursive(JToken token, string key) {
@@ -84,11 +111,16 @@ internal static class MmsJsonParser {
                     }
                 }
 
-                break;
+                return null;
             }
+
             case JTokenType.Array:
-                return token.Children().Select(child => FindPropertyRecursive(child, key)).OfType<JProperty>()
+                return token.Children()
+                            .Select(child => FindPropertyRecursive(child, key))
+                            .OfType<JProperty>()
                             .FirstOrDefault();
+
+            // Scalar and leaf token types contain no child properties to search.
             case JTokenType.None:
             case JTokenType.Constructor:
             case JTokenType.Property:
@@ -106,26 +138,29 @@ internal static class MmsJsonParser {
             case JTokenType.Uri:
             case JTokenType.TimeSpan:
             default:
-                throw new ArgumentOutOfRangeException();
+                return null;
         }
-
-        return null;
     }
 
-    /// <summary>Maps the local enum to the lowercase lobby type string MMS expects.</summary>
+    /// <summary>
+    /// Maps the local enum to the lowercase lobby type string MMS expects.
+    /// Throws <see cref="ArgumentOutOfRangeException"/> for unrecognized values so that
+    /// new enum members are caught at development time rather than silently misrouted.
+    /// </summary>
     private static string SerializeLobbyType(PublicLobbyType lobbyType) => lobbyType switch {
         PublicLobbyType.Matchmaking => "matchmaking",
-        PublicLobbyType.Steam => "steam",
-        _ => "matchmaking"
+        PublicLobbyType.Steam       => "steam",
+        _ => throw new ArgumentOutOfRangeException(nameof(lobbyType), lobbyType,
+                 $"No MMS name defined for lobby type '{lobbyType}'.")
     };
 
     /// <summary>Converts a JSON token into the string shape expected by existing callers.</summary>
     private static string? ConvertTokenToString(JToken token) => token.Type switch {
-        JTokenType.Null => null,
-        JTokenType.String => token.Value<string>(),
+        JTokenType.Null    => null,
+        JTokenType.String  => token.Value<string>(),
         JTokenType.Integer => token.Value<long>().ToString(CultureInfo.InvariantCulture),
-        JTokenType.Float => token.Value<double>().ToString(CultureInfo.InvariantCulture),
+        JTokenType.Float   => token.Value<double>().ToString(CultureInfo.InvariantCulture),
         JTokenType.Boolean => token.Value<bool>() ? "true" : "false",
-        _ => token.ToString(Formatting.None)
+        _                  => token.ToString(Formatting.None)
     };
 }

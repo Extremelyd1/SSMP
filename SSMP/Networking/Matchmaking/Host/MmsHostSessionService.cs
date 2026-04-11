@@ -141,29 +141,27 @@ internal sealed class MmsHostSessionService : IDisposable {
                 if (_hostToken != null) return ((null, null, null), MatchmakingError.NetworkFailure);
             }
 
-            var (buffer, length) = MmsJsonParser.FormatCreateLobbyJson(
+            using var lease = MmsJsonParser.FormatCreateLobbyJson(
                 hostPort, isPublic, gameVersion, lobbyType, MmsUtilities.GetLocalIpAddress()
             );
-            try {
-                var response = await MmsHttpClient.PostJsonAsync(
-                    $"{_baseUrl}{MmsRoutes.Lobby}",
-                    new string(buffer, 0, length)
-                );
-                if (!response.Success || response.Body == null)
-                    return ((null, null, null), response.Error);
 
-                return TryActivateLobby(
-                    response.Body,
-                    "CreateLobby",
-                    out var lobbyName,
-                    out var lobbyCode,
-                    out var hostDiscoveryToken
-                )
-                    ? ((lobbyCode, lobbyName, hostDiscoveryToken), MatchmakingError.None)
-                    : ((null, null, null), MatchmakingError.NetworkFailure);
-            } finally {
-                MmsJsonParser.ReturnBuffer(buffer);
-            }
+            var response = await MmsHttpClient.PostJsonAsync(
+                $"{_baseUrl}{MmsRoutes.Lobby}",
+                new string(lease.Span)
+            );
+
+            if (!response.Success || response.Body == null)
+                return ((null, null, null), response.Error);
+
+            return TryActivateLobby(
+                response.Body,
+                "CreateLobby",
+                out var lobbyName,
+                out var lobbyCode,
+                out var hostDiscoveryToken
+            )
+                ? ((lobbyCode, lobbyName, hostDiscoveryToken), MatchmakingError.None)
+                : ((null, null, null), MatchmakingError.NetworkFailure);
         } finally {
             Interlocked.Exchange(ref _creationLock, 0);
         }
