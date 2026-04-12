@@ -9,26 +9,35 @@ using Object = UnityEngine.Object;
 
 namespace SSMP.Animation.Effects;
 
+/// <summary>
+/// Animation effect for the death of the player.
+/// </summary>
 internal class Death : AnimationEffect {
-    public static Death Instance = new();
+    /// <summary>
+    /// Name of the game object for the death particles.
+    /// </summary>
+    private const string DeathParticleObjectName = "Low Health Leak";
 
+    /// <summary>
+    /// Cached game object for the death particles.
+    /// </summary>
     private static GameObject? _deathParticles;
-    private const string ParticleObjectName = "Low Health Leak";
 
-    public override byte[]? GetEffectInfo() {
+    /// <inheritdoc/>
+    public override byte[] GetEffectInfo() {
         var frosted = HeroController.instance.cState.isFrostDeath;
 
-        var info = new byte[] {
+        byte[] info = [
             (byte)(frosted ? 1 : 0)
-        };
+        ];
 
         return info;
     }
 
     /// <inheritdoc/>
     public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
-        // Play frost death if applicable
-        if (effectInfo != null && effectInfo.Length == 1 && effectInfo[0] == 1) {
+        // Play frost death if applicable (effect info contains a single byte with the value '1')
+        if (effectInfo is [1]) {
             MonoBehaviourUtil.Instance.StartCoroutine(PlayFrostDeath(playerObject));
             return;
         } 
@@ -38,10 +47,10 @@ internal class Death : AnimationEffect {
     }
 
     /// <summary>
-    /// Plays the frost death animation
+    /// Plays the frost death animation.
     /// </summary>
     /// <param name="playerObject">The GameObject representing the player.</param>
-    private IEnumerator PlayFrostDeath(GameObject playerObject) {
+    private static IEnumerator PlayFrostDeath(GameObject playerObject) {
         // Find frost death prefab
         var prefab = HeroController.instance.heroDeathFrostPrefab;
         if (prefab == null) {
@@ -57,9 +66,19 @@ internal class Death : AnimationEffect {
         var localCrystalSlow = prefab.FindGameObjectInChildren("Particle_Crystal Slow");
         var localCrystalFinal = prefab.FindGameObjectInChildren("Particle_Crystal Final");
 
-        var growthTime = 3f;
-        var crystalSlow = EffectUtils.SpawnGlobalPoolObject(localCrystalSlow, playerObject.transform, growthTime, true);
-        var crystalFinal = EffectUtils.SpawnGlobalPoolObject(localCrystalFinal, playerObject.transform, growthTime, true);
+        const float growthTime = 3f;
+        var crystalSlow = EffectUtils.SpawnGlobalPoolObject(
+            localCrystalSlow, 
+            playerObject.transform, 
+            growthTime, 
+            true
+        );
+        var crystalFinal = EffectUtils.SpawnGlobalPoolObject(
+            localCrystalFinal, 
+            playerObject.transform, 
+            growthTime, 
+            true
+        );
 
         if (crystalSlow == null || crystalFinal == null) {
             yield break;
@@ -73,8 +92,12 @@ internal class Death : AnimationEffect {
 
         // Transition from growing the crystals to exploding them
         var localDestroyEffects = prefab.FindGameObjectInChildren("Destroy Effects");
-        var destroyEffects = EffectUtils.SpawnGlobalPoolObject(localDestroyEffects, playerObject.transform, 5);
-        if (destroyEffects.TryGetComponent<CameraShakeOnEnable>(out var shaker)) {
+        var destroyEffects = EffectUtils.SpawnGlobalPoolObject(
+            localDestroyEffects, 
+            playerObject.transform, 
+            5
+        );
+        if (destroyEffects != null && destroyEffects.TryGetComponent<CameraShakeOnEnable>(out var shaker)) {
             Object.DestroyImmediate(shaker);
         }
 
@@ -83,9 +106,17 @@ internal class Death : AnimationEffect {
         playerObject.GetComponent<tk2dSprite>().SetSprite("wall_puff0004");
 
         // Spawn the frosted hornet object
-        var frostedDuration = 3;
+        const int frostedDuration = 3;
         var localFrostDeath = prefab.FindGameObjectInChildren("Hornet_Frosted");
-        var frostDeath = EffectUtils.SpawnGlobalPoolObject(localFrostDeath, playerObject.transform, frostedDuration + 1.1f);
+        var frostDeath = EffectUtils.SpawnGlobalPoolObject(
+            localFrostDeath, 
+            playerObject.transform, 
+            frostedDuration + 1.1f
+        );
+        if (frostDeath == null) {
+            yield break;
+        }
+
         frostDeath.transform.localPosition = playerObject.transform.position + new Vector3(0.11f, 0, -0.18f);
 
         // Fade out and play particles
@@ -95,10 +126,10 @@ internal class Death : AnimationEffect {
     }
 
     /// <summary>
-    /// Plays the normal death animation
+    /// Plays the normal death animation.
     /// </summary>
     /// <param name="playerObject">The GameObject representing the player.</param>
-    private IEnumerator PlayDeath(GameObject playerObject) {
+    private static IEnumerator PlayDeath(GameObject playerObject) {
         // Get/create a death particle system
         if (!CreateParticles(playerObject, out var particles)) {
             yield break;
@@ -120,16 +151,18 @@ internal class Death : AnimationEffect {
     }
 
     /// <summary>
-    /// Spawns the particle system that is created when a player hits their cocoon
+    /// Spawns the particle system that is created when a player hits their cocoon.
     /// </summary>
     /// <param name="playerObject">The player object to spawn the particles on</param>
-    private void SpawnCocoonParticles(GameObject playerObject) {
+    private static void SpawnCocoonParticles(GameObject playerObject) {
         // Get the cocoon prefab
         var manager = GameManager.instance.GetSceneManager().GetComponent<CustomSceneManager>();
         var localCocoon = manager.heroCorpsePrefab;
 
         // Find the particle systems inside of it
-        var localCocoonParticles = localCocoon.FindGameObjectInChildren("Core")?.FindGameObjectInChildren("Pt Spider Fall");
+        var localCocoonParticles = localCocoon
+                                   .FindGameObjectInChildren("Core")?
+                                   .FindGameObjectInChildren("Pt Spider Fall");
         if (localCocoonParticles == null) {
             Logger.Info("No particles");
             return;
@@ -145,9 +178,12 @@ internal class Death : AnimationEffect {
     /// <param name="playerObject">The player's object.</param>
     /// <param name="deathParticles">The player's 'Low Health Leak' object, or null if not found.</param>
     /// <returns>true if the 'Low Health Leak' GameObject is successfully found and bound; otherwise, false.</returns>
-    protected bool CreateParticles(GameObject playerObject, [MaybeNullWhen(false)] out GameObject deathParticles) {
+    private static bool CreateParticles(
+        GameObject playerObject, 
+        [MaybeNullWhen(false)] out GameObject deathParticles
+    ) {
         // Find the reference object
-        _deathParticles ??= HeroController.instance.gameObject.FindGameObjectInChildren(ParticleObjectName);
+        _deathParticles ??= HeroController.instance.gameObject.FindGameObjectInChildren(DeathParticleObjectName);
         if (_deathParticles == null) {
             Logger.Warn("Could not find local Bind Effects object in hero object");
             deathParticles = null;
@@ -155,14 +191,14 @@ internal class Death : AnimationEffect {
         }
 
         // Find the existing particles for the player object
-        deathParticles = playerObject.FindGameObjectInChildren(ParticleObjectName);
+        deathParticles = playerObject.FindGameObjectInChildren(DeathParticleObjectName);
 
         // If not found, make it!
         if (deathParticles == null) {
             deathParticles = Object.Instantiate(_deathParticles);
             deathParticles.transform.SetParentReset(playerObject.transform);
             deathParticles.transform.SetLocalPositionZ(0.2f);
-            deathParticles.name = ParticleObjectName;
+            deathParticles.name = DeathParticleObjectName;
             
             // Add timer to turn off
             var deactivator = deathParticles.AddComponent<DeactivateAfterDelay>();

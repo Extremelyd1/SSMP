@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using SSMP.Animation.Effects;
@@ -10,7 +9,6 @@ using SSMP.Game.Settings;
 using SSMP.Hooks;
 using SSMP.Internals;
 using SSMP.Networking.Client;
-using SSMP.Networking.Packet.Data;
 using SSMP.Util;
 using UnityEngine.SceneManagement;
 using Logger = SSMP.Logging.Logger;
@@ -657,7 +655,7 @@ internal class AnimationManager {
         { AnimationClip.BindChargeHealBurst, BindBurst.Instance },
         { AnimationClip.BindBurstAir, BindBurst.Instance },
         { AnimationClip.RageBindBurst, BindBurst.Instance },
-        { AnimationClip.Death, Death.Instance }
+        { AnimationClip.Death, new Death() }
     };
 
     private static readonly Dictionary<AnimationClip, IAnimationEffect> SubAnimationEffects = new() {
@@ -788,9 +786,6 @@ internal class AnimationManager {
 
         // Relinquish Control cancels a lot of effects, so we need to broadcast the end of these effects
         // On.HeroController.RelinquishControl += HeroControllerOnRelinquishControl;
-
-        // Register when the player dies to send the animation
-        // ModHooks.BeforePlayerDeadHook += OnDeath;
     }
 
     /// <summary>
@@ -815,8 +810,6 @@ internal class AnimationManager {
         // On.GameManager.HazardRespawn -= GameManagerOnHazardRespawn;
 
         // On.HeroController.RelinquishControl -= HeroControllerOnRelinquishControl;
-
-        // ModHooks.BeforePlayerDeadHook -= OnDeath;
     }
 
     /// <summary>
@@ -1370,12 +1363,10 @@ internal class AnimationManager {
 
         Logger.Debug("Client has died, sending PlayerDeath data");
 
-        Logger.Info(frostDeath.ToString());
         // Let the server know that we have died
-        var effectInfo = new byte[] {
+        byte[] effectInfo = [
             (byte)(frostDeath ? 1 : 0)
-        };
-        Logger.Info(string.Join(", ", effectInfo));
+        ];
         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.Death, 0, effectInfo);
     }
 
