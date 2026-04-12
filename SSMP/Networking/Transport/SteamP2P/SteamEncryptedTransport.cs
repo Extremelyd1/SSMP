@@ -241,7 +241,7 @@ internal sealed class SteamEncryptedTransport : IReliableTransport {
     public void Disconnect() {
         if (!_isConnected) return;
 
-        // Signal shutdown first
+        // Signal shutdown first so the receive loop exits at the top of its next iteration.
         _isConnected = false;
         _receiveTokenSource?.Cancel();
 
@@ -257,8 +257,6 @@ internal sealed class SteamEncryptedTransport : IReliableTransport {
             SteamNetworking.CloseP2PSessionWithUser(_remoteSteamId);
         }
 
-        _remoteSteamId = NilSteamId;
-
         if (_receiveThread != null) {
             if (!_receiveThread.Join(5000)) {
                 Logger.Warn("Steam P2P: Receive thread did not terminate within 5 seconds");
@@ -266,6 +264,9 @@ internal sealed class SteamEncryptedTransport : IReliableTransport {
 
             _receiveThread = null;
         }
+
+        // Safe to zero connection state only after the thread has exited.
+        _remoteSteamId = NilSteamId;
 
         _receiveTokenSource?.Dispose();
         _receiveTokenSource = null;
