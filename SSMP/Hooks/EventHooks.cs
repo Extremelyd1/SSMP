@@ -77,6 +77,11 @@ public static class EventHooks {
     private static Hook? _heroControllerUpdateHook;
 
     /// <summary>
+    /// Hook for HeroController.Die
+    /// </summary>
+    private static Hook? _heroControllerDieHook;
+
+    /// <summary>
     /// Hook for GameMap.PositionCompassAndCorpse.
     /// </summary>
     private static Hook? _gameMapPositionCompassAndCorpseHook;
@@ -161,6 +166,12 @@ public static class EventHooks {
     /// Event that is called when HeroController.Update is called.
     /// </summary>
     public static event Action<HeroController>? HeroControllerUpdate;
+
+    /// <summary>
+    /// Event that executes when HeroController.Die is called
+    /// The first parameter is nonLethal, the second is frostDeath.
+    /// </summary>
+    public static event Action<bool, bool>? HeroControllerDie;
 
     /// <summary>
     /// Event that is called when GameMap.PositionCompassAndCorpse is called.
@@ -285,6 +296,11 @@ public static class EventHooks {
         _heroControllerUpdateHook = new Hook(
             typeof(HeroController).GetMethod(nameof(HeroController.Update), BindingFlags),
             OnHeroControllerUpdate
+        );
+
+        _heroControllerDieHook = new Hook(
+            typeof(HeroController).GetMethod(nameof(HeroController.Die), BindingFlags),
+            OnHeroControllerDie
         );
 
         _gameMapPositionCompassAndCorpseHook = new Hook(
@@ -446,6 +462,17 @@ public static class EventHooks {
         orig(self);
 
         HeroControllerUpdate?.Invoke(self);
+    }
+
+    private static IEnumerator OnHeroControllerDie(
+        Func<HeroController, bool, bool, IEnumerator> orig,
+        HeroController self,
+        bool nonLethal,
+        bool frostDeath
+        ) {
+        HeroControllerDie?.Invoke(nonLethal, frostDeath);
+
+        return orig(self, nonLethal, frostDeath);
     }
 
     private static void OnGameMapPositionCompassAndCorpse(Action<GameMap> orig, GameMap self) {

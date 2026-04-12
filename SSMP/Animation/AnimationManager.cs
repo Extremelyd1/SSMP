@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using SSMP.Animation.Effects;
@@ -10,7 +9,6 @@ using SSMP.Game.Settings;
 using SSMP.Hooks;
 using SSMP.Internals;
 using SSMP.Networking.Client;
-using SSMP.Networking.Packet.Data;
 using SSMP.Util;
 using UnityEngine.SceneManagement;
 using Logger = SSMP.Logging.Logger;
@@ -656,7 +654,8 @@ internal class AnimationManager {
         { AnimationClip.BindBurstGround, BindBurst.Instance },
         { AnimationClip.BindChargeHealBurst, BindBurst.Instance },
         { AnimationClip.BindBurstAir, BindBurst.Instance },
-        { AnimationClip.RageBindBurst, BindBurst.Instance }
+        { AnimationClip.RageBindBurst, BindBurst.Instance },
+        { AnimationClip.Death, new Death() }
     };
 
     private static readonly Dictionary<AnimationClip, IAnimationEffect> SubAnimationEffects = new() {
@@ -765,6 +764,8 @@ internal class AnimationManager {
         EventHooks.SpriteAnimatorWarpClipToLocalTime += Tk2dSpriteAnimatorOnWarpClipToLocalTime;
         EventHooks.SpriteAnimatorProcessEvents += Tk2dSpriteAnimatorOnProcessEvents;
 
+        EventHooks.HeroControllerDie += OnDeath;
+
         // Register FSM hooks for certain bind actions
         HeroController.OnHeroInstanceSet += CreateBindHooks;
         if (HeroController.SilentInstance != null) {
@@ -785,9 +786,6 @@ internal class AnimationManager {
 
         // Relinquish Control cancels a lot of effects, so we need to broadcast the end of these effects
         // On.HeroController.RelinquishControl += HeroControllerOnRelinquishControl;
-
-        // Register when the player dies to send the animation
-        // ModHooks.BeforePlayerDeadHook += OnDeath;
     }
 
     /// <summary>
@@ -812,8 +810,6 @@ internal class AnimationManager {
         // On.GameManager.HazardRespawn -= GameManagerOnHazardRespawn;
 
         // On.HeroController.RelinquishControl -= HeroControllerOnRelinquishControl;
-
-        // ModHooks.BeforePlayerDeadHook -= OnDeath;
     }
 
     /// <summary>
@@ -1356,119 +1352,22 @@ internal class AnimationManager {
     //     // _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.HazardRespawn);
     // }
 
-    /// <summary>
-    /// Callback method for when a player death is received.
-    /// </summary>
-    /// <param name="data">The generic client data for this event.</param>
-    public void OnPlayerDeath(GenericClientData data) {
-        // And play the death animation for the ID in the packet
-        MonoBehaviourUtil.Instance.StartCoroutine(PlayDeathAnimation(data.Id));
-    }
-
     // /// <summary>
     // /// Callback method for when the local player dies.
     // /// </summary>
-    // private void OnDeath() {
-    //     // If we are not connected, there is nothing to send to
-    //     if (!_netClient.IsConnected) {
-    //         return;
-    //     }
-    //
-    //     Logger.Debug("Client has died, sending PlayerDeath data");
-    //
-    //     // Let the server know that we have died            
-    //     _netClient.UpdateManager.SetDeath();
-    // }
+    private void OnDeath(bool nonLethal, bool frostDeath) {
+        // If we are not connected, there is nothing to send to
+        if (!_netClient.IsConnected) {
+            return;
+        }
 
-    /// <summary>
-    /// Play the death animation for the player with the given ID.
-    /// </summary>
-    /// <param name="id">The ID of the player.</param>
-    /// <returns>An enumerator for the coroutine.</returns>
-    private IEnumerator PlayDeathAnimation(ushort id) {
-        Logger.Debug($"Starting death animation for ID: {id}");
-        yield break;
+        Logger.Debug("Client has died, sending PlayerDeath data");
 
-        // // Get the player object corresponding to this ID
-        // var playerObject = _playerManager.GetPlayerObject(id);
-        //
-        // // Get the sprite animator and start playing the Death animation
-        // var animator = playerObject.GetComponent<tk2dSpriteAnimator>();
-        // animator.Stop();
-        // animator.PlayFromFrame("Death", 0);
-        //
-        // // Obtain the duration for the animation
-        // var deathAnimationDuration = animator.GetClipByName("Death").Duration;
-        //
-        // // After half a second we want to throw out the nail (as defined in the FSM)
-        // yield return new WaitForSeconds(0.5f);
-        //
-        // // Calculate the duration remaining until the death animation is finished
-        // var remainingDuration = deathAnimationDuration - 0.5f;
-        //
-        // // Obtain the local player object, to copy actions from
-        // var localPlayerObject = HeroController.instance.gameObject;
-        //
-        // // Get the FSM for the Hero Death
-        // var heroDeathAnimFsm = localPlayerObject
-        //     .FindGameObjectInChildren("Hero Death")
-        //     .LocateMyFSM("Hero Death Anim");
-        //
-        // // Get the nail fling object from the Blow state
-        // var nailObject = heroDeathAnimFsm.GetFirstAction<FlingObjectsFromGlobalPool>("Blow");
-        //
-        // // Spawn it relative to the player
-        // var nailGameObject = nailObject.gameObject.Value.Spawn(
-        //     playerObject.transform.position,
-        //     Quaternion.Euler(Vector3.zero)
-        // );
-        //
-        // // Get the rigidbody component that we need to throw around
-        // var nailRigidBody = nailGameObject.GetComponent<Rigidbody2D>();
-        //
-        // // Get a random speed and angle and calculate the rigidbody velocity
-        // var speed = Random.Range(18, 22);
-        // float angle = Random.Range(50, 130);
-        // var velX = speed * Mathf.Cos(angle * ((float) System.Math.PI / 180f));
-        // var velY = speed * Mathf.Sin(angle * ((float) System.Math.PI / 180f));
-        //
-        // // Set the velocity so it starts moving
-        // nailRigidBody.velocity = new Vector2(velX, velY);
-        //
-        // // Wait for the remaining duration of the death animation
-        // yield return new WaitForSeconds(remainingDuration);
-        //
-        // // Now we can disable the player object so it isn't visible anymore
-        // playerObject.SetActive(false);
-        //
-        // // Check which direction we are facing, we need this in a few variables
-        // var facingRight = playerObject.transform.localScale.x > 0;
-        //
-        // // Depending on which direction the player was facing, choose a state
-        // var stateName = "Head Left";
-        // if (facingRight) {
-        //     stateName = "Head Right";
-        // }
-        //
-        // // Obtain a head object from the either Head states and instantiate it
-        // var headObject = heroDeathAnimFsm.GetFirstAction<CreateObject>(stateName);
-        // var headGameObject = Object.Instantiate(
-        //     headObject.gameObject.Value,
-        //     playerObject.transform.position + new Vector3(facingRight ? 0.2f : -0.2f, -0.02f, -0.01f),
-        //     Quaternion.identity
-        // );
-        //
-        // // Get the rigidbody component of the head object
-        // var headRigidBody = headGameObject.GetComponent<Rigidbody2D>();
-        //
-        // // Calculate the angle at which we are going to throw 
-        // var headAngle = 15f * Mathf.Cos((facingRight ? 100f : 80f) * ((float) System.Math.PI / 180f));
-        //
-        // // Now set the velocity as this angle
-        // headRigidBody.velocity = new Vector2(headAngle, headAngle);
-        //
-        // // Finally add required torque (according to the FSM)
-        // headRigidBody.AddTorque(facingRight ? 20f : -20f);
+        // Let the server know that we have died
+        byte[] effectInfo = [
+            (byte)(frostDeath ? 1 : 0)
+        ];
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.Death, 0, effectInfo);
     }
 
     // /// <summary>

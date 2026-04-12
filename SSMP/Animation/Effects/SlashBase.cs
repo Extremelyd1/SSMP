@@ -154,8 +154,7 @@ internal abstract class SlashBase : ParryableEffect {
 
         var relAudioSource = AudioUtil.GetAudioSourceObject(playerObject);
         relAudioSource.transform.parent = slashParent.transform;
-        relAudioSource.clip = audio.clip;
-        relAudioSource.Play();
+        relAudioSource.PlayOneShot(audio.clip);
 
         mesh.enabled = true;
 

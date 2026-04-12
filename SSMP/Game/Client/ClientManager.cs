@@ -411,10 +411,6 @@ internal class ClientManager : IClientManager {
             ClientUpdatePacketId.PlayerSetting,
             OnPlayerSettingUpdate
         );
-        _packetManager.RegisterClientUpdatePacketHandler<GenericClientData>(
-            ClientUpdatePacketId.PlayerDeath,
-            OnPlayerDeath
-        );
 
         // Register packet handlers related to full synchronisation
         if (_fullSynchronisation) {
@@ -456,7 +452,6 @@ internal class ClientManager : IClientManager {
         _packetManager.DeregisterClientUpdatePacketHandler(ClientUpdatePacketId.ServerSettingsUpdated);
         _packetManager.DeregisterClientUpdatePacketHandler(ClientUpdatePacketId.ChatMessage);
         _packetManager.DeregisterClientUpdatePacketHandler(ClientUpdatePacketId.PlayerSetting);
-        _packetManager.DeregisterClientUpdatePacketHandler(ClientUpdatePacketId.PlayerDeath);
 
         if (_fullSynchronisation) {
             _packetManager.DeregisterClientUpdatePacketHandler(ClientUpdatePacketId.EntitySpawn);
@@ -1307,14 +1302,6 @@ internal class ClientManager : IClientManager {
                 playerData.CrestType = settingUpdate.CrestType;
             }
         }
-    }
-
-    /// <summary>
-    /// Callback method for when a player death packet is received.
-    /// </summary>
-    /// <param name="deathData">The GenericClientData packet data.</param>
-    private void OnPlayerDeath(GenericClientData deathData) {
-        _animationManager.OnPlayerDeath(deathData);
     }
 
     /// <summary>
