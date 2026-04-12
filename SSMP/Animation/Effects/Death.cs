@@ -57,8 +57,9 @@ internal class Death : AnimationEffect {
         var localCrystalSlow = prefab.FindGameObjectInChildren("Particle_Crystal Slow");
         var localCrystalFinal = prefab.FindGameObjectInChildren("Particle_Crystal Final");
 
-        var crystalSlow = EffectUtils.SpawnGlobalPoolObject(localCrystalSlow, playerObject.transform, 2.45f, true);
-        var crystalFinal = EffectUtils.SpawnGlobalPoolObject(localCrystalFinal, playerObject.transform, 2.45f, true);
+        var growthTime = 3f;
+        var crystalSlow = EffectUtils.SpawnGlobalPoolObject(localCrystalSlow, playerObject.transform, growthTime, true);
+        var crystalFinal = EffectUtils.SpawnGlobalPoolObject(localCrystalFinal, playerObject.transform, growthTime, true);
 
         if (crystalSlow == null || crystalFinal == null) {
             yield break;
@@ -68,7 +69,7 @@ internal class Death : AnimationEffect {
         crystalSlow.transform.localPosition = new Vector3(-0.32f, 0, -2.22f);
         crystalFinal.transform.localPosition = new Vector3(-0.22f, -0.04f, -2.2f);
 
-        yield return new WaitForSeconds(2.45f);
+        yield return new WaitForSeconds(growthTime);
 
         // Transition from growing the crystals to exploding them
         var localDestroyEffects = prefab.FindGameObjectInChildren("Destroy Effects");
