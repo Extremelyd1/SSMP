@@ -1131,7 +1131,7 @@ internal class AnimationManager {
         //OnAnimationEvent(dummyClip);
 
         var effectInfo = ThreadStorm.GetEffectFlags();
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.AirSphereAttack, 0, effectInfo);
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.AirSphereRefresh, 0, effectInfo);
 
     }
 

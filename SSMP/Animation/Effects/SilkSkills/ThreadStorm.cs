@@ -1,12 +1,7 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Threading;
-using GlobalSettings;
-using HutongGames.PlayMaker;
 using HutongGames.PlayMaker.Actions;
-using Org.BouncyCastle.Bcpg;
 using SSMP.Internals;
 using SSMP.Util;
 using UnityEngine;
@@ -54,15 +49,13 @@ internal class ThreadStorm : BaseSilkSkill {
         MonoBehaviourUtil.Instance.StartCoroutine(PlayStormSetup(playerObject, volt, isShaman));
     }
 
+    /// <summary>
+    /// Plays the main loop of the Thread Storm attack
+    /// </summary>
+    /// <param name="playerObject">The player object that used the attack</param>
     private IEnumerator PlayStormExtension(GameObject playerObject) {
         if (!TryGetThreadStorm(playerObject, out var threadStorm)) {
             yield break;
-        }
-
-        // The animation is kinda broken as it replays for each extension. Keep this unless we use a dedicated packet
-        var playerAnimator = playerObject.GetComponent<tk2dSpriteAnimator>();
-        if (playerAnimator) {
-            playerAnimator.Stop();
         }
 
         // Restart animation
@@ -72,7 +65,7 @@ internal class ThreadStorm : BaseSilkSkill {
             yield break;
         }
 
-        //animator.PlayFromFrame("AirSphere", 0);
+        animator.PlayFromFrame("AirSphere", 0);
 
         // Scale up
         var curveScale = threadStorm.GetComponent<CurveScaleAnimation>();
@@ -87,6 +80,12 @@ internal class ThreadStorm : BaseSilkSkill {
         AttemptStop(playerObject, threadStorm);
     }
 
+    /// <summary>
+    /// Initializes and activates the Thread Storm attack, setting up sub-effects
+    /// </summary>
+    /// <param name="playerObject">The player object that used the attack.</param>
+    /// <param name="volt">Determines if the volt filament effect should be enabled.</param>
+    /// <param name="isShaman">Determines if the shaman crest effect should be displayed.</param>
     private IEnumerator PlayStormSetup(GameObject playerObject, bool volt, bool isShaman) {
         if (!TryGetThreadStorm(playerObject, out var threadStorm)) {
             yield break;
@@ -95,9 +94,8 @@ internal class ThreadStorm : BaseSilkSkill {
         threadStorm.SetActive(true);
 
         // Set volt filament effect
-        var voltObject = threadStorm
-            .FindGameObjectInChildren("Ball")?
-            .FindGameObjectInChildren("thread_sphere_effect_zap");
+        var damager = threadStorm.FindGameObjectInChildren("Ball");
+        var voltObject = damager?.FindGameObjectInChildren("thread_sphere_effect_zap");
 
         if (voltObject) {
             voltObject.SetActive(false);
@@ -118,7 +116,7 @@ internal class ThreadStorm : BaseSilkSkill {
         }
 
         // Set the damager
-        var damager = threadStorm.FindGameObjectInChildren("Ball");
+        
         if (damager) {
             SetDamageHeroState(damager, 1);
             damager.SetActive(true);
@@ -126,23 +124,31 @@ internal class ThreadStorm : BaseSilkSkill {
             Logger.Warn("Unable to set damager for Thread Storm");
         }
 
-        // Play silk audio
+        // Play looping silk audio
         var audio = threadStorm.GetComponent<AudioSource>();
         audio.Play();
 
-        // Play the effect
+        // Play the main effect
         MonoBehaviourUtil.Instance.StartCoroutine(PlayStormExtension(playerObject));
     }
 
+    /// <summary>
+    /// Stops the effect if no more extensions have been received
+    /// </summary>
+    /// <param name="playerObject">The player object that used the attack</param>
+    /// <param name="threadStorm">The thread storm effect object</param>
     private static void AttemptStop(GameObject playerObject, GameObject threadStorm) {
+        // Decrement extension count
         var playerId = playerObject.GetInstanceID();
         var extensions = _playerExtensions.GetValueOrDefault(playerId, 1);
         _playerExtensions[playerId] = Mathf.Max(0, extensions - 1);
 
+        // There are more extensions, don't deactivate yet
         if (extensions > 1) {
             return;
         }
 
+        // Stop the effect
         ForceStop(threadStorm);
 
         // Play ending audio
@@ -151,6 +157,10 @@ internal class ThreadStorm : BaseSilkSkill {
         AudioUtil.PlayAudio(endAudio, playerObject);
     }
 
+    /// <summary>
+    /// Forces the thread storm to stop
+    /// </summary>
+    /// <param name="threadStorm">The thread storm effect's object</param>
     private static void ForceStop(GameObject threadStorm) {
         var audio = threadStorm.GetComponent<AudioSource>();
         audio.Stop();
@@ -158,6 +168,12 @@ internal class ThreadStorm : BaseSilkSkill {
 
     }
 
+    /// <summary>
+    /// Gets or creates the Thread Storm effect
+    /// </summary>
+    /// <param name="playerObject">The object of the player that used the attack</param>
+    /// <param name="threadStorm">The found or created Thread Storm effect object</param>
+    /// <returns>false if threadStorm could not be created</returns>
     private static bool TryGetThreadStorm(
         GameObject playerObject,
         [MaybeNullWhen(false)] out GameObject threadStorm
@@ -196,7 +212,7 @@ internal class ThreadStorm : BaseSilkSkill {
             Object.Destroy(fsm);
         }
 
-        // Remove shaman manager
+        // Remove components that could interfere
         if (threadStorm.TryGetComponent<HeroShamanRuneEffect>(out var globalRuneEffect)) {
             Object.DestroyImmediate(globalRuneEffect);
         }
@@ -249,7 +265,6 @@ internal class ThreadStorm : BaseSilkSkill {
         curveScale.enabled = false;
         curveScale.offset = new Vector3(0.1f, 0.1f, 0.1f);
         
-
         threadStorm.SetActive(true);
 
         return true;
