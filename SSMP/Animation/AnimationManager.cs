@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using SSMP.Animation.Effects;
+using SSMP.Animation.Effects.SilkSkills;
 using SSMP.Collection;
 using SSMP.Fsm;
 using SSMP.Game;
@@ -385,6 +386,7 @@ internal class AnimationManager {
 
         { "AirSphere Attack", AnimationClip.AirSphereAttack },
         { "AirSphere End", AnimationClip.AirSphereEnd },
+        { "AirSphere Refresh", AnimationClip.AirSphereRefresh },
         
         { "Silk Charge Antic", AnimationClip.SilkChargeAntic },
         { "Silk Charge", AnimationClip.SilkCharge },
@@ -655,13 +657,15 @@ internal class AnimationManager {
         { AnimationClip.BindChargeHealBurst, BindBurst.Instance },
         { AnimationClip.BindBurstAir, BindBurst.Instance },
         { AnimationClip.RageBindBurst, BindBurst.Instance },
-        { AnimationClip.Death, new Death() }
+        { AnimationClip.Death, new Death() },
+        { AnimationClip.AirSphereAttack, new ThreadStorm() }
     };
 
     private static readonly Dictionary<AnimationClip, IAnimationEffect> SubAnimationEffects = new() {
         { AnimationClip.WitchTentacles, BindBurst.Instance },
         { AnimationClip.ShamanCancel, new Bind { BindState = Bind.State.ShamanCancel } },
-        { AnimationClip.BindInterrupt, BindInterrupt.Instance }
+        { AnimationClip.BindInterrupt, BindInterrupt.Instance },
+        { AnimationClip.AirSphereRefresh, new ThreadStorm() },
     };
 
     /// <summary>
@@ -767,9 +771,9 @@ internal class AnimationManager {
         EventHooks.HeroControllerDie += OnDeath;
 
         // Register FSM hooks for certain bind actions
-        HeroController.OnHeroInstanceSet += CreateBindHooks;
+        HeroController.OnHeroInstanceSet += CreateHeroHooksHooks;
         if (HeroController.SilentInstance != null) {
-            CreateBindHooks(HeroController.instance);
+            CreateHeroHooksHooks(HeroController.instance);
         }
 
 
@@ -794,7 +798,7 @@ internal class AnimationManager {
     public void DeregisterHooks() {
         SceneManager.activeSceneChanged -= OnSceneChange;
 
-        HeroController.OnHeroInstanceSet -= CreateBindHooks;
+        HeroController.OnHeroInstanceSet -= CreateHeroHooksHooks;
         FsmStateActionInjector.UninjectAll();
         // On.HeroAnimationController.Play -= HeroAnimationControllerOnPlay;
         // On.HeroAnimationController.PlayFromFrame -= HeroAnimationControllerOnPlayFromFrame;
@@ -1049,7 +1053,7 @@ internal class AnimationManager {
     /// Creates hooks for the Witch Tentacles and Shaman Cancel states in
     /// the Bind fsm once the HeroController is ready.
     /// </summary>
-    private void CreateBindHooks(HeroController hc) {
+    private void CreateHeroHooksHooks(HeroController hc) {
         // Initialize warding bell FSM if it isn't already.
         // This fills it in with the template
         var bellFsm = HeroController.instance.bellBindFSM;
@@ -1075,6 +1079,17 @@ internal class AnimationManager {
 
         var bindInterrupt = bindFsm.GetState("Remove Silk?");
         FsmStateActionInjector.Inject(bindInterrupt, OnBindInterrupt, 2);
+
+
+        // Silk skill injections
+        var silkSkillFsm = hc.silkSpecialFSM;
+        if (silkSkillFsm == null) {
+            Logger.Warn("Unable to find Silk Skill FSM to hook.");
+            return;
+        }
+
+        var threadStormExtend = silkSkillFsm.GetState("Extend");
+        FsmStateActionInjector.Inject(threadStormExtend, OnThreadStormExtend, 0);
     }
 
     /// <summary>
@@ -1104,6 +1119,20 @@ internal class AnimationManager {
         dummyClip.name = "Bind Fail Burst";
         dummyClip.wrapMode = tk2dSpriteAnimationClip.WrapMode.Once;
         OnAnimationEvent(dummyClip);
+    }
+
+    private void OnThreadStormExtend(PlayMakerFSM fsm) {
+        //var dummyClip = new tk2dSpriteAnimationClip();
+        //dummyClip.name = "AirSphere Attack";
+        //dummyClip.wrapMode = tk2dSpriteAnimationClip.WrapMode.Once;
+        //if (_lastAnimationClip == dummyClip.name) {
+        //    dummyClip.name = "AirSphere Attack";
+        //}
+        //OnAnimationEvent(dummyClip);
+
+        var effectInfo = ThreadStorm.GetEffectFlags();
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.AirSphereAttack, 0, effectInfo);
+
     }
 
     // /// <summary>

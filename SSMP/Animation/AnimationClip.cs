@@ -505,6 +505,7 @@ internal enum AnimationClip {
     /// </summary>
     AirSphereAttack,
     AirSphereEnd,
+    AirSphereRefresh,
     /// <summary>
     /// Sharpdart
     /// </summary>

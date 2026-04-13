@@ -123,6 +123,33 @@ internal static class AudioUtil {
     }
 
     /// <summary>
+    /// Play a random audio clip from the given FSM action positionally at the given player object's position.
+    /// </summary>
+    /// <param name="playAudioClip">The action instance from an FSM.</param>
+    /// <param name="playerObject">The player object to play the audio at.</param>
+    public static void PlayAudio(
+        PlayRandomAudioClipTable playAudioClip,
+        GameObject playerObject
+    ) {
+        var audioClipTable = playAudioClip.Table.value as RandomAudioClipTable;
+        if (audioClipTable == null) {
+            Logger.Warn("Audio clip table for PlayRandomAudioClipTableV2 is null");
+            return;
+        }
+
+        var position = playerObject.transform.position;
+
+        if (playAudioClip.AudioPlayerPrefab.Value) {
+            audioClipTable.SpawnAndPlayOneShot(
+                playAudioClip.AudioPlayerPrefab.value as AudioSource,
+                position
+            );
+        } else {
+            audioClipTable.SpawnAndPlayOneShot(position);
+        }
+    }
+
+    /// <summary>
     /// Play the audio from a <see cref="AudioPlayerOneShotSingle"/> action relative to the given player object.
     /// </summary>
     /// <param name="action">The audio player action.</param>
@@ -142,5 +169,27 @@ internal static class AudioUtil {
         audioSource.volume = action.volume.value;
         
         audioSource.PlayOneShot(clip);
+    }
+
+    /// <summary>
+    /// Play the given audio event positionally at the given player object's position with the given audio clip.
+    /// And destroy it after it is done playing.
+    /// </summary>
+    /// <param name="audioClip">The audio clip to play.</param>
+    /// <param name="playerObject">The player object to play the audio at.</param>
+    public static void PlayAudio(
+        AudioClip audioClip,
+        GameObject playerObject
+    ) {
+        var audioEvent = new AudioEvent {
+            Clip = audioClip,
+            PitchMin = 1,
+            PitchMax = 1,
+            Volume = 1
+        };
+
+        var position = playerObject.transform.position;
+
+        audioEvent.SpawnAndPlayOneShot(position);
     }
 }
