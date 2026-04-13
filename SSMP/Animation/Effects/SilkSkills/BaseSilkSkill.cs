@@ -12,8 +12,20 @@ internal abstract class BaseSilkSkill : DamageAnimationEffect {
     private const string SilkSkillsObjectName = "Special Attacks";
     private static GameObject? _localSilkAttacks;
 
+    public static byte[] GetEffectFlags() {
+        var voltFilament = ToolItemManager.GetToolByName("Zap Imbuement");
+
+        return new byte[] {
+            (byte)(voltFilament.IsEquipped ? 1 : 0)
+        };
+    }
+
     public override byte[]? GetEffectInfo() {
-        return null;
+        return GetEffectFlags();
+    }
+
+    protected bool IsVolt(byte[]? effectInfo) {
+        return effectInfo is [1];
     }
 
     public abstract override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo);
@@ -47,7 +59,7 @@ internal abstract class BaseSilkSkill : DamageAnimationEffect {
         return true;
     }
 
-    protected static GameObject TryGetPlayerSilkAttacks(GameObject playerObject) {
+    protected static GameObject GetPlayerSilkAttacks(GameObject playerObject) {
         var silkAttacks = playerObject.FindGameObjectInChildren(SilkSkillsObjectName);
         if (silkAttacks == null) {
             silkAttacks = new GameObject(SilkSkillsObjectName);

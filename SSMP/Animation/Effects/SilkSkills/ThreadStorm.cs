@@ -17,20 +17,8 @@ internal class ThreadStorm : BaseSilkSkill {
 
     private static Dictionary<int, int> _playerExtensions = new();
 
-    public static byte[] GetEffectFlags() {
-        var voltFilament = ToolItemManager.GetToolByName("Zap Imbuement");
-
-        return new byte[] {
-            (byte)(voltFilament.IsEquipped ? 1 : 0)
-        };
-    }
-
-    public override byte[]? GetEffectInfo() {
-        return GetEffectFlags();
-    }
-
     public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
-        var volt = effectInfo is [1];
+        var volt = IsVolt(effectInfo);
         var isShaman = crestType == CrestType.Shaman;
 
         // Update number of extensions
@@ -179,7 +167,7 @@ internal class ThreadStorm : BaseSilkSkill {
         [MaybeNullWhen(false)] out GameObject threadStorm
     ) {
         // Find existing thread storm
-        var parent = TryGetPlayerSilkAttacks(playerObject);
+        var parent = GetPlayerSilkAttacks(playerObject);
         threadStorm = parent.FindGameObjectInChildren(SkillObjectName);
         if (threadStorm) {
             return true;

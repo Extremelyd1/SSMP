@@ -658,7 +658,8 @@ internal class AnimationManager {
         { AnimationClip.BindBurstAir, BindBurst.Instance },
         { AnimationClip.RageBindBurst, BindBurst.Instance },
         { AnimationClip.Death, new Death() },
-        { AnimationClip.AirSphereAttack, new ThreadStorm() }
+        { AnimationClip.NeedleThrowThrowing, new SilkSpear() },
+        { AnimationClip.AirSphereAttack, new ThreadStorm() },
     };
 
     private static readonly Dictionary<AnimationClip, IAnimationEffect> SubAnimationEffects = new() {
