@@ -63,10 +63,8 @@ internal class SilkSpear : BaseSilkSkill {
         spear.SetActive(true);
 
         // Play audio
+        PlayHornetAttackSound(playerObject);
         var fsm = GetSkillFSM();
-
-        var anticAudio = fsm.GetAction<PlayRandomAudioClipTable>("A Sphere Antic", 2);
-        if (anticAudio != null) AudioUtil.PlayAudio(anticAudio, playerObject);
 
         var throwAudio = fsm.GetAction<PlayAudioEvent>("Start Throw", 1);
         if (throwAudio != null) AudioUtil.PlayAudio(throwAudio, playerObject);

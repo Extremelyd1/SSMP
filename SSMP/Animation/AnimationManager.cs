@@ -660,6 +660,8 @@ internal class AnimationManager {
         { AnimationClip.Death, new Death() },
         { AnimationClip.NeedleThrowThrowing, new SilkSpear() },
         { AnimationClip.AirSphereAttack, new ThreadStorm() },
+        { AnimationClip.SilkCharge, new SharpDart() },
+        { AnimationClip.SilkChargeZap, new SharpDart { Volt = true } },
     };
 
     private static readonly Dictionary<AnimationClip, IAnimationEffect> SubAnimationEffects = new() {

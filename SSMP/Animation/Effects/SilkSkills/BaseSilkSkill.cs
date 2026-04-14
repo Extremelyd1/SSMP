@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using HutongGames.PlayMaker.Actions;
 using SSMP.Internals;
 using SSMP.Util;
 using UnityEngine;
@@ -67,6 +68,14 @@ internal abstract class BaseSilkSkill : DamageAnimationEffect {
         }
 
         return silkAttacks;
+    }
+
+    protected static void PlayHornetAttackSound(GameObject playerObject) {
+        var fsm = GetSkillFSM();
+        var anticAudio = fsm.GetAction<PlayRandomAudioClipTable>("A Sphere Antic", 2);
+        if (anticAudio != null) {
+            AudioUtil.PlayAudio(anticAudio, playerObject);
+        }
     }
 
 }

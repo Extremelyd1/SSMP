@@ -97,14 +97,9 @@ internal class ThreadStorm : BaseSilkSkill {
         }
 
         // Play antic noise
-        var fsm = GetSkillFSM();
-        var anticAudio = fsm.GetAction<PlayRandomAudioClipTable>("A Sphere Antic", 2);
-        if (anticAudio != null) {
-            AudioUtil.PlayAudio(anticAudio, playerObject);
-        }
+        PlayHornetAttackSound(playerObject);
 
         // Set the damager
-        
         if (damager) {
             SetDamageHeroState(damager, 1);
             damager.SetActive(true);
