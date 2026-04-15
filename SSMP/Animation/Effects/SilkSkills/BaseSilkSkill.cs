@@ -78,4 +78,26 @@ internal abstract class BaseSilkSkill : DamageAnimationEffect {
         }
     }
 
+    protected static bool FindOrCreateAttack(GameObject playerObject, string name, out GameObject? attack) {
+        // Find existing object
+        var attacks = GetPlayerSilkAttacks(playerObject);
+        attack = attacks.FindGameObjectInChildren(name);
+        if (attack) {
+            return false;
+        }
+
+        // Copy from local attacks
+        if (!TryGetLocalSilkAttacks(out var localSilkAttacks)) {
+            return false;
+        }
+
+        var localClash = localSilkAttacks.FindGameObjectInChildren(name);
+        if (!localClash) {
+            return false;
+        }
+
+        attack = Object.Instantiate(localClash, attacks.transform);
+        attack.name = name;
+        return true;
+    }
 }

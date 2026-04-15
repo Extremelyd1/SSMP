@@ -128,6 +128,34 @@ internal static class AudioUtil {
     /// <param name="playAudioClip">The action instance from an FSM.</param>
     /// <param name="playerObject">The player object to play the audio at.</param>
     public static void PlayAudio(
+        PlayRandomAudioClipTableV3 playAudioClip,
+        GameObject playerObject
+    ) {
+        var audioClipTable = playAudioClip.Table.value as RandomAudioClipTable;
+        if (audioClipTable == null) {
+            Logger.Warn("Audio clip table for PlayRandomAudioClipTableV3 is null");
+            return;
+        }
+
+        var position = playerObject.transform.position;
+
+        if (playAudioClip.AudioPlayerPrefab.Value) {
+            audioClipTable.SpawnAndPlayOneShot(
+                playAudioClip.AudioPlayerPrefab.value as AudioSource,
+                position,
+                playAudioClip.ForcePlay.value
+            );
+        } else {
+            audioClipTable.SpawnAndPlayOneShot(position, playAudioClip.ForcePlay.value);
+        }
+    }
+
+    /// <summary>
+    /// Play a random audio clip from the given FSM action positionally at the given player object's position.
+    /// </summary>
+    /// <param name="playAudioClip">The action instance from an FSM.</param>
+    /// <param name="playerObject">The player object to play the audio at.</param>
+    public static void PlayAudio(
         PlayRandomAudioClipTable playAudioClip,
         GameObject playerObject
     ) {

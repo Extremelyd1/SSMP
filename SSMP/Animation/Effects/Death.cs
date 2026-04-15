@@ -101,9 +101,8 @@ internal class Death : AnimationEffect {
             Object.DestroyImmediate(shaker);
         }
 
-        // "hide" the player (assign a very small texture)
-        playerObject.GetComponent<tk2dSpriteAnimator>().Stop();
-        playerObject.GetComponent<tk2dSprite>().SetSprite("wall_puff0004");
+        // Hide the player. They're shown as a separate frosted object in the next step
+        HidePlayer(playerObject);
 
         // Spawn the frosted hornet object
         const int frostedDuration = 3;

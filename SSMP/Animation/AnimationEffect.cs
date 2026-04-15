@@ -40,4 +40,14 @@ internal abstract class AnimationEffect : IAnimationEffect {
         var directionVar = damageFsm.FsmVariables.GetFsmFloat("direction");
         directionVar.Value = direction;
     }
+
+    /// <summary>
+    /// "Hides" the player character by stopping its animation and setting its sprite to a small texture
+    /// </summary>
+    /// <param name="playerObject">The player to be hidden.</param>
+    protected static void HidePlayer(GameObject playerObject) {
+        // "hide" the player (assign a very small texture)
+        playerObject.GetComponent<tk2dSpriteAnimator>().Stop();
+        playerObject.GetComponent<tk2dSprite>().SetSprite("wall_puff0004");
+    }
 }

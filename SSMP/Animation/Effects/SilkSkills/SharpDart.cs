@@ -18,12 +18,12 @@ internal class SharpDart : BaseSilkSkill {
 
     public bool Volt = false;
 
-    public override void Play(GameObject playerObject, CrestType crestType, byte[] effectInfo) {
+    public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
         var isShaman = crestType == CrestType.Shaman;
-        MonoBehaviourUtil.Instance.StartCoroutine(Play(playerObject, isShaman));
+        MonoBehaviourUtil.Instance.StartCoroutine(PlayEffect(playerObject, isShaman));
     }
 
-    private IEnumerator Play(GameObject playerObject, bool isShaman) {
+    private IEnumerator PlayEffect(GameObject playerObject, bool isShaman) {
         if (TryGetDamager(playerObject, out var damager)) {
             SetDamageHeroState(damager);
             damager.SetActive(true);

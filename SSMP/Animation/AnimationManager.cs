@@ -658,10 +658,15 @@ internal class AnimationManager {
         { AnimationClip.BindBurstAir, BindBurst.Instance },
         { AnimationClip.RageBindBurst, BindBurst.Instance },
         { AnimationClip.Death, new Death() },
+
+        // Silk Skills
         { AnimationClip.NeedleThrowThrowing, new SilkSpear() },
         { AnimationClip.AirSphereAttack, new ThreadStorm() },
         { AnimationClip.SilkCharge, new SharpDart() },
         { AnimationClip.SilkChargeZap, new SharpDart { Volt = true } },
+        { AnimationClip.ParryStance, CrossStitch.StartingInstance },
+        { AnimationClip.ParryStanceGround, CrossStitch.StartingInstance },
+        { AnimationClip.ParryClash, new CrossStitch() }
     };
 
     private static readonly Dictionary<AnimationClip, IAnimationEffect> SubAnimationEffects = new() {
