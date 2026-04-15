@@ -11,6 +11,7 @@ using SSMP.Hooks;
 using SSMP.Internals;
 using SSMP.Networking.Client;
 using SSMP.Util;
+using UnityEngine;
 using UnityEngine.SceneManagement;
 using Logger = SSMP.Logging.Logger;
 
@@ -666,7 +667,8 @@ internal class AnimationManager {
         { AnimationClip.SilkChargeZap, new SharpDart { Volt = true } },
         { AnimationClip.ParryStance, CrossStitch.StartingInstance },
         { AnimationClip.ParryStanceGround, CrossStitch.StartingInstance },
-        { AnimationClip.ParryClash, new CrossStitch() }
+        { AnimationClip.ParryClash, new CrossStitch() },
+        { AnimationClip.SilkBombAntic, new RuneRage() }
     };
 
     private static readonly Dictionary<AnimationClip, IAnimationEffect> SubAnimationEffects = new() {
@@ -685,6 +687,12 @@ internal class AnimationManager {
     /// The player manager to get player objects.
     /// </summary>
     private readonly PlayerManager _playerManager;
+
+    /// <summary>
+    /// </summary>
+    private readonly Dictionary<ushort, ClientPlayerData> _playerData;
+
+    private ServerSettings _serverSettings;
 
     /// <summary>
     /// The last animation clip sent.
@@ -738,11 +746,12 @@ internal class AnimationManager {
 
     public AnimationManager(
         NetClient netClient,
-        PlayerManager playerManager
+        PlayerManager playerManager,
+        Dictionary<ushort, ClientPlayerData> playerData
     ) {
         _netClient = netClient;
         _playerManager = playerManager;
-
+        _playerData = playerData;
         // _chargedEffectStopwatch = new Stopwatch();
         // _chargedEndEffectStopwatch = new Stopwatch();
     }
@@ -751,6 +760,8 @@ internal class AnimationManager {
     /// Initialize the animation manager by registering packet handlers and initializing animation effects.
     /// </summary>
     public void Initialize(ServerSettings serverSettings) {
+        _serverSettings = serverSettings;
+
         // Set the server settings for all animation effects
         foreach (var effect in AnimationEffects.Values) {
             effect.SetServerSettings(serverSettings);
@@ -1098,7 +1109,21 @@ internal class AnimationManager {
 
         var threadStormExtend = silkSkillFsm.GetState("Extend");
         FsmStateActionInjector.Inject(threadStormExtend, OnThreadStormExtend, 0);
+
+        var sonarBuildArray = silkSkillFsm.GetState("Build Enemy Array For Ping");
+        FsmStateActionInjector.Inject(sonarBuildArray, OnBuildRuneRagePingArray, 0);
+
+        //var enemiesIn = silkSkillFsm.GetState("Enemies In Ping Array?");
+        //FsmStateActionInjector.Inject(enemiesIn, LogEnemyList, 0);
     }
+
+    //private void LogEnemyList(PlayMakerFSM fsm) {
+    //    var arr = fsm.FsmVariables.ArrayVariables[0];
+    //    foreach (var value in arr.Values) {
+    //        if (value is GameObject go)
+    //            Logger.Info(go.name);
+    //    }
+    //}
 
     /// <summary>
     /// Animation subanimation hook for the Witch Tentacles FSM state
@@ -1141,6 +1166,61 @@ internal class AnimationManager {
         var effectInfo = ThreadStorm.GetEffectFlags();
         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.AirSphereRefresh, 0, effectInfo);
 
+    }
+
+    private void OnBuildRuneRagePingArray(PlayMakerFSM fsm) {
+        // If we are not connected, there is nothing to send to
+        if (!_netClient.IsConnected) {
+            return;
+        }
+
+        // Sonar tracker for Rune Rage
+        var sonarObject = HeroController.instance.gameObject
+            .FindGameObjectInChildren("Special Attacks")?
+            .FindGameObjectInChildren("Sonar Enemy Tracker");
+
+        if (sonarObject == null) return;
+
+        var sonar = sonarObject.GetComponent<TrackTriggerObjects>();
+        if (sonar == null) return;
+
+        var sonarCollider = sonarObject.GetComponent<CircleCollider2D>();
+        if (sonarCollider == null) return;
+
+        var radius = sonarCollider.radius * sonar.transform.GetScaleX();
+
+        if (!_serverSettings.IsPvpEnabled) return;
+
+        var playersInSonar = sonar.insideObjectsList;
+
+        // Find all players within sonar
+        foreach (var player in _playerData.Values) {
+            if (!player.IsInLocalScene || !player.PlayerObject) {
+                continue;
+            }
+
+            if (_serverSettings.TeamsEnabled && player.Team == _playerManager.LocalPlayerTeam) {
+                continue;
+            }
+
+            var collider = player.PlayerObject.GetComponent<BoxCollider2D>();
+            if (!collider) continue;
+
+            var closestPlayerPoint = collider.ClosestPoint(sonarCollider.transform.position);
+            Logger.Info(closestPlayerPoint.ToString());
+
+            var distanceFromCenter = Vector2.Distance(closestPlayerPoint, sonarCollider.transform.position);
+            Logger.Info(distanceFromCenter.ToString());
+            Logger.Info(radius.ToString());
+
+            if (distanceFromCenter <= radius) {
+                playersInSonar.AddIfNotPresent(player.PlayerObject);
+                Logger.Info($"Player {player.Username} is in the sonar!");
+            } else {
+                playersInSonar.Remove(player.PlayerObject);
+                Logger.Info("Not touching");
+            }
+        }
     }
 
     // /// <summary>
