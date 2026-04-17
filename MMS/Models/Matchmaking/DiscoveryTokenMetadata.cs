@@ -1,4 +1,4 @@
-namespace MMS.Models;
+namespace MMS.Models.Matchmaking;
 
 /// <summary>
 /// Metadata for an active NAT traversal discovery session.
@@ -8,7 +8,7 @@ public sealed class DiscoveryTokenMetadata {
     /// The UTC timestamp when this discovery token was created.
     /// Used for automatic cleanup of stale sessions.
     /// </summary>
-    public DateTime CreatedAt { get; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 
     /// <summary>
     /// The external port discovered via UDP. 
@@ -17,16 +17,10 @@ public sealed class DiscoveryTokenMetadata {
     public int? DiscoveredPort { get; set; }
 
     /// <summary>
-    /// The invite code of the lobby this token is associated with.
+    /// The join session associated with the client discovery token.
     /// Only populated for client discovery tokens.
     /// </summary>
-    public string? LobbyCode { get; init; }
-
-    /// <summary>
-    /// The public IP address of the client performing discovery.
-    /// Only populated for client discovery tokens.
-    /// </summary>
-    public string? ClientIp { get; init; }
+    public string? JoinId { get; init; }
 
     /// <summary>
     /// The connection data of the host lobby.
