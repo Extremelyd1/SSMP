@@ -151,16 +151,8 @@ internal class CrossStitch : BaseSilkSkill {
         flash = flashObj;
         if (!created) return true;
 
-        var runes = flash.GetComponentsInChildren<HeroShamanRuneEffect>();
-        foreach (var rune in runes) {
-            Object.DestroyImmediate(rune);
-        }
-
-        var runeGlow = flash.FindGameObjectInChildren("Shaman Flash Glow");
-
-        if (runeGlow) {
-            Object.DestroyImmediate(runeGlow);
-        }
+        flash.DestroyComponentsInChildren<HeroShamanRuneEffect>();
+        flash.DestroyGameObjectInChildren("Shaman Flash Glow");
 
         return true;
     }
@@ -175,10 +167,7 @@ internal class CrossStitch : BaseSilkSkill {
         clash = clashObj;
         if (!created) return true;
 
-        var runes = clash.GetComponentsInChildren<HeroShamanRuneEffect>();
-        foreach (var rune in runes) {
-            Object.DestroyImmediate(rune);
-        }
+        clash.DestroyComponentsInChildren<HeroShamanRuneEffect>();
 
         return true;
     }
@@ -210,15 +199,8 @@ internal class CrossStitch : BaseSilkSkill {
         slash.name = name;
         slash.transform.localPosition = new Vector3(1, 1, 0);
 
-        var runes = slash.GetComponentsInChildren<HeroShamanRuneEffect>();
-        foreach (var rune in runes) {
-            Object.DestroyImmediate(rune);
-        }
-
-        var haze = slash.FindGameObjectInChildren("haze2");
-        if (haze != null) {
-            Object.Destroy(haze);
-        }
+        slash.DestroyComponentsInChildren<HeroShamanRuneEffect>();
+        slash.DestroyGameObjectInChildren("haze2");
 
         var runeFlash = slash
             .FindGameObjectInChildren("Runes")?

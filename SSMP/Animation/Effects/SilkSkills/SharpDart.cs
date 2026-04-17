@@ -113,15 +113,9 @@ internal class SharpDart : BaseSilkSkill {
         var delay = damager.AddComponent<DeactivateAfterDelay>();
         delay.time = 0.3f;
 
-        var worm = damager.FindGameObjectInChildren("Worm Worrier");
-        if (worm) {
-            Object.Destroy(worm);
-        }
+        damager.DestroyGameObjectInChildren("Worm Worrier");
 
-        var runes = damager.GetComponentsInChildren<HeroShamanRuneEffect>();
-        foreach (var rune in runes) {
-            Object.DestroyImmediate(rune);
-        }
+        damager.DestroyComponentsInChildren<HeroShamanRuneEffect>();
 
         var runeBloom = damager
             .FindGameObjectInChildren("Shaman Rune")?

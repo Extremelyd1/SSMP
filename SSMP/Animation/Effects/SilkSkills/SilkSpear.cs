@@ -95,31 +95,14 @@ internal class SilkSpear : BaseSilkSkill {
         spear = Object.Instantiate(localSpear, silkAttacks.transform);
         spear.name = SpearObjectName;
 
-        if (spear.TryGetComponent<ToolEquipChecker>(out var toolChecker)) {
-            Object.DestroyImmediate(toolChecker);
-        }
-
-
-        // Remove potentially disruptive components
-        var runes = spear.GetComponentsInChildren<HeroShamanRuneEffect>();
-        foreach (var rune in runes) {
-            Object.DestroyImmediate(rune);
-        }
-
-        var camFollows = spear.GetComponentsInChildren<FollowCamera>();
-        foreach (var camFollow in camFollows) {
-            Object.Destroy(camFollow);
-        }
+        spear.DestroyComponent<ToolEquipChecker>();
+        spear.DestroyComponentsInChildren<HeroShamanRuneEffect>();
+        spear.DestroyComponentsInChildren<FollowCamera>();
 
         var child = spear.FindGameObjectInChildren("needle_throw_simple");
         if (child) {
-            if (child.TryGetComponent<CameraControlAnimationEvents>(out var cam)) {
-                Object.DestroyImmediate(cam);
-            }
-
-            if (child.TryGetComponent<CaptureAnimationEvent>(out var anim)) {
-                Object.DestroyImmediate(anim);
-            }
+            child.DestroyComponent<CameraControlAnimationEvents>();
+            child.DestroyComponent<CaptureAnimationEvent>();
 
             var bloom1 = child
                 .FindGameObjectInChildren("Rune Effect Activator")?

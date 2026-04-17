@@ -154,10 +154,7 @@ internal class RuneRage : BaseSilkSkill {
         // Spawn and remove components
         var sonarParent = EffectUtils.SpawnGlobalPoolObject(localSonar, playerObject.transform, 2f);
         if (sonarParent != null) {
-            var cam = sonarParent.GetComponentInChildren<CameraControlAnimationEvents>();
-            if (cam != null) {
-                Object.DestroyImmediate(cam);
-            }
+            sonarParent.DestroyComponentsInChildren<CameraControlAnimationEvents>();
         }
 
         if (!isShaman) return;
@@ -169,13 +166,8 @@ internal class RuneRage : BaseSilkSkill {
         var shaman = EffectUtils.SpawnGlobalPoolObject(localShaman, playerObject.transform, 0.7f);
         if (shaman == null) return;
 
-        if (shaman.TryGetComponent<HeroShamanRuneEffect>(out var rune)) {
-            Object.DestroyImmediate(rune);
-        }
-
-        if (shaman.TryGetComponent<CameraControlAnimationEvents>(out var camEffect)) {
-            Object.DestroyImmediate(camEffect);
-        }
+        shaman.DestroyComponent<HeroShamanRuneEffect>();
+        shaman.DestroyComponent<CameraControlAnimationEvents>();
     }
 
     /// <summary>
@@ -231,9 +223,7 @@ internal class RuneRage : BaseSilkSkill {
         if (!created) return true;
 
         // Remove problematic component from newly created object
-        if (antic.TryGetComponent<ToolEquipChecker>(out var checker)) {
-            Object.DestroyImmediate(checker);
-        }
+        antic.DestroyComponent<ToolEquipChecker>();
 
         return true;
     }
@@ -360,10 +350,7 @@ internal class RuneRage : BaseSilkSkill {
         }
 
         // Remove camera controller
-        var cam = blast.GetComponentInChildren<CameraControlAnimationEvents>();
-        if (cam) {
-            cam.enabled = false;
-        }
+        blast.DestroyComponentsInChildren<CameraControlAnimationEvents>();
 
         // Cull while offscreen (fixes bug)
         var animator = blast.GetComponentInChildren<Animator>();

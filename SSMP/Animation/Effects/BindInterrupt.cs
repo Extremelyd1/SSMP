@@ -56,19 +56,13 @@ internal class BindInterrupt : Bind {
 
         // Remove haze and camera controls
         burst.DestroyGameObjectInChildren("haze2");
-
-        var shaker = burst.GetComponentInChildren<CameraControlAnimationEvents>();
-        if (shaker != null) {
-            Object.DestroyImmediate(shaker);
-        }
+        burst.DestroyComponentsInChildren<CameraControlAnimationEvents>();
     }
 
     /// <summary>
     /// Creates a Warding Bell explosion
     /// </summary>
     private void PlayBellExplode(GameObject bindEffects) {
-        Logger.Debug("Playing Bell Burst");
-        
         // Locate warding bell FSM
         var bellFsm = HeroController.instance.bellBindFSM;
 
@@ -92,11 +86,7 @@ internal class BindInterrupt : Bind {
 
 
         // Remove camera control and haze
-        var shaker = bindBell.GetComponentInChildren<CameraControlAnimationEvents>();
-        if (shaker != null) {
-            Object.DestroyImmediate(shaker);
-        }
-
+        bindBell.DestroyComponentsInChildren<CameraControlAnimationEvents>();
         bindBell.DestroyGameObjectInChildren("haze2 (1)");
 
         // Add hitbox if appropriate

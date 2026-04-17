@@ -97,9 +97,8 @@ internal class Death : AnimationEffect {
             playerObject.transform, 
             5
         );
-        if (destroyEffects != null && destroyEffects.TryGetComponent<CameraShakeOnEnable>(out var shaker)) {
-            Object.DestroyImmediate(shaker);
-        }
+
+        destroyEffects?.DestroyComponent<CameraShakeOnEnable>();
 
         // Hide the player. They're shown as a separate frosted object in the next step
         HidePlayer(playerObject);

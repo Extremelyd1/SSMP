@@ -248,9 +248,7 @@ internal class PaleNails : BaseSilkSkill {
         antic = Object.Instantiate(localAntic, effects.transform);
         antic.name = AnticName;
 
-        if (antic.TryGetComponent<ToolEquipChecker>(out var checker)) {
-            Object.DestroyImmediate(checker);
-        }
+        antic.DestroyComponent<ToolEquipChecker>();
 
         return true;
     }

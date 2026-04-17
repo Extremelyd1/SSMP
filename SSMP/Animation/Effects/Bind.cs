@@ -142,8 +142,6 @@ internal class Bind : DamageAnimationEffect {
 
         var bindSilkAnimator = bindSilkObj.GetComponent<tk2dSpriteAnimator>();
 
-        Logger.Info("Playing Bind Silk animation");
-
         if (flags.QuickBind) {
             bindSilkAnimator.Play(bindSilkAnimator.GetClipByName("Bind Silk Quick"));
         } else {

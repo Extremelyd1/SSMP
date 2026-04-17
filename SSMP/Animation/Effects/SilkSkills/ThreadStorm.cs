@@ -190,24 +190,11 @@ internal class ThreadStorm : BaseSilkSkill {
         threadStorm = Object.Instantiate(localStorm, parent.transform);
         threadStorm.name = SkillObjectName;
 
-        // Remove FSM
-        if (threadStorm.TryGetComponent<PlayMakerFSM>(out var fsm)) {
-            Object.Destroy(fsm);
-        }
-
         // Remove components that could interfere
-        if (threadStorm.TryGetComponent<HeroShamanRuneEffect>(out var globalRuneEffect)) {
-            Object.DestroyImmediate(globalRuneEffect);
-        }
-
-        if (threadStorm.TryGetComponent<ToolEquipChecker>(out var checker)) {
-            Object.DestroyImmediate(checker);
-        }
-
-        if (threadStorm.TryGetComponent<EventRegister>(out var register)) {
-            Object.DestroyImmediate(register);
-        }
-
+        threadStorm.DestroyComponent<PlayMakerFSM>();
+        threadStorm.DestroyComponent<HeroShamanRuneEffect>();
+        threadStorm.DestroyComponent<ToolEquipChecker>();
+        threadStorm.DestroyComponent<EventRegister>();
 
         // Set up shaman crest effects
         var shamanRune = threadStorm.FindGameObjectInChildren("Shaman Rune");
