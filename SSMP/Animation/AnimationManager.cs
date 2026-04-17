@@ -1113,10 +1113,11 @@ internal class AnimationManager {
             return;
         }
 
+        // Thread strom
         var threadStormExtend = silkSkillFsm.GetState("Extend");
         FsmStateActionInjector.Inject(threadStormExtend, OnThreadStormExtend, 0);
 
-        // Rune Rage injections
+        // Rune Rage
         var sonarBuildArray = silkSkillFsm.GetState("Build Enemy Array");
         FsmStateActionInjector.Inject(sonarBuildArray, OnBuildRuneRageArray, 0);
 
@@ -1128,6 +1129,47 @@ internal class AnimationManager {
 
         var blastFinished = silkSkillFsm.GetState("Silk Bomb Recover");
         FsmStateActionInjector.Inject(blastFinished, OnBlastFinished, 0);
+
+        // Pale Nails
+        var nailObject = silkSkillFsm.GetAction<SpawnObjectFromGlobalPool>("BossNeedle Cast", 5)?.gameObject.Value;
+        var nailFsm = nailObject?.LocateMyFSM("Control");
+        if (nailObject == null || nailFsm == null) {
+            Logger.Warn("Unable to find Pale Nail FSM to hook.");
+            return;
+        }
+
+        // Find all existing pale nails
+        List<GameObject> nails = [
+            nailObject
+        ];
+
+        if (ObjectPool.instance.pooledObjects.TryGetValue(nailObject, out var globalPoolNails)) {
+            nails.AddRange(globalPoolNails);
+        }
+
+        // Add injector components to all current instances of nails
+        foreach (var nail in nails) {
+            var injector = nail.AddComponent<FsmActionInjectorComponent>();
+            List<FsmActionInjectorComponent.Injection> injections = [
+                new FsmActionInjectorComponent.Injection {
+                    FsmName = nailFsm.FsmName,
+                    ActionIndex = 12,
+                    FsmStateName = "Follow HeroFacingLeft",
+                    Hook = OnPaleNailAttackCheck,
+                    HookName = "Nail Attack"
+                },
+
+                new FsmActionInjectorComponent.Injection {
+                    FsmName = nailFsm.FsmName,
+                    ActionIndex = 12,
+                    FsmStateName = "Follow HeroFacingRight",
+                    Hook = OnPaleNailAttackCheck,
+                    HookName = "Nail Attack"
+                }
+            ];
+
+            injector.SetInjections(injections);
+        }
     }
 
     /// <summary>
@@ -1269,6 +1311,59 @@ internal class AnimationManager {
 
         _runeRagePositions.Clear();
         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.SilkBombLocations, 0, effectInfo.ToArray());
+    }
+
+    /// <summary>
+    /// Influences Pail Nails to be able to target players that can be attacked
+    /// </summary>
+    private void OnPaleNailAttackCheck(PlayMakerFSM fsm) {
+        // If we are not connected, there is nothing to send to
+        if (!_netClient.IsConnected) {
+            return;
+        }
+
+        var sonarObject = fsm.gameObject;
+
+        // Get needed components
+        var sonar = sonarObject.GetComponentInChildren<TrackTriggerObjectsLineOfSight>();
+        if (sonar == null) return;
+
+        var sonarCollider = sonarObject.GetComponentInChildren<CircleCollider2D>();
+        if (sonarCollider == null) return;
+
+        // Remove any old player objects
+        sonar.Refresh();
+
+        // Don't bother targeting if PvP is off
+        if (!_serverSettings.IsPvpEnabled) {
+            return;
+        }
+
+        var radius = sonarCollider.radius * sonar.transform.GetScaleX();
+        var inSonar = sonar.insideObjectsList;
+
+        // Find all players within sonar
+        foreach (var player in _playerData.Values) {
+            if (!player.IsInLocalScene || !player.PlayerObject) {
+                continue;
+            }
+
+            // Don't bother to target players on same team
+            if (_serverSettings.TeamsEnabled && player.Team == _playerManager.LocalPlayerTeam && player.Team != Team.None) {
+                continue;
+            }
+
+            var collider = player.PlayerObject.GetComponent<BoxCollider2D>();
+            if (!collider) continue;
+
+            // Determine if the player is within the sonar circle and is not obstructed
+            var closestPlayerPoint = collider.ClosestPoint(sonarCollider.transform.position);
+            var distanceFromCenter = Vector2.Distance(closestPlayerPoint, sonarCollider.transform.position);
+
+            if (distanceFromCenter <= radius && sonar.IsCounted(collider.gameObject)) {
+                inSonar.AddIfNotPresent(player.PlayerObject);
+            }
+        }
     }
 
     // /// <summary>

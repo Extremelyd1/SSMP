@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using HutongGames.PlayMaker;
 using HutongGames.PlayMaker.Actions;
+using SSMP.Fsm;
 using SSMP.Internals;
 using SSMP.Util;
 using UnityEngine;
@@ -184,6 +185,13 @@ internal class PaleNails : BaseSilkSkill {
         wallCheck = fsm.GetAction<ConvertBoolToFloat>(followRightName, 7);
         wallCheck?.trueValue = wallTrueVar;
 
+        // Remove hook
+        var hook = fsm.GetAction<FsmStateActionInjector>(followLeftName, 12);
+        hook?.Uninject();
+
+        hook = fsm.GetAction<FsmStateActionInjector>(followRightName, 12);
+        hook?.Uninject();
+
         // Remove track trigger
         var trackTrigger = fsm.GetAction<CheckTrackTriggerCountV2>(followLeftName, 12);
 
@@ -209,19 +217,6 @@ internal class PaleNails : BaseSilkSkill {
 
         fsm.enabled = true;
         return true;
-    }
-
-    private GameObject GetNailParent(GameObject playerObject) {
-        var attacks = GetPlayerSilkAttacks(playerObject);
-
-        const string parentName = "Pale Nails";
-        var nails = attacks.FindGameObjectInChildren(parentName);
-        if (nails == null) {
-            nails = new GameObject(parentName);
-            nails.transform.SetParentReset(attacks.transform);
-        }
-
-        return nails;
     }
 
     private bool TryGetAntic(GameObject playerObject, [MaybeNullWhen(false)] out GameObject antic) {
