@@ -129,10 +129,7 @@ internal class CrossStitch : BaseSilkSkill {
         if (!created) return true;
 
         if (zap) {
-            var bloom = thread.FindGameObjectInChildren("light_effect_v02 (2)");
-            if (bloom) {
-                Object.Destroy(bloom);
-            }
+            thread.DestroyGameObjectInChildren("light_effect_v02 (2)");
 
             thread.SetActiveChildren(true);
             thread.SetActive(false);

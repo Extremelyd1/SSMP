@@ -214,8 +214,7 @@ internal class ThreadStorm : BaseSilkSkill {
                 Object.DestroyImmediate(runeEffect);
             }
 
-            var bloom = shamanRune.FindGameObjectInChildren("Shaman Rune Camera Bloom");
-            if (bloom) Object.DestroyImmediate(bloom);
+            shamanRune.DestroyGameObjectInChildren("Shaman Rune Camera Bloom");
         }
 
         // Set up scale animation. It plays when enabled.
