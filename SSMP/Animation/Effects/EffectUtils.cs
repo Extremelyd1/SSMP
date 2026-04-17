@@ -16,6 +16,7 @@ internal static class EffectUtils {
         var recycler = obj.GetComponent<AutoRecycleSelf>();
         if (recycler != null) {
             // Stop listeners before destroying
+            AutoRecycleSelf.activeRecyclers.Remove(recycler);
             recycler.recycleTimerRunning = false;
             recycler.subbed = false;
 

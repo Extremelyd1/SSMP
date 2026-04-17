@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using HutongGames.PlayMaker.Actions;
 using SSMP.Animation.Effects;
 using SSMP.Animation.Effects.SilkSkills;
 using SSMP.Collection;
@@ -401,6 +402,7 @@ internal class AnimationManager {
         { "Silk Bomb Antic Q", AnimationClip.SilkBombAnticQ },
         { "Silk Bomb Loop", AnimationClip.SilkBombLoop },
         { "Silk Bomb Recover", AnimationClip.SilkBombRecover },
+        { "Silk Bomb Locations", AnimationClip.SilkBombLocations },
         
         { "Sit Craft", AnimationClip.SitCraft },
         { "Sit Craft Silk", AnimationClip.SitCraftSilk },
@@ -668,7 +670,7 @@ internal class AnimationManager {
         { AnimationClip.ParryStance, CrossStitch.StartingInstance },
         { AnimationClip.ParryStanceGround, CrossStitch.StartingInstance },
         { AnimationClip.ParryClash, new CrossStitch() },
-        { AnimationClip.SilkBombAntic, new RuneRage() }
+        { AnimationClip.SilkBombAntic, new RuneRage { IsAntic = true } }
     };
 
     private static readonly Dictionary<AnimationClip, IAnimationEffect> SubAnimationEffects = new() {
@@ -676,6 +678,7 @@ internal class AnimationManager {
         { AnimationClip.ShamanCancel, new Bind { BindState = Bind.State.ShamanCancel } },
         { AnimationClip.BindInterrupt, BindInterrupt.Instance },
         { AnimationClip.AirSphereRefresh, new ThreadStorm() },
+        { AnimationClip.SilkBombLocations, new RuneRage() }
     };
 
     /// <summary>
@@ -713,6 +716,8 @@ internal class AnimationManager {
     /// Whether the current dash has ended and we can start a new one.
     /// </summary>
     private bool _dashHasEnded = true;
+
+    private List<byte> _runeRagePositions = new();
 
     // /// <summary>
     // /// Whether the player has sent that they stopped crystal dashing.
@@ -1110,20 +1115,19 @@ internal class AnimationManager {
         var threadStormExtend = silkSkillFsm.GetState("Extend");
         FsmStateActionInjector.Inject(threadStormExtend, OnThreadStormExtend, 0);
 
-        var sonarBuildArray = silkSkillFsm.GetState("Build Enemy Array For Ping");
-        FsmStateActionInjector.Inject(sonarBuildArray, OnBuildRuneRagePingArray, 0);
+        // Rune Rage injections
+        var sonarBuildArray = silkSkillFsm.GetState("Build Enemy Array");
+        FsmStateActionInjector.Inject(sonarBuildArray, OnBuildRuneRageArray, 0);
 
-        //var enemiesIn = silkSkillFsm.GetState("Enemies In Ping Array?");
-        //FsmStateActionInjector.Inject(enemiesIn, LogEnemyList, 0);
+        var blastEnemy = silkSkillFsm.GetState("Blast Enemy");
+        FsmStateActionInjector.Inject(blastEnemy, OnBlastEnemy, 4);
+
+        var blastRandom = silkSkillFsm.GetState("Random Blasts");
+        FsmStateActionInjector.Inject(blastRandom, OnBlastRandom, 3);
+
+        var blastFinished = silkSkillFsm.GetState("Silk Bomb Recover");
+        FsmStateActionInjector.Inject(blastFinished, OnBlastFinished, 0);
     }
-
-    //private void LogEnemyList(PlayMakerFSM fsm) {
-    //    var arr = fsm.FsmVariables.ArrayVariables[0];
-    //    foreach (var value in arr.Values) {
-    //        if (value is GameObject go)
-    //            Logger.Info(go.name);
-    //    }
-    //}
 
     /// <summary>
     /// Animation subanimation hook for the Witch Tentacles FSM state
@@ -1155,43 +1159,47 @@ internal class AnimationManager {
     }
 
     private void OnThreadStormExtend(PlayMakerFSM fsm) {
-        //var dummyClip = new tk2dSpriteAnimationClip();
-        //dummyClip.name = "AirSphere Attack";
-        //dummyClip.wrapMode = tk2dSpriteAnimationClip.WrapMode.Once;
-        //if (_lastAnimationClip == dummyClip.name) {
-        //    dummyClip.name = "AirSphere Attack";
-        //}
-        //OnAnimationEvent(dummyClip);
-
-        var effectInfo = ThreadStorm.GetEffectFlags();
+        var effectInfo = BaseSilkSkill.GetEffectFlags();
         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.AirSphereRefresh, 0, effectInfo);
 
     }
 
-    private void OnBuildRuneRagePingArray(PlayMakerFSM fsm) {
+    /// <summary>
+    /// Influences Rune Rage to be able to target players that can be attacked
+    /// </summary>
+    private void OnBuildRuneRageArray(PlayMakerFSM fsm) {
         // If we are not connected, there is nothing to send to
         if (!_netClient.IsConnected) {
             return;
         }
 
-        // Sonar tracker for Rune Rage
+        _runeRagePositions.Clear();
+
+        // Find tracker for Rune Rage
         var sonarObject = HeroController.instance.gameObject
             .FindGameObjectInChildren("Special Attacks")?
             .FindGameObjectInChildren("Sonar Enemy Tracker");
 
         if (sonarObject == null) return;
 
+        // Get needed components
         var sonar = sonarObject.GetComponent<TrackTriggerObjects>();
         if (sonar == null) return;
 
         var sonarCollider = sonarObject.GetComponent<CircleCollider2D>();
         if (sonarCollider == null) return;
 
+        // Remove any old player objects
+        sonar.Refresh();
+
+        // If PvP is off, remove any players that might be inside
+        if (!_serverSettings.IsPvpEnabled) {
+            return;
+        }
+
         var radius = sonarCollider.radius * sonar.transform.GetScaleX();
 
-        if (!_serverSettings.IsPvpEnabled) return;
-
-        var playersInSonar = sonar.insideObjectsList;
+        var inSonar = sonar.insideObjectsList;
 
         // Find all players within sonar
         foreach (var player in _playerData.Values) {
@@ -1199,28 +1207,67 @@ internal class AnimationManager {
                 continue;
             }
 
-            if (_serverSettings.TeamsEnabled && player.Team == _playerManager.LocalPlayerTeam) {
+            // Don't bother to target players on same team
+            if (_serverSettings.TeamsEnabled && player.Team == _playerManager.LocalPlayerTeam && player.Team != Team.None) {
+                inSonar.Remove(player.PlayerObject);
                 continue;
             }
 
             var collider = player.PlayerObject.GetComponent<BoxCollider2D>();
             if (!collider) continue;
 
+            // Determine if the player is within the sonar circle
             var closestPlayerPoint = collider.ClosestPoint(sonarCollider.transform.position);
-            Logger.Info(closestPlayerPoint.ToString());
-
             var distanceFromCenter = Vector2.Distance(closestPlayerPoint, sonarCollider.transform.position);
-            Logger.Info(distanceFromCenter.ToString());
-            Logger.Info(radius.ToString());
 
             if (distanceFromCenter <= radius) {
-                playersInSonar.AddIfNotPresent(player.PlayerObject);
-                Logger.Info($"Player {player.Username} is in the sonar!");
+                inSonar.AddIfNotPresent(player.PlayerObject);
             } else {
-                playersInSonar.Remove(player.PlayerObject);
-                Logger.Info("Not touching");
+                inSonar.Remove(player.PlayerObject);
             }
         }
+    }
+
+    /// <summary>
+    /// Intercepts the spawn locations for targeted Rune Rages
+    /// </summary>
+    private void OnBlastEnemy(PlayMakerFSM fsm) {
+        // At this point the rune cluster has been created with a position and a given offset from the object.
+        // This position is relative to the player.
+        var spawnPosition = fsm.FsmVariables.FindFsmVector3("Shift Pos");
+        if (spawnPosition != null) {
+            var position = RuneRage.EncodeRunePosition(spawnPosition.Value + HeroController.instance.transform.position);
+            _runeRagePositions.AddRange(position);
+        }
+    }
+
+    /// <summary>
+    /// Intercepts the spawn locations for random Rune Rages
+    /// </summary>
+    private void OnBlastRandom(PlayMakerFSM fsm) {
+        // If there aren't enough targets, rune rage will spawn up to 3 other blasts
+        var spawnRadial = fsm.GetFirstAction<SpawnRandomObjectsRadialRandom>("Random Blasts");
+        if (spawnRadial != null) {
+            // Get the positions of spawned blasts
+            var positions = spawnRadial.tempPosStore;
+
+            // Add to collection of positions
+            foreach (var position in positions) {
+                var encodedPosition = RuneRage.EncodeRunePosition((Vector3)position);
+                _runeRagePositions.AddRange(encodedPosition);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Animation hook to send Rune Rage positions
+    /// </summary>
+    private void OnBlastFinished(PlayMakerFSM fsm) {
+        var effectInfo = BaseSilkSkill.GetEffectFlags().ToList();
+        effectInfo.AddRange(_runeRagePositions);
+
+        _runeRagePositions.Clear();
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.SilkBombLocations, 0, effectInfo.ToArray());
     }
 
     // /// <summary>

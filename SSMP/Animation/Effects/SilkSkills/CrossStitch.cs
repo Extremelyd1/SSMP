@@ -1,10 +1,6 @@
-using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using HutongGames.PlayMaker;
 using HutongGames.PlayMaker.Actions;
-using Mono.WebBrowser;
 using SSMP.Internals;
 using SSMP.Util;
 using UnityEngine;
@@ -120,7 +116,7 @@ internal class CrossStitch : BaseSilkSkill {
         }
     }
 
-    private bool TryGetParryThread(GameObject playerObject, bool zap, [MaybeNullWhen(false)] out GameObject thread) {
+    private static bool TryGetParryThread(GameObject playerObject, bool zap, [MaybeNullWhen(false)] out GameObject thread) {
         // Find existing object
         var name = zap ? "Parry Thread Zap" : "Parry Thread";
         var created = FindOrCreateAttack(playerObject, name, out var threadObj);
@@ -145,7 +141,7 @@ internal class CrossStitch : BaseSilkSkill {
         return true;
     }
 
-    private bool TryGetStanceFlash(GameObject playerObject, [MaybeNullWhen(false)] out GameObject flash) {
+    private static bool TryGetStanceFlash(GameObject playerObject, [MaybeNullWhen(false)] out GameObject flash) {
         var created = FindOrCreateAttack(playerObject, ParryStanceFlashName, out var flashObj);
         if (flashObj == null) {
             flash = null;
@@ -169,7 +165,7 @@ internal class CrossStitch : BaseSilkSkill {
         return true;
     }
 
-    private bool TryGetClashEffect(GameObject playerObject, [MaybeNullWhen(false)] out GameObject clash) {
+    private static bool TryGetClashEffect(GameObject playerObject, [MaybeNullWhen(false)] out GameObject clash) {
         var created = FindOrCreateAttack(playerObject, ParryClashName, out var clashObj);
         if (clashObj == null) {
             clash = null;
@@ -187,7 +183,7 @@ internal class CrossStitch : BaseSilkSkill {
         return true;
     }
 
-    private bool TryGetSlashEffect(GameObject playerObject, bool isZap, [MaybeNullWhen(false)] out GameObject slash) {
+    private static bool TryGetSlashEffect(GameObject playerObject, bool isZap, [MaybeNullWhen(false)] out GameObject slash) {
         var name = isZap ? ParryZapSlashName : ParrySlashName;
 
         var attacks = GetPlayerSilkAttacks(playerObject);

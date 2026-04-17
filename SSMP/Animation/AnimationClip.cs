@@ -522,6 +522,7 @@ internal enum AnimationClip {
     SilkBombAntic,
     SilkBombAnticQ,
     SilkBombLoop,
+    SilkBombLocations,
     SilkBombRecover,
     
     SitCraft,
