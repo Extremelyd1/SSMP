@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using HutongGames.PlayMaker.Actions;
 using SSMP.Animation.Effects;
+using SSMP.Animation.Effects.Movement;
 using SSMP.Animation.Effects.SilkSkills;
 using SSMP.Collection;
 using SSMP.Fsm;
@@ -663,6 +664,7 @@ internal class AnimationManager {
         { AnimationClip.RageBindBurst, BindBurst.Instance },
         { AnimationClip.Death, new Death() },
         { AnimationClip.DoubleJump, new DoubleJump() },
+        { AnimationClip.UmbrellaInflateAntic, new UmbrellaInflate() },
 
         // Silk Skills
         { AnimationClip.NeedleThrowThrowing, new SilkSpear() },
