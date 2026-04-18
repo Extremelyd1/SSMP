@@ -205,7 +205,6 @@ internal class ThreadStorm : BaseSilkSkill {
                 if (preParticles != null) {
                     var postParticles = EffectUtils.SpawnGlobalPoolObject(preParticles, shamanRune.transform, 0, true);
                     if (postParticles) {
-                        postParticles.transform.localPosition = Vector3.zero;
                         postParticles.transform.localScale = new Vector3(3.5f, 3.5f, 1);
                     }
                 }
