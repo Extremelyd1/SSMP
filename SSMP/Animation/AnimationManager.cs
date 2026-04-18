@@ -662,6 +662,7 @@ internal class AnimationManager {
         { AnimationClip.BindBurstAir, BindBurst.Instance },
         { AnimationClip.RageBindBurst, BindBurst.Instance },
         { AnimationClip.Death, new Death() },
+        { AnimationClip.DoubleJump, new DoubleJump() },
 
         // Silk Skills
         { AnimationClip.NeedleThrowThrowing, new SilkSpear() },
@@ -672,7 +673,7 @@ internal class AnimationManager {
         { AnimationClip.ParryStanceGround, CrossStitch.StartingInstance },
         { AnimationClip.ParryClash, new CrossStitch() },
         { AnimationClip.SilkBombAntic, new RuneRage { IsAntic = true } },
-        { AnimationClip.AirSphereAntic, new PaleNails { IsAntic = true } }
+        { AnimationClip.AirSphereAntic, new PaleNails { IsAntic = true } },
     };
 
     private static readonly Dictionary<AnimationClip, IAnimationEffect> SubAnimationEffects = new() {
