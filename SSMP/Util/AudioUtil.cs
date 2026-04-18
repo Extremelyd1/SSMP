@@ -200,6 +200,28 @@ internal static class AudioUtil {
     }
 
     /// <summary>
+    /// Play the audio from a <see cref="PlayAudioEventRandom"/> action relative to the given player object.
+    /// </summary>
+    /// <param name="action">The audio player action.</param>
+    /// <param name="playerObject">The game object for the player.</param>
+    public static void PlayAudio(
+        PlayAudioEventRandom action,
+        GameObject playerObject
+    ) {
+        var clips = action.audioClipsArray;
+        if (clips == null || clips.Length == 0) {
+            return;
+        }
+
+        var audioSource = GetAudioSourceObject(playerObject);
+
+        audioSource.pitch = UnityEngine.Random.Range(action.pitchMin.value, action.pitchMax.value);
+        audioSource.volume = action.volume.value;
+
+        audioSource.PlayOneShot(clips.GetRandomElement());
+    }
+
+    /// <summary>
     /// Play the given audio event positionally at the given player object's position with the given audio clip.
     /// And destroy it after it is done playing.
     /// </summary>

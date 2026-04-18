@@ -143,6 +143,7 @@ internal enum AnimationClip {
     AirSphereRepeatAntic,
 
     SilkBossNeedleCast,
+    SilkBossNeedleFire,
 
     Taunt,
     TauntBack,

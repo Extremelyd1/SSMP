@@ -178,6 +178,7 @@ internal class AnimationManager {
         { "AirSphere Dissipate", AnimationClip.AirSphereDissipate },
         { "AirSphere RepeatAntic", AnimationClip.AirSphereRepeatAntic },
         { "Silk Boss Needle Cast", AnimationClip.SilkBossNeedleCast },
+        { "Silk Boss Needle Fire", AnimationClip.SilkBossNeedleFire },
         { "Taunt", AnimationClip.Taunt },
         { "Taunt Back", AnimationClip.TauntBack },
         { "Taunt Back End", AnimationClip.TauntBackEnd },
@@ -679,7 +680,8 @@ internal class AnimationManager {
         { AnimationClip.ShamanCancel, new Bind { BindState = Bind.State.ShamanCancel } },
         { AnimationClip.BindInterrupt, BindInterrupt.Instance },
         { AnimationClip.AirSphereRefresh, new ThreadStorm() },
-        { AnimationClip.SilkBombLocations, new RuneRage() }
+        { AnimationClip.SilkBombLocations, new RuneRage() },
+        { AnimationClip.SilkBossNeedleFire, new PaleNails() }
     };
 
     /// <summary>
@@ -1153,18 +1155,26 @@ internal class AnimationManager {
             List<FsmActionInjectorComponent.Injection> injections = [
                 new FsmActionInjectorComponent.Injection {
                     FsmName = nailFsm.FsmName,
-                    ActionIndex = 12,
                     FsmStateName = "Follow HeroFacingLeft",
+                    ActionIndex = 12,
                     Hook = OnPaleNailAttackCheck,
-                    HookName = "Nail Attack"
+                    HookName = "Nail Target"
                 },
 
                 new FsmActionInjectorComponent.Injection {
                     FsmName = nailFsm.FsmName,
-                    ActionIndex = 12,
                     FsmStateName = "Follow HeroFacingRight",
+                    ActionIndex = 12,
                     Hook = OnPaleNailAttackCheck,
-                    HookName = "Nail Attack"
+                    HookName = "Nail Target"
+                },
+
+                new FsmActionInjectorComponent.Injection {
+                    FsmName = nailFsm.FsmName,
+                    FsmStateName = "Fire Antic",
+                    ActionIndex = 0,
+                    Hook = OnPaleNailFire,
+                    HookName = "Nail Fire"
                 }
             ];
 
@@ -1364,6 +1374,25 @@ internal class AnimationManager {
                 inSonar.AddIfNotPresent(player.PlayerObject);
             }
         }
+    }
+
+    /// <summary>
+    /// Sends an update to fire a set of nails at a specific target
+    /// </summary>
+    private void OnPaleNailFire(PlayMakerFSM fsm) {
+        // Only get info from one needle position (the first one)
+        var needleOffset = fsm.FsmVariables.GetFsmVector3("Offset");
+        if (needleOffset.Value.x != 3) return;
+
+        // Don't send if no target, it'll go off on its own.
+        var target = fsm.FsmVariables.FindFsmGameObject("Target").Value;
+        if (target == null) {
+            return;
+        }
+
+        // Send nail target info
+        var effectInfo = PaleNails.EncodeTargetInfo(target);
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.SilkBossNeedleFire, 0, effectInfo);
     }
 
     // /// <summary>
