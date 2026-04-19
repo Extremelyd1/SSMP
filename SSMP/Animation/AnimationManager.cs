@@ -675,7 +675,7 @@ internal class AnimationManager {
         { AnimationClip.ParryStanceGround, CrossStitch.StartingInstance },
         { AnimationClip.ParryClash, new CrossStitch() },
         { AnimationClip.SilkBombAntic, new RuneRage { IsAntic = true } },
-        { AnimationClip.AirSphereAntic, new PaleNails { IsAntic = true } },
+        { AnimationClip.SilkBossNeedleCast, new PaleNails { IsAntic = true } },
     };
 
     private static readonly Dictionary<AnimationClip, IAnimationEffect> SubAnimationEffects = new() {

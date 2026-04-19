@@ -25,7 +25,7 @@ internal class PaleNails : BaseSilkSkill {
 
     public bool IsAntic = false;
 
-    private static Dictionary<int, List<GameObject[]>> _playerNails = new();
+    private static Dictionary<int, GameObject[]> _playerNails = new();
 
     /// <inheritdoc/>
     public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
@@ -42,39 +42,25 @@ internal class PaleNails : BaseSilkSkill {
 
         // Get existing nails
         var id = playerObject.GetInstanceID();
-        if (!_playerNails.TryGetValue(id, out var playerNails)) {
-            playerNails = [];
-        }
-
-        // No nails to fire
-        if (playerNails.Count == 0) {
+        if (!_playerNails.TryGetValue(id, out var nails) || nails.Length == 0) {
             return;
         }
 
-        // Find first nails that aren't despawned
-        var nails = playerNails[0];
-        playerNails.RemoveAt(0);
-        while (nails[0] == null && playerNails.Count > 0) {
-            nails = playerNails[0];
-            playerNails.RemoveAt(0);
-        }
-
+        // Ensure nails aren't despawned
         if (nails.Any(obj => obj == null)) {
             return;
         }
 
-        _playerNails[id] = playerNails;
-
         // Decode target position. If can't decode, play the unguided variant
         var targetInfo = DecodeTargetInfo(effectInfo);
         if (!targetInfo.HasValue) {
-            PlayNailFireUnguided(nails, isVolt);
+            PlayNailFireUnguided(nails, isVolt, id);
             return;
         }
 
         // Fire at target position
         var target = FindTarget(targetInfo.Value);
-        MonoBehaviourUtil.Instance.StartCoroutine(PlayNailFireTargeted(target, nails, isVolt));
+        MonoBehaviourUtil.Instance.StartCoroutine(PlayNailFireTargeted(target, nails, isVolt, id));
     }
 
     /// <summary>
@@ -83,12 +69,17 @@ internal class PaleNails : BaseSilkSkill {
     /// <param name="target">The target object to fire at</param>
     /// <param name="nails">The set of nails to fire</param>
     /// <param name="isVolt">If the volt filament effect should be used</param>
-    private static IEnumerator PlayNailFireTargeted(GameObject target, GameObject[] nails, bool isVolt) {
+    /// <param name="playerId">The 'id' of the player firing the nails</param>
+    private static IEnumerator PlayNailFireTargeted(GameObject target, GameObject[] nails, bool isVolt, int playerId) {
+        // Copy nails
+        GameObject[] playerNails = [.. nails];
+        _playerNails[playerId] = [];
+
         // Play audio
-        if (isVolt) PlayVoltAudio(nails[0]);
+        if (isVolt) PlayVoltAudio(playerNails[0]);
         
         // Fire each nail
-        foreach (var nail in nails) {
+        foreach (var nail in playerNails) {
             // Nail has already been despawned
             if (nail == null) {
                 yield break;
@@ -110,7 +101,8 @@ internal class PaleNails : BaseSilkSkill {
     /// </summary>
     /// <param name="nails">The set of nails to fire</param>
     /// <param name="isVolt">If the volt filament effect should be used</param>
-    private static void PlayNailFireUnguided(GameObject[] nails, bool isVolt) {
+    /// <param name="playerId">The 'id' of the player that summoned the nails</param>
+    private static void PlayNailFireUnguided(GameObject[] nails, bool isVolt, int playerId) {
         // Play audio
         if (isVolt) PlayVoltAudio(nails[0]);
 
@@ -118,7 +110,7 @@ internal class PaleNails : BaseSilkSkill {
         foreach (var nail in nails) {
             // Nail has already been despawned
             if (nail == null) {
-                continue;
+                return;
             }
 
             // Remove any target
@@ -128,6 +120,9 @@ internal class PaleNails : BaseSilkSkill {
             // Send it off into the world immediately
             fsm.Fsm.Event("FOLLOW BUDDY");
         }
+
+        // Clear nails
+        _playerNails[playerId] = [];
     }
 
     /// <summary>
@@ -139,6 +134,12 @@ internal class PaleNails : BaseSilkSkill {
     /// <returns></returns>
     private IEnumerator PlayAntic(GameObject playerObject, bool isVolt, bool isShaman) {
         var fsm = GetSkillFSM();
+
+        // Fire existing nails
+        var id = playerObject.GetInstanceID();
+        if (_playerNails.TryGetValue(id, out var existingNails)) {
+            PlayNailFireUnguided(existingNails, isVolt, id);
+        }
 
         // Play main antic
         PlayHornetAttackSound(playerObject);
@@ -218,26 +219,13 @@ internal class PaleNails : BaseSilkSkill {
         }
 
         // Store nails for firing later
-        var id = playerObject.GetInstanceID();
-        if (!_playerNails.TryGetValue(id, out var playerNails)) {
-            playerNails = [];
-        }
-
-        playerNails.Add(nails);
-
-        _playerNails[id] = playerNails;
+        _playerNails[id] = nails;
 
         // Wait for nail hover time to expire
         yield return new WaitForSeconds(1.8f);
-
-        // Nails may have been fired, don't refire
-        if (!_playerNails[id].Contains(nails)) yield break;
-
-        // Remove from being able to fire
-        _playerNails[id].Remove(nails);
-
+        
         // Fire em'
-        PlayNailFireUnguided(nails, isVolt);
+        PlayNailFireUnguided(nails, isVolt, id);
     }
 
     /// <summary>
