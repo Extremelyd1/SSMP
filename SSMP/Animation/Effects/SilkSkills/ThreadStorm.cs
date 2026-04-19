@@ -1,7 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using HutongGames.PlayMaker.Actions;
 using SSMP.Internals;
 using SSMP.Util;
 using UnityEngine;
@@ -41,7 +40,8 @@ internal class ThreadStorm : BaseSilkSkill {
     /// Plays the main loop of the Thread Storm attack
     /// </summary>
     /// <param name="playerObject">The player object that used the attack</param>
-    private IEnumerator PlayStormExtension(GameObject playerObject) {
+    /// <param name="initial">If the extension is part of the original animation</param>
+    private IEnumerator PlayStormExtension(GameObject playerObject, bool initial = false) {
         if (!TryGetThreadStorm(playerObject, out var threadStorm)) {
             yield break;
         }
@@ -56,11 +56,10 @@ internal class ThreadStorm : BaseSilkSkill {
         animator.PlayFromFrame("AirSphere", 0);
 
         // Scale up
-        var curveScale = threadStorm.GetComponent<CurveScaleAnimation>();
-        if (curveScale != null) {
-            curveScale.enabled = false;
-            curveScale.enabled = true;
-            curveScale.StartAnimation();
+        var damager = threadStorm.FindGameObjectInChildren("Ball");
+        if (!initial && damager != null) {
+            damager.transform.localScale = new Vector3(1.9f, 1.9f, 1);
+            AnimateScaleReset(damager);
         }
 
         yield return new WaitForSeconds(0.65f);
@@ -80,6 +79,7 @@ internal class ThreadStorm : BaseSilkSkill {
         }
 
         threadStorm.SetActive(true);
+        threadStorm.transform.localScale = Vector3.one;
 
         // Set volt filament effect
         var damager = threadStorm.FindGameObjectInChildren("Ball");
@@ -101,6 +101,9 @@ internal class ThreadStorm : BaseSilkSkill {
 
         // Set the damager
         if (damager) {
+            damager.transform.localScale = new Vector3(0.8f, 0.8f, 1);
+            AnimateScaleReset(damager);
+
             SetDamageHeroState(damager, 1);
             damager.SetActive(true);
         } else {
@@ -112,7 +115,15 @@ internal class ThreadStorm : BaseSilkSkill {
         audio.Play();
 
         // Play the main effect
-        MonoBehaviourUtil.Instance.StartCoroutine(PlayStormExtension(playerObject));
+        MonoBehaviourUtil.Instance.StartCoroutine(PlayStormExtension(playerObject, true));
+    }
+
+    /// <summary>
+    /// Animates the thread storm scale back to default
+    /// </summary>
+    /// <param name="ball">The "ball" child on the thread storm object</param>
+    private static void AnimateScaleReset(GameObject ball) {
+        ball.transform.ScaleTo(MonoBehaviourUtil.Instance, new Vector3(1.7f, 1.7f, 1), 0.1f);
     }
 
     /// <summary>
@@ -216,23 +227,7 @@ internal class ThreadStorm : BaseSilkSkill {
             shamanRune.DestroyGameObjectInChildren("Shaman Rune Camera Bloom");
         }
 
-        // Set up scale animation. It plays when enabled.
-        var curveScale = threadStorm.AddComponent<CurveScaleAnimation>();
-        curveScale.duration = 0.3f;
-        curveScale.playOnEnable = false;
-        curveScale.curve = new([
-            new Keyframe(0, 1),
-            new Keyframe(0.5f, 2f),
-            new Keyframe(1, 1),
-        ]);
-        curveScale.OnStart = new UnityEngine.Events.UnityEvent();
-        curveScale.OnStop = new UnityEngine.Events.UnityEvent();
-        curveScale.framerate = 30;
-        curveScale.isRealtime = true;
-        curveScale.playOnEnable = true;
-        curveScale.enabled = false;
-        curveScale.offset = new Vector3(0.1f, 0.1f, 0.1f);
-        
+        threadStorm.SetActive(false);
         threadStorm.SetActive(true);
 
         return true;
