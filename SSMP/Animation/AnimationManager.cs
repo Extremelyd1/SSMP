@@ -663,8 +663,6 @@ internal class AnimationManager {
         { AnimationClip.BindBurstAir, BindBurst.Instance },
         { AnimationClip.RageBindBurst, BindBurst.Instance },
         { AnimationClip.Death, new Death() },
-        { AnimationClip.DoubleJump, new DoubleJump() },
-        { AnimationClip.UmbrellaInflate, UmbrellaInflate.Instance },
 
         // Silk Skills
         { AnimationClip.NeedleThrowThrowing, new SilkSpear() },
