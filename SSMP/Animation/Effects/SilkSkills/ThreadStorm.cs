@@ -113,13 +113,12 @@ internal class ThreadStorm : BaseSilkSkill {
             damager.transform.localScale = new Vector3(0.8f, 0.8f, 1);
             AnimateScaleReset(damager);
 
-            SetDamageHeroState(damager, 1);
+            SetDamageHeroStateCalculated(damager, ServerSettings.ThreadStormDamage, isVolt, isShaman);
             damager.SetActive(true);
         } else {
             Logger.Warn("Unable to set damager for Thread Storm");
         }
 
-        // Play looping silk audio
         // Play the main effect
         MonoBehaviourUtil.Instance.StartCoroutine(PlayStormExtension(playerObject, true));
     }
@@ -183,7 +182,7 @@ internal class ThreadStorm : BaseSilkSkill {
             return false;
         }
 
-        if (created) {
+        if (!created) {
             return true;
         }
 

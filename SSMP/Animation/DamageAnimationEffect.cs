@@ -55,7 +55,7 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
     /// Adds or removes a <see cref="DamageHero"/> component from the given game object,
     /// depending on the PVP and team settings.
     /// </summary>
-    /// <param name="target">The target game object to detatch the component to.</param>
+    /// <param name="target">The target game object to attach or remove the component from.</param>
     /// <param name="damage">The number of mask of damage it should deal.</param>
     /// <returns>The <see cref="DamageHero"/> component that was added if PVP was turned on</returns>
     protected DamageHero? SetDamageHeroState(GameObject target, int damage = 1) {

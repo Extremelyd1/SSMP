@@ -25,20 +25,20 @@ internal class SilkSpear : BaseSilkSkill {
 
 
         // Set volt settings
-        var volt = IsVolt(effectInfo);
+        var isVolt = IsVolt(effectInfo);
 
         var voltThread = parent
             .FindGameObjectInChildren("thread")?
             .FindGameObjectInChildren("zap thread");
 
-        if (voltThread) voltThread.SetActive(volt);
+        if (voltThread) voltThread.SetActive(isVolt);
 
         var needle = parent.FindGameObjectInChildren("needle");
 
         var voltNeedle = needle?.FindGameObjectInChildren("Zap Effect Activator");
         if (voltNeedle) {
-            voltNeedle.SetActive(volt);
-            voltNeedle.SetActiveChildren(volt);
+            voltNeedle.SetActive(isVolt);
+            voltNeedle.SetActiveChildren(isVolt);
         }
 
         // Set shaman settings
@@ -53,14 +53,14 @@ internal class SilkSpear : BaseSilkSkill {
                 shamanRune.SetActive(isShaman);
 
                 var voltRune = shamanRune.FindGameObjectInChildren("Zap Rune");
-                if (voltRune) voltRune.SetActive(volt);
+                if (voltRune) voltRune.SetActive(isVolt);
             }
         }
 
         // Set damager
         var damager = needle?.FindGameObjectInChildren("Needle Damage");
         if (damager) {
-            SetDamageHeroState(damager, 1);
+            SetDamageHeroStateCalculated(damager, ServerSettings.SilkSpearDamage, isVolt, isShaman);
             MonoBehaviourUtil.Instance.StartCoroutine(PlayPossibleThunk(playerObject, spear, damager));
         } else {
             Logger.Warn("Unable to set damager for Silk Spear");
@@ -77,7 +77,7 @@ internal class SilkSpear : BaseSilkSkill {
         var throwAudio = fsm.GetAction<PlayAudioEvent>("Start Throw", 1);
         if (throwAudio != null) AudioUtil.PlayAudio(throwAudio, playerObject);
 
-        if (volt) {
+        if (isVolt) {
             var voltAudio = fsm.GetAction<PlayAudioEvent>("Silkspear Zap FX", 1);
             if (voltAudio != null) AudioUtil.PlayAudio(voltAudio, playerObject);
         }

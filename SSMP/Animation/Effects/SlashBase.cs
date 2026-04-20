@@ -186,7 +186,7 @@ internal abstract class SlashBase : ParryableEffect {
         }
 
         if (ServerSettings.IsPvpEnabled && ShouldDoDamage) {
-            AddDamageHeroComponent(slashObj);
+            AddDamageHeroComponent(slashObj, ServerSettings.NeedleDamage);
         }
         
         // TODO: nail imbued from NailAttackBase

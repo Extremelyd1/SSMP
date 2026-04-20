@@ -71,6 +71,10 @@ internal class BindInterrupt : Bind {
             return;
         }
 
+        if (bellFsm.FsmStates.Length == 1) {
+            bellFsm.Init();
+        }
+
         var stateName = "Burst";
         var spawner = bellFsm.GetFirstAction<SpawnObjectFromGlobalPool>(stateName);
 
@@ -93,7 +97,7 @@ internal class BindInterrupt : Bind {
         if (ServerSettings.IsPvpEnabled && ShouldDoDamage) {
             var damager = bindBell.FindGameObjectInChildren("damager");
             if (damager != null) {
-                AddDamageHeroComponent(damager);
+                AddDamageHeroComponent(damager, ServerSettings.WardingBellDamage);
             } else {
                 Logger.Warn("Unable to add damager to warding bell burst");
             }

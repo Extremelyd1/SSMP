@@ -119,7 +119,7 @@ internal class CrossStitch : BaseSilkSkill {
             // Add damager
             var damager = slash.FindGameObjectInChildren("Enemy_Damager");
             if (damager != null) {
-                SetDamageHeroState(damager);
+                SetDamageHeroStateCalculated(damager, ServerSettings.CrossStitchDamage, isVolt, isShaman);
             } else {
                 Logger.Warn("Unable to set damager for Cross Stitch");
             }

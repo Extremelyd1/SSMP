@@ -321,7 +321,7 @@ internal class RuneRage : BaseSilkSkill {
             .FindGameObjectInChildren("damager");
 
         if (damager != null) {
-            SetDamageHeroState(damager, 1);
+            SetDamageHeroStateCalculated(damager, ServerSettings.RuneRageDamage, isVolt, isShaman);
         }
 
         // Remove extra recycling component

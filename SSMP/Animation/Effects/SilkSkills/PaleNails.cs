@@ -154,7 +154,7 @@ internal class PaleNails : BaseSilkSkill {
 
         // Fire existing nails
         var id = playerObject.GetInstanceID();
-        if (PlayerNails.TryGetValue(id, out var existingNails)) {
+        if (PlayerNails.TryGetValue(id, out var existingNails) && existingNails.Length > 0) {
             PlayNailFireUnguided(existingNails, isVolt, id);
         }
 
@@ -200,7 +200,7 @@ internal class PaleNails : BaseSilkSkill {
             // Set the damage state
             var damager = nail.FindGameObjectInChildren("Enemy Damager");
             if (damager) {
-                SetDamageHeroState(damager, 1);
+                SetDamageHeroStateCalculated(damager, ServerSettings.PaleNailsDamage, isVolt, isShaman);
             }
 
             // Remove interfering components

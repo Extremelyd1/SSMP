@@ -32,7 +32,7 @@ internal class SharpDart : BaseSilkSkill {
     private IEnumerator PlayEffect(GameObject playerObject, bool isShaman) {
         // Set up damager
         if (TryGetDamager(playerObject, out var damager)) {
-            SetDamageHeroState(damager);
+            SetDamageHeroStateCalculated(damager, ServerSettings.SharpDartDamage, Volt, isShaman);
             damager.SetActive(true);
 
             var rune = damager.FindGameObjectInChildren("Shaman Rune");

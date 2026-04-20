@@ -116,6 +116,47 @@ All names for the settings are case-insensitive, but are written in case for cla
 - `AllowSkins`: Whether player skins are allowed.
   If disabled, players will not be able to use a skin locally, nor will it be transmitted to other players.
     - Aliases: `skins`
+- `NeedleDamage`: The number of masks of damage that a player's needle swing deals.
+    - Aliases: `needledmg`
+    - Default: 1
+- `NeedleStrikeDamage`: The number of masks of damage that Needle Strikes deal.
+    - Aliases: `needlestrikedmg`, `strikedmg`, `artdmg`
+    - Default: 2
+- `VoltFilamentDamage`: The number of extra half-masks of damage that silk skills with volt filament should deal.
+  Damage is rounded down after modifiers.
+    - Aliases: `voltfilamentdmg`, `voltdmg`, `filamentdmg`, `voltmodifier`, `voltmod`
+    - Default: 1
+- `ShamanDamage`: The number of extra half-masks of damage that silk skills on shaman crest should deal.
+  Damage is rounded down after modifiers.
+    - Aliases: `shamandmg`, `shamanmodifier`, `shamanmod`
+    - Default: 1
+- `CrossStitchDamage`: The number of masks of damage that Cross Stitch deals.
+    - Aliases: `crossstitchdmg`, `stitchdmg`, `parrydmg`
+    - Default: 1
+- `PaleNailsDamage`: The number of masks of damage that Pale Nails deals.
+    - Aliases: `palenailsdmg`, `palenaildmg`, `paledmg`
+    - Default: 1
+- `RuneRageDamage`: The number of masks of damage that Rune Rage deals.
+    - Aliases: `runeragedmg`
+    - Default: 1
+- `SharpDartDamage`: The number of masks of damage that Sharpdart deals.
+    - Aliases: `sharpdartdmg`, `dartdmg`
+    - Default: 1
+- `SilkSpearDamage`: The number of masks of damage that Silk Spear deals.
+    - Aliases: `silkspeardmg`, `speardmg`
+    - Default: 1
+- `ThreadStormDamage`: The number of masks of damage that Thread Storm deals.
+    - Aliases: `threadstormdmg`, `stormdmg`
+    - Default: 1
+- `WardingBellDamage`: The number of masks of damage that the Warding Bell deals.
+    - Aliases: `wardingbelldmg`, `bindbelldmg`, `belldmg`
+    - Default: 1
+- `ClawMirrorDamage`: The number of masks of damage that the base Claw Mirror deals.
+    - Aliases: `clawmirrordmg`, `mirrordmg`, `mirror1dmg`
+    - Default: 1
+- `ClawMirrorUpgradedDamage`: The number of masks of damage that the upgraded Claw Mirrors deal.
+    - Aliases: `clawmirrorupgradeddmg`, `mirror2dmg`
+    - Default: 1
 
 ### Skins
 The system for skins is currently not implemented entirely.
