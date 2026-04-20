@@ -229,7 +229,7 @@ internal class ClientManager : IClientManager {
         _playerData = new Dictionary<ushort, ClientPlayerData>();
 
         _playerManager = new PlayerManager(serverSettings, _playerData);
-        _animationManager = new AnimationManager(netClient, _playerManager, _playerData);
+        _animationManager = new AnimationManager(netClient, _playerManager, serverSettings, _playerData);
         _mapManager = new MapManager(netClient, serverSettings);
 
         _entityManager = new EntityManager(netClient);

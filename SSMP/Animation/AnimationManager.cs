@@ -755,11 +755,14 @@ internal class AnimationManager {
     public AnimationManager(
         NetClient netClient,
         PlayerManager playerManager,
+        ServerSettings serverSettings,
         Dictionary<ushort, ClientPlayerData> playerData
     ) {
         _netClient = netClient;
         _playerManager = playerManager;
         _playerData = playerData;
+        _serverSettings = serverSettings;
+
         // _chargedEffectStopwatch = new Stopwatch();
         // _chargedEndEffectStopwatch = new Stopwatch();
     }
@@ -798,9 +801,9 @@ internal class AnimationManager {
         EventHooks.HeroControllerDie += OnDeath;
 
         // Register FSM hooks for certain bind actions
-        HeroController.OnHeroInstanceSet += CreateHeroHooksHooks;
+        HeroController.OnHeroInstanceSet += CreateHeroHooks;
         if (HeroController.SilentInstance != null) {
-            CreateHeroHooksHooks(HeroController.instance);
+            CreateHeroHooks(HeroController.instance);
         }
 
 
@@ -825,7 +828,7 @@ internal class AnimationManager {
     public void DeregisterHooks() {
         SceneManager.activeSceneChanged -= OnSceneChange;
 
-        HeroController.OnHeroInstanceSet -= CreateHeroHooksHooks;
+        HeroController.OnHeroInstanceSet -= CreateHeroHooks;
         FsmStateActionInjector.UninjectAll();
         // On.HeroAnimationController.Play -= HeroAnimationControllerOnPlay;
         // On.HeroAnimationController.PlayFromFrame -= HeroAnimationControllerOnPlayFromFrame;
@@ -1080,7 +1083,7 @@ internal class AnimationManager {
     /// Creates hooks for the Witch Tentacles and Shaman Cancel states in
     /// the Bind fsm once the HeroController is ready.
     /// </summary>
-    private void CreateHeroHooksHooks(HeroController hc) {
+    private void CreateHeroHooks(HeroController hc) {
         // Initialize warding bell FSM if it isn't already.
         // This fills it in with the template
         var bellFsm = HeroController.instance.bellBindFSM;
@@ -1092,20 +1095,20 @@ internal class AnimationManager {
         var heroFsms = hc.GetComponents<PlayMakerFSM>();
 
         var bindFsm = heroFsms.FirstOrDefault(fsm => fsm.FsmName == "Bind");
-        if (bindFsm == null) {
+        if (bindFsm != null) {
+            // Find FSM states to inject
+            var tentacles = bindFsm.GetState("Witch Tentancles!"); // no that's not a typo... at least on my end
+            FsmStateActionInjector.Inject(tentacles, OnWitchTentacles, 4);
+        
+            var shamanCancel = bindFsm.GetState("Shaman Air Cancel");
+            FsmStateActionInjector.Inject(shamanCancel, OnShamanCancel);
+
+            var bindInterrupt = bindFsm.GetState("Remove Silk?");
+            FsmStateActionInjector.Inject(bindInterrupt, OnBindInterrupt, 2);
+        } else {
             Logger.Warn("Unable to find Bind FSM to hook.");
-            return;
         }
 
-        // Find FSM states to inject
-        var tentacles = bindFsm.GetState("Witch Tentancles!"); // no that's not a typo... at least on my end
-        FsmStateActionInjector.Inject(tentacles, OnWitchTentacles, 4);
-        
-        var shamanCancel = bindFsm.GetState("Shaman Air Cancel");
-        FsmStateActionInjector.Inject(shamanCancel, OnShamanCancel);
-
-        var bindInterrupt = bindFsm.GetState("Remove Silk?");
-        FsmStateActionInjector.Inject(bindInterrupt, OnBindInterrupt, 2);
 
 
         // Silk skill injections
@@ -1124,13 +1127,13 @@ internal class AnimationManager {
         FsmStateActionInjector.Inject(sonarBuildArray, OnBuildRuneRageArray, 0);
 
         var blastEnemy = silkSkillFsm.GetState("Blast Enemy");
-        FsmStateActionInjector.Inject(blastEnemy, OnBlastEnemy, 4);
+        FsmStateActionInjector.Inject(blastEnemy, OnRuneBlastEnemy, 4);
 
         var blastRandom = silkSkillFsm.GetState("Random Blasts");
-        FsmStateActionInjector.Inject(blastRandom, OnBlastRandom, 3);
+        FsmStateActionInjector.Inject(blastRandom, OnRuneBlastRandom, 3);
 
         var blastFinished = silkSkillFsm.GetState("Silk Bomb Recover");
-        FsmStateActionInjector.Inject(blastFinished, OnBlastFinished, 0);
+        FsmStateActionInjector.Inject(blastFinished, OnRuneBlastFinished, 0);
 
         // Pale Nails
         var nailObject = silkSkillFsm.GetAction<SpawnObjectFromGlobalPool>("BossNeedle Cast", 5)?.gameObject.Value;
@@ -1195,12 +1198,14 @@ internal class AnimationManager {
     /// <summary>
     /// Animation subanimation hook for the Shaman Air Cancel FSM state
     /// </summary>
+    
     private void OnShamanCancel(PlayMakerFSM fsm) {
         var dummyClip = new tk2dSpriteAnimationClip();
         dummyClip.name = "Shaman Cancel";
         dummyClip.wrapMode = tk2dSpriteAnimationClip.WrapMode.Once;
         OnAnimationEvent(dummyClip);
     }
+    
     /// <summary>
     /// Animation subanimation hook for interrupted binds
     /// </summary>
@@ -1211,10 +1216,12 @@ internal class AnimationManager {
         OnAnimationEvent(dummyClip);
     }
 
+    /// <summary>
+    /// Animation subanimation hook for extending a thread storm
+    /// </summary>
     private void OnThreadStormExtend(PlayMakerFSM fsm) {
         var effectInfo = BaseSilkSkill.GetEffectFlags();
         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.AirSphereRefresh, 0, effectInfo);
-
     }
 
     /// <summary>
@@ -1245,7 +1252,7 @@ internal class AnimationManager {
         // Remove any old player objects
         sonar.Refresh();
 
-        // If PvP is off, remove any players that might be inside
+        // No need to target if pvp is off
         if (!_serverSettings.IsPvpEnabled) {
             return;
         }
@@ -1284,7 +1291,7 @@ internal class AnimationManager {
     /// <summary>
     /// Intercepts the spawn locations for targeted Rune Rages
     /// </summary>
-    private void OnBlastEnemy(PlayMakerFSM fsm) {
+    private void OnRuneBlastEnemy(PlayMakerFSM fsm) {
         // At this point the rune cluster has been created with a position and a given offset from the object.
         // This position is relative to the player.
         var spawnPosition = fsm.FsmVariables.FindFsmVector3("Shift Pos");
@@ -1297,7 +1304,7 @@ internal class AnimationManager {
     /// <summary>
     /// Intercepts the spawn locations for random Rune Rages
     /// </summary>
-    private void OnBlastRandom(PlayMakerFSM fsm) {
+    private void OnRuneBlastRandom(PlayMakerFSM fsm) {
         // If there aren't enough targets, rune rage will spawn up to 3 other blasts
         var spawnRadial = fsm.GetFirstAction<SpawnRandomObjectsRadialRandom>("Random Blasts");
         if (spawnRadial != null) {
@@ -1315,7 +1322,7 @@ internal class AnimationManager {
     /// <summary>
     /// Animation hook to send Rune Rage positions
     /// </summary>
-    private void OnBlastFinished(PlayMakerFSM fsm) {
+    private void OnRuneBlastFinished(PlayMakerFSM fsm) {
         var effectInfo = BaseSilkSkill.GetEffectFlags().ToList();
         effectInfo.AddRange(_runeRagePositions);
 
