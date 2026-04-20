@@ -41,7 +41,7 @@ internal class DoubleJump : DamageAnimationEffect {
 
         // Play sawtooth circlet if appropriate
         if (effectInfo is [1]) {
-            SawtoothCirclet.PlayCirclet(playerObject, ShouldDoDamage && ServerSettings.IsPvpEnabled);
+            SawtoothCirclet.PlayCirclet(playerObject, ShouldDoDamage && ServerSettings.IsPvpEnabled, ServerSettings);
         }
     }
 }

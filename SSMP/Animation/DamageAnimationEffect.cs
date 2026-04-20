@@ -71,7 +71,7 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
     /// <param name="doDamage">If the damager should be enabled or not</param>
     /// <returns>The <see cref="DamageHero"/> component that was added if PVP was turned on</returns>
     protected static DamageHero? SetDamageHeroState(GameObject target, bool doDamage, int damage = 1) {
-        if (doDamage) {
+        if (doDamage && damage > 0) {
             return AddDamageHeroComponent(target, damage);
         }
 

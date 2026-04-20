@@ -246,6 +246,18 @@ public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
         }
     } = 1;
 
+    /// <inheritdoc />
+    [SettingAlias("sawtoothcircletdmg", "circletdmg", "umbrelladmg")]
+    [ModMenuSetting("Sawtooth Circlet Damage", "The number of masks of damage that Sawtooth Circlet deals")]
+    public byte SawtoothCircletDamage {
+        get;
+        init {
+            if (field == value) return;
+            field = value;
+            ChangeEvent?.Invoke(nameof(SawtoothCircletDamage));
+        }
+    } = 1;
+
     //
     // /// <inheritdoc />
     // [SettingAlias("sporeshroomdmg")]
