@@ -5,7 +5,6 @@ using HutongGames.PlayMaker.Actions;
 using SSMP.Internals;
 using SSMP.Util;
 using UnityEngine;
-using Logger = SSMP.Logging.Logger;
 using Object = UnityEngine.Object;
 
 namespace SSMP.Animation.Effects.SilkSkills;
@@ -101,7 +100,7 @@ internal class RuneRage : BaseSilkSkill {
 
         var fsm = GetSkillFSM();
         
-        // Play audio in S Bomb Zap FX 1
+        // Play volt audio
         if (isVolt) {
             var voltAntic = fsm.GetFirstAction<PlayAudioEvent>("S Bomb Zap FX");
             if (voltAntic != null) {
@@ -109,7 +108,7 @@ internal class RuneRage : BaseSilkSkill {
             }
         }
 
-        // Play audio in Silk Bomb Start
+        // Play normal audio
         var runeAnticAudio = fsm.GetAction<PlayAudioEvent>("Silk Bomb Start", 15);
         if (runeAnticAudio != null) {
             AudioUtil.PlayAudio(runeAnticAudio, playerObject);
@@ -125,13 +124,13 @@ internal class RuneRage : BaseSilkSkill {
     private void PlaySonar(GameObject playerObject, bool isVolt, bool isShaman) {
         var fsm = GetSkillFSM();
 
-        // Play audio in Initial Silk Cost
+        // Play general audio
         var runeBurstAudio = fsm.GetFirstAction<PlayAudioEvent>("Initial Silk Cost");
         if (runeBurstAudio != null) {
             AudioUtil.PlayAudio(runeBurstAudio, playerObject);
         }
 
-        // Play audio in S Bomb Volt FX 2
+        // Play volt audio
         if (isVolt) {
             var zapAudioBug = fsm.GetFirstAction<PlayAudioEvent>("S Bomb Zap FX 2");
             if (zapAudioBug != null) {
@@ -178,7 +177,7 @@ internal class RuneRage : BaseSilkSkill {
     /// <param name="isShaman">If the shaman crest effects should be used</param>
     private void PlayRuneRage(List<Vector3> positions, bool isVolt, bool isShaman) {
         // Generate spawn template
-        // Template layout looks like . * .
+        // Template layout kinda looks like . * .
         if (_clusterSpawnTemplate == null) {
             _clusterSpawnTemplate = new GameObject().transform;
             var firstBlast = new GameObject().transform;
@@ -213,7 +212,7 @@ internal class RuneRage : BaseSilkSkill {
     /// <returns></returns>
     private static bool TryGetAntic(GameObject playerObject, [MaybeNullWhen(false)] out GameObject antic) {
         // Find or create the antic object
-        var created = FindOrCreateAttack(playerObject, AnticName, out var anticObj);
+        var created = FindOrCreateSkill(playerObject, AnticName, out var anticObj);
         if (anticObj == null) {
             antic = null;
             return false;

@@ -1,29 +1,36 @@
-using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 using SSMP.Internals;
 using SSMP.Util;
 using UnityEngine;
-using Logger = SSMP.Logging.Logger;
 using Object = UnityEngine.Object;
 
 namespace SSMP.Animation.Effects.SilkSkills;
 
 internal class SharpDart : BaseSilkSkill {
-    private const string DashBurstName = "Silk Charge DashBurst";
-    private const string ZapParticlesName = "Silk Charge Particles Zap";
-    private const string DashDamagerName = "Silk Charge Damager";
+    /// <summary>
+    /// The name of the volt particles object
+    /// </summary>
+    private const string VoltParticlesName = "Silk Charge Particles Zap";
 
+    /// <summary>
+    /// If this instance of sharp dart is for the volt filament variant
+    /// </summary>
     public bool Volt = false;
 
+    /// <inheritdoc/>
     public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
         var isShaman = crestType == CrestType.Shaman;
         MonoBehaviourUtil.Instance.StartCoroutine(PlayEffect(playerObject, isShaman));
     }
 
+    /// <summary>
+    /// Plays the sharp dart effect
+    /// </summary>
+    /// <param name="playerObject">The player using the skill</param>
+    /// <param name="isShaman">If the shaman crest effects should be used</param>
     private IEnumerator PlayEffect(GameObject playerObject, bool isShaman) {
+        // Set up damager
         if (TryGetDamager(playerObject, out var damager)) {
             SetDamageHeroState(damager);
             damager.SetActive(true);
@@ -35,26 +42,29 @@ internal class SharpDart : BaseSilkSkill {
             }
         }
 
+        // Play dash burst
         if (TryGetDashBurst(playerObject, out var dashBurst)) {
             dashBurst.SetActive(false);
             dashBurst.SetActive(true);
         }
 
-        if (Volt && TryGetParticles(playerObject, out var particles)) {
-            particles.SetActive(false);
-            particles.SetActive(true);
-        }
+        var fsm = GetSkillFSM();
 
         // Play sound effects
         PlayHornetAttackSound(playerObject);
 
-        var fsm = GetSkillFSM();
         var chargeAntic = fsm.GetAction<PlayAudioEvent>("Silk Charge Begin", 5);
         if (chargeAntic != null) AudioUtil.PlayAudio(chargeAntic, playerObject);
         
+        // Play volt effects
         if (Volt) {
             var voltNoise = fsm.GetFirstAction<PlayAudioEvent>("Silk Charge Zap FX");
             if (voltNoise != null) AudioUtil.PlayAudio(voltNoise, playerObject);
+
+            if (TryGetParticles(playerObject, out var particles)) {
+                particles.SetActive(false);
+                particles.SetActive(true);
+            }
         }
 
         // Brief pause for ending sound
@@ -64,52 +74,41 @@ internal class SharpDart : BaseSilkSkill {
         if (chargeFull != null) AudioUtil.PlayAudio(chargeFull, playerObject);
     }
 
-    private bool TryGetDashBurst(GameObject playerObject, [MaybeNullWhen(false)] out GameObject dashBurst) {
-        // Find existing object
-        var attacks = GetPlayerSilkAttacks(playerObject);
-        dashBurst = attacks.FindGameObjectInChildren(DashBurstName);
+    /// <summary>
+    /// Attempts to get the dash burst effect
+    /// </summary>
+    /// <param name="playerObject">The player using the skill</param>
+    /// <param name="dashBurst">The effect, if found</param>
+    /// <returns>true if the effect was found</returns>
+    private static bool TryGetDashBurst(GameObject playerObject, [MaybeNullWhen(false)] out GameObject dashBurst) {
+        FindOrCreateSkill(playerObject, "Silk Charge DashBurst", out dashBurst);
+        
         if (dashBurst) {
+            dashBurst.transform.localScale = new Vector3(0.75f, 0.75f, 0.75f);
             return true;
         }
 
-        // Copy from local attacks
-        if (!TryGetLocalSilkAttacks(out var localSilkAttacks)) {
-            return false;
-        }
-
-        var localDashBurst = localSilkAttacks.FindGameObjectInChildren(DashBurstName);
-        if (!localDashBurst) {
-            return false;
-        }
-
-        dashBurst = Object.Instantiate(localDashBurst, attacks.transform);
-        dashBurst.name = DashBurstName;
-        dashBurst.transform.localScale = new Vector3(0.75f, 0.75f, 0.75f);
-
-        return true;
+        return false;
     }
 
-    private bool TryGetDamager(GameObject playerObject, [MaybeNullWhen(false)] out GameObject damager) {
-        // Find existing object
-        var attacks = GetPlayerSilkAttacks(playerObject);
-        damager = attacks.FindGameObjectInChildren(DashDamagerName);
-        if (damager) {
+    /// <summary>
+    /// Attempts to get the damage object
+    /// </summary>
+    /// <param name="playerObject">The player using the skill</param>
+    /// <param name="damager">The damager, if found</param>
+    /// <returns>true if the damager was found</returns>
+    private static bool TryGetDamager(GameObject playerObject, [MaybeNullWhen(false)] out GameObject damager) {
+        // Find or create effect
+        var created = FindOrCreateSkill(playerObject, "Silk Charge Damager", out damager);
+        if (!damager) {
+            return false;
+        }
+
+        if (!created) {
             return true;
         }
 
-        // Copy from local attacks
-        if (!TryGetLocalSilkAttacks(out var localSilkAttacks)) {
-            return false;
-        }
-
-        var localDamager = localSilkAttacks.FindGameObjectInChildren(DashDamagerName);
-        if (!localDamager) {
-            return false;
-        }
-
-        damager = Object.Instantiate(localDamager, attacks.transform);
-        damager.name = DashDamagerName;
-
+        // Set up effect if created
         var delay = damager.AddComponent<DeactivateAfterDelay>();
         delay.time = 0.3f;
 
@@ -117,41 +116,46 @@ internal class SharpDart : BaseSilkSkill {
 
         damager.DestroyComponentsInChildren<HeroShamanRuneEffect>();
 
-        var runeBloom = damager
-            .FindGameObjectInChildren("Shaman Rune")?
-            .FindGameObjectInChildren("Shaman Rune Camera Bloom");
-
-        if (runeBloom) {
-            Object.DestroyImmediate(runeBloom);
-        }
+        damager.FindGameObjectInChildren("Shaman Rune")?
+            .DestroyGameObjectInChildren("Shaman Rune Camera Bloom");
 
         return true;
     }
 
-    private bool TryGetParticles(GameObject playerObject, [MaybeNullWhen(false)] out GameObject particles) {
+    /// <summary>
+    /// Attempts to get the volt particles
+    /// </summary>
+    /// <param name="playerObject">The player using the skill</param>
+    /// <param name="particles">The particles, if found</param>
+    /// <returns>true if the particles were found</returns>
+    private static bool TryGetParticles(GameObject playerObject, [MaybeNullWhen(false)] out GameObject particles) {
+        // Find effects
         var effects = playerObject.FindGameObjectInChildren("Effects");
         if (!effects) {
-            particles = null;
-            return false;
+            effects = new GameObject("Effects");
+            effects.transform.SetParentReset(playerObject.transform);
         }
 
-        particles = effects.FindGameObjectInChildren(ZapParticlesName);
+        // Find existing effect
+        particles = effects.FindGameObjectInChildren(VoltParticlesName);
 
         if (particles) {
             return true;
         }
 
+        // Create new effect
         var localParticles = HeroController.instance.gameObject
             .FindGameObjectInChildren("Effects")?
-            .FindGameObjectInChildren(ZapParticlesName);
+            .FindGameObjectInChildren(VoltParticlesName);
 
         if (!localParticles) {
             return false;
         }
 
         particles = Object.Instantiate(localParticles, effects.transform);
-        particles.name = ZapParticlesName;
+        particles.name = VoltParticlesName;
 
+        // Set up components
         if (particles.TryGetComponent<ParticleSystem>(out var system)) {
             var emission = system.emission;
             emission.enabled = true;

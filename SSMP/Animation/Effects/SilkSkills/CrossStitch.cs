@@ -10,15 +10,18 @@ using Object = UnityEngine.Object;
 namespace SSMP.Animation.Effects.SilkSkills;
 
 internal class CrossStitch : BaseSilkSkill {
-    private const string ParryStanceFlashName = "Parry Stance Flash";
-    private const string ParryClashName = "Parry Clash Effect";
-    private const string ParrySlashName = "Parry Slash Effect";
-    private const string ParryZapSlashName = "Parry Slash Effect Zap";
 
+    /// <summary>
+    /// Determines if this instance is for the starting animation
+    /// </summary>
     public bool IsStarting = false;
 
+    /// <summary>
+    /// Reference to an instance for the starting animation
+    /// </summary>
     public static CrossStitch StartingInstance = new() { IsStarting = true };
 
+    /// <inheritdoc/>
     public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
         var isShaman = crestType == CrestType.Shaman;
         var isVolt = IsVolt(effectInfo);
@@ -33,6 +36,12 @@ internal class CrossStitch : BaseSilkSkill {
         MonoBehaviourUtil.Instance.StartCoroutine(PlayClash(playerObject, isShaman, isVolt));
     }
 
+    /// <summary>
+    /// Plays the parry preparation animation
+    /// </summary>
+    /// <param name="playerObject">The player who used the skill</param>
+    /// <param name="isShaman">If shaman effects should be used</param>
+    /// <param name="isVolt">If volt filament effects should be used</param>
     private void PlayStart(GameObject playerObject, bool isShaman, bool isVolt) {
         var fsm = GetSkillFSM();
 
@@ -44,7 +53,7 @@ internal class CrossStitch : BaseSilkSkill {
         var stanceAudio = fsm.GetAction<AudioPlayerOneShotSingle>("Parry Start", 15);
         if (stanceAudio != null) AudioUtil.PlayAudio(stanceAudio, playerObject);
 
-        // Enable thread (or zap thread)
+        // Enable thread (or volt thread)
         if (TryGetParryThread(playerObject, isVolt, out var thread)) {
             thread.SetActive(false);
             thread.SetActive(true);
@@ -59,6 +68,12 @@ internal class CrossStitch : BaseSilkSkill {
         }
     }
 
+    /// <summary>
+    /// Plays the post-hit clash effect, then the dash.
+    /// </summary>
+    /// <param name="playerObject">The player who used the skill</param>
+    /// <param name="isShaman">If shaman effects should be used</param>
+    /// <param name="isVolt">If volt filament effects should be used</param>
     private IEnumerator PlayClash(GameObject playerObject, bool isShaman, bool isVolt) {
         // Play parry audio
         var fsm = GetSkillFSM();
@@ -79,6 +94,12 @@ internal class CrossStitch : BaseSilkSkill {
         MonoBehaviourUtil.Instance.StartCoroutine(PlayDash(playerObject, isShaman, isVolt));
     }
 
+    /// <summary>
+    /// Plays the cross stitch dashing animation that does damage (if appropriate)
+    /// </summary>
+    /// <param name="playerObject">The player who used the skill</param>
+    /// <param name="isShaman">If shaman effects should be used</param>
+    /// <param name="isVolt">If volt filament effects should be used</param>
     private IEnumerator PlayDash(GameObject playerObject, bool isShaman, bool isVolt) {
         // Play louder sound
         PlayHornetAttackSound(playerObject);
@@ -86,17 +107,16 @@ internal class CrossStitch : BaseSilkSkill {
         // Hide the player during animation
         HidePlayer(playerObject);
 
-        // Get appropriate effect object from FSM (Parry Cross Slash)
+        // Get appropriate effect object
         if (TryGetSlashEffect(playerObject, isVolt, out var slash)) {
             slash.SetActive(false);
             slash.SetActive(true);
 
+            // Enable shaman effect if appropriate
             var runes = slash.FindGameObjectInChildren("Runes");
+            runes?.SetActive(isShaman);
 
-            if (runes != null) {
-                runes.SetActive(isShaman);
-            }
-
+            // Add damager
             var damager = slash.FindGameObjectInChildren("Enemy_Damager");
             if (damager != null) {
                 SetDamageHeroState(damager);
@@ -116,10 +136,17 @@ internal class CrossStitch : BaseSilkSkill {
         }
     }
 
-    private static bool TryGetParryThread(GameObject playerObject, bool zap, [MaybeNullWhen(false)] out GameObject thread) {
+    /// <summary>
+    /// Attempts to get the parry thread effect for the preparation animation
+    /// </summary>
+    /// <param name="playerObject">The player using the skill</param>
+    /// <param name="isVolt">If volt filament effects should be used</param>
+    /// <param name="thread">The effect, if found</param>
+    /// <returns>true if found</returns>
+    private static bool TryGetParryThread(GameObject playerObject, bool isVolt, [MaybeNullWhen(false)] out GameObject thread) {
         // Find existing object
-        var name = zap ? "Parry Thread Zap" : "Parry Thread";
-        var created = FindOrCreateAttack(playerObject, name, out var threadObj);
+        var name = isVolt ? "Parry Thread Zap" : "Parry Thread";
+        var created = FindOrCreateSkill(playerObject, name, out var threadObj);
         if (threadObj == null) {
             thread = null;
             return false;
@@ -128,7 +155,8 @@ internal class CrossStitch : BaseSilkSkill {
         thread = threadObj;
         if (!created) return true;
 
-        if (zap) {
+        // Remove existing components if applicable
+        if (isVolt) {
             thread.DestroyGameObjectInChildren("light_effect_v02 (2)");
 
             thread.SetActiveChildren(true);
@@ -138,8 +166,15 @@ internal class CrossStitch : BaseSilkSkill {
         return true;
     }
 
+    /// <summary>
+    /// Attempts to get the flash effect for the preparation animation
+    /// </summary>
+    /// <param name="playerObject">The player using the skill</param>
+    /// <param name="flash">The effect, if found</param>
+    /// <returns>true if found</returns>
     private static bool TryGetStanceFlash(GameObject playerObject, [MaybeNullWhen(false)] out GameObject flash) {
-        var created = FindOrCreateAttack(playerObject, ParryStanceFlashName, out var flashObj);
+        // Find or create
+        var created = FindOrCreateSkill(playerObject, "Parry Stance Flash", out var flashObj);
         if (flashObj == null) {
             flash = null;
             return false;
@@ -148,14 +183,22 @@ internal class CrossStitch : BaseSilkSkill {
         flash = flashObj;
         if (!created) return true;
 
+        // Destroy components/children if created
         flash.DestroyComponentsInChildren<HeroShamanRuneEffect>();
         flash.DestroyGameObjectInChildren("Shaman Flash Glow");
 
         return true;
     }
 
+    /// <summary>
+    /// Attempts to get the parry activation clash effect
+    /// </summary>
+    /// <param name="playerObject">The player using the skill</param>
+    /// <param name="clash">The effect, if found</param>
+    /// <returns>true if found</returns>
     private static bool TryGetClashEffect(GameObject playerObject, [MaybeNullWhen(false)] out GameObject clash) {
-        var created = FindOrCreateAttack(playerObject, ParryClashName, out var clashObj);
+        // Find or create
+        var created = FindOrCreateSkill(playerObject, "Parry Clash Effect", out var clashObj);
         if (clashObj == null) {
             clash = null;
             return false;
@@ -164,21 +207,31 @@ internal class CrossStitch : BaseSilkSkill {
         clash = clashObj;
         if (!created) return true;
 
+        // Remove components if created
         clash.DestroyComponentsInChildren<HeroShamanRuneEffect>();
 
         return true;
     }
 
-    private static bool TryGetSlashEffect(GameObject playerObject, bool isZap, [MaybeNullWhen(false)] out GameObject slash) {
-        var name = isZap ? ParryZapSlashName : ParrySlashName;
+    /// <summary>
+    /// Attempts to get the parry activation slash dash effect
+    /// </summary>
+    /// <param name="playerObject">The player using the skill</param>
+    /// <param name="isVolt">If volt filament effects should be used</param>
+    /// <param name="slash">The effect, if found</param>
+    /// <returns>true if found</returns>
+    private static bool TryGetSlashEffect(GameObject playerObject, bool isVolt, [MaybeNullWhen(false)] out GameObject slash) {
+        var name = isVolt ? "Parry Slash Effect Zap" : "Parry Slash Effect";
 
-        var attacks = GetPlayerSilkAttacks(playerObject);
+        // Find existing slash
+        var attacks = GetPlayerSilkSkills(playerObject);
         slash = attacks.FindGameObjectInChildren(name);
 
         if (slash) {
             return true;
         }
 
+        // Get the correct slash
         var fsm = GetSkillFSM();
         var boolTest = fsm.GetAction<BoolTestToGameObject>("Parry Cross Slash", 8);
         if (boolTest == null) {
@@ -186,12 +239,13 @@ internal class CrossStitch : BaseSilkSkill {
         }
 
         GameObject localSlashObj;
-        if (isZap) {
+        if (isVolt) {
             localSlashObj = boolTest.TrueGameObject.Value;
         } else {
             localSlashObj = boolTest.FalseGameObject.Value;
         }
 
+        // Create an instance of it, then prepare
         slash = Object.Instantiate(localSlashObj, attacks.transform);
         slash.name = name;
         slash.transform.localPosition = new Vector3(1, 1, 0);
@@ -199,13 +253,8 @@ internal class CrossStitch : BaseSilkSkill {
         slash.DestroyComponentsInChildren<HeroShamanRuneEffect>();
         slash.DestroyGameObjectInChildren("haze2");
 
-        var runeFlash = slash
-            .FindGameObjectInChildren("Runes")?
-            .FindGameObjectInChildren("Runes Flash");
-
-        if (runeFlash != null) {
-            Object.Destroy(runeFlash);
-        }
+        slash.FindGameObjectInChildren("Runes")?
+            .DestroyGameObjectInChildren("Runes Flash");
         
         // Enable damage collider
         var damager = slash.FindGameObjectInChildren("Enemy_Damager");

@@ -1,6 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
 using HutongGames.PlayMaker.Actions;
-using SSMP.Internals;
 using SSMP.Util;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
@@ -9,28 +8,45 @@ using Object = UnityEngine.Object;
 namespace SSMP.Animation.Effects.SilkSkills;
 
 internal abstract class BaseSilkSkill : DamageAnimationEffect {
-
+    /// <summary>
+    /// The name of the silk skills parent
+    /// </summary>
     private const string SilkSkillsObjectName = "Special Attacks";
-    private static GameObject? _localSilkAttacks;
 
+    /// <summary>
+    /// Cached object with silk skills
+    /// </summary>
+    private static GameObject? _localSilkSkills;
+
+    /// <summary>
+    /// See <see cref="GetEffectInfo"/>. Determines if the player is using the Volt Filament
+    /// </summary>
     public static byte[] GetEffectFlags() {
         var voltFilament = ToolItemManager.GetToolByName("Zap Imbuement");
 
-        return new byte[] {
+        return [
             (byte)(voltFilament.IsEquipped ? 1 : 0)
-        };
+        ];
     }
 
+    /// <inheritdoc/>
     public override byte[]? GetEffectInfo() {
         return GetEffectFlags();
     }
 
+    /// <summary>
+    /// Determines if the player was using the Volt Filament
+    /// </summary>
+    /// <param name="effectInfo">The effect info sent with the animation</param>
+    /// <returns>true if the player used Volt Filament</returns>
     protected bool IsVolt(byte[]? effectInfo) {
         return effectInfo is [1];
     }
 
-    public abstract override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo);
-
+    /// <summary>
+    /// Gets the Silk Skill FSM
+    /// </summary>
+    /// <returns>The found FSM</returns>
     protected static PlayMakerFSM GetSkillFSM() {
         var fsm = HeroController.instance.silkSpecialFSM;
         if (fsm == null) {
@@ -44,23 +60,33 @@ internal abstract class BaseSilkSkill : DamageAnimationEffect {
         return fsm;
     }
 
-    protected static bool TryGetLocalSilkAttacks([MaybeNullWhen(false)] out GameObject localSilkAttacks) {
+    /// <summary>
+    /// Attempts to find the local silk skills object
+    /// </summary>
+    /// <param name="localSilkSkills">The silk skills object, if found</param>
+    /// <returns>true if the object was found</returns>
+    protected static bool TryGetLocalSilkSkills([MaybeNullWhen(false)] out GameObject localSilkSkills) {
         // Find local silk skills
-        if (_localSilkAttacks == null) {
-            _localSilkAttacks = HeroController.instance.gameObject.FindGameObjectInChildren(SilkSkillsObjectName);
-            if (_localSilkAttacks == null) {
+        if (_localSilkSkills == null) {
+            _localSilkSkills = HeroController.instance.gameObject.FindGameObjectInChildren(SilkSkillsObjectName);
+            if (_localSilkSkills == null) {
                 Logger.Warn("Unable to find local Silk Silks object");
-                localSilkAttacks = null;
+                localSilkSkills = null;
                 return false;
             }
         }
 
         // Find existing attacks
-        localSilkAttacks = _localSilkAttacks;
+        localSilkSkills = _localSilkSkills;
         return true;
     }
 
-    protected static GameObject GetPlayerSilkAttacks(GameObject playerObject) {
+    /// <summary>
+    /// Gets the silk skills object on a player
+    /// </summary>
+    /// <param name="playerObject">The player to find silk skill son</param>
+    /// <returns>The found silk skills object</returns>
+    protected static GameObject GetPlayerSilkSkills(GameObject playerObject) {
         var silkAttacks = playerObject.FindGameObjectInChildren(SilkSkillsObjectName);
         if (silkAttacks == null) {
             silkAttacks = new GameObject(SilkSkillsObjectName);
@@ -70,6 +96,10 @@ internal abstract class BaseSilkSkill : DamageAnimationEffect {
         return silkAttacks;
     }
 
+    /// <summary>
+    /// Plays a loud attack sound
+    /// </summary>
+    /// <param name="playerObject">The player to play the sound on</param>
     protected static void PlayHornetAttackSound(GameObject playerObject) {
         var fsm = GetSkillFSM();
         var anticAudio = fsm.GetAction<PlayRandomAudioClipTable>("A Sphere Antic", 2);
@@ -78,26 +108,33 @@ internal abstract class BaseSilkSkill : DamageAnimationEffect {
         }
     }
 
-    protected static bool FindOrCreateAttack(GameObject playerObject, string name, out GameObject? attack) {
+    /// <summary>
+    /// Attempts to find or create a silk skill object.
+    /// </summary>
+    /// <param name="playerObject">The player using the skill</param>
+    /// <param name="name">The name of the skill object</param>
+    /// <param name="skill">The found or created skill object</param>
+    /// <returns>true if the skill was created, false if it already existed or wasn't found</returns>
+    protected static bool FindOrCreateSkill(GameObject playerObject, string name, out GameObject? skill) {
         // Find existing object
-        var attacks = GetPlayerSilkAttacks(playerObject);
-        attack = attacks.FindGameObjectInChildren(name);
-        if (attack) {
+        var skills = GetPlayerSilkSkills(playerObject);
+        skill = skills.FindGameObjectInChildren(name);
+        if (skill) {
             return false;
         }
 
         // Copy from local attacks
-        if (!TryGetLocalSilkAttacks(out var localSilkAttacks)) {
+        if (!TryGetLocalSilkSkills(out var localSilkAttacks)) {
             return false;
         }
 
-        var localClash = localSilkAttacks.FindGameObjectInChildren(name);
-        if (!localClash) {
+        var localSkill = localSilkAttacks.FindGameObjectInChildren(name);
+        if (!localSkill) {
             return false;
         }
 
-        attack = Object.Instantiate(localClash, attacks.transform);
-        attack.name = name;
+        skill = Object.Instantiate(localSkill, skills.transform);
+        skill.name = name;
         return true;
     }
 }

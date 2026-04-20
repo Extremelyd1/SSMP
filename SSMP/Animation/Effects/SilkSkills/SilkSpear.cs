@@ -27,18 +27,18 @@ internal class SilkSpear : BaseSilkSkill {
         // Set volt settings
         var volt = IsVolt(effectInfo);
 
-        var zapThread = parent
+        var voltThread = parent
             .FindGameObjectInChildren("thread")?
             .FindGameObjectInChildren("zap thread");
 
-        if (zapThread) zapThread.SetActive(volt);
+        if (voltThread) voltThread.SetActive(volt);
 
         var needle = parent.FindGameObjectInChildren("needle");
 
-        var zapNeedle = needle?.FindGameObjectInChildren("Zap Effect Activator");
-        if (zapNeedle) {
-            zapNeedle.SetActive(volt);
-            zapNeedle.SetActiveChildren(volt);
+        var voltNeedle = needle?.FindGameObjectInChildren("Zap Effect Activator");
+        if (voltNeedle) {
+            voltNeedle.SetActive(volt);
+            voltNeedle.SetActiveChildren(volt);
         }
 
         // Set shaman settings
@@ -52,8 +52,8 @@ internal class SilkSpear : BaseSilkSkill {
             if (shamanRune) {
                 shamanRune.SetActive(isShaman);
 
-                var zapRune = shamanRune.FindGameObjectInChildren("Zap Rune");
-                if (zapRune) zapRune.SetActive(volt);
+                var voltRune = shamanRune.FindGameObjectInChildren("Zap Rune");
+                if (voltRune) voltRune.SetActive(volt);
             }
         }
 
@@ -137,12 +137,12 @@ internal class SilkSpear : BaseSilkSkill {
     /// <returns>The spear, if found</returns>
     private static GameObject? GetSilkSpear(GameObject playerObject) {
         // Find existing silk spear
-        var silkAttacks = GetPlayerSilkAttacks(playerObject);
+        var silkAttacks = GetPlayerSilkSkills(playerObject);
         var spear = silkAttacks.FindGameObjectInChildren(SpearObjectName);
         if (spear) return spear;
 
         // Find on own silk attacks
-        if (!TryGetLocalSilkAttacks(out var localSilkAttacks)) {
+        if (!TryGetLocalSilkSkills(out var localSilkAttacks)) {
             return null;
         }
 

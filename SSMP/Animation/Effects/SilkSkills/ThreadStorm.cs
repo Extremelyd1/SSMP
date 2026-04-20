@@ -10,20 +10,22 @@ using Object = UnityEngine.Object;
 namespace SSMP.Animation.Effects.SilkSkills;
 
 internal class ThreadStorm : BaseSilkSkill {
-    private const string SkillObjectName = "Sphere Ball";
 
-    private static GameObject? _localThreadStorm;
+    /// <summary>
+    /// A reference for players currently extending their thread storms.
+    /// Used to prevent the effect from disappearing early.
+    /// </summary>
+    private static readonly Dictionary<int, int> PlayerExtensions = [];
 
-    private static Dictionary<int, int> _playerExtensions = new();
-
+    /// <inheritdoc/>
     public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
         var volt = IsVolt(effectInfo);
         var isShaman = crestType == CrestType.Shaman;
 
         // Update number of extensions
         var playerId = playerObject.GetInstanceID();
-        var extensions = _playerExtensions.GetValueOrDefault(playerId, 0);
-        _playerExtensions[playerId] = extensions + 1;
+        var extensions = PlayerExtensions.GetValueOrDefault(playerId, 0);
+        PlayerExtensions[playerId] = extensions + 1;
 
         // Play extension if applicable
         if (extensions > 0) {
@@ -134,8 +136,8 @@ internal class ThreadStorm : BaseSilkSkill {
     private static void AttemptStop(GameObject playerObject, GameObject threadStorm) {
         // Decrement extension count
         var playerId = playerObject.GetInstanceID();
-        var extensions = _playerExtensions.GetValueOrDefault(playerId, 1);
-        _playerExtensions[playerId] = Mathf.Max(0, extensions - 1);
+        var extensions = PlayerExtensions.GetValueOrDefault(playerId, 1);
+        PlayerExtensions[playerId] = Mathf.Max(0, extensions - 1);
 
         // There are more extensions, don't deactivate yet
         if (extensions > 1) {
@@ -159,7 +161,6 @@ internal class ThreadStorm : BaseSilkSkill {
         var audio = threadStorm.GetComponent<AudioSource>();
         audio.Stop();
         threadStorm.SetActive(false);
-
     }
 
     /// <summary>
@@ -172,34 +173,15 @@ internal class ThreadStorm : BaseSilkSkill {
         GameObject playerObject,
         [MaybeNullWhen(false)] out GameObject threadStorm
     ) {
-        // Find existing thread storm
-        var parent = GetPlayerSilkAttacks(playerObject);
-        threadStorm = parent.FindGameObjectInChildren(SkillObjectName);
-        if (threadStorm) {
+        // Find or create effect
+        var created = FindOrCreateSkill(playerObject, "Sphere Ball", out threadStorm);
+        if (!threadStorm) {
+            return false;
+        }
+
+        if (created) {
             return true;
         }
-
-        // Not found, locate it on the player
-        var localStorm = _localThreadStorm;
-        if (localStorm == null) {
-            // Get local silk attacks
-            if (!TryGetLocalSilkAttacks(out var localSilkAttacks)) {
-                return false;
-            }
-
-            // Find the thread storm
-            localStorm = localSilkAttacks.FindGameObjectInChildren(SkillObjectName);
-            if (localStorm == null) {
-                Logger.Warn("Unable to get local Thread Storm object");
-                return false;
-            }
-
-            _localThreadStorm = localStorm;
-        }
-        
-        // Copy to the player object
-        threadStorm = Object.Instantiate(localStorm, parent.transform);
-        threadStorm.name = SkillObjectName;
 
         // Remove components that could interfere
         threadStorm.DestroyComponent<PlayMakerFSM>();

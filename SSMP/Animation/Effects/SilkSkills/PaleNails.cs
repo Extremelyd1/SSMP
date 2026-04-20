@@ -14,18 +14,35 @@ using Object = UnityEngine.Object;
 namespace SSMP.Animation.Effects.SilkSkills;
 
 internal class PaleNails : BaseSilkSkill {
-
+    /// <summary>
+    /// The name of the blade summoning effect object
+    /// </summary>
     private const string AnticName = "Hornet_finger_blade_cast_silk";
 
+    /// <summary>
+    /// The number of nails to summon
+    /// </summary>
     private const int NailCount = 3;
 
+    /// <summary>
+    /// Offset to keep negative values when converting a short to a ushort
+    /// </summary>
     private const int PositionOffset = short.MaxValue;
 
+    /// <summary>
+    /// Scale used to keep a higher level of precision when converting a float to a short
+    /// </summary>
     private const int PositionScale = 5;
 
+    /// <summary>
+    /// Determines if this animation is for the summoning antic
+    /// </summary>
     public bool IsAntic = false;
 
-    private static Dictionary<int, GameObject[]> _playerNails = new();
+    /// <summary>
+    /// Cached nail objects for players. Used when firing.
+    /// </summary>
+    private static readonly Dictionary<int, GameObject[]> PlayerNails = [];
 
     /// <inheritdoc/>
     public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
@@ -42,11 +59,11 @@ internal class PaleNails : BaseSilkSkill {
 
         // Get existing nails
         var id = playerObject.GetInstanceID();
-        if (!_playerNails.TryGetValue(id, out var nails) || nails.Length == 0) {
+        if (!PlayerNails.TryGetValue(id, out var nails) || nails.Length == 0) {
             return;
         }
 
-        // Ensure nails aren't despawned
+        // Ensure nails aren't de-spawned
         if (nails.Any(obj => obj == null)) {
             return;
         }
@@ -71,16 +88,16 @@ internal class PaleNails : BaseSilkSkill {
     /// <param name="isVolt">If the volt filament effect should be used</param>
     /// <param name="playerId">The 'id' of the player firing the nails</param>
     private static IEnumerator PlayNailFireTargeted(GameObject target, GameObject[] nails, bool isVolt, int playerId) {
-        // Copy nails
+        // Copy nails and clear array before they can be fired by anything else
         GameObject[] playerNails = [.. nails];
-        _playerNails[playerId] = [];
+        PlayerNails[playerId] = [];
 
         // Play audio
         if (isVolt) PlayVoltAudio(playerNails[0]);
         
         // Fire each nail
         foreach (var nail in playerNails) {
-            // Nail has already been despawned
+            // A nail has already de-spawned
             if (nail == null) {
                 yield break;
             }
@@ -108,7 +125,7 @@ internal class PaleNails : BaseSilkSkill {
 
         // Fire each nail
         foreach (var nail in nails) {
-            // Nail has already been despawned
+            // Nail has already de-spawned
             if (nail == null) {
                 return;
             }
@@ -122,7 +139,7 @@ internal class PaleNails : BaseSilkSkill {
         }
 
         // Clear nails
-        _playerNails[playerId] = [];
+        PlayerNails[playerId] = [];
     }
 
     /// <summary>
@@ -137,7 +154,7 @@ internal class PaleNails : BaseSilkSkill {
 
         // Fire existing nails
         var id = playerObject.GetInstanceID();
-        if (_playerNails.TryGetValue(id, out var existingNails)) {
+        if (PlayerNails.TryGetValue(id, out var existingNails)) {
             PlayNailFireUnguided(existingNails, isVolt, id);
         }
 
@@ -219,7 +236,7 @@ internal class PaleNails : BaseSilkSkill {
         }
 
         // Store nails for firing later
-        _playerNails[id] = nails;
+        PlayerNails[id] = nails;
 
         // Wait for nail hover time to expire
         yield return new WaitForSeconds(1.8f);
@@ -256,11 +273,11 @@ internal class PaleNails : BaseSilkSkill {
 
         FixFsmForUse(fsm, playerObject, isVolt);
 
+        // Set nail buddy and event
         string position;
         GameObject buddy1;
         GameObject buddy2;
 
-        // Set nail buddy and event
         if (index == 0) {
             position = "TOP1";
             buddy1 = nails[1];
@@ -448,13 +465,13 @@ internal class PaleNails : BaseSilkSkill {
         var position = target.transform.position;
         var isPlayer = target.GetComponent<CoroutineCancelComponent>() != null;
 
-        // Convert floats to ushorts
+        // Convert floats to ushorts, scaling to preserve some precision, and offsetting to keep negative values
         var x = (ushort) ((position.x * PositionScale) + PositionOffset);
         var y = (ushort) ((position.y * PositionScale) + PositionOffset);
 
         // Split shorts into bytes
         return [
-            GetEffectFlags()[0], // get volt status
+            GetEffectFlags()[0], // include volt status
             (byte)(x & 0xFF),
             (byte)(x >> 8),
             (byte)(y & 0xFF),
@@ -502,6 +519,8 @@ internal class PaleNails : BaseSilkSkill {
 
         // Prioritize player
         if (target.IsPlayer) {
+            // CoroutineCancelComponent is on all player objects and nothing else.
+            // May be a good idea to create a custom component specifically for identifying players.
             var player = inside.FirstOrDefault(obj => (bool)obj.GetComponent<HeroController>() || (bool)obj.GetComponent<CoroutineCancelComponent>());
             if (player) {
                 return player.gameObject;
