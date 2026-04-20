@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using System.Linq;
 using HutongGames.PlayMaker.Actions;
 using SSMP.Animation.Effects;
-using SSMP.Animation.Effects.Movement;
 using SSMP.Animation.Effects.SilkSkills;
 using SSMP.Collection;
 using SSMP.Fsm;
