@@ -106,9 +106,7 @@ internal class MapManager : IMapManager {
             if (!_serverSettings.OnlyBroadcastMapIconWithCompass) {
                 hasMapIcon = false;
             } else {
-                // Only broadcast when the Wayward Compass is equipped (matches ModMenu / server setting text).
-                // Previously this branch inverted the check, so with the compass equipped we never sent
-                // PlayerMapUpdate(true) — remote map pins never appeared for anyone using default settings.
+                // OnlyBroadcastMapIconWithCompass: suppress unless the compass tool exists and is equipped.
                 if (!Gameplay.CompassTool || !Gameplay.CompassTool.IsEquipped) {
                     hasMapIcon = false;
                 }
