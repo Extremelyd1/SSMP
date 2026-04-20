@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using HutongGames.PlayMaker.Actions;
 using SSMP.Internals;
 using SSMP.Util;
 using UnityEngine;
@@ -29,7 +30,6 @@ internal class ThreadStorm : BaseSilkSkill {
 
         // Play extension if applicable
         if (extensions > 0) {
-            Logger.Info("Playing extension");
             MonoBehaviourUtil.Instance.StartCoroutine(PlayStormExtension(playerObject));
             return;
         }
@@ -64,6 +64,13 @@ internal class ThreadStorm : BaseSilkSkill {
             AnimateScaleReset(damager);
         }
 
+        // Play audio
+        var fsm = GetSkillFSM();
+        var extendAudio = fsm.GetFirstAction<AudioPlaySimple>("Extend");
+        if (extendAudio.oneShotClip.Value is AudioClip clip) {
+            AudioUtil.PlayAudio(clip, playerObject);
+        }
+
         yield return new WaitForSeconds(0.65f);
 
         AttemptStop(playerObject, threadStorm);
@@ -73,9 +80,9 @@ internal class ThreadStorm : BaseSilkSkill {
     /// Initializes and activates the Thread Storm attack, setting up sub-effects
     /// </summary>
     /// <param name="playerObject">The player object that used the attack.</param>
-    /// <param name="volt">Determines if the volt filament effect should be enabled.</param>
+    /// <param name="isVolt">Determines if the volt filament effect should be enabled.</param>
     /// <param name="isShaman">Determines if the shaman crest effect should be displayed.</param>
-    private IEnumerator PlayStormSetup(GameObject playerObject, bool volt, bool isShaman) {
+    private IEnumerator PlayStormSetup(GameObject playerObject, bool isVolt, bool isShaman) {
         if (!TryGetThreadStorm(playerObject, out var threadStorm)) {
             yield break;
         }
@@ -89,7 +96,7 @@ internal class ThreadStorm : BaseSilkSkill {
 
         if (voltObject) {
             voltObject.SetActive(false);
-            voltObject.SetActive(volt);
+            voltObject.SetActive(isVolt);
         }
 
         // Enable shaman crest effect
@@ -113,9 +120,6 @@ internal class ThreadStorm : BaseSilkSkill {
         }
 
         // Play looping silk audio
-        var audio = threadStorm.GetComponent<AudioSource>();
-        audio.Play();
-
         // Play the main effect
         MonoBehaviourUtil.Instance.StartCoroutine(PlayStormExtension(playerObject, true));
     }
@@ -188,6 +192,11 @@ internal class ThreadStorm : BaseSilkSkill {
         threadStorm.DestroyComponent<HeroShamanRuneEffect>();
         threadStorm.DestroyComponent<ToolEquipChecker>();
         threadStorm.DestroyComponent<EventRegister>();
+
+        // Play looping silk audio
+        if (threadStorm.TryGetComponent<AudioSource>(out var audio)) {
+            audio.playOnAwake = true;
+        }
 
         // Set up shaman crest effects
         var shamanRune = threadStorm.FindGameObjectInChildren("Shaman Rune");
