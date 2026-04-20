@@ -59,7 +59,19 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
     /// <param name="damage">The number of mask of damage it should deal.</param>
     /// <returns>The <see cref="DamageHero"/> component that was added if PVP was turned on</returns>
     protected DamageHero? SetDamageHeroState(GameObject target, int damage = 1) {
-        if (ServerSettings.IsPvpEnabled && ShouldDoDamage) {
+        return SetDamageHeroState(target, ServerSettings.IsPvpEnabled && ShouldDoDamage, damage);
+    }
+
+    /// <summary>
+    /// Adds or removes a <see cref="DamageHero"/> component from the given game object,
+    /// depending on the PVP and team settings.
+    /// </summary>
+    /// <param name="target">The target game object to attach or remove the component from.</param>
+    /// <param name="damage">The number of mask of damage it should deal.</param>
+    /// <param name="doDamage">If the damager should be enabled or not</param>
+    /// <returns>The <see cref="DamageHero"/> component that was added if PVP was turned on</returns>
+    protected static DamageHero? SetDamageHeroState(GameObject target, bool doDamage, int damage = 1) {
+        if (doDamage) {
             return AddDamageHeroComponent(target, damage);
         }
 

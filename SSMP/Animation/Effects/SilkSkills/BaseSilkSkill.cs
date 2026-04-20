@@ -139,7 +139,7 @@ internal abstract class BaseSilkSkill : DamageAnimationEffect {
     }
 
     /// <summary>
-    /// <see cref="DamageAnimationEffect.SetDamageHeroState"/> with a calculated damage amount for silk skills
+    /// <see cref="DamageAnimationEffect.SetDamageHeroState(GameObject, int)"/> with a calculated damage amount for silk skills
     /// </summary>
     /// <param name="damager">The target game object to attach or remove the component from.</param>
     /// <param name="baseDamage">The base silk skill damage</param>

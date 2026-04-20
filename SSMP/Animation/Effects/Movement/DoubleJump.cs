@@ -1,3 +1,4 @@
+using SSMP.Animation.Effects.Tools;
 using SSMP.Internals;
 using SSMP.Util;
 using UnityEngine;
@@ -17,11 +18,7 @@ internal class DoubleJump : DamageAnimationEffect {
     /// <inheritdoc/>
     public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
         // Find or create effects
-        var effects = playerObject.FindGameObjectInChildren("Effects");
-        if (effects == null) {
-            effects = new GameObject();
-            effects.transform.SetParentReset(playerObject.transform);
-        }
+        var effects = GetPlayerEffects(playerObject);
 
         // Find or create jump effect
         var effect = effects.FindGameObjectInChildren(JumpEffectName);
@@ -44,7 +41,7 @@ internal class DoubleJump : DamageAnimationEffect {
 
         // Play sawtooth circlet if appropriate
         if (effectInfo is [1]) {
-            UmbrellaInflate.Instance.PlayCirclet(playerObject);
+            SawtoothCirclet.PlayCirclet(playerObject, ShouldDoDamage && ServerSettings.IsPvpEnabled);
         }
     }
 }
