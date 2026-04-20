@@ -1,4 +1,5 @@
 using SSMP.Internals;
+using SSMP.Util;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -47,12 +48,7 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
     /// </summary>
     /// <param name="target">The target game object to detach the component from.</param>
     protected static void RemoveDamageHeroComponent(GameObject target) {
-        var damageHero = target.GetComponent<DamageHero>();
-        if (damageHero == null) {
-            return;
-        }
-
-        Object.DestroyImmediate(damageHero);
+        target.DestroyComponent<DamageHero>();
     }
 
     /// <summary>

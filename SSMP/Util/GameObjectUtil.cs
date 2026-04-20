@@ -70,7 +70,45 @@ internal static class GameObjectUtil {
 
         return children;
     }
-    
+
+    /// <summary>
+    /// Attempts to remove a component from a given GameObject
+    /// </summary>
+    /// <typeparam name="T">The component type to remove</typeparam>
+    /// <param name="gameObject">The object to remove the component from</param>
+    /// <returns>true if the component was removed</returns>
+    public static bool DestroyComponent<T>(this GameObject gameObject) where T : Component {
+        if (gameObject == null) {
+            return false;
+        }
+
+        if (gameObject.TryGetComponent<T>(out var component)) {
+            Object.DestroyImmediate(component);
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Attempts to remove all components of a given type from a GameObject and all of its children
+    /// </summary>
+    /// <typeparam name="T">The type of component to remove</typeparam>
+    /// <param name="gameObject">The parent object</param>
+    /// <returns>true if any components were removed</returns>
+    public static bool DestroyComponentsInChildren<T>(this GameObject gameObject) where T : Component {
+        if (gameObject == null) {
+            return false;
+        }
+
+        var components = gameObject.GetComponentsInChildren<T>();
+        foreach (var component in components) {
+            Object.DestroyImmediate(component);
+        }
+
+        return components.Length > 0;
+    }
+
     /// <summary>
     /// Find an inactive GameObject with the given name.
     /// </summary>

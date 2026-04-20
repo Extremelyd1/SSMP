@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
+using HutongGames.PlayMaker.Actions;
 using SSMP.Animation.Effects;
+using SSMP.Animation.Effects.SilkSkills;
 using SSMP.Collection;
 using SSMP.Fsm;
 using SSMP.Game;
@@ -10,6 +12,7 @@ using SSMP.Hooks;
 using SSMP.Internals;
 using SSMP.Networking.Client;
 using SSMP.Util;
+using UnityEngine;
 using UnityEngine.SceneManagement;
 using Logger = SSMP.Logging.Logger;
 
@@ -175,6 +178,7 @@ internal class AnimationManager {
         { "AirSphere Dissipate", AnimationClip.AirSphereDissipate },
         { "AirSphere RepeatAntic", AnimationClip.AirSphereRepeatAntic },
         { "Silk Boss Needle Cast", AnimationClip.SilkBossNeedleCast },
+        { "Silk Boss Needle Fire", AnimationClip.SilkBossNeedleFire },
         { "Taunt", AnimationClip.Taunt },
         { "Taunt Back", AnimationClip.TauntBack },
         { "Taunt Back End", AnimationClip.TauntBackEnd },
@@ -385,6 +389,7 @@ internal class AnimationManager {
 
         { "AirSphere Attack", AnimationClip.AirSphereAttack },
         { "AirSphere End", AnimationClip.AirSphereEnd },
+        { "AirSphere Refresh", AnimationClip.AirSphereRefresh },
         
         { "Silk Charge Antic", AnimationClip.SilkChargeAntic },
         { "Silk Charge", AnimationClip.SilkCharge },
@@ -398,6 +403,7 @@ internal class AnimationManager {
         { "Silk Bomb Antic Q", AnimationClip.SilkBombAnticQ },
         { "Silk Bomb Loop", AnimationClip.SilkBombLoop },
         { "Silk Bomb Recover", AnimationClip.SilkBombRecover },
+        { "Silk Bomb Locations", AnimationClip.SilkBombLocations },
         
         { "Sit Craft", AnimationClip.SitCraft },
         { "Sit Craft Silk", AnimationClip.SitCraftSilk },
@@ -655,13 +661,27 @@ internal class AnimationManager {
         { AnimationClip.BindChargeHealBurst, BindBurst.Instance },
         { AnimationClip.BindBurstAir, BindBurst.Instance },
         { AnimationClip.RageBindBurst, BindBurst.Instance },
-        { AnimationClip.Death, new Death() }
+        { AnimationClip.Death, new Death() },
+
+        // Silk Skills
+        { AnimationClip.NeedleThrowThrowing, new SilkSpear() },
+        { AnimationClip.AirSphereAttack, new ThreadStorm() },
+        { AnimationClip.SilkCharge, new SharpDart() },
+        { AnimationClip.SilkChargeZap, new SharpDart { Volt = true } },
+        { AnimationClip.ParryStance, CrossStitch.StartingInstance },
+        { AnimationClip.ParryStanceGround, CrossStitch.StartingInstance },
+        { AnimationClip.ParryClash, new CrossStitch() },
+        { AnimationClip.SilkBombAntic, new RuneRage { IsAntic = true } },
+        { AnimationClip.SilkBossNeedleCast, new PaleNails { IsAntic = true } },
     };
 
     private static readonly Dictionary<AnimationClip, IAnimationEffect> SubAnimationEffects = new() {
         { AnimationClip.WitchTentacles, BindBurst.Instance },
         { AnimationClip.ShamanCancel, new Bind { BindState = Bind.State.ShamanCancel } },
-        { AnimationClip.BindInterrupt, BindInterrupt.Instance }
+        { AnimationClip.BindInterrupt, BindInterrupt.Instance },
+        { AnimationClip.AirSphereRefresh, new ThreadStorm() },
+        { AnimationClip.SilkBombLocations, new RuneRage() },
+        { AnimationClip.SilkBossNeedleFire, new PaleNails() }
     };
 
     /// <summary>
@@ -673,6 +693,12 @@ internal class AnimationManager {
     /// The player manager to get player objects.
     /// </summary>
     private readonly PlayerManager _playerManager;
+
+    /// <summary>
+    /// </summary>
+    private readonly Dictionary<ushort, ClientPlayerData> _playerData;
+
+    private ServerSettings _serverSettings;
 
     /// <summary>
     /// The last animation clip sent.
@@ -693,6 +719,8 @@ internal class AnimationManager {
     /// Whether the current dash has ended and we can start a new one.
     /// </summary>
     private bool _dashHasEnded = true;
+
+    private List<byte> _runeRagePositions = new();
 
     // /// <summary>
     // /// Whether the player has sent that they stopped crystal dashing.
@@ -726,10 +754,14 @@ internal class AnimationManager {
 
     public AnimationManager(
         NetClient netClient,
-        PlayerManager playerManager
+        PlayerManager playerManager,
+        ServerSettings serverSettings,
+        Dictionary<ushort, ClientPlayerData> playerData
     ) {
         _netClient = netClient;
         _playerManager = playerManager;
+        _playerData = playerData;
+        _serverSettings = serverSettings;
 
         // _chargedEffectStopwatch = new Stopwatch();
         // _chargedEndEffectStopwatch = new Stopwatch();
@@ -739,6 +771,8 @@ internal class AnimationManager {
     /// Initialize the animation manager by registering packet handlers and initializing animation effects.
     /// </summary>
     public void Initialize(ServerSettings serverSettings) {
+        _serverSettings = serverSettings;
+
         // Set the server settings for all animation effects
         foreach (var effect in AnimationEffects.Values) {
             effect.SetServerSettings(serverSettings);
@@ -767,9 +801,9 @@ internal class AnimationManager {
         EventHooks.HeroControllerDie += OnDeath;
 
         // Register FSM hooks for certain bind actions
-        HeroController.OnHeroInstanceSet += CreateBindHooks;
+        HeroController.OnHeroInstanceSet += CreateHeroHooks;
         if (HeroController.SilentInstance != null) {
-            CreateBindHooks(HeroController.instance);
+            CreateHeroHooks(HeroController.instance);
         }
 
 
@@ -794,7 +828,7 @@ internal class AnimationManager {
     public void DeregisterHooks() {
         SceneManager.activeSceneChanged -= OnSceneChange;
 
-        HeroController.OnHeroInstanceSet -= CreateBindHooks;
+        HeroController.OnHeroInstanceSet -= CreateHeroHooks;
         FsmStateActionInjector.UninjectAll();
         // On.HeroAnimationController.Play -= HeroAnimationControllerOnPlay;
         // On.HeroAnimationController.PlayFromFrame -= HeroAnimationControllerOnPlayFromFrame;
@@ -1049,7 +1083,7 @@ internal class AnimationManager {
     /// Creates hooks for the Witch Tentacles and Shaman Cancel states in
     /// the Bind fsm once the HeroController is ready.
     /// </summary>
-    private void CreateBindHooks(HeroController hc) {
+    private void CreateHeroHooks(HeroController hc) {
         // Initialize warding bell FSM if it isn't already.
         // This fills it in with the template
         var bellFsm = HeroController.instance.bellBindFSM;
@@ -1061,20 +1095,94 @@ internal class AnimationManager {
         var heroFsms = hc.GetComponents<PlayMakerFSM>();
 
         var bindFsm = heroFsms.FirstOrDefault(fsm => fsm.FsmName == "Bind");
-        if (bindFsm == null) {
+        if (bindFsm != null) {
+            // Find FSM states to inject
+            var tentacles = bindFsm.GetState("Witch Tentancles!"); // no that's not a typo... at least on my end
+            FsmStateActionInjector.Inject(tentacles, OnWitchTentacles, 4);
+        
+            var shamanCancel = bindFsm.GetState("Shaman Air Cancel");
+            FsmStateActionInjector.Inject(shamanCancel, OnShamanCancel);
+
+            var bindInterrupt = bindFsm.GetState("Remove Silk?");
+            FsmStateActionInjector.Inject(bindInterrupt, OnBindInterrupt, 2);
+        } else {
             Logger.Warn("Unable to find Bind FSM to hook.");
+        }
+
+
+
+        // Silk skill injections
+        var silkSkillFsm = hc.silkSpecialFSM;
+        if (silkSkillFsm == null) {
+            Logger.Warn("Unable to find Silk Skill FSM to hook.");
             return;
         }
 
-        // Find FSM states to inject
-        var tentacles = bindFsm.GetState("Witch Tentancles!"); // no that's not a typo... at least on my end
-        FsmStateActionInjector.Inject(tentacles, OnWitchTentacles, 4);
-        
-        var shamanCancel = bindFsm.GetState("Shaman Air Cancel");
-        FsmStateActionInjector.Inject(shamanCancel, OnShamanCancel);
+        // Thread strom
+        var threadStormExtend = silkSkillFsm.GetState("Extend");
+        FsmStateActionInjector.Inject(threadStormExtend, OnThreadStormExtend, 0);
 
-        var bindInterrupt = bindFsm.GetState("Remove Silk?");
-        FsmStateActionInjector.Inject(bindInterrupt, OnBindInterrupt, 2);
+        // Rune Rage
+        var sonarBuildArray = silkSkillFsm.GetState("Build Enemy Array");
+        FsmStateActionInjector.Inject(sonarBuildArray, OnBuildRuneRageArray, 0);
+
+        var blastEnemy = silkSkillFsm.GetState("Blast Enemy");
+        FsmStateActionInjector.Inject(blastEnemy, OnRuneBlastEnemy, 4);
+
+        var blastRandom = silkSkillFsm.GetState("Random Blasts");
+        FsmStateActionInjector.Inject(blastRandom, OnRuneBlastRandom, 3);
+
+        var blastFinished = silkSkillFsm.GetState("Silk Bomb Recover");
+        FsmStateActionInjector.Inject(blastFinished, OnRuneBlastFinished, 0);
+
+        // Pale Nails
+        var nailObject = silkSkillFsm.GetAction<SpawnObjectFromGlobalPool>("BossNeedle Cast", 5)?.gameObject.Value;
+        var nailFsm = nailObject?.LocateMyFSM("Control");
+        if (nailObject == null || nailFsm == null) {
+            Logger.Warn("Unable to find Pale Nail FSM to hook.");
+            return;
+        }
+
+        // Find all existing pale nails
+        List<GameObject> nails = [
+            nailObject
+        ];
+
+        if (ObjectPool.instance.pooledObjects.TryGetValue(nailObject, out var globalPoolNails)) {
+            nails.AddRange(globalPoolNails);
+        }
+
+        // Add injector components to all current instances of nails
+        foreach (var nail in nails) {
+            var injector = nail.AddComponent<FsmActionInjectorComponent>();
+            List<FsmActionInjectorComponent.Injection> injections = [
+                new FsmActionInjectorComponent.Injection {
+                    FsmName = nailFsm.FsmName,
+                    FsmStateName = "Follow HeroFacingLeft",
+                    ActionIndex = 12,
+                    Hook = OnPaleNailAttackCheck,
+                    HookName = "Nail Target"
+                },
+
+                new FsmActionInjectorComponent.Injection {
+                    FsmName = nailFsm.FsmName,
+                    FsmStateName = "Follow HeroFacingRight",
+                    ActionIndex = 12,
+                    Hook = OnPaleNailAttackCheck,
+                    HookName = "Nail Target"
+                },
+
+                new FsmActionInjectorComponent.Injection {
+                    FsmName = nailFsm.FsmName,
+                    FsmStateName = "Fire Antic",
+                    ActionIndex = 0,
+                    Hook = OnPaleNailFire,
+                    HookName = "Nail Fire"
+                }
+            ];
+
+            injector.SetInjections(injections);
+        }
     }
 
     /// <summary>
@@ -1090,12 +1198,14 @@ internal class AnimationManager {
     /// <summary>
     /// Animation subanimation hook for the Shaman Air Cancel FSM state
     /// </summary>
+    
     private void OnShamanCancel(PlayMakerFSM fsm) {
         var dummyClip = new tk2dSpriteAnimationClip();
         dummyClip.name = "Shaman Cancel";
         dummyClip.wrapMode = tk2dSpriteAnimationClip.WrapMode.Once;
         OnAnimationEvent(dummyClip);
     }
+    
     /// <summary>
     /// Animation subanimation hook for interrupted binds
     /// </summary>
@@ -1104,6 +1214,192 @@ internal class AnimationManager {
         dummyClip.name = "Bind Fail Burst";
         dummyClip.wrapMode = tk2dSpriteAnimationClip.WrapMode.Once;
         OnAnimationEvent(dummyClip);
+    }
+
+    /// <summary>
+    /// Animation subanimation hook for extending a thread storm
+    /// </summary>
+    private void OnThreadStormExtend(PlayMakerFSM fsm) {
+        var effectInfo = BaseSilkSkill.GetEffectFlags();
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.AirSphereRefresh, 0, effectInfo);
+    }
+
+    /// <summary>
+    /// Influences Rune Rage to be able to target players that can be attacked
+    /// </summary>
+    private void OnBuildRuneRageArray(PlayMakerFSM fsm) {
+        // If we are not connected, there is nothing to send to
+        if (!_netClient.IsConnected) {
+            return;
+        }
+
+        _runeRagePositions.Clear();
+
+        // Find tracker for Rune Rage
+        var sonarObject = HeroController.instance.gameObject
+            .FindGameObjectInChildren("Special Attacks")?
+            .FindGameObjectInChildren("Sonar Enemy Tracker");
+
+        if (sonarObject == null) return;
+
+        // Get needed components
+        var sonar = sonarObject.GetComponent<TrackTriggerObjects>();
+        if (sonar == null) return;
+
+        var sonarCollider = sonarObject.GetComponent<CircleCollider2D>();
+        if (sonarCollider == null) return;
+
+        // Remove any old player objects
+        sonar.Refresh();
+
+        // No need to target if pvp is off
+        if (!_serverSettings.IsPvpEnabled) {
+            return;
+        }
+
+        var radius = sonarCollider.radius * sonar.transform.GetScaleX();
+
+        var inSonar = sonar.insideObjectsList;
+
+        // Find all players within sonar
+        foreach (var player in _playerData.Values) {
+            if (!player.IsInLocalScene || !player.PlayerObject) {
+                continue;
+            }
+
+            // Don't bother to target players on same team
+            if (_serverSettings.TeamsEnabled && player.Team == _playerManager.LocalPlayerTeam && player.Team != Team.None) {
+                inSonar.Remove(player.PlayerObject);
+                continue;
+            }
+
+            var collider = player.PlayerObject.GetComponent<BoxCollider2D>();
+            if (!collider) continue;
+
+            // Determine if the player is within the sonar circle
+            var closestPlayerPoint = collider.ClosestPoint(sonarCollider.transform.position);
+            var distanceFromCenter = Vector2.Distance(closestPlayerPoint, sonarCollider.transform.position);
+
+            if (distanceFromCenter <= radius) {
+                inSonar.AddIfNotPresent(player.PlayerObject);
+            } else {
+                inSonar.Remove(player.PlayerObject);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Intercepts the spawn locations for targeted Rune Rages
+    /// </summary>
+    private void OnRuneBlastEnemy(PlayMakerFSM fsm) {
+        // At this point the rune cluster has been created with a position and a given offset from the object.
+        // This position is relative to the player.
+        var spawnPosition = fsm.FsmVariables.FindFsmVector3("Shift Pos");
+        if (spawnPosition != null) {
+            var position = RuneRage.EncodeRunePosition(spawnPosition.Value + HeroController.instance.transform.position);
+            _runeRagePositions.AddRange(position);
+        }
+    }
+
+    /// <summary>
+    /// Intercepts the spawn locations for random Rune Rages
+    /// </summary>
+    private void OnRuneBlastRandom(PlayMakerFSM fsm) {
+        // If there aren't enough targets, rune rage will spawn up to 3 other blasts
+        var spawnRadial = fsm.GetFirstAction<SpawnRandomObjectsRadialRandom>("Random Blasts");
+        if (spawnRadial != null) {
+            // Get the positions of spawned blasts
+            var positions = spawnRadial.tempPosStore;
+
+            // Add to collection of positions
+            foreach (var position in positions) {
+                var encodedPosition = RuneRage.EncodeRunePosition((Vector3)position);
+                _runeRagePositions.AddRange(encodedPosition);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Animation hook to send Rune Rage positions
+    /// </summary>
+    private void OnRuneBlastFinished(PlayMakerFSM fsm) {
+        var effectInfo = BaseSilkSkill.GetEffectFlags().ToList();
+        effectInfo.AddRange(_runeRagePositions);
+
+        _runeRagePositions.Clear();
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.SilkBombLocations, 0, effectInfo.ToArray());
+    }
+
+    /// <summary>
+    /// Influences Pail Nails to be able to target players that can be attacked
+    /// </summary>
+    private void OnPaleNailAttackCheck(PlayMakerFSM fsm) {
+        // If we are not connected, there is nothing to send to
+        if (!_netClient.IsConnected) {
+            return;
+        }
+
+        var sonarObject = fsm.gameObject;
+
+        // Get needed components
+        var sonar = sonarObject.GetComponentInChildren<TrackTriggerObjectsLineOfSight>();
+        if (sonar == null) return;
+
+        var sonarCollider = sonarObject.GetComponentInChildren<CircleCollider2D>();
+        if (sonarCollider == null) return;
+
+        // Remove any old player objects
+        sonar.Refresh();
+
+        // Don't bother targeting if PvP is off
+        if (!_serverSettings.IsPvpEnabled) {
+            return;
+        }
+
+        var radius = sonarCollider.radius * sonar.transform.GetScaleX();
+        var inSonar = sonar.insideObjectsList;
+
+        // Find all players within sonar
+        foreach (var player in _playerData.Values) {
+            if (!player.IsInLocalScene || !player.PlayerObject) {
+                continue;
+            }
+
+            // Don't bother to target players on same team
+            if (_serverSettings.TeamsEnabled && player.Team == _playerManager.LocalPlayerTeam && player.Team != Team.None) {
+                continue;
+            }
+
+            var collider = player.PlayerObject.GetComponent<BoxCollider2D>();
+            if (!collider) continue;
+
+            // Determine if the player is within the sonar circle and is not obstructed
+            var closestPlayerPoint = collider.ClosestPoint(sonarCollider.transform.position);
+            var distanceFromCenter = Vector2.Distance(closestPlayerPoint, sonarCollider.transform.position);
+
+            if (distanceFromCenter <= radius && sonar.IsCounted(collider.gameObject)) {
+                inSonar.AddIfNotPresent(player.PlayerObject);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Sends an update to fire a set of nails at a specific target
+    /// </summary>
+    private void OnPaleNailFire(PlayMakerFSM fsm) {
+        // Only get info from one needle position (the first one)
+        var needleOffset = fsm.FsmVariables.GetFsmVector3("Offset");
+        if (needleOffset.Value.x != 3) return;
+
+        // Don't send if no target, it'll go off on its own.
+        var target = fsm.FsmVariables.FindFsmGameObject("Target").Value;
+        if (target == null) {
+            return;
+        }
+
+        // Send nail target info
+        var effectInfo = PaleNails.EncodeTargetInfo(target);
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.SilkBossNeedleFire, 0, effectInfo);
     }
 
     // /// <summary>
