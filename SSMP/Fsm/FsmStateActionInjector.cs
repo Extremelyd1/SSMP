@@ -46,7 +46,7 @@ internal sealed class FsmStateActionInjector : FsmStateAction {
     /// <inheritdoc/>
     public override void OnEnter() {
         if (_onStateEnter != null) {
-            try {    
+            try {
                 _onStateEnter?.Invoke(Fsm.FsmComponent);
             } catch (Exception e) {
                 Logger.Error(e.ToString());

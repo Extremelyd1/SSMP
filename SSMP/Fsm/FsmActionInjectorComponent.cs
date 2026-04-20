@@ -9,7 +9,7 @@ namespace SSMP.Fsm;
 /// A component to copy FSM injections between objects. An instantiated object can't copy Actions, so this bridges the gap.
 /// </summary>
 internal class FsmActionInjectorComponent : MonoBehaviour {
-    private static Dictionary<int, List<Injection>> _allInjections = [];
+    private static readonly Dictionary<int, List<Injection>> AllInjections = [];
 
     private List<Injection> _injections = [];
 
@@ -21,7 +21,7 @@ internal class FsmActionInjectorComponent : MonoBehaviour {
     public void Awake() {
         _injected = false;
 
-        if (_allInjections.TryGetValue(_injectionIndex, out var injections)) {
+        if (AllInjections.TryGetValue(_injectionIndex, out var injections)) {
             _injections = injections;
             TryDoInjection();
         }
@@ -34,10 +34,10 @@ internal class FsmActionInjectorComponent : MonoBehaviour {
     public void SetInjections(List<Injection> injections) {
         // Set injections and index
         _injections = injections;
-        _injectionIndex = _allInjections.Count + 1;
+        _injectionIndex = AllInjections.Count + 1;
 
         // Add to static collection of injections and inject
-        _allInjections.Add(_injectionIndex, injections);
+        AllInjections.Add(_injectionIndex, injections);
         TryDoInjection();
     }
 
