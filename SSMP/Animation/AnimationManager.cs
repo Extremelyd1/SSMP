@@ -2,7 +2,9 @@ using System.Collections.Generic;
 using System.Linq;
 using HutongGames.PlayMaker.Actions;
 using SSMP.Animation.Effects;
+using SSMP.Animation.Effects.Movement;
 using SSMP.Animation.Effects.SilkSkills;
+using SSMP.Animation.Effects.Tools;
 using SSMP.Collection;
 using SSMP.Fsm;
 using SSMP.Game;
@@ -623,7 +625,8 @@ internal class AnimationManager {
 
         { "Witch Tentacles!", AnimationClip.WitchTentacles },
         { "Shaman Cancel", AnimationClip.ShamanCancel },
-        { "Bind Fail Burst", AnimationClip.BindInterrupt }
+        { "Bind Fail Burst", AnimationClip.BindInterrupt },
+        { "Magnetite Dice", AnimationClip.MagnetiteDice }
     };
 
     /// <summary>
@@ -663,7 +666,7 @@ internal class AnimationManager {
         { AnimationClip.RageBindBurst, BindBurst.Instance },
         { AnimationClip.Death, new Death() },
         { AnimationClip.DoubleJump, new DoubleJump() },
-        { AnimationClip.UmbrellaInflate, UmbrellaInflate.Instance },
+        { AnimationClip.UmbrellaInflate, new UmbrellaInflate() },
 
         // Silk Skills
         { AnimationClip.NeedleThrowThrowing, new SilkSpear() },
@@ -681,9 +684,14 @@ internal class AnimationManager {
         { AnimationClip.WitchTentacles, BindBurst.Instance },
         { AnimationClip.ShamanCancel, new Bind { BindState = Bind.State.ShamanCancel } },
         { AnimationClip.BindInterrupt, BindInterrupt.Instance },
+
+        // Silk Skills
         { AnimationClip.AirSphereRefresh, new ThreadStorm() },
         { AnimationClip.SilkBombLocations, new RuneRage() },
-        { AnimationClip.SilkBossNeedleFire, new PaleNails() }
+        { AnimationClip.SilkBossNeedleFire, new PaleNails() },
+
+        // Tools
+        { AnimationClip.MagnetiteDice, new MagnetiteDice() }
     };
 
     /// <summary>
@@ -832,6 +840,8 @@ internal class AnimationManager {
 
         HeroController.OnHeroInstanceSet -= CreateHeroHooks;
         FsmStateActionInjector.UninjectAll();
+
+        MagnetiteDice.Unhook();
         // On.HeroAnimationController.Play -= HeroAnimationControllerOnPlay;
         // On.HeroAnimationController.PlayFromFrame -= HeroAnimationControllerOnPlayFromFrame;
 
@@ -1093,6 +1103,9 @@ internal class AnimationManager {
             bellFsm.Init();
         }
 
+        CreateSkillHooks();
+        CreateToolHooks();
+
         // Find bind FSM
         var heroFsms = hc.GetComponents<PlayMakerFSM>();
 
@@ -1110,17 +1123,52 @@ internal class AnimationManager {
         } else {
             Logger.Warn("Unable to find Bind FSM to hook.");
         }
+    }
+
+    /// <summary>
+    /// Animation subanimation hook for the Witch Tentacles FSM state
+    /// </summary>
+    private void OnWitchTentacles(PlayMakerFSM fsm) {
+        var dummyClip = new tk2dSpriteAnimationClip();
+        dummyClip.name = "Witch Tentacles!";
+        dummyClip.wrapMode = tk2dSpriteAnimationClip.WrapMode.Once;
+        OnAnimationEvent(dummyClip);
+    }
+
+    /// <summary>
+    /// Animation subanimation hook for the Shaman Air Cancel FSM state
+    /// </summary>
+    
+    private void OnShamanCancel(PlayMakerFSM fsm) {
+        var dummyClip = new tk2dSpriteAnimationClip();
+        dummyClip.name = "Shaman Cancel";
+        dummyClip.wrapMode = tk2dSpriteAnimationClip.WrapMode.Once;
+        OnAnimationEvent(dummyClip);
+    }
+    
+    /// <summary>
+    /// Animation subanimation hook for interrupted binds
+    /// </summary>
+    private void OnBindInterrupt(PlayMakerFSM fsm) {
+        var dummyClip = new tk2dSpriteAnimationClip();
+        dummyClip.name = "Bind Fail Burst";
+        dummyClip.wrapMode = tk2dSpriteAnimationClip.WrapMode.Once;
+        OnAnimationEvent(dummyClip);
+    }
 
 
-
+    /// <summary>
+    /// Creates hooks for silk skills
+    /// </summary>
+    private void CreateSkillHooks() {
         // Silk skill injections
-        var silkSkillFsm = hc.silkSpecialFSM;
+        var silkSkillFsm = HeroController.instance.silkSpecialFSM;
         if (silkSkillFsm == null) {
             Logger.Warn("Unable to find Silk Skill FSM to hook.");
             return;
         }
 
-        // Thread strom
+        // Thread storm
         var threadStormExtend = silkSkillFsm.GetState("Extend");
         FsmStateActionInjector.Inject(threadStormExtend, OnThreadStormExtend, 0);
 
@@ -1185,37 +1233,6 @@ internal class AnimationManager {
 
             injector.SetInjections(injections);
         }
-    }
-
-    /// <summary>
-    /// Animation subanimation hook for the Witch Tentacles FSM state
-    /// </summary>
-    private void OnWitchTentacles(PlayMakerFSM fsm) {
-        var dummyClip = new tk2dSpriteAnimationClip();
-        dummyClip.name = "Witch Tentacles!";
-        dummyClip.wrapMode = tk2dSpriteAnimationClip.WrapMode.Once;
-        OnAnimationEvent(dummyClip);
-    }
-
-    /// <summary>
-    /// Animation subanimation hook for the Shaman Air Cancel FSM state
-    /// </summary>
-    
-    private void OnShamanCancel(PlayMakerFSM fsm) {
-        var dummyClip = new tk2dSpriteAnimationClip();
-        dummyClip.name = "Shaman Cancel";
-        dummyClip.wrapMode = tk2dSpriteAnimationClip.WrapMode.Once;
-        OnAnimationEvent(dummyClip);
-    }
-    
-    /// <summary>
-    /// Animation subanimation hook for interrupted binds
-    /// </summary>
-    private void OnBindInterrupt(PlayMakerFSM fsm) {
-        var dummyClip = new tk2dSpriteAnimationClip();
-        dummyClip.name = "Bind Fail Burst";
-        dummyClip.wrapMode = tk2dSpriteAnimationClip.WrapMode.Once;
-        OnAnimationEvent(dummyClip);
     }
 
     /// <summary>
@@ -1402,6 +1419,15 @@ internal class AnimationManager {
         // Send nail target info
         var effectInfo = PaleNails.EncodeTargetInfo(target);
         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.SilkBossNeedleFire, 0, effectInfo);
+    }
+
+
+    private void CreateToolHooks() {
+        MagnetiteDice.Hook(OnDiceEnable);
+    }
+
+    private void OnDiceEnable() {
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagnetiteDice, 0);
     }
 
     // /// <summary>
