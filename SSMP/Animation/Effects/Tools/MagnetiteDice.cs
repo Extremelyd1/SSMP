@@ -62,7 +62,7 @@ internal class MagnetiteDice : BaseTool {
     /// Removes the hook from the dice
     /// </summary>
     public static void Unhook() {
-        var prefab = HeroController.instance.spawnedLuckyDiceShieldEffect;
+        var prefab = HeroController.SilentInstance?.spawnedLuckyDiceShieldEffect;
         if (prefab == null) {
             return;
         }

@@ -258,6 +258,18 @@ public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
         }
     } = 1;
 
+    /// <inheritdoc />
+    [SettingAlias("poisonbrewdmg", "brewdmg", "fleabrewdmg")]
+    [ModMenuSetting("Sawtooth Circlet Damage", "The number of masks of damage that a cloud from the poisoned Flea Brew deals")]
+    public byte PoisonBrewDamage {
+        get;
+        init {
+            if (field == value) return;
+            field = value;
+            ChangeEvent?.Invoke(nameof(PoisonBrewDamage));
+        }
+    } = 1;
+
     //
     // /// <inheritdoc />
     // [SettingAlias("sporeshroomdmg")]

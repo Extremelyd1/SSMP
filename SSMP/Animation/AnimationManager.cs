@@ -626,7 +626,8 @@ internal class AnimationManager {
         { "Witch Tentacles!", AnimationClip.WitchTentacles },
         { "Shaman Cancel", AnimationClip.ShamanCancel },
         { "Bind Fail Burst", AnimationClip.BindInterrupt },
-        { "Magnetite Dice", AnimationClip.MagnetiteDice }
+        { "Magnetite Dice", AnimationClip.MagnetiteDice },
+        { "Flea Brew", AnimationClip.FleaBrew }
     };
 
     /// <summary>
@@ -691,7 +692,8 @@ internal class AnimationManager {
         { AnimationClip.SilkBossNeedleFire, new PaleNails() },
 
         // Tools
-        { AnimationClip.MagnetiteDice, new MagnetiteDice() }
+        { AnimationClip.MagnetiteDice, new MagnetiteDice() },
+        { AnimationClip.FleaBrew, new FleaBrew() },
     };
 
     /// <summary>
@@ -1424,10 +1426,19 @@ internal class AnimationManager {
 
     private void CreateToolHooks() {
         MagnetiteDice.Hook(OnDiceEnable);
+
+        var toolFsm = HeroController.instance.toolsFSM;
+        var brewBurst = toolFsm.GetState("Flea Brew Burst");
+        FsmStateActionInjector.Inject(brewBurst, OnFleaBrew, 0, "Flea Brew");
     }
 
     private void OnDiceEnable() {
         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagnetiteDice, 0);
+    }
+
+    private void OnFleaBrew(PlayMakerFSM fsm) {
+        var effectInfo = FleaBrew.Instance.GetEffectInfo();
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.FleaBrew, 0, effectInfo);
     }
 
     // /// <summary>
