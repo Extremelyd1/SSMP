@@ -627,7 +627,8 @@ internal class AnimationManager {
         { "Shaman Cancel", AnimationClip.ShamanCancel },
         { "Bind Fail Burst", AnimationClip.BindInterrupt },
         { "Magnetite Dice", AnimationClip.MagnetiteDice },
-        { "Flea Brew", AnimationClip.FleaBrew }
+        { "Flea Brew", AnimationClip.FleaBrew },
+        { "Fractured Mask", AnimationClip.FracturedMask }
     };
 
     /// <summary>
@@ -693,7 +694,8 @@ internal class AnimationManager {
 
         // Tools
         { AnimationClip.MagnetiteDice, new MagnetiteDice() },
-        { AnimationClip.FleaBrew, new FleaBrew() },
+        { AnimationClip.FleaBrew, FleaBrew.Instance },
+        { AnimationClip.FracturedMask, new FracturedMask() }
     };
 
     /// <summary>
@@ -1430,6 +1432,16 @@ internal class AnimationManager {
         var toolFsm = HeroController.instance.toolsFSM;
         var brewBurst = toolFsm.GetState("Flea Brew Burst");
         FsmStateActionInjector.Inject(brewBurst, OnFleaBrew, 0, "Flea Brew");
+
+        var maskFsm = HeroController.instance.gameObject
+            .FindGameObjectInChildren("Charm Effects")?
+            .FindGameObjectInChildren("Fractured Mask Break")?
+            .LocateMyFSM("Spawn Effect");
+
+        if (maskFsm) {
+            var maskEffect = maskFsm.GetState("Instantiate Effect");
+            FsmStateActionInjector.Inject(maskEffect, OnFracturedMaskBreak, 0, "Fractured Mask Break");
+        }
     }
 
     private void OnDiceEnable() {
@@ -1439,6 +1451,10 @@ internal class AnimationManager {
     private void OnFleaBrew(PlayMakerFSM fsm) {
         var effectInfo = FleaBrew.Instance.GetEffectInfo();
         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.FleaBrew, 0, effectInfo);
+    }
+
+    private void OnFracturedMaskBreak(PlayMakerFSM fsm) {
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.FracturedMask, 0);
     }
 
     // /// <summary>
