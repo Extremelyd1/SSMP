@@ -75,6 +75,9 @@ internal class MapManager : IMapManager {
 
         // Register when the player opens their map, which is when the compass position is calculated
         EventHooks.GameMapPositionCompassAndCorpse += OnPositionCompass;
+
+        // Register when the wide inventory map updates positions, so remote icons are shown there too
+        EventHooks.InventoryWideMapUpdatePositions += OnInventoryWideMapUpdatePositions;
     }
 
     /// <summary>
@@ -86,6 +89,8 @@ internal class MapManager : IMapManager {
         EventHooks.GameMapCloseQuickMap -= OnCloseQuickMap;
 
         EventHooks.GameMapPositionCompassAndCorpse -= OnPositionCompass;
+
+        EventHooks.InventoryWideMapUpdatePositions -= OnInventoryWideMapUpdatePositions;
     }
 
     /// <summary>
@@ -293,6 +298,16 @@ internal class MapManager : IMapManager {
         // Otherwise, we have opened the map
         _displayingIcons = true;
         UpdateMapIconsActive();
+        RetryDeferredIcons();
+    }
+
+    /// <summary>
+    /// Callback method on the InventoryWideMap#UpdatePositions method.
+    /// </summary>
+    private void OnInventoryWideMapUpdatePositions(InventoryWideMap _) {
+        _displayingIcons = true;
+        UpdateMapIconsActive();
+        RetryDeferredIcons();
     }
 
     /// <summary>
@@ -302,6 +317,17 @@ internal class MapManager : IMapManager {
         foreach (var mapEntry in _mapEntries.Values) {
             if (mapEntry.HasMapIcon && mapEntry.GameObject != null) {
                 mapEntry.GameObject.SetActive(_displayingIcons);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Retry creating map icons for any player that has a map icon but no icon object yet.
+    /// </summary>
+    private void RetryDeferredIcons() {
+        foreach (var (id, entry) in _mapEntries) {
+            if (entry.HasMapIcon && entry.GameObject == null) {
+                CreatePlayerIcon(id, entry.Position);
             }
         }
     }
