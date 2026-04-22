@@ -68,9 +68,9 @@ internal class HolePunchEncryptedTransportServer : IEncryptedTransportServer {
         Logger.Info($"HolePunch Server: Starting on port {port}");
 
         if (_mmsClient != null) {
-            _mmsClient.RefreshHostMappingRequested += OnHostMappingRefreshRequested;
-            _mmsClient.HostMappingReceived += OnHostMappingReceived;
-            _mmsClient.StartPunchRequested += OnStartPunchRequested;
+            _mmsClient.HostSession.WebSocket.RefreshHostMappingRequested += OnHostMappingRefreshRequested;
+            _mmsClient.HostSession.WebSocket.HostMappingReceived += OnHostMappingReceived;
+            _mmsClient.HostSession.WebSocket.StartPunchRequested += OnStartPunchRequested;
         }
         
         var socket = PreBoundSocket;
@@ -86,9 +86,9 @@ internal class HolePunchEncryptedTransportServer : IEncryptedTransportServer {
         Logger.Info("HolePunch Server: Stopping");
 
         if (_mmsClient != null) {
-            _mmsClient.RefreshHostMappingRequested -= OnHostMappingRefreshRequested;
-            _mmsClient.HostMappingReceived -= OnHostMappingReceived;
-            _mmsClient.StartPunchRequested -= OnStartPunchRequested;
+            _mmsClient.HostSession.WebSocket.RefreshHostMappingRequested -= OnHostMappingRefreshRequested;
+            _mmsClient.HostSession.WebSocket.HostMappingReceived -= OnHostMappingReceived;
+            _mmsClient.HostSession.WebSocket.StartPunchRequested -= OnStartPunchRequested;
             _mmsClient.CloseLobby();
             _mmsClient = null;
         }
@@ -107,6 +107,7 @@ internal class HolePunchEncryptedTransportServer : IEncryptedTransportServer {
             return;
         }
 
+        // Run the PunchToClientAsync method asynchronously, but don't wait for the result
         _ = PunchToClientAsync(new IPEndPoint(ip, clientPort), startTimeMs);
     }
 
@@ -153,22 +154,20 @@ internal class HolePunchEncryptedTransportServer : IEncryptedTransportServer {
     /// spaced <see cref="PunchPacketDelayMs"/> ms apart, starting at <paramref name="startTimeMs"/>.
     /// Exceptions are caught and logged rather than propagated, since this runs fire-and-forget.
     /// </summary>
-    private async Task PunchToClientAsync(IPEndPoint clientEndpoint, long startTimeMs)
-    {
-        try
-        {
+    private async Task PunchToClientAsync(IPEndPoint clientEndpoint, long startTimeMs) {
+        try {
             Logger.Debug($"HolePunch Server: Punching to client at {clientEndpoint}");
             var delay = startTimeMs - DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             if (delay > 0) await Task.Delay(TimeSpan.FromMilliseconds(delay));
 
-            for (var i = 0; i < PunchPacketCount; i++)
-            {
+            for (var i = 0; i < PunchPacketCount; i++) {
                 _dtlsServer.SendRaw(PunchPacket, clientEndpoint);
                 await Task.Delay(PunchPacketDelayMs);
             }
 
             Logger.Info($"HolePunch Server: Punch complete to {clientEndpoint}");
+        } catch (Exception ex) {
+            Logger.Error($"HolePunch Server: Punch to {clientEndpoint} failed – {ex.Message}");
         }
-        catch (Exception ex) { Logger.Error($"HolePunch Server: Punch to {clientEndpoint} failed – {ex.Message}"); }
     }
 }

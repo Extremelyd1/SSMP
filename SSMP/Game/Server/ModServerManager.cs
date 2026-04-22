@@ -64,7 +64,7 @@ internal class ModServerManager : ServerManager {
         _uiManager.RequestServerStopHostEvent += Stop;
         PlayerConnectEvent += _ => UpdateMatchmakingRemotePlayerCount();
         PlayerDisconnectEvent += _ => UpdateMatchmakingRemotePlayerCount();
-        ServerShutdownEvent += () => _uiManager.ConnectInterface.MmsClient.SetConnectedPlayers(0);
+        ServerShutdownEvent += () => UpdateMatchmakingRemotePlayerCount(0);
 
         // Register application quit handler
         // ModHooks.ApplicationQuitHook += Stop;
@@ -128,7 +128,14 @@ internal class ModServerManager : ServerManager {
     /// <summary>
     /// Pushes the current remote-player count to MMS heartbeat state.
     /// </summary>
-    private void UpdateMatchmakingRemotePlayerCount() {
+    /// <param name="count">The number of players to set in the update, or -1 if the number needs to be retrieved
+    /// from the server.</param>
+    private void UpdateMatchmakingRemotePlayerCount(int count = -1) {
+        if (count == -1) {
+            _uiManager.ConnectInterface.MmsClient.SetConnectedPlayers(count);
+            return;
+        }
+        
         var hostAuthKey = _modSettings.AuthKey;
         var remotePlayerCount = hostAuthKey == null
             ? 0

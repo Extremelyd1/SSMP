@@ -1,5 +1,4 @@
 using System;
-using System.Buffers;
 using System.Globalization;
 using System.Linq;
 using Newtonsoft.Json;
@@ -11,43 +10,10 @@ namespace SSMP.Networking.Matchmaking.Parsing;
 /// <summary>Reads and writes the small JSON payloads used by MMS.</summary>
 internal static class MmsJsonParser {
     /// <summary>
-    /// A scoped rental of a pooled char buffer. Disposing returns the buffer to the shared
-    /// pool, making double-return safe and ensuring the caller cannot forget to release.
-    /// </summary>
-    internal sealed class CharLease : IDisposable {
-        private static readonly ArrayPool<char> Pool = ArrayPool<char>.Shared;
-        private char[]? _buffer;
-
-        /// <summary>The number of valid characters in <see cref="Span"/>.</summary>
-        private int Length { get; }
-
-        /// <summary>The serialized JSON content, valid only while this lease is undisposed.</summary>
-        public ReadOnlySpan<char> Span => _buffer != null
-            ? _buffer.AsSpan(0, Length)
-            : ReadOnlySpan<char>.Empty;
-
-        internal CharLease(char[] buffer, int length) {
-            _buffer = buffer;
-            Length  = length;
-        }
-
-        /// <summary>Returns the rented buffer to the pool. Safe to call more than once.</summary>
-        public void Dispose() {
-            var buf = _buffer;
-            if (buf == null) {
-                return;
-            }
-
-            _buffer = null;
-            Pool.Return(buf);
-        }
-    }
-
-    /// <summary>
     /// Parses a JSON string and returns the first property with the requested key.
     /// Returns null when the payload is invalid or the key is missing.
     /// </summary>
-    private static string? ExtractValue(string json, string key) {
+    public static string? ExtractValue(string json, string key) {
         try {
             var token = JToken.Parse(json);
             var property = FindPropertyRecursive(token, key);
@@ -58,16 +24,9 @@ internal static class MmsJsonParser {
     }
 
     /// <summary>
-    /// Span-based wrapper for callers that already have a message buffer.
-    /// Converts once, then reuses the string overload.
+    /// Serializes the create-lobby payload into a string.
     /// </summary>
-    public static string? ExtractValue(ReadOnlySpan<char> json, string key) => ExtractValue(json.ToString(), key);
-
-    /// <summary>
-    /// Serializes the create-lobby payload into a scoped <see cref="CharLease"/>.
-    /// Dispose the returned lease (e.g. with <c>using</c>) to return the buffer to the pool.
-    /// </summary>
-    public static CharLease FormatCreateLobbyJson(
+    public static string FormatCreateLobbyJson(
         int port,
         bool isPublic,
         string gameVersion,
@@ -90,10 +49,8 @@ internal static class MmsJsonParser {
             payload[MmsFields.MatchmakingVersionRequest] = MmsProtocol.CurrentVersion;
         }
 
-        var json   = payload.ToString(Formatting.None);
-        var buffer = ArrayPool<char>.Shared.Rent(json.Length);
-        json.AsSpan().CopyTo(buffer);
-        return new CharLease(buffer, json.Length);
+        var json = payload.ToString(Formatting.None);
+        return json;
     }
 
     /// <summary>Walks nested objects and arrays until it finds a matching property name.</summary>

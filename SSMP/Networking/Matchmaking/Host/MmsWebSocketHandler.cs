@@ -217,10 +217,12 @@ internal sealed class MmsWebSocketHandler : IDisposable, IAsyncDisposable {
             if (!eq.TryDequeue(out var action) || action == null)
                 break;
 
-            if (_mainThreadContext != null)
-                _mainThreadContext.Post(static s => ((Action)s!)(), action);
-            else
-                action();
+            if (_mainThreadContext != null) {
+                // Static lambda variable to prevent association with this class instance
+                _mainThreadContext.Post(static a => ((Action) a!).Invoke(), action);
+            } else {
+                action.Invoke();
+            }
         }
     }
 
@@ -265,16 +267,12 @@ internal sealed class MmsWebSocketHandler : IDisposable, IAsyncDisposable {
     /// </summary>
     /// <returns>The generation number that should be used by the next background run.</returns>
     private int InvalidateActiveRun() {
-        int nextVersion;
-
         lock (_stateGate) {
             _cts?.Cancel();
             _cts = null;
             _socket = null;
-            nextVersion = unchecked(++_runVersion);
+            return unchecked(++_runVersion);
         }
-
-        return nextVersion;
     }
 
     /// <summary>
@@ -303,16 +301,19 @@ internal sealed class MmsWebSocketHandler : IDisposable, IAsyncDisposable {
     /// <param name="message">Decoded UTF-8 text frame received from MMS.</param>
     /// <param name="eq">Run-local event queue for marshalling event invocations.</param>
     private void HandleMessage(string message, EventQueue eq) {
-        var span = message.AsSpan();
-        var action = MmsJsonParser.ExtractValue(span, MmsFields.Action);
+        var action = MmsJsonParser.ExtractValue(message, MmsFields.Action);
+        if (action == null) {
+            Logger.Debug("MmsWebSocketHandler: invalid message, no defined action");
+            return;
+        }
 
         switch (action) {
-            case MmsActions.RefreshHostMapping: HandleRefreshHostMapping(span, eq); break;
-            case MmsActions.StartPunch: HandleStartPunch(span, eq); break;
+            case MmsActions.RefreshHostMapping: HandleRefreshHostMapping(message, eq); break;
+            case MmsActions.StartPunch: HandleStartPunch(message, eq); break;
             case MmsActions.HostMappingReceived: HandleHostMappingReceived(eq); break;
             case MmsActions.JoinFailed: HandleJoinFailed(message); break;
             default:
-                Logger.Debug($"MmsWebSocketHandler: unknown action '{new string(action)}' mapped to message dropping");
+                Logger.Debug($"MmsWebSocketHandler: unknown action '{action}' mapped to message dropping");
                 break;
         }
     }
@@ -323,12 +324,12 @@ internal sealed class MmsWebSocketHandler : IDisposable, IAsyncDisposable {
     /// <see cref="RefreshHostMappingRequested"/>. Silently ignored if any required
     /// field is missing or unparseable.
     /// </summary>
-    /// <param name="span">Span over the raw message text.</param>
+    /// <param name="message">The JSON message.</param>
     /// <param name="eq">Run-local event queue for marshalling event invocations.</param>
-    private void HandleRefreshHostMapping(ReadOnlySpan<char> span, EventQueue eq) {
-        var joinId = MmsJsonParser.ExtractValue(span, MmsFields.JoinId);
-        var token = MmsJsonParser.ExtractValue(span, MmsFields.HostDiscoveryToken);
-        var timeStr = MmsJsonParser.ExtractValue(span, MmsFields.ServerTimeMs);
+    private void HandleRefreshHostMapping(string message, EventQueue eq) {
+        var joinId = MmsJsonParser.ExtractValue(message, MmsFields.JoinId);
+        var token = MmsJsonParser.ExtractValue(message, MmsFields.HostDiscoveryToken);
+        var timeStr = MmsJsonParser.ExtractValue(message, MmsFields.ServerTimeMs);
 
         if (joinId == null || token == null || !long.TryParse(timeStr, out var time))
             return;
@@ -343,14 +344,14 @@ internal sealed class MmsWebSocketHandler : IDisposable, IAsyncDisposable {
     /// <see cref="StartPunchRequested"/>. Silently ignored if any required field
     /// is missing or unparseable.
     /// </summary>
-    /// <param name="span">Span over the raw message text.</param>
+    /// <param name="message">The JSON message.</param>
     /// <param name="eq">Run-local event queue for marshalling event invocations.</param>
-    private void HandleStartPunch(ReadOnlySpan<char> span, EventQueue eq) {
-        var joinId = MmsJsonParser.ExtractValue(span, MmsFields.JoinId);
-        var clientIp = MmsJsonParser.ExtractValue(span, MmsFields.ClientIp);
-        var clientPortStr = MmsJsonParser.ExtractValue(span, MmsFields.ClientPort);
-        var hostPortStr = MmsJsonParser.ExtractValue(span, MmsFields.HostPort);
-        var startTimeStr = MmsJsonParser.ExtractValue(span, MmsFields.StartTimeMs);
+    private void HandleStartPunch(string message, EventQueue eq) {
+        var joinId = MmsJsonParser.ExtractValue(message, MmsFields.JoinId);
+        var clientIp = MmsJsonParser.ExtractValue(message, MmsFields.ClientIp);
+        var clientPortStr = MmsJsonParser.ExtractValue(message, MmsFields.ClientPort);
+        var hostPortStr = MmsJsonParser.ExtractValue(message, MmsFields.HostPort);
+        var startTimeStr = MmsJsonParser.ExtractValue(message, MmsFields.StartTimeMs);
 
         if (joinId == null ||
             clientIp == null ||

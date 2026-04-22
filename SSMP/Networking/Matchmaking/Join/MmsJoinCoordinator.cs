@@ -35,30 +35,6 @@ internal sealed class MmsJoinCoordinator {
         _discoveryHost = discoveryHost;
     }
 
-    /// <summary>
-    /// Mutable holder for the active UDP discovery <see cref="CancellationTokenSource"/>,
-    /// allowing handler methods to update it without <c>ref</c> parameters.
-    /// </summary>
-    private sealed class DiscoverySession : IDisposable {
-        /// <summary>
-        /// The CTS governing the currently running discovery task, or <c>null</c>
-        /// if no discovery is active.
-        /// </summary>
-        public CancellationTokenSource? Cts;
-
-        /// <summary>Cancels <see cref="Cts"/> without disposing it.</summary>
-        public void Cancel() {
-            Cts?.Cancel();
-        }
-
-        /// <summary>Cancels and disposes <see cref="Cts"/> if it is set.</summary>
-        public void Dispose() {
-            Cts?.Cancel();
-            Cts?.Dispose();
-            Cts = null;
-        }
-    }
-
     /// <summary>Connects to join WebSocket and drives server-directed UDP mapping flow.</summary>
     public async Task<MatchmakingJoinStartResult?> CoordinateAsync(
         string joinId,
@@ -79,12 +55,12 @@ internal sealed class MmsJoinCoordinator {
             await ConnectAsync(socket, joinId, timeoutCts.Token);
             return await RunMessageLoopAsync(socket, timeoutCts, sendRawAction, discovery, onJoinFailed);
         } catch (OperationCanceledException) {
-            onJoinFailed("Timeout.");
+            onJoinFailed.Invoke("Timeout");
         } catch (WebSocketException ex) {
-            onJoinFailed(ex.Message);
-            Logger.Error($"MmsJoinCoordinator: matchmaking WebSocket error: {ex.Message}");
+            onJoinFailed.Invoke(ex.Message);
+            Logger.Error($"MmsJoinCoordinator: Matchmaking WebSocket error: {ex.Message}");
         } catch (Exception ex) {
-            onJoinFailed(ex.Message);
+            onJoinFailed.Invoke(ex.Message);
             Logger.Error($"MmsJoinCoordinator: CoordinateAsync failed: {ex.Message}");
         } finally {
             discovery.Dispose();
@@ -116,12 +92,12 @@ internal sealed class MmsJoinCoordinator {
             try {
                 (messageType, message) = await MmsUtilities.ReceiveTextMessageAsync(socket, timeoutCts.Token);
             } catch (InvalidOperationException ex) {
-                onJoinFailed($"Matchmaking error: {ex.Message}");
+                onJoinFailed.Invoke($"Matchmaking error: {ex.Message}");
                 break;
             }
 
             if (messageType == WebSocketMessageType.Close) {
-                onJoinFailed("Connection closed prematurely by server.");
+                onJoinFailed.Invoke("Connection closed prematurely by server.");
                 break;
             }
             if (messageType != WebSocketMessageType.Text || string.IsNullOrEmpty(message)) continue;
@@ -141,7 +117,11 @@ internal sealed class MmsJoinCoordinator {
         DiscoverySession discovery,
         Action<string> onJoinFailed
     ) {
-        var action = MmsJsonParser.ExtractValue(message.AsSpan(), MmsFields.Action);
+        var action = MmsJsonParser.ExtractValue(message, MmsFields.Action);
+        if (action == null) {
+            Logger.Debug("MmsWebSocketHandler: invalid message, no defined action");
+            return (false, null);
+        }
 
         switch (action) {
             case MmsActions.BeginClientMapping:
@@ -161,7 +141,7 @@ internal sealed class MmsJoinCoordinator {
                 return (true, null);
 
             default:
-                Logger.Debug($"MmsJoinCoordinator: Unknown action '{new string(action)}' mapped to message dropping");
+                Logger.Debug($"MmsJoinCoordinator: Unknown action '{action}' mapped to message dropping");
                 break;
         }
 
@@ -174,7 +154,7 @@ internal sealed class MmsJoinCoordinator {
         Action<byte[], IPEndPoint> sendRaw,
         DiscoverySession discovery
     ) {
-        var token = MmsJsonParser.ExtractValue(message.AsSpan(), MmsFields.ClientDiscoveryToken);
+        var token = MmsJsonParser.ExtractValue(message, MmsFields.ClientDiscoveryToken);
         discovery.Cancel();
         discovery.Cts = StartDiscovery(token, sendRaw);
     }
@@ -188,10 +168,10 @@ internal sealed class MmsJoinCoordinator {
     ) {
         discovery.Cancel();
 
-        var joinStart = MmsResponseParser.ParseStartPunch(message.AsSpan());
+        var joinStart = MmsResponseParser.ParseStartPunch(message);
         if (joinStart == null) {
             Logger.Warn($"MmsJoinCoordinator: Failed to parse start punch payload: {message}");
-            onJoinFailed("Invalid start_punch payload received from server.");
+            onJoinFailed.Invoke("Invalid start_punch payload received from server.");
             return null;
         }
 
@@ -247,7 +227,31 @@ internal sealed class MmsJoinCoordinator {
     /// <param name="message">Raw JSON WebSocket message from MMS.</param>
     /// <param name="onJoinFailed">Callback that updates higher-level matchmaking state.</param>
     private static void HandleJoinFailed(string message, Action<string> onJoinFailed) {
-        onJoinFailed(MmsJsonParser.ExtractValue(message.AsSpan(), MmsFields.Reason) ?? "join_failed");
+        onJoinFailed.Invoke(MmsJsonParser.ExtractValue(message, MmsFields.Reason) ?? "join_failed");
         Logger.Warn($"MmsJoinCoordinator: {MmsActions.JoinFailed} - {message}");
+    }
+    
+    /// <summary>
+    /// Mutable holder for the active UDP discovery <see cref="CancellationTokenSource"/>,
+    /// allowing handler methods to update it without <c>ref</c> parameters.
+    /// </summary>
+    private sealed class DiscoverySession : IDisposable {
+        /// <summary>
+        /// The CTS governing the currently running discovery task, or <c>null</c>
+        /// if no discovery is active.
+        /// </summary>
+        public CancellationTokenSource? Cts;
+
+        /// <summary>Cancels <see cref="Cts"/> without disposing it.</summary>
+        public void Cancel() {
+            Cts?.Cancel();
+        }
+
+        /// <summary>Cancels and disposes <see cref="Cts"/> if it is set.</summary>
+        public void Dispose() {
+            Cts?.Cancel();
+            Cts?.Dispose();
+            Cts = null;
+        }
     }
 }

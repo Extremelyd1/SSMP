@@ -2,6 +2,7 @@ using System;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 using SSMP.Logging;
 using SSMP.Networking.Matchmaking.Join;
 using SSMP.Networking.Matchmaking.Parsing;
@@ -28,15 +29,11 @@ internal sealed class MmsHostSessionService : IDisposable {
     /// <summary>Whether this service instance has been disposed.</summary>
     private volatile bool _disposed;
 
-    /// <summary>WebSocket handler that receives real-time MMS server events.</summary>
-    private readonly MmsWebSocketHandler _webSocket;
-
     /// <summary>MMS session bearer token; null if no active lobby.</summary>
     private volatile string? _hostToken;
 
     /// <summary>
-    /// The MMS lobby ID of the currently active session, or <c>null</c> when no
-    /// lobby is active.
+    /// The MMS lobby ID of the currently active session, or <c>null</c> when no lobby is active.
     /// </summary>
     private string? _currentLobbyId;
 
@@ -59,6 +56,9 @@ internal sealed class MmsHostSessionService : IDisposable {
     /// <c>null</c> when no refresh is running.
     /// </summary>
     private CancellationTokenSource? _hostDiscoveryRefreshCts;
+    
+    /// <summary>WebSocket handler that receives real-time MMS server events.</summary>
+    public MmsWebSocketHandler WebSocket { get; }
 
     /// <summary>
     /// Initializes a new <see cref="MmsHostSessionService"/>.
@@ -76,36 +76,7 @@ internal sealed class MmsHostSessionService : IDisposable {
     ) {
         _baseUrl = baseUrl;
         _discoveryHost = discoveryHost;
-        _webSocket = webSocket;
-    }
-
-    /// <summary>
-    /// Raised when MMS requests a host-mapping refresh.
-    /// Provides the join ID, host discovery token, and a server correlation timestamp.
-    /// Forwarded directly from <see cref="MmsWebSocketHandler.RefreshHostMappingRequested"/>.
-    /// </summary>
-    public event Action<string, string, long>? RefreshHostMappingRequested {
-        add => _webSocket.RefreshHostMappingRequested += value;
-        remove => _webSocket.RefreshHostMappingRequested -= value;
-    }
-
-    /// <summary>
-    /// Raised when MMS confirms that a host mapping has been received and recorded.
-    /// Forwarded directly from <see cref="MmsWebSocketHandler.HostMappingReceived"/>.
-    /// </summary>
-    public event Action? HostMappingReceived {
-        add => _webSocket.HostMappingReceived += value;
-        remove => _webSocket.HostMappingReceived -= value;
-    }
-
-    /// <summary>
-    /// Raised when MMS instructs this host to begin NAT hole-punching toward a client.
-    /// Provides the join ID, client IP, client port, host port, and a startTimeMs correlation timestamp.
-    /// Forwarded directly from <see cref="MmsWebSocketHandler.StartPunchRequested"/>.
-    /// </summary>
-    public event Action<string, string, int, int, long>? StartPunchRequested {
-        add => _webSocket.StartPunchRequested += value;
-        remove => _webSocket.StartPunchRequested -= value;
+        WebSocket = webSocket;
     }
 
     /// <summary>Updates player count; triggers immediate heartbeat if changed.</summary>
@@ -141,13 +112,13 @@ internal sealed class MmsHostSessionService : IDisposable {
                 if (_hostToken != null) return ((null, null, null), MatchmakingError.NetworkFailure);
             }
 
-            using var lease = MmsJsonParser.FormatCreateLobbyJson(
+            var jsonString = MmsJsonParser.FormatCreateLobbyJson(
                 hostPort, isPublic, gameVersion, lobbyType, MmsUtilities.GetLocalIpAddress()
             );
 
             var response = await MmsHttpClient.PostJsonAsync(
                 $"{_baseUrl}{MmsRoutes.Lobby}",
-                new string(lease.Span)
+                jsonString
             );
 
             if (!response.Success || response.Body == null)
@@ -217,7 +188,7 @@ internal sealed class MmsHostSessionService : IDisposable {
         }
 
         StopHostDiscoveryRefresh();
-        _webSocket.Stop();
+        WebSocket.Stop();
 
         var (tokenSnapshot, lobbyIdSnapshot) = snapshot.Value;
         _ = SafeDeleteLobbyAsync(tokenSnapshot, lobbyIdSnapshot);
@@ -235,7 +206,7 @@ internal sealed class MmsHostSessionService : IDisposable {
             return;
         }
 
-        _webSocket.Start(_hostToken);
+        WebSocket.Start(_hostToken);
     }
 
     /// <summary>Starts periodic background UDP discovery for external IP learning.</summary>
@@ -293,9 +264,9 @@ internal sealed class MmsHostSessionService : IDisposable {
     /// <param name="gameVersion">Game version string for compatibility filtering.</param>
     /// <returns>A JSON string ready to POST to the MMS lobby endpoint.</returns>
     private static string BuildSteamLobbyJson(string steamLobbyId, bool isPublic, string gameVersion) =>
-        $"{{\"{MmsFields.ConnectionDataRequest}\":\"{MmsUtilities.EscapeJsonString(steamLobbyId)}\"," +
-        $"\"{MmsFields.IsPublicRequest}\":{MmsUtilities.BoolToJson(isPublic)}," +
-        $"\"{MmsFields.GameVersionRequest}\":\"{MmsUtilities.EscapeJsonString(gameVersion)}\"," +
+        $"{{\"{MmsFields.ConnectionDataRequest}\":\"{JsonConvert.ToString(steamLobbyId)}\"," +
+        $"\"{MmsFields.IsPublicRequest}\":{isPublic.ToString().ToLower()}," +
+        $"\"{MmsFields.GameVersionRequest}\":\"{JsonConvert.ToString(gameVersion)}\"," +
         $"\"{MmsFields.LobbyTypeRequest}\":\"steam\"}}";
 
 
@@ -345,7 +316,7 @@ internal sealed class MmsHostSessionService : IDisposable {
 
         lock (_sessionLock) {
             if (_disposed) {
-                _ = SafeDeleteLobbyAsync(hostToken!, lobbyId);
+                _ = SafeDeleteLobbyAsync(hostToken, lobbyId);
                 return false;
             }
 
@@ -396,7 +367,8 @@ internal sealed class MmsHostSessionService : IDisposable {
     /// heartbeat endpoint. Fire-and-forget with a continuation that tracks and logs consecutive failures.
     /// Failures are not retried but are logged and tracked via a consecutive failure counter.
     /// </summary>
-    /// <param name="state">Unused timer state; always <c>null</c>.</param>
+    /// <param name="state">Unused timer state in order for this method to be used as a callback in
+    /// <see cref="Timer"/>.</param>
     private void SendHeartbeat(object? state) {
         string? token;
         CancellationToken cancellationToken;

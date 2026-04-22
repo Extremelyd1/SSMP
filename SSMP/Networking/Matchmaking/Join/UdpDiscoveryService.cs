@@ -24,7 +24,7 @@ internal static class UdpDiscoveryService {
         var endpoint = await ResolveEndpointAsync(discoveryHost);
         if (endpoint is null) return;
 
-        var tokenBytes = EncodeToken(token);
+        var tokenBytes = Encoding.UTF8.GetBytes(token);
         if (tokenBytes.Length != ExpectedTokenByteLength) {
             Logger.Error(
                 $"UdpDiscoveryService: discovery token encoded to {tokenBytes.Length} bytes; expected {ExpectedTokenByteLength}. Aborting discovery."
@@ -63,10 +63,6 @@ internal static class UdpDiscoveryService {
         }
     }
 
-    /// <summary>Encodes <paramref name="token"/> to a UTF-8 byte array.</summary>
-    private static byte[] EncodeToken(string token) =>
-        Encoding.UTF8.GetBytes(token);
-
     /// <summary>
     /// Loops, sending <paramref name="tokenBytes"/> to <paramref name="endpoint"/>
     /// every <see cref="MmsProtocol.DiscoveryIntervalMs"/> until
@@ -79,24 +75,13 @@ internal static class UdpDiscoveryService {
         CancellationToken cancellationToken
     ) {
         while (!cancellationToken.IsCancellationRequested) {
-            TrySend(sendRaw, tokenBytes, endpoint);
+            try {
+                sendRaw.Invoke(tokenBytes, endpoint);
+            } catch (Exception ex) when (ex is not OperationCanceledException) {
+                Logger.Warn($"UdpDiscoveryService: send error, aborting – {ex}");
+            }
 
-            if (!await TryDelayAsync(cancellationToken).ConfigureAwait(false)) return;
-        }
-    }
-
-    /// <summary>
-    /// Attempts a single send. Returns <c>false</c> (and logs a warning) on failure.
-    /// </summary>
-    private static void TrySend(
-        Action<byte[], IPEndPoint> sendRaw,
-        byte[] tokenBytes,
-        IPEndPoint endpoint
-    ) {
-        try {
-            sendRaw(tokenBytes, endpoint);
-        } catch (Exception ex) when (ex is not OperationCanceledException) {
-            Logger.Warn($"UdpDiscoveryService: send error, aborting – {ex}");
+            if (!await TryDelayAsync(cancellationToken)) return;
         }
     }
 

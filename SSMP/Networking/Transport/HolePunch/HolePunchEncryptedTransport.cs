@@ -239,12 +239,15 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     /// <exception cref="InvalidOperationException">Thrown if hole punching fails</exception>
     /// <remarks>
     /// Hole-punching sequence:
-    /// 1. Reuse pre-bound socket from STUN discovery (or create new one)
-    /// 2. Configure socket to ignore ICMP Port Unreachable errors
-    /// 3. Send a short priming burst to open the NAT mapping
-    /// 4. Connect socket to peer endpoint
-    /// 5. Continue punching in the background while DTLS handshakes
-    /// 6. Return socket for DTLS handshake
+    /// 1. Reuse pre-bound socket from STUN discovery (or create new one).
+    /// 2. Configure socket to ignore ICMP Port Unreachable errors.
+    /// 3. Send a short priming burst to open the NAT mapping.
+    /// 4. Connect socket to peer endpoint.
+    /// 5. Continue punching in the background while DTLS handshakes.
+    /// 6. Return socket for DTLS handshake.
+    ///
+    /// While step 5 shouldn't be necessary as the DTLS handshake also sends packets over the same socket, which should
+    /// maintain the NAT UDP port mapping, it doesn't work without it.
     /// </remarks>
     private static Socket PerformHolePunch(string address, int port) {
         // Attempt to reuse the socket passed from ConnectInterface
@@ -299,7 +302,7 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     /// Continues sending punch packets while DTLS handshakes so stricter NATs keep the mapping alive.
     /// </summary>
     private static void StartBackgroundPunchBurst(Socket socket, IPEndPoint endpoint) {
-        _ = Task.Run(() => {
+        Task.Run(() => {
             try {
                 Logger.Debug(
                     $"HolePunch: Continuing background punch burst ({PunchPacketCount - InitialPunchPacketCount} packets) to {endpoint}"

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SSMP.Logging;
@@ -20,10 +21,10 @@ internal static class MmsResponseParser {
     /// </remarks>
     public static bool TryParseLobbyActivation(
         string response,
-        out string? lobbyId,
-        out string? hostToken,
-        out string? lobbyName,
-        out string? lobbyCode,
+        [NotNullWhen(true)] out string? lobbyId,
+        [NotNullWhen(true)] out string? hostToken,
+        [NotNullWhen(true)] out string? lobbyName,
+        [NotNullWhen(true)] out string? lobbyCode,
         out string? hostDiscoveryToken
     ) {
         var root = ParseJsonObject(response);
@@ -79,7 +80,7 @@ internal static class MmsResponseParser {
     /// Parses the start-punch message sent before synchronized hole punching.
     /// Returns null when the host endpoint or timestamp is missing.
     /// </summary>
-    private static MatchmakingJoinStartResult? ParseStartPunch(string json) {
+    public static MatchmakingJoinStartResult? ParseStartPunch(string json) {
         var root = ParseJsonObject(json);
         if (root == null) {
             return null;
@@ -100,15 +101,10 @@ internal static class MmsResponseParser {
         };
     }
 
-    /// <summary>Span-based wrapper for callers that already work with message spans.</summary>
-    public static MatchmakingJoinStartResult? ParseStartPunch(ReadOnlySpan<char> span) =>
-        ParseStartPunch(span.ToString());
-
     /// <summary>Normalizes lobby-list payloads so callers can always iterate a JSON array.</summary>
     private static JArray ParseLobbiesAsArray(string response) {
         return JToken.Parse(response) switch {
             JArray  array => array,
-            JObject obj   => [obj],
             var other     => LogAndReturnEmpty(other)
         };
 

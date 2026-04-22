@@ -1,11 +1,9 @@
-using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using SSMP.Logging;
 using SSMP.Networking.Matchmaking.Parsing;
 using SSMP.Networking.Matchmaking.Protocol;
 using SSMP.Networking.Matchmaking.Transport;
-using SSMP.Networking.Matchmaking.Utilities;
 
 namespace SSMP.Networking.Matchmaking.Query;
 
@@ -45,12 +43,6 @@ internal sealed class MmsLobbyQueryService {
             return (null, response.Error);
         }
 
-        var startIdx = MmsUtilities.SkipWhitespace(response.Body.AsSpan(), 0);
-        if (startIdx >= response.Body.Length || response.Body[startIdx] != '[') {
-            Logger.Warn($"MmsLobbyQueryService: GetPublicLobbiesAsync received malformed non-array response (length={response.Body.Length}).");
-            return (null, MatchmakingError.NetworkFailure);
-        }
-
         return (MmsResponseParser.ParsePublicLobbies(response.Body), MatchmakingError.None);
     }
 
@@ -88,8 +80,8 @@ internal sealed class MmsLobbyQueryService {
     private static JoinLobbyResult? ParseAndLogJoinResult(string lobbyId, string response) {
         var joinResult = MmsResponseParser.ParseJoinLobbyResult(response);
         if (joinResult == null) {
-            var hasJoinId = MmsJsonParser.ExtractValue(response.AsSpan(), MmsFields.JoinId) != null;
-            var hasConnectionData = MmsJsonParser.ExtractValue(response.AsSpan(), MmsFields.ConnectionData) != null;
+            var hasJoinId = MmsJsonParser.ExtractValue(response, MmsFields.JoinId) != null;
+            var hasConnectionData = MmsJsonParser.ExtractValue(response, MmsFields.ConnectionData) != null;
             Logger.Error(
                 $"MmsLobbyQueryService: invalid JoinLobby response (length={response.Length}, hasJoinId={hasJoinId}, hasConnectionData={hasConnectionData})."
             );
@@ -108,7 +100,7 @@ internal sealed class MmsLobbyQueryService {
     /// <param name="serverVersion">Receives the parsed version number on success; 0 on failure.</param>
     /// <returns><c>true</c> if a valid integer version was found; <c>false</c> otherwise.</returns>
     private static bool TryParseServerVersion(string response, out int serverVersion) {
-        var versionString = MmsJsonParser.ExtractValue(response.AsSpan(), MmsFields.Version);
+        var versionString = MmsJsonParser.ExtractValue(response, MmsFields.Version);
         if (int.TryParse(versionString, out serverVersion)) return true;
 
         Logger.Warn("MmsLobbyQueryService: MMS health response did not include a valid protocol version.");

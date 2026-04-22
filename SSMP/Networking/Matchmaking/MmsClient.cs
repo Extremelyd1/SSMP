@@ -14,30 +14,13 @@ namespace SSMP.Networking.Matchmaking;
 
 /// <summary>Public entry point for MMS coordination. Delegates to specialized services.</summary>
 internal sealed class MmsClient {
-    private readonly MmsHostSessionService _hostSession;
     private readonly MmsLobbyQueryService _queries;
     private readonly MmsJoinCoordinator _joinCoordinator;
+    
+    public MmsHostSessionService HostSession { get; }
 
     /// <summary>Last error from most recent operation.</summary>
     public MatchmakingError LastMatchmakingError { get; private set; } = MatchmakingError.None;
-
-    /// <inheritdoc cref="MmsHostSessionService.RefreshHostMappingRequested"/>
-    public event Action<string, string, long>? RefreshHostMappingRequested {
-        add => _hostSession.RefreshHostMappingRequested += value;
-        remove => _hostSession.RefreshHostMappingRequested -= value;
-    }
-
-    /// <inheritdoc cref="MmsHostSessionService.HostMappingReceived"/>
-    public event Action? HostMappingReceived {
-        add => _hostSession.HostMappingReceived += value;
-        remove => _hostSession.HostMappingReceived -= value;
-    }
-
-    /// <inheritdoc cref="MmsHostSessionService.StartPunchRequested"/>
-    public event Action<string, string, int, int, long>? StartPunchRequested {
-        add => _hostSession.StartPunchRequested += value;
-        remove => _hostSession.StartPunchRequested -= value;
-    }
 
     public MmsClient(
         string baseUrl,
@@ -52,7 +35,7 @@ internal sealed class MmsClient {
 
         var discoveryHost = uri.Host;
 
-        _hostSession = hostSession ??
+        HostSession = hostSession ??
                        new MmsHostSessionService(
                            normalizedBaseUrl,
                            discoveryHost,
@@ -63,7 +46,7 @@ internal sealed class MmsClient {
     }
 
     /// <summary>Updates connected players; triggers heartbeat if count changes.</summary>
-    public void SetConnectedPlayers(int count) => _hostSession.SetConnectedPlayers(count);
+    public void SetConnectedPlayers(int count) => HostSession.SetConnectedPlayers(count);
 
     /// <summary>Creates lobby and starts host services.</summary>
     /// <returns>Lobby code, lobby name, and host discovery token; all null on failure.</returns>
@@ -74,7 +57,7 @@ internal sealed class MmsClient {
         PublicLobbyType lobbyType = PublicLobbyType.Matchmaking
     ) {
         ClearErrors();
-        var result = await _hostSession.CreateLobbyAsync(hostPort, isPublic, gameVersion, lobbyType);
+        var result = await HostSession.CreateLobbyAsync(hostPort, isPublic, gameVersion, lobbyType);
         LastMatchmakingError = result.error;
         return result.result;
     }
@@ -87,13 +70,13 @@ internal sealed class MmsClient {
         string gameVersion = "unknown"
     ) {
         ClearErrors();
-        var result = await _hostSession.RegisterSteamLobbyAsync(steamLobbyId, isPublic, gameVersion);
+        var result = await HostSession.RegisterSteamLobbyAsync(steamLobbyId, isPublic, gameVersion);
         LastMatchmakingError = result.error;
         return result.lobbyCode;
     }
 
     /// <summary>Closes active lobby and deregisters from MMS.</summary>
-    public void CloseLobby() => _hostSession.CloseLobby();
+    public void CloseLobby() => HostSession.CloseLobby();
 
     /// <summary>Retrieves join details from MMS.</summary>
     public async Task<JoinLobbyResult?> JoinLobbyAsync(string lobbyId, int clientPort) {
@@ -130,14 +113,14 @@ internal sealed class MmsClient {
     }
 
     /// <summary>Starts host push event listener. Call after creating lobby.</summary>
-    public void StartWebSocketConnection() => _hostSession.StartWebSocketConnection();
+    public void StartWebSocketConnection() => HostSession.StartWebSocketConnection();
 
     /// <summary>Triggers background UDP discovery refresh for given token.</summary>
     public void StartHostDiscoveryRefresh(string hostDiscoveryToken, Action<byte[], IPEndPoint> sendRawAction) =>
-        _hostSession.StartHostDiscoveryRefresh(hostDiscoveryToken, sendRawAction);
+        HostSession.StartHostDiscoveryRefresh(hostDiscoveryToken, sendRawAction);
 
     /// <summary>Stops active host discovery refresh loop.</summary>
-    public void StopHostDiscoveryRefresh() => _hostSession.StopHostDiscoveryRefresh();
+    public void StopHostDiscoveryRefresh() => HostSession.StopHostDiscoveryRefresh();
 
     /// <summary>
     /// Signals a join failure with a specific reason.
