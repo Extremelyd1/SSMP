@@ -131,7 +131,7 @@ internal class ModServerManager : ServerManager {
     /// <param name="count">The number of players to set in the update, or -1 if the number needs to be retrieved
     /// from the server.</param>
     private void UpdateMatchmakingRemotePlayerCount(int count = -1) {
-        if (count == -1) {
+        if (count != -1) {
             _uiManager.ConnectInterface.MmsClient.SetConnectedPlayers(count);
             return;
         }
