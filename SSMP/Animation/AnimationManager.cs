@@ -628,7 +628,8 @@ internal class AnimationManager {
         { "Bind Fail Burst", AnimationClip.BindInterrupt },
         { "Magnetite Dice", AnimationClip.MagnetiteDice },
         { "Flea Brew", AnimationClip.FleaBrew },
-        { "Fractured Mask", AnimationClip.FracturedMask }
+        { "Fractured Mask", AnimationClip.FracturedMask },
+        { "Magma Bell", AnimationClip.MagmaBell }
     };
 
     /// <summary>
@@ -695,7 +696,8 @@ internal class AnimationManager {
         // Tools
         { AnimationClip.MagnetiteDice, new MagnetiteDice() },
         { AnimationClip.FleaBrew, FleaBrew.Instance },
-        { AnimationClip.FracturedMask, new FracturedMask() }
+        { AnimationClip.FracturedMask, new FracturedMask() },
+        { AnimationClip.MagmaBell, new MagmaBell() }
     };
 
     /// <summary>
@@ -820,6 +822,7 @@ internal class AnimationManager {
             CreateHeroHooks(HeroController.instance);
         }
 
+        EventHooks.UseLavaBell += OnMagmaBell;
 
         // Register a callback so we know when the dash has finished
         // On.HeroController.CancelDash += HeroControllerOnCancelDash;
@@ -846,6 +849,9 @@ internal class AnimationManager {
         FsmStateActionInjector.UninjectAll();
 
         MagnetiteDice.Unhook();
+
+        EventHooks.HeroControllerDie -= OnDeath;
+        EventHooks.UseLavaBell -= OnMagmaBell;
         // On.HeroAnimationController.Play -= HeroAnimationControllerOnPlay;
         // On.HeroAnimationController.PlayFromFrame -= HeroAnimationControllerOnPlayFromFrame;
 
@@ -1425,7 +1431,9 @@ internal class AnimationManager {
         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.SilkBossNeedleFire, 0, effectInfo);
     }
 
-
+    /// <summary>
+    /// Creates hooks for tools
+    /// </summary>
     private void CreateToolHooks() {
         MagnetiteDice.Hook(OnDiceEnable);
 
@@ -1444,17 +1452,50 @@ internal class AnimationManager {
         }
     }
 
+    /// <summary>
+    /// Hook for the magnetite dice being triggered
+    /// </summary>
     private void OnDiceEnable() {
+        // If we are not connected, there is nothing to send to
+        if (!_netClient.IsConnected) {
+            return;
+        }
+
         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagnetiteDice, 0);
     }
 
     private void OnFleaBrew(PlayMakerFSM fsm) {
+        // If we are not connected, there is nothing to send to
+        if (!_netClient.IsConnected) {
+            return;
+        }
+
         var effectInfo = FleaBrew.Instance.GetEffectInfo();
         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.FleaBrew, 0, effectInfo);
     }
 
+    /// <summary>
+    /// Hook for the fractured mask being triggered
+    /// </summary>
     private void OnFracturedMaskBreak(PlayMakerFSM fsm) {
+        // If we are not connected, there is nothing to send to
+        if (!_netClient.IsConnected) {
+            return;
+        }
+
         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.FracturedMask, 0);
+    }
+
+    /// <summary>
+    /// Hook for the magma bell being triggered
+    /// </summary>
+    private void OnMagmaBell() {
+        // If we are not connected, there is nothing to send to
+        if (!_netClient.IsConnected) {
+            return;
+        }
+        Logger.Info("magma bell sending");
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagmaBell, 0);
     }
 
     // /// <summary>
