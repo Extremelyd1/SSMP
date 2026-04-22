@@ -16,23 +16,24 @@ internal sealed class MmsJoinCoordinator {
     private readonly string _baseUrl;
 
     /// <summary>
-    /// Hostname used for UDP NAT hole-punch discovery, or <c>null</c> if discovery
-    /// is unavailable. When <c>null</c>, <c>begin_client_mapping</c> messages are
-    /// silently skipped.
+    /// Hostname used for UDP NAT hole-punch discovery.
     /// </summary>
-    private readonly string? _discoveryHost;
+    private readonly string _discoveryHost;
+    /// <summary>
+    /// Port used for UDP NAT hole-punch discovery.
+    /// </summary>
+    private readonly int _discoveryPort;
 
     /// <summary>
     /// Initialises a new <see cref="MmsJoinCoordinator"/>.
     /// </summary>
     /// <param name="baseUrl">Base HTTP URL of the MMS server.</param>
-    /// <param name="discoveryHost">
-    /// Hostname of the MMS UDP discovery endpoint, or <c>null</c> to skip
-    /// NAT hole-punch discovery.
-    /// </param>
-    public MmsJoinCoordinator(string baseUrl, string? discoveryHost) {
+    /// <param name="discoveryHost">Hostname of the MMS UDP discovery endpoint.</param>
+    /// <param name="discoveryPort">Port of the MMS UDP discovery endpoint.</param>
+    public MmsJoinCoordinator(string baseUrl, string discoveryHost, int discoveryPort) {
         _baseUrl = baseUrl;
         _discoveryHost = discoveryHost;
+        _discoveryPort = discoveryPort;
     }
 
     /// <summary>Connects to join WebSocket and drives server-directed UDP mapping flow.</summary>
@@ -42,9 +43,6 @@ internal sealed class MmsJoinCoordinator {
         Action<string> onJoinFailed,
         CancellationToken cancellationToken
     ) {
-        if (_discoveryHost == null)
-            Logger.Warn("MmsJoinCoordinator: discovery host unknown; UDP mapping will be skipped");
-
         using var socket = new ClientWebSocket();
         using var sessionCts =
             new CancellationTokenSource(TimeSpan.FromMilliseconds(MmsProtocol.MatchmakingWebSocketTimeoutMs));
@@ -196,12 +194,9 @@ internal sealed class MmsJoinCoordinator {
             return null;
         }
 
-        if (_discoveryHost == null)
-            return null;
-
         var cts = new CancellationTokenSource(TimeSpan.FromSeconds(MmsProtocol.DiscoveryDurationSeconds));
         MmsUtilities.RunBackground(
-            UdpDiscoveryService.SendUntilCancelledAsync(_discoveryHost, token, sendRaw, cts.Token),
+            UdpDiscoveryService.SendUntilCancelledAsync(_discoveryHost, _discoveryPort, token, sendRaw, cts.Token),
             nameof(MmsJoinCoordinator),
             "client UDP discovery"
         );

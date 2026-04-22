@@ -17,11 +17,12 @@ internal static class UdpDiscoveryService {
     /// <summary>Resolves endpoint and sends token pulses until cancellation.</summary>
     public static async Task SendUntilCancelledAsync(
         string discoveryHost,
+        int discoveryPort,
         string token,
         Action<byte[], IPEndPoint> sendRaw,
         CancellationToken cancellationToken
     ) {
-        var endpoint = await ResolveEndpointAsync(discoveryHost);
+        var endpoint = await ResolveEndpointAsync(discoveryHost, discoveryPort);
         if (endpoint is null) return;
 
         var tokenBytes = Encoding.UTF8.GetBytes(token);
@@ -37,10 +38,10 @@ internal static class UdpDiscoveryService {
 
     /// <summary>
     /// Resolves <paramref name="host"/> to an <see cref="IPEndPoint"/> on
-    /// <see cref="MmsProtocol.DiscoveryPort"/>. Returns <c>null</c> and logs an
+    /// <paramref name="port"/>. Returns <c>null</c> and logs an
     /// error if DNS resolution yields no addresses.
     /// </summary>
-    private static async Task<IPEndPoint?> ResolveEndpointAsync(string host) {
+    private static async Task<IPEndPoint?> ResolveEndpointAsync(string host, int port) {
         try {
             var addresses = await Dns.GetHostAddressesAsync(host).ConfigureAwait(false);
 
@@ -52,7 +53,7 @@ internal static class UdpDiscoveryService {
                     address = a;
                     break;
                 }
-                return new IPEndPoint(address, MmsProtocol.DiscoveryPort);
+                return new IPEndPoint(address, port);
             }
 
             Logger.Error($"UdpDiscoveryService: could not resolve host '{host}'");

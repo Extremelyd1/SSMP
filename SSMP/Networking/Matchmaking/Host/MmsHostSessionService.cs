@@ -17,8 +17,11 @@ internal sealed class MmsHostSessionService : IDisposable {
     /// <summary>The base HTTP URL of the MMS server (e.g. <c>https://mms.example.com</c>).</summary>
     private readonly string _baseUrl;
 
-    /// <summary>NAT discovery hostname; null if disabled.</summary>
-    private readonly string? _discoveryHost;
+    /// <summary>NAT discovery hostname.</summary>
+    private readonly string _discoveryHost;
+
+    /// <summary>NAT discovery port.</summary>
+    private readonly int _discoveryPort;
 
     /// <summary>Synchronization lock for thread-safe access to session state (tokens, lobby IDs).</summary>
     private readonly object _sessionLock = new();
@@ -64,18 +67,18 @@ internal sealed class MmsHostSessionService : IDisposable {
     /// Initializes a new <see cref="MmsHostSessionService"/>.
     /// </summary>
     /// <param name="baseUrl">Base HTTP URL of the MMS server.</param>
-    /// <param name="discoveryHost">
-    /// Hostname of the MMS UDP discovery endpoint, or <c>null</c> to disable
-    /// NAT hole-punch discovery.
-    /// </param>
+    /// <param name="discoveryHost">Hostname of the MMS UDP discovery endpoint.</param>
+    /// <param name="discoveryPort">The port of the MMS UDP discovery endpoint.</param>
     /// <param name="webSocket">WebSocket handler for real-time MMS events.</param>
     public MmsHostSessionService(
         string baseUrl,
-        string? discoveryHost,
+        string discoveryHost,
+        int discoveryPort,
         MmsWebSocketHandler webSocket
     ) {
         _baseUrl = baseUrl;
         _discoveryHost = discoveryHost;
+        _discoveryPort = discoveryPort;
         WebSocket = webSocket;
     }
 
@@ -429,11 +432,9 @@ internal sealed class MmsHostSessionService : IDisposable {
         CancellationTokenSource cts
     ) {
         try {
-            // Defensive check; normal flow is already guarded in StartHostDiscoveryRefresh
-            if (_discoveryHost == null) return;
-
             await UdpDiscoveryService.SendUntilCancelledAsync(
                 _discoveryHost,
+                _discoveryPort,
                 hostDiscoveryToken,
                 sendRawAction,
                 cts.Token

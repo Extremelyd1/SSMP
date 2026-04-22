@@ -24,6 +24,7 @@ internal sealed class MmsClient {
 
     public MmsClient(
         string baseUrl,
+        int discoveryPort,
         MmsHostSessionService? hostSession = null,
         MmsLobbyQueryService? queries = null,
         MmsJoinCoordinator? joinCoordinator = null
@@ -39,10 +40,11 @@ internal sealed class MmsClient {
                        new MmsHostSessionService(
                            normalizedBaseUrl,
                            discoveryHost,
+                           discoveryPort,
                            new MmsWebSocketHandler(MmsUtilities.ToWebSocketUrl(normalizedBaseUrl))
                        );
         _queries = queries ?? new MmsLobbyQueryService(normalizedBaseUrl);
-        _joinCoordinator = joinCoordinator ?? new MmsJoinCoordinator(normalizedBaseUrl, discoveryHost);
+        _joinCoordinator = joinCoordinator ?? new MmsJoinCoordinator(normalizedBaseUrl, discoveryHost, discoveryPort);
     }
 
     /// <summary>Updates connected players; triggers heartbeat if count changes.</summary>

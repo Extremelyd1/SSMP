@@ -14,9 +14,6 @@ internal static class MmsProtocol {
     /// <summary>Timeout for HTTP requests to the MMS API.</summary>
     public const int HttpTimeoutMs = 5_000;
 
-    /// <summary>The UDP port used for NAT discovery.</summary>
-    public const int DiscoveryPort = 6001;
-
     /// <summary>Timeout for the client-side matchmaking WebSocket handshake.</summary>
     public const int MatchmakingWebSocketTimeoutMs = 20_000;
 
