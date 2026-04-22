@@ -6,6 +6,7 @@ using SSMP.Game;
 using SSMP.Game.Settings;
 using SSMP.Networking.Client;
 using SSMP.Networking.Matchmaking;
+using SSMP.Networking.Matchmaking.Protocol;
 using SSMP.Ui.Component;
 using Steamworks;
 using SSMP.Networking.Transport.Common;
@@ -157,6 +158,11 @@ internal class ConnectInterface {
     /// Y-offset for the feedback/error text relative to the content area.
     /// </summary>
     private const float FeedbackTextOffset = 310f;
+
+    /// <summary>
+    /// Height of the bottom feedback area so longer matchmaking messages can wrap cleanly.
+    /// </summary>
+    private const float FeedbackTextHeight = 72f;
 
     #endregion
 
@@ -329,6 +335,22 @@ internal class ConnectInterface {
     /// </summary>
     private const string ErrorUnknown = "Failed to connect:\nUnknown reason";
 
+    /// <summary>
+    /// Large blocking message shown when the client must update before using matchmaking.
+    /// </summary>
+    private const string MatchmakingUpdateRequiredText =
+        "Please update to the latest version in order to use matchmaking!";
+
+    /// <summary>
+    /// Temporary message shown while the client verifies matchmaking compatibility.
+    /// </summary>
+    private const string MatchmakingCheckingText = "Checking matchmaking compatibility...";
+
+    /// <summary>
+    /// Blocking message shown when MMS cannot be reached, so matchmaking stays unavailable.
+    /// </summary>
+    private const string MatchmakingUnavailableText = "Unable to contact matchmaking server right now.";
+
     #endregion
 
     #region Fields
@@ -472,6 +494,31 @@ internal class ConnectInterface {
     /// Coroutine handle for hiding feedback text after a delay.
     /// </summary>
     private Coroutine? _feedbackHideCoroutine;
+
+    /// <summary>
+    /// Whether the current bottom feedback message is being driven by matchmaking status UI.
+    /// </summary>
+    private bool _isMatchmakingFeedbackActive;
+
+    /// <summary>
+    /// Whether MMS has reported that this client is too old for matchmaking.
+    /// </summary>
+    private bool _isMatchmakingVersionBlocked;
+
+    /// <summary>
+    /// Whether the UI is currently verifying matchmaking compatibility with MMS.
+    /// </summary>
+    private bool _isCheckingMatchmakingVersion;
+
+    /// <summary>
+    /// Whether MMS has been reached successfully and the matchmaking version check passed.
+    /// </summary>
+    private bool _isMatchmakingReady;
+
+    /// <summary>
+    /// Tracks the currently selected tab so async UI refreshes preserve the active view.
+    /// </summary>
+    private Tab _activeTab = Tab.Matchmaking;
 
     /// <summary>
     /// Public accessor for the MMS client.
@@ -650,6 +697,7 @@ internal class ConnectInterface {
 
         FinalizeLayout();
 
+        BeginMatchmakingVersionCheck();
         SwitchTab(Tab.Matchmaking);
     }
 
@@ -1028,11 +1076,12 @@ internal class ConnectInterface {
         var feedback = new TextComponent(
             _backgroundGroup,
             new Vector2(InitialX, contentY),
-            new Vector2(ContentWidth, LabelHeight),
+            new Vector2(ContentWidth, FeedbackTextHeight),
             new Vector2(0.5f, 1f),
             "",
             UiManager.SubTextFontSize,
-            alignment: TextAnchor.UpperCenter
+            alignment: TextAnchor.UpperCenter,
+            wrap: true
         );
 
         feedback.SetActive(false);
@@ -1082,6 +1131,8 @@ internal class ConnectInterface {
     /// </summary>
     /// <param name="tab">The tab to activate.</param>
     private void SwitchTab(Tab tab) {
+        _activeTab = tab;
+
         // Hide lobby browsers and config panels if visible
         _lobbyBrowserPanel.Hide();
         _steamLobbyBrowserPanel?.Hide();
@@ -1093,9 +1144,15 @@ internal class ConnectInterface {
         _directIpTab.SetTabActive(tab == Tab.DirectIp);
 
         // Show only the active tab's content
-        _matchmakingGroup.SetActive(tab == Tab.Matchmaking);
+        _matchmakingGroup.SetActive(
+            tab == Tab.Matchmaking &&
+            _isMatchmakingReady &&
+            !_isMatchmakingVersionBlocked &&
+            !_isCheckingMatchmakingVersion
+        );
         _steamGroup?.SetActive(tab == Tab.Steam);
         _directIpGroup.SetActive(tab == Tab.DirectIp);
+        RefreshMatchmakingStatusFeedback();
     }
 
     /// <summary>
@@ -1105,6 +1162,10 @@ internal class ConnectInterface {
     public void SetMenuActive(bool active) {
         _backgroundPanel.SetActive(active);
         _glowingNotch.SetActive(active);
+
+        if (active && !_isMatchmakingVersionBlocked && !_isCheckingMatchmakingVersion) {
+            BeginMatchmakingVersionCheck();
+        }
     }
 
     #endregion
@@ -1116,6 +1177,10 @@ internal class ConnectInterface {
     /// Looks up lobby via MMS and connects to the host.
     /// </summary>
     private void OnLobbyConnectButtonPressed() {
+        if (_isMatchmakingVersionBlocked) {
+            return;
+        }
+
         if (!ValidateUsername(out var username)) {
             return;
         }
@@ -1144,27 +1209,76 @@ internal class ConnectInterface {
         var task = MmsClient.JoinLobbyAsync(lobbyId, clientPort);
         yield return new WaitUntil(() => task.IsCompleted);
 
-        var lobbyInfo = task.Result;
-        if (lobbyInfo == null) {
+        if (!task.IsCompletedSuccessfully) {
             CleanupHolePunchSocket(holePunchSocket);
+            Logger.Error(
+                $"ConnectInterface: JoinLobbyAsync failed: {task.Exception?.GetBaseException().Message ?? "cancelled"}"
+            );
             ShowFeedback(Color.red, "Lobby not found, offline, or join failed");
             yield break;
         }
 
-        var (connectionData, lobbyType, lanConnectionData, clientDiscoveryToken) = lobbyInfo.Value;
+        var lobbyInfo = task.Result;
+        if (lobbyInfo == null) {
+            CleanupHolePunchSocket(holePunchSocket);
 
-        yield return RunDiscoveryCoroutine(
-            holePunchSocket,
-            clientDiscoveryToken,
-            "MmsClient: UDP discovery timed out, falling back to local port"
-        );
+            if (MmsClient.LastMatchmakingError == MatchmakingError.UpdateRequired) {
+                ActivateMatchmakingVersionBlock();
+                yield break;
+            }
+
+            ShowFeedback(Color.red, "Lobby not found, offline, or join failed");
+            yield break;
+        }
+
+        var connectionData = lobbyInfo.ConnectionData;
+        var lobbyType = lobbyInfo.LobbyType;
+        var lanConnectionData = lobbyInfo.LanConnectionData;
+        var joinId = lobbyInfo.JoinId;
 
         // Handle connection based on lobby type
         if (lobbyType == PublicLobbyType.Steam) {
             CleanupHolePunchSocket(holePunchSocket);
             ConnectToSteamLobby(connectionData, username);
         } else {
-            ConnectToMatchmakingLobby(connectionData, lanConnectionData, username, holePunchSocket);
+            if (string.IsNullOrEmpty(joinId)) {
+                CleanupHolePunchSocket(holePunchSocket);
+                ShowFeedback(Color.red, "Lobby not found, offline, or join failed");
+                yield break;
+            }
+
+            var joinTask = MmsClient.CoordinateMatchmakingJoinAsync(
+                joinId,
+                (data, endpoint) => { holePunchSocket.SendTo(data, endpoint); }
+            );
+
+            yield return new WaitUntil(() => joinTask.IsCompleted);
+
+            if (!joinTask.IsCompletedSuccessfully) {
+                CleanupHolePunchSocket(holePunchSocket);
+                Logger.Error(
+                    $"ConnectInterface: CoordinateMatchmakingJoinAsync failed: {joinTask.Exception?.GetBaseException().Message ?? "cancelled"}"
+                );
+                ShowFeedback(Color.red, "Lobby not found, offline, or join failed");
+                yield break;
+            }
+
+            var joinStart = joinTask.Result;
+            if (joinStart == null) {
+                CleanupHolePunchSocket(holePunchSocket);
+
+                if (MmsClient.LastMatchmakingError == MatchmakingError.UpdateRequired) {
+                    ActivateMatchmakingVersionBlock();
+                    yield break;
+                }
+
+                ShowFeedback(Color.red, "Lobby not found, offline, or join failed");
+                yield break;
+            }
+
+            ConnectToMatchmakingLobby(
+                $"{joinStart.HostIp}:{joinStart.HostPort}", lanConnectionData, username, holePunchSocket
+            );
         }
     }
 
@@ -1173,6 +1287,10 @@ internal class ConnectInterface {
     /// Shows the lobby configuration panel.
     /// </summary>
     private void OnHostLobbyButtonPressed() {
+        if (_isMatchmakingVersionBlocked) {
+            return;
+        }
+
         if (!ValidateUsername(out _)) {
             return;
         }
@@ -1295,21 +1413,27 @@ internal class ConnectInterface {
 
         yield return new WaitUntil(() => task.IsCompleted);
 
-        var (lobbyId, lobbyName, hostDiscoveryToken) = task.Result;
+        if (!task.IsCompletedSuccessfully) {
+            CleanupHolePunchSocket(holePunchSocket);
+            Logger.Error(
+                $"ConnectInterface: CreateLobbyAsync failed: {task.Exception?.GetBaseException().Message ?? "cancelled"}"
+            );
+            ShowFeedback(Color.red, "Failed to create lobby. Is MMS running?");
+            yield break;
+        }
+
+        var (lobbyId, lobbyName, _) = task.Result;
         if (lobbyId == null || lobbyName == null) {
+            if (MmsClient.LastMatchmakingError == MatchmakingError.UpdateRequired) {
+                CleanupHolePunchSocket(holePunchSocket);
+                ActivateMatchmakingVersionBlock();
+                yield break;
+            }
+
             ShowFeedback(Color.red, "Failed to create lobby. Is MMS running?");
             CleanupHolePunchSocket(holePunchSocket);
             yield break;
         }
-
-        yield return RunDiscoveryCoroutine(
-            holePunchSocket,
-            hostDiscoveryToken,
-            "MmsClient: UDP discovery timed out, falling back to mapping-less hosting"
-        );
-
-        // Start polling for pending clients to punch back
-        MmsClient.StartPendingClientPolling();
 
         // For private lobbies, show invite code in ChatBox so it's easily shareable
         if (visibility == LobbyVisibility.Private) {
@@ -1335,6 +1459,10 @@ internal class ConnectInterface {
     /// Fetches and displays public lobbies from the MMS.
     /// </summary>
     private void OnBrowseMatchmakingLobbiesPressed() {
+        if (_isMatchmakingVersionBlocked) {
+            return;
+        }
+
         // Hide matchmaking content and show lobby browser
         _matchmakingGroup.SetActive(false);
         _lobbyBrowserPanel.Show();
@@ -1354,6 +1482,12 @@ internal class ConnectInterface {
 
         var lobbies = task.Result;
         if (lobbies == null) {
+            if (MmsClient.LastMatchmakingError == MatchmakingError.UpdateRequired) {
+                _lobbyBrowserPanel.Hide();
+                ActivateMatchmakingVersionBlock();
+                yield break;
+            }
+
             ShowFeedback(Color.red, "Failed to fetch lobbies. Is MMS running?");
             yield break;
         }
@@ -1691,12 +1825,105 @@ internal class ConnectInterface {
     /// <param name="color">The color of the feedback text.</param>
     /// <param name="message">The message to display.</param>
     private void ShowFeedback(Color color, string message) {
+        _isMatchmakingFeedbackActive = false;
         _feedbackHideCoroutine = ConnectInterfaceHelpers.SetFeedbackText(
             _feedbackText,
             color,
             message,
             _feedbackHideCoroutine
         );
+    }
+
+    /// <summary>
+    /// Activates the persistent matchmaking version block UI.
+    /// </summary>
+    private void ActivateMatchmakingVersionBlock() {
+        _isCheckingMatchmakingVersion = false;
+        _isMatchmakingReady = false;
+        _isMatchmakingVersionBlocked = true;
+        _lobbyBrowserPanel.Hide();
+        _lobbyConfigPanel.Hide();
+        SwitchTab(Tab.Matchmaking);
+    }
+
+    /// <summary>
+    /// Starts an immediate matchmaking compatibility probe so the UI can block before showing actions.
+    /// </summary>
+    private void BeginMatchmakingVersionCheck() {
+        if (_isCheckingMatchmakingVersion || _isMatchmakingVersionBlocked) {
+            return;
+        }
+
+        _isMatchmakingReady = false;
+        _isCheckingMatchmakingVersion = true;
+        SwitchTab(_activeTab);
+        MonoBehaviourUtil.Instance.StartCoroutine(CheckMatchmakingVersionCoroutine());
+    }
+
+    /// <summary>
+    /// Contacts MMS first and only enables matchmaking when the server is both reachable and compatible.
+    /// </summary>
+    private IEnumerator CheckMatchmakingVersionCoroutine() {
+        var task = MmsClient.ProbeMatchmakingCompatibilityAsync();
+        yield return new WaitUntil(() => task.IsCompleted);
+
+        if (MmsClient.LastMatchmakingError == MatchmakingError.UpdateRequired) {
+            ActivateMatchmakingVersionBlock();
+            yield break;
+        }
+
+        _isCheckingMatchmakingVersion = false;
+        _isMatchmakingReady = task.Result == true;
+        SwitchTab(_activeTab);
+    }
+
+    /// <summary>
+    /// Keeps matchmaking status messages aligned with the standard bottom feedback area.
+    /// </summary>
+    private void RefreshMatchmakingStatusFeedback() {
+        if (_activeTab != Tab.Matchmaking) {
+            if (_isMatchmakingFeedbackActive) {
+                _feedbackText.SetActive(false);
+                _isMatchmakingFeedbackActive = false;
+            }
+
+            return;
+        }
+
+        if (_isCheckingMatchmakingVersion) {
+            SetMatchmakingStatusFeedback(MatchmakingCheckingText, Color.yellow);
+            return;
+        }
+
+        if (_isMatchmakingVersionBlocked) {
+            SetMatchmakingStatusFeedback(MatchmakingUpdateRequiredText, Color.red);
+            return;
+        }
+
+        if (!_isMatchmakingReady) {
+            SetMatchmakingStatusFeedback(MatchmakingUnavailableText, Color.red);
+            return;
+        }
+
+        if (_isMatchmakingFeedbackActive) {
+            _feedbackText.SetActive(false);
+            _isMatchmakingFeedbackActive = false;
+        }
+    }
+
+    /// <summary>
+    /// Displays matchmaking-owned status feedback without clobbering feedback from other tabs.
+    /// </summary>
+    private void SetMatchmakingStatusFeedback(string message, Color color) {
+        if (_feedbackHideCoroutine != null) {
+            MonoBehaviourUtil.Instance.StopCoroutine(_feedbackHideCoroutine);
+            _feedbackHideCoroutine = null;
+        }
+
+        _isMatchmakingFeedbackActive = true;
+        _feedbackText.SetText(message);
+        _feedbackText.SetColor(color);
+        _feedbackText.SetActive(true);
     }
 
     /// <summary>
@@ -1747,31 +1974,6 @@ internal class ConnectInterface {
     /// </summary>
     private static int GetSocketPort(Socket socket) {
         return ((IPEndPoint) socket.LocalEndPoint!).Port;
-    }
-
-    /// <summary>
-    /// Performs MMS-backed UDP discovery for a pre-bound hole-punch socket.
-    /// </summary>
-    private IEnumerator RunDiscoveryCoroutine(Socket holePunchSocket, string? discoveryToken, string timeoutMessage) {
-        if (string.IsNullOrEmpty(discoveryToken)) {
-            yield break;
-        }
-
-        ShowFeedback(Color.yellow, "Mapping external port...");
-
-        var discoveryTask = MmsClient.PerformDiscoveryAsync(
-            discoveryToken,
-            (data, endpoint) => { holePunchSocket.SendTo(data, endpoint); }
-        );
-
-        yield return new WaitUntil(() => discoveryTask.IsCompleted);
-
-        if (discoveryTask.Result == null) {
-            Logger.Warn(timeoutMessage);
-            yield break;
-        }
-
-        Logger.Info($"MmsClient: Discovered external port {discoveryTask.Result}");
     }
 
     /// <summary>

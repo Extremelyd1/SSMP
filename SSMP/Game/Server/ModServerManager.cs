@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using SSMP.Game.Command.Server;
 using SSMP.Game.Settings;
 using SSMP.Networking.Packet;
@@ -58,9 +59,12 @@ internal class ModServerManager : ServerManager {
         AddonManager.LoadAddons();
 
         // Register handlers for UI events
-        _uiManager.RequestServerStartHostEvent += (_, port, _, transportType, _) => 
+        _uiManager.RequestServerStartHostEvent += (_, port, _, transportType, _) =>
             OnRequestServerStartHost(port, _modSettings.FullSynchronisation, transportType);
         _uiManager.RequestServerStopHostEvent += Stop;
+        PlayerConnectEvent += _ => UpdateMatchmakingRemotePlayerCount();
+        PlayerDisconnectEvent += _ => UpdateMatchmakingRemotePlayerCount();
+        ServerShutdownEvent += () => UpdateMatchmakingRemotePlayerCount(0);
 
         // Register application quit handler
         // ModHooks.ApplicationQuitHook += Stop;
@@ -97,6 +101,7 @@ internal class ModServerManager : ServerManager {
         };
 
         Start(port, fullSynchronisation, transportServer);
+        UpdateMatchmakingRemotePlayerCount();
     }
 
     /// <summary>
@@ -118,5 +123,23 @@ internal class ModServerManager : ServerManager {
         base.DeregisterCommands();
         
         CommandManager.DeregisterCommand(_settingsCommand);
+    }
+
+    /// <summary>
+    /// Pushes the current remote-player count to MMS heartbeat state.
+    /// </summary>
+    /// <param name="count">The number of players to set in the update, or -1 if the number needs to be retrieved
+    /// from the server.</param>
+    private void UpdateMatchmakingRemotePlayerCount(int count = -1) {
+        if (count == -1) {
+            _uiManager.ConnectInterface.MmsClient.SetConnectedPlayers(count);
+            return;
+        }
+        
+        var hostAuthKey = _modSettings.AuthKey;
+        var remotePlayerCount = hostAuthKey == null
+            ? 0
+            : Players.Count(player => player.AuthKey != hostAuthKey);
+        _uiManager.ConnectInterface.MmsClient.SetConnectedPlayers(remotePlayerCount);
     }
 }
