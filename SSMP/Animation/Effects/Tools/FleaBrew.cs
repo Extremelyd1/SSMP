@@ -33,7 +33,7 @@ internal class FleaBrew : BaseTool {
     /// <inheritdoc/>
     public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
         var hc = HeroController.instance;
-        var isPoison = effectInfo is [1];
+        var isPoison = EffectIsPoisoned(effectInfo);
 
         // Play audio
         var fsm = hc.toolsFSM;

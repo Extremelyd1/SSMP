@@ -629,7 +629,8 @@ internal class AnimationManager {
         { "Magnetite Dice", AnimationClip.MagnetiteDice },
         { "Flea Brew", AnimationClip.FleaBrew },
         { "Fractured Mask", AnimationClip.FracturedMask },
-        { "Magma Bell", AnimationClip.MagmaBell }
+        { "Magma Bell", AnimationClip.MagmaBell },
+        { "Attack Tool", AnimationClip.AttackTool }
     };
 
     /// <summary>
@@ -697,7 +698,8 @@ internal class AnimationManager {
         { AnimationClip.MagnetiteDice, new MagnetiteDice() },
         { AnimationClip.FleaBrew, FleaBrew.Instance },
         { AnimationClip.FracturedMask, new FracturedMask() },
-        { AnimationClip.MagmaBell, new MagmaBell() }
+        { AnimationClip.MagmaBell, new MagmaBell() },
+        { AnimationClip.AttackTool, BaseTool.Instance }
     };
 
     /// <summary>
@@ -1459,6 +1461,26 @@ internal class AnimationManager {
             var maskEffect = maskFsm.GetState("Instantiate Effect");
             FsmStateActionInjector.Inject(maskEffect, OnFracturedMaskBreak, 0, "Fractured Mask Break");
         }
+
+        ToolItemManager.BoundAttackToolUsed += AttackToolUsed;
+    }
+
+    private void AttackToolUsed(AttackToolBinding binding) {
+        var tool = ToolItemManager.GetBoundAttackTool(binding, ToolEquippedReadSource.Active);
+        if (tool == null) {
+            Logger.Info($"No tool on {binding}");
+            return;
+        }
+
+        Logger.Info(tool.name);
+
+        // If we are not connected, there is nothing to send to
+        if (!_netClient.IsConnected) {
+            return;
+        }
+
+        var effectInfo = BaseTool.GetToolInfo(tool.name);
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.AttackTool, 0, effectInfo);
     }
 
     /// <summary>
