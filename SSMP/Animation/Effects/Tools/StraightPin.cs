@@ -42,7 +42,12 @@ internal class StraightPin : BaseTool {
             body.linearVelocityX = tool.usageOptions.ThrowVelocity.x * playerObject.transform.localScale.x * -1;
         }
 
-        // Set poison settings
-        SetPinPoison(pin, poisoned);
+        // Set poison settings and deflection
+        if (pin.TryGetComponent<ToolPin>(out var controller)) {
+            SetPinPoison(controller, poisoned);
+
+            // Allows deflecting pins, but causes some side effects that make it look a bit worse (disappears immediately after hitting walls)
+            controller.tinked = ServerSettings.IsPvpEnabled && ShouldDoDamage;
+        }
     }
 }

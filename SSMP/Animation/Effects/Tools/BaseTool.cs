@@ -102,12 +102,7 @@ internal class BaseTool : DamageAnimationEffect {
         }
     }
 
-    protected static void SetPinPoison(GameObject pin, bool isPoison) {
-        // Get controller
-        if (!pin.TryGetComponent<ToolPin>(out var controller)) {
-            return;
-        }
-
+    protected static void SetPinPoison(ToolPin controller, bool isPoison) {
         // Toggle poison effect
         if (isPoison) {
             if ((bool) controller.getTintFrom) {
@@ -127,6 +122,7 @@ internal class BaseTool : DamageAnimationEffect {
             controller.sprite.color = Color.white;
             var main2 = controller.ptShatter.main;
             main2.startColor = controller.ptShatterDefaultColour;
+            controller.isPoison = false;
         }
     }
 }
