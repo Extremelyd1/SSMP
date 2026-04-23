@@ -1,6 +1,8 @@
+using System.Collections;
 using System.Collections.Generic;
 using GlobalSettings;
 using SSMP.Internals;
+using SSMP.Util;
 using UnityEngine;
 
 namespace SSMP.Animation.Effects.Tools;
@@ -11,12 +13,13 @@ internal class BaseTool : DamageAnimationEffect {
 
     private static readonly Dictionary<AttackTool, BaseTool> ToolEffectMap = new Dictionary<AttackTool, BaseTool> {
         //{ AttackTool.FleaBrew, FleaBrew.Instance },
-        { AttackTool.StraightPin, new StraightPin() }
+        { AttackTool.StraightPin, new StraightPin() },
+        { AttackTool.ThreefoldPin, new ThreefoldPin() }
     };
 
     private static readonly Dictionary<string, AttackTool> ToolNameMap = new Dictionary<string, AttackTool> {
         { "Straight Pin", AttackTool.StraightPin },
-        //{ "Tri Pin", AttackTool.ThreefoldPin } ,
+        { "Tri Pin", AttackTool.ThreefoldPin } ,
         //{ "Sting Shard", AttackTool.StingShard } ,
         //{ "Tack", AttackTool.Tacks } ,
         //{ "Harpoon", AttackTool.Longpin } ,
@@ -54,7 +57,8 @@ internal class BaseTool : DamageAnimationEffect {
 
         return [
             Instance.GetEffectInfo()![0],
-            (byte) tool
+            (byte) tool,
+            (byte) (HeroController.instance.IsOnWall() ? 1 : 0)
         ];
     }
 
@@ -82,6 +86,15 @@ internal class BaseTool : DamageAnimationEffect {
     }
 
     /// <summary>
+    /// Determines if the player is on a wall
+    /// </summary>
+    /// <param name="effectInfo">The effect info sent over the network</param>
+    /// <returns>true if the player is on a wall</returns>
+    protected static bool EffectIsOnWall(byte[]? effectInfo) {
+        return effectInfo != null && effectInfo.Length > 2 && effectInfo[2] == 1;
+    }
+
+    /// <summary>
     /// Plays a tool effect based on the given effectInfo
     /// </summary>
     /// <param name="playerObject">The player that used the tool</param>
@@ -103,27 +116,36 @@ internal class BaseTool : DamageAnimationEffect {
     }
 
     protected static void SetPinPoison(ToolPin controller, bool isPoison) {
-        // Toggle poison effect
-        if (isPoison) {
-            if ((bool) controller.getTintFrom) {
-                controller.sprite.EnableKeyword("CAN_HUESHIFT");
-                controller.sprite.SetFloat(PoisonTintBase.HueShiftPropId, controller.getTintFrom.PoisonHueShift);
+
+        // Run at the end of the frame to ensure it's off
+        static IEnumerator DoPoisonSet(ToolPin controller, bool isPoison) {
+            yield return null;
+
+            // Toggle poison effect
+            if (isPoison) {
+                if ((bool) controller.getTintFrom) {
+                    controller.sprite.EnableKeyword("CAN_HUESHIFT");
+                    controller.sprite.SetFloat(PoisonTintBase.HueShiftPropId, controller.getTintFrom.PoisonHueShift);
+                } else {
+                    controller.sprite.EnableKeyword("RECOLOUR");
+                    controller.sprite.color = controller.poisonTint;
+                }
+                var main = controller.ptShatter.main;
+                main.startColor = controller.poisonTint;
+                controller.ptPoisonIdle.Play();
+                controller.isPoison = true;
             } else {
-                controller.sprite.EnableKeyword("RECOLOUR");
-                controller.sprite.color = controller.poisonTint;
+                controller.sprite.DisableKeyword("CAN_HUESHIFT");
+                controller.sprite.DisableKeyword("RECOLOUR");
+                controller.sprite.color = Color.white;
+                var main2 = controller.ptShatter.main;
+                main2.startColor = controller.ptShatterDefaultColour;
+                controller.ptPoisonIdle.Stop();
+                controller.isPoison = false;
             }
-            var main = controller.ptShatter.main;
-            main.startColor = controller.poisonTint;
-            controller.ptPoisonIdle.Play();
-            controller.isPoison = true;
-        } else {
-            controller.sprite.DisableKeyword("CAN_HUESHIFT");
-            controller.sprite.DisableKeyword("RECOLOUR");
-            controller.sprite.color = Color.white;
-            var main2 = controller.ptShatter.main;
-            main2.startColor = controller.ptShatterDefaultColour;
-            controller.isPoison = false;
         }
+
+        MonoBehaviourUtil.Instance.StartCoroutine(DoPoisonSet(controller, isPoison));
     }
 }
 
