@@ -220,8 +220,6 @@ internal sealed class MmsHostSessionService : IDisposable {
     public void StartHostDiscoveryRefresh(string hostDiscoveryToken, Action<byte[], IPEndPoint> sendRawAction) {
         if (_disposed) throw new ObjectDisposedException(nameof(MmsHostSessionService));
 
-        if (_discoveryHost == null) return;
-
         var cts = new CancellationTokenSource(TimeSpan.FromSeconds(MmsProtocol.DiscoveryDurationSeconds));
 
         var oldCts = Interlocked.Exchange(ref _hostDiscoveryRefreshCts, cts);
