@@ -16,78 +16,61 @@ internal abstract class UdpDatagramTransport : DatagramTransport {
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     
     /// <summary>
-    /// A thread-safe blocking collection storing received data that is used to handle the "Receive" calls from the
-    /// DTLS transport.
+    /// A thread-safe queue of complete UDP datagrams handed off from the socket receive loop to DTLS.
+    /// Each entry represents exactly one received datagram and must never be treated as a stream fragment.
     /// </summary>
     public BlockingCollection<ReceivedData> ReceivedDataCollection { get; } = new();
 
     /// <summary>
-    /// This method is called whenever the corresponding DtlsTransport's Receive is called. The implementation
-    /// obtains data from the blocking collection and store it in the given buffer. If no data is present in the
-    /// collection within the given <paramref name="waitMillis"/>, the method returns -1.
+    /// Called by the DTLS stack to dequeue a single datagram and copy it into <paramref name="buf"/>.
+    /// If no datagram is available within <paramref name="waitMillis"/>, or if the transport is shutting down,
+    /// the method returns <c>-1</c>.
+    /// <para><b>Contract:</b></para>
+    /// <list type="bullet">
+    ///   <item><description>Each <see cref="ReceivedData"/> entry is one full UDP datagram.</description></item>
+    ///   <item><description>Callers must pass a buffer of at least <see cref="GetReceiveLimit"/> bytes.</description></item>
+    ///   <item><description>Producers must enqueue datagrams no larger than <see cref="GetReceiveLimit"/>.</description></item>
+    /// </list>
+    /// <para><b>Edge case behavior:</b></para>
+    /// <list type="bullet">
+    ///   <item><description>If <paramref name="len"/> is smaller than the queued datagram, only the fitting prefix is copied.</description></item>
+    ///   <item><description>The remaining bytes are silently discarded — not re-queued.</description></item>
+    /// </list>
+    /// <para>
+    /// Discard is intentional: UDP/DTLS has datagram semantics, not stream semantics. Re-queuing a tail would
+    /// splice it into the next read and corrupt the receive flow. In normal operation this branch is never hit,
+    /// because outbound packets are fragmented below 1200 bytes to leave headroom for DTLS overhead under the
+    /// cap defined by <see cref="Networking.Client.DtlsClient.MaxPacketSize"/>.
+    /// </para>
     /// </summary>
-    /// <param name="buf">Byte array to store the received data.</param>
-    /// <param name="off">The offset at which to begin storing the data.</param>
-    /// <param name="len">The number of bytes that can be stored in the buffer.</param>
-    /// <param name="waitMillis">The number of milliseconds to wait for data to fill.</param>
-    /// <returns>The number of bytes that were received, or -1 if no bytes were received in the given time.</returns>
-    public int Receive(byte[] buf, int off, int len, int waitMillis) {
-        if (_cancellationTokenSource.IsCancellationRequested) {
+    /// <param name="buf">Destination buffer for the received datagram bytes.</param>
+    /// <param name="off">Offset within <paramref name="buf"/> at which to begin writing.</param>
+    /// <param name="len">Usable capacity of <paramref name="buf"/> starting at <paramref name="off"/>.</param>
+    /// <param name="waitMillis">Milliseconds to block waiting for a datagram before timing out.</param>
+    /// <returns>
+    /// Bytes copied into <paramref name="buf"/>, or <c>-1</c> if the wait timed out or the transport
+    /// was canceled/disposed.
+    /// </returns>
+    public int Receive(byte[] buf, int off, int len, int waitMillis)
+    {
+        if (_cancellationTokenSource.IsCancellationRequested)
             return -1;
+
+        try
+        {
+            if (!ReceivedDataCollection.TryTake(out var data, waitMillis, _cancellationTokenSource.Token))
+                return -1;
+
+            // Clamp to available buffer space and drop any excess. Re-queuing the remainder would turn a datagram
+            // transport into a fake byte stream and corrupt the next DTLS read.
+            var bytesToCopy = System.Math.Min(data.Length, len);
+            Array.Copy(data.Buffer, 0, buf, off, bytesToCopy);
+            return bytesToCopy;
         }
-
-        bool tryTakeSuccess;
-        ReceivedData data;
-        
-        try {
-            tryTakeSuccess = ReceivedDataCollection.TryTake(out data, waitMillis, _cancellationTokenSource.Token);
-        } catch (OperationCanceledException) {
-            return -1;
-        } catch (ArgumentNullException) {
-            // Mono bug: BlockingCollection can throw ArgumentNullException instead of ObjectDisposedException
-            // when disposed during TryTake
-            return -1;
-        } catch (ObjectDisposedException) {
-            return -1;
-        }
-
-        if (!tryTakeSuccess) {
-            return -1;
-        }
-
-        // If there is more data in the entry we received from the blocking collection than space in the buffer
-        // from the method, we need to add as much data into the buffer and put the rest back in the collection
-        if (len < data.Length) {
-            // Fill the buffer from the method with as much data from the entry as possible
-            for (var i = off; i < off + len; i++) {
-                buf[i] = data.Buffer[i - off];
-            }
-
-            // Calculate the length of the leftover buffer and instantiate it
-            var leftoverLength = data.Length - len;
-            var leftoverBuffer = new byte[leftoverLength];
-
-            // Fill the leftover buffer with the leftover data from the entry
-            for (var i = 0; i < leftoverLength; i++) {
-                leftoverBuffer[i] = data.Buffer[len + i];
-            }
-
-            // Add the leftover buffer and its length back to the collection
-            ReceivedDataCollection.Add(new ReceivedData {
-                Buffer = leftoverBuffer,
-                Length = leftoverLength
-            });
-
-            return len;
-        }
-
-        // In this case, the space in the buffer from the method is large enough, so we fill it with all the data
-        // from the collection entry
-        for (var i = 0; i < data.Length; i++) {
-            buf[off + i] = data.Buffer[i];
-        }
-
-        return data.Length;
+        catch (OperationCanceledException)  { return -1; }
+        /* Mono bug: BlockingCollection can throw ArgumentNullException instead of ObjectDisposedException when disposed during TryTake. */
+        catch (ArgumentNullException)       { return -1; }
+        catch (ObjectDisposedException)     { return -1; }
     }
     
     /// <summary>
@@ -126,8 +109,9 @@ internal abstract class UdpDatagramTransport : DatagramTransport {
     }
     
     /// <summary>
-    /// Data class containing a buffer and the corresponding length of bytes stored in that buffer. Not necessarily
-    /// the length of the buffer.
+    /// One received UDP datagram.
+    /// <see cref="Length"/> may be smaller than <see cref="Buffer"/>.Length, but it must never describe bytes from
+    /// more than one datagram.
     /// </summary>
     public class ReceivedData {
         /// <summary>
