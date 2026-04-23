@@ -1,12 +1,13 @@
 using System;
+using System.Buffers;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using Org.BouncyCastle.Tls;
 using Org.BouncyCastle.Tls.Crypto.Impl.BC;
 using SSMP.Logging;
-using SSMP.Networking.Transport.UDP;
 
 namespace SSMP.Networking.Client;
 
@@ -198,58 +199,54 @@ internal class DtlsClient {
     /// Continuously tries to receive data from the socket until cancellation is requested.
     /// </summary>
     /// <param name="cancellationToken">The cancellation token to cancel the loop.</param>
-    private void SocketReceiveLoop(CancellationToken cancellationToken) {
-        while (!cancellationToken.IsCancellationRequested) {
-            if (_socket == null) {
-                Logger.Error("Socket was null during receive call");
-                break;
-            }
-
-            EndPoint endPoint = new IPEndPoint(IPAddress.Any, 0);
-
-            int numReceived;
-            var buffer = new byte[MaxPacketSize];
-
-            try {
-                numReceived = _socket.ReceiveFrom(
-                    buffer,
-                    SocketFlags.None,
-                    ref endPoint
-                );
-            } catch (SocketException e) when (e.SocketErrorCode == SocketError.Interrupted ||
-                                              e.SocketErrorCode == SocketError.ConnectionReset) {
-                break;
-            } catch (SocketException e) when (e.SocketErrorCode == SocketError.TimedOut) {
-                continue;
-            } catch (ObjectDisposedException) {
-                break;
-            }
-
-            if (_clientDatagramTransport == null) {
-                break;
-            }
-
-            // Create a copy of the buffer for this specific packet. The original buffer will be reused in the next iteration
-            var packetBuffer = new byte[numReceived];
-            Array.Copy(buffer, 0, packetBuffer, 0, numReceived);
-
-            var added = false;
-            try {
-                // Use the copy, not the original buffer
-                _clientDatagramTransport.ReceivedDataCollection.Add(new UdpDatagramTransport.ReceivedData {
-                    Buffer = packetBuffer,
-                    Length = numReceived
-                }, cancellationToken);
-                added = true;
-            } catch (OperationCanceledException) {
-                // Expected during disconnect
-            } catch (InvalidOperationException) {
-                // Collection might be marked as complete for adding
-            }
-
-            // Collection disposed, completed, or cancelled
-            if (!added) break;
+    private void SocketReceiveLoop(CancellationToken cancellationToken)
+    {
+        if (_socket == null)
+        {
+            Logger.Error("Socket was null when starting receive loop");
+            return;
         }
+
+        if (_clientDatagramTransport == null)
+        {
+            Logger.Error("ClientDatagramTransport was null when starting receive loop");
+            return;
+        }
+
+        var rentedBuffer = ArrayPool<byte>.Shared.Rent(MaxPacketSize);
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                EndPoint endPoint = new IPEndPoint(IPAddress.Any, 0);
+                int numReceived;
+
+                try { numReceived = _socket.ReceiveFrom(rentedBuffer, SocketFlags.None, ref endPoint); }
+                catch (SocketException e) when (e.SocketErrorCode is SocketError.Interrupted or SocketError.ConnectionReset) { break; }
+                catch (SocketException e) when (e.SocketErrorCode == SocketError.TimedOut) { continue; }
+                catch (SocketException e) { Logger.Error($"Unexpected socket error in receive loop: {e.SocketErrorCode}"); break; }
+                catch (ObjectDisposedException) { break; }
+                
+                // TODO: If SocketReceiveLoop shows up as an allocation hotspot in profiling, consider reusable buffers
+                // TODO: (for example ArrayPool<byte> or an owned-memory pattern). For now we copy into a dedicated array
+                // TODO: because BouncyCastle's buffer ownership and lifetime expectations are not explicit enough to safely reuse buffers.
+                var packetBuffer = new byte[numReceived];
+                Array.Copy(rentedBuffer, 0, packetBuffer, 0, numReceived);
+
+                try
+                {
+                    var added = _clientDatagramTransport.TryEnqueueReceivedData(
+                        packetBuffer,
+                        numReceived,
+                        cancellationToken
+                    );
+
+                    if (!added) break;
+                }
+                catch (OperationCanceledException) { break; }
+            }
+        }
+        finally { ArrayPool<byte>.Shared.Return(rentedBuffer); }
     }
 
     /// <summary>

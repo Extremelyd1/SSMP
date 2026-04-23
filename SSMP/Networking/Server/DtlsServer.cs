@@ -8,7 +8,6 @@ using System.Threading.Tasks;
 using Org.BouncyCastle.Tls;
 using Org.BouncyCastle.Tls.Crypto.Impl.BC;
 using SSMP.Logging;
-using SSMP.Networking.Transport.UDP;
 
 namespace SSMP.Networking.Server;
 
@@ -20,7 +19,7 @@ internal class DtlsServer {
     /// The maximum packet size for sending and receiving DTLS packets.
     /// </summary>
     public const int MaxPacketSize = 1400;
-    
+
     /// <summary>
     /// The socket instance for the underlying networking.
     /// The server only uses a single socket for all connections given that with UDP, we cannot create more than one
@@ -83,6 +82,7 @@ internal class DtlsServer {
             _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
             _socket.Bind(new IPEndPoint(IPAddress.Any, _port));
         }
+
         _socketReceiveThread = new Thread(() => SocketReceiveLoop(_cancellationTokenSource.Token)) {
             IsBackground = true
         };
@@ -111,6 +111,7 @@ internal class DtlsServer {
                 Logger.Warn("Socket receive thread did not exit within timeout, abandoning");
             }
         }
+
         _socketReceiveThread = null;
 
         _tlsServer?.Cancel();
@@ -119,7 +120,7 @@ internal class DtlsServer {
         // We just cancel tokens and close transports. The threads are background and will die.
         foreach (var kvp in _connections) {
             var connInfo = kvp.Value;
-            lock (connInfo) {
+            lock (connInfo.SyncRoot) {
                 if (connInfo is { State: ConnectionState.Connected, Client: not null }) {
                     // Signal cancellation but don't join
                     connInfo.Client.ReceiveLoopTokenSource.Cancel();
@@ -129,6 +130,7 @@ internal class DtlsServer {
                 } else {
                     connInfo.DatagramTransport.Close();
                 }
+
                 connInfo.State = ConnectionState.Disconnected;
             }
         }
@@ -148,7 +150,7 @@ internal class DtlsServer {
             return;
         }
 
-        lock (connInfo) {
+        lock (connInfo.SyncRoot) {
             if (connInfo.State != ConnectionState.Connected || connInfo.Client == null) {
                 Logger.Warn($"Connection {endPoint} not in connected state");
                 return;
@@ -158,7 +160,6 @@ internal class DtlsServer {
 
             InternalDisconnectClient(connInfo.Client);
             connInfo.State = ConnectionState.Disconnected;
-
         }
 
         _connections.TryRemove(endPoint, out _);
@@ -253,101 +254,131 @@ internal class DtlsServer {
     /// <param name="cancellationToken">The cancellation token for checking whether this task is requested to cancel.
     /// </param>
     private void ProcessReceivedPacket(
-        IPEndPoint ipEndPoint, 
-        byte[] buffer, 
-        int numReceived, 
+        IPEndPoint ipEndPoint,
+        byte[] buffer,
+        int numReceived,
         CancellationToken cancellationToken
     ) {
-        // 1. Attempt to route to an existing connection
         if (_connections.TryGetValue(ipEndPoint, out var connInfo)) {
-            bool shouldRemove;
-            DtlsServerClient? clientToDisconnect = null;
+            if (TryRouteToExistingConnection(connInfo, ipEndPoint, buffer, numReceived, cancellationToken))
+                return;
 
-            lock (connInfo) {
-                if (connInfo.State == ConnectionState.Handshaking) {
-                    try {
-                        var data = new UdpDatagramTransport.ReceivedData { Buffer = buffer, Length = numReceived };
-                        connInfo.DatagramTransport.ReceivedDataCollection.Add(data, cancellationToken);
-                        return; // Successfully routed
-                    } catch (Exception) {
-                        shouldRemove = true;
-                    }
-                } else if (connInfo.State == ConnectionState.Connected) {
-                    try {
-                        var data = new UdpDatagramTransport.ReceivedData { Buffer = buffer, Length = numReceived };
-                        connInfo.DatagramTransport.ReceivedDataCollection.Add(data, cancellationToken);
-                    } catch (Exception) {
-                        // Silently ignore
-                    }
-                    return; // Successfully routed or ignored
-                } else {
-                    // Disconnecting or Disconnected
-                    shouldRemove = true;
-                }
-            }
-
-            // Handle removal if the state was invalid
-            if (!shouldRemove) return;
-            
+            // Connection was in a terminal or broken state -> evict and fall through to treat as new.
             _connections.TryRemove(ipEndPoint, out _);
-            if (clientToDisconnect != null) {
-                Task.Run(() => InternalDisconnectClient(clientToDisconnect), cancellationToken);
-            }
-            
-            // Fall through: We removed the bad connection, now treat this as a new connection attempt
+
+            if (connInfo.Client != null)
+                Task.Run(() => InternalDisconnectClient(connInfo.Client), cancellationToken);
         }
 
-        // 2. Handle new connection attempt
-        Logger.Debug($"DtlsServer: Received packet from new endpoint {ipEndPoint} ({numReceived} bytes). Starting handshake.");
-        var newTransport = new ServerDatagramTransport(_socket!) {
-            IPEndPoint = ipEndPoint
-        };
+        StartNewConnection(ipEndPoint, buffer, numReceived, cancellationToken);
+    }
 
+    /// <summary>
+    /// Attempts to route <paramref name="buffer"/> to <paramref name="connInfo"/>.
+    /// </summary>
+    /// <returns>
+    /// <see langword="true"/> if the datagram was handled (routed or intentionally dropped);
+    /// <see langword="false"/> if the connection is in a terminal state and should be evicted.
+    /// </returns>
+    private static bool TryRouteToExistingConnection(
+        ConnectionInfo connInfo,
+        IPEndPoint ipEndPoint,
+        byte[] buffer,
+        int numReceived,
+        CancellationToken cancellationToken
+    ) {
+        lock (connInfo.SyncRoot) {
+            // ReSharper disable once SwitchStatementHandlesSomeKnownEnumValuesWithDefault
+            switch (connInfo.State) {
+                case ConnectionState.Handshaking:
+                    // Enqueue failure means the transport is gone -> signal eviction.
+                    if (connInfo.DatagramTransport.TryEnqueueReceivedData(
+                            buffer, numReceived, cancellationToken,
+                            $"ProcessReceivedPacket(handshaking, endpoint={ipEndPoint})"
+                        ))
+                        return true;
+
+                    Logger.Warn($"Failed to enqueue datagram for handshaking connection {ipEndPoint}. Evicting.");
+                    return false;
+
+                case ConnectionState.Connected:
+                    if (!connInfo.DatagramTransport.TryEnqueueReceivedData(
+                            buffer, numReceived, cancellationToken,
+                            $"ProcessReceivedPacket(connected, endpoint={ipEndPoint})"
+                        ))
+                        Logger.Warn($"Failed to enqueue datagram for connected client {ipEndPoint}. Packet dropped.");
+
+                    // Enqueue failure on a connected client is non-fatal -> keep the connection.
+                    return true;
+
+                default:
+                    return false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Creates a new transport and connection entry for <paramref name="ipEndPoint"/> and spawns the handshake task.
+    /// Handles the race where another thread registered the same endpoint concurrently.
+    /// </summary>
+    private void StartNewConnection(
+        IPEndPoint ipEndPoint,
+        byte[] buffer,
+        int numReceived,
+        CancellationToken cancellationToken
+    ) {
+        Logger.Debug($"New endpoint {ipEndPoint} ({numReceived} bytes). Starting handshake.");
+
+        var transport = new ServerDatagramTransport(_socket!) { IPEndPoint = ipEndPoint };
         var newConnInfo = new ConnectionInfo {
-            DatagramTransport = newTransport,
+            DatagramTransport = transport,
             State = ConnectionState.Handshaking,
-
             Client = null
         };
 
-        if (_connections.TryAdd(ipEndPoint, newConnInfo)) {
-            try {
-                newTransport.ReceivedDataCollection.Add(new UdpDatagramTransport.ReceivedData {
-                    Buffer = buffer,
-                    Length = numReceived
-                }, cancellationToken);
-            } catch (Exception) {
-                _connections.TryRemove(ipEndPoint, out _);
-                newTransport.Dispose();
-                return;
-            }
+        if (!_connections.TryAdd(ipEndPoint, newConnInfo)) {
+            // Race: another thread registered this endpoint between our lookup and TryAdd.
+            transport.Dispose();
+            RouteToRaceWinner(ipEndPoint, buffer, numReceived, cancellationToken);
+            return;
+        }
 
-            // Spawn handshake task
-            Task.Factory.StartNew(
-                () => PerformHandshake(ipEndPoint, cancellationToken),
-                cancellationToken,
-                TaskCreationOptions.LongRunning,
-                TaskScheduler.Default
-            );
-        } else {
-            // Race condition: another thread added the connection while we were setting up
-            newTransport.Dispose();
+        if (!transport.TryEnqueueReceivedData(
+                buffer, numReceived, cancellationToken, $"ProcessReceivedPacket(new-connection, endpoint={ipEndPoint})"
+            )) {
+            Logger.Warn($"Failed to enqueue first datagram for new connection {ipEndPoint}. Aborting handshake.");
+            _connections.TryRemove(ipEndPoint, out _);
+            transport.Dispose();
+            return;
+        }
 
-            // Retry routing to the existing connection
-            if (_connections.TryGetValue(ipEndPoint, out var existingConnInfo)) {
-                lock (existingConnInfo) {
-                    if (existingConnInfo.State == ConnectionState.Handshaking) {
-                        try {
-                            existingConnInfo.DatagramTransport.ReceivedDataCollection.Add(
-                                new UdpDatagramTransport.ReceivedData {
-                                    Buffer = buffer,
-                                    Length = numReceived
-                                }, cancellationToken);
-                        } catch (Exception) {
-                            // Silently ignore
-                        }
-                    }
-                }
+        Task.Factory.StartNew(
+            () => PerformHandshake(ipEndPoint, cancellationToken),
+            cancellationToken,
+            TaskCreationOptions.LongRunning,
+            TaskScheduler.Default
+        );
+    }
+
+    /// <summary>
+    /// After losing the TryAdd race, attempts to route the datagram to whichever connection won.
+    /// Packet loss here is acceptable since this is an extremely rare race and DTLS handles retransmission.
+    /// </summary>
+    private void RouteToRaceWinner(
+        IPEndPoint ipEndPoint,
+        byte[] buffer,
+        int numReceived,
+        CancellationToken cancellationToken
+    ) {
+        if (!_connections.TryGetValue(ipEndPoint, out var winner))
+            return;
+
+        lock (winner.SyncRoot) {
+            if (winner.State == ConnectionState.Handshaking) {
+                winner.DatagramTransport.TryEnqueueReceivedData(
+                    buffer, numReceived, cancellationToken,
+                    $"ProcessReceivedPacket(race-handshaking, endpoint={ipEndPoint})"
+                );
             }
         }
     }
@@ -408,7 +439,7 @@ internal class DtlsServer {
         }
 
         // Transition to connected state
-        lock (connInfo) {
+        lock (connInfo.SyncRoot) {
             if (connInfo.State != ConnectionState.Handshaking) {
                 Logger.Warn($"Connection {endPoint} no longer in handshaking state");
                 dtlsTransport.Close();
@@ -500,6 +531,11 @@ internal class DtlsServer {
     /// </summary>
     private class ConnectionInfo {
         /// <summary>
+        /// Private synchronization object for mutating connection state.
+        /// </summary>
+        public object SyncRoot { get; } = new();
+
+        /// <summary>
         /// The datagram transport for this connection.
         /// </summary>
         public required ServerDatagramTransport DatagramTransport { get; init; }
@@ -520,3 +556,4 @@ internal class DtlsServer {
         public Thread? ReceiveThread { get; set; }
     }
 }
+
