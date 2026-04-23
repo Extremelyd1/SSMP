@@ -4,7 +4,9 @@ using UnityEngine;
 namespace SSMP.Animation.Effects.Tools;
 
 internal class StraightPin : BaseTool {
-
+    /// <summary>
+    /// Cached prefab for the attacking straight pin
+    /// </summary>
     private GameObject? _modifiedPrefab;
 
     /// <inheritdoc/>
@@ -29,7 +31,14 @@ internal class StraightPin : BaseTool {
 
         // Spawn in prefab
         var pin = _modifiedPrefab.Spawn(playerObject.transform.position);
-        pin.transform.localScale = new Vector3(playerObject.transform.localScale.x * -1, 1, 1);
+
+        // Set scale
+        var scale = playerObject.transform.localScale.x * -1;
+        if (EffectIsOnWall(effectInfo)) {
+            scale *= -1;
+        }
+
+        pin.transform.localScale = new Vector3(scale, 1, 1);
 
         // Set damage settings
         if (pin.TryGetComponent<DamageHero>(out var damager)) {
@@ -39,7 +48,7 @@ internal class StraightPin : BaseTool {
 
         // Set initial velocity
         if (pin.TryGetComponent<Rigidbody2D>(out var body)) {
-            body.linearVelocityX = tool.usageOptions.ThrowVelocity.x * playerObject.transform.localScale.x * -1;
+            body.linearVelocityX = tool.usageOptions.ThrowVelocity.x * scale;
         }
 
         // Set poison settings and deflection
