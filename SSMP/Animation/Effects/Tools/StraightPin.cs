@@ -43,18 +43,6 @@ internal class StraightPin : BaseTool {
         }
 
         // Set poison settings
-        if (poisoned && pin.TryGetComponent<ToolPin>(out var controller)) {
-            if ((bool) controller.getTintFrom) {
-                controller.sprite.EnableKeyword("CAN_HUESHIFT");
-                controller.sprite.SetFloat(PoisonTintBase.HueShiftPropId, controller.getTintFrom.PoisonHueShift);
-            } else {
-                controller.sprite.EnableKeyword("RECOLOUR");
-                controller.sprite.color = controller.poisonTint;
-            }
-            var main = controller.ptShatter.main;
-            main.startColor = controller.poisonTint;
-            controller.ptPoisonIdle.Play();
-            controller.isPoison = true;
-        }
+        SetPinPoison(pin, poisoned);
     }
 }

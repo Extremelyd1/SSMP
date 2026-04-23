@@ -102,6 +102,33 @@ internal class BaseTool : DamageAnimationEffect {
         }
     }
 
+    protected static void SetPinPoison(GameObject pin, bool isPoison) {
+        // Get controller
+        if (!pin.TryGetComponent<ToolPin>(out var controller)) {
+            return;
+        }
+
+        // Toggle poison effect
+        if (isPoison) {
+            if ((bool) controller.getTintFrom) {
+                controller.sprite.EnableKeyword("CAN_HUESHIFT");
+                controller.sprite.SetFloat(PoisonTintBase.HueShiftPropId, controller.getTintFrom.PoisonHueShift);
+            } else {
+                controller.sprite.EnableKeyword("RECOLOUR");
+                controller.sprite.color = controller.poisonTint;
+            }
+            var main = controller.ptShatter.main;
+            main.startColor = controller.poisonTint;
+            controller.ptPoisonIdle.Play();
+            controller.isPoison = true;
+        } else {
+            controller.sprite.DisableKeyword("CAN_HUESHIFT");
+            controller.sprite.DisableKeyword("RECOLOUR");
+            controller.sprite.color = Color.white;
+            var main2 = controller.ptShatter.main;
+            main2.startColor = controller.ptShatterDefaultColour;
+        }
+    }
 }
 
 internal enum AttackTool {
