@@ -8,9 +8,12 @@ using Object = UnityEngine.Object;
 
 namespace SSMP.Animation.Effects.SilkSkills;
 
+/// <summary>
+/// Effect class for the Silk Spear Silk Skill.
+/// </summary>
 internal class SilkSpear : BaseSilkSkill {
     /// <summary>
-    /// The object name of the silk spear
+    /// The object name of the silk spear.
     /// </summary>
     private const string SpearObjectName = "Needle Throw";
     
@@ -72,7 +75,7 @@ internal class SilkSpear : BaseSilkSkill {
 
         // Play audio
         PlayHornetAttackSound(playerObject);
-        var fsm = GetSkillFSM();
+        var fsm = GetSkillFsm();
 
         var throwAudio = fsm.GetAction<PlayAudioEvent>("Start Throw", 1);
         if (throwAudio != null) AudioUtil.PlayAudio(throwAudio, playerObject);
@@ -87,10 +90,9 @@ internal class SilkSpear : BaseSilkSkill {
     /// <summary>
     /// Waits for the spear to collide with terrain. If it does, it'll stop short.
     /// </summary>
-    /// <param name="playerObject">The player who fired the spear</param>
-    /// <param name="spear">The spear</param>
-    /// <param name="damager">The spear's damager</param>
-    /// <returns></returns>
+    /// <param name="playerObject">The player who fired the spear.</param>
+    /// <param name="spear">The spear object.</param>
+    /// <param name="damager">The spear's damager object.</param>
     private static IEnumerator PlayPossibleThunk(GameObject playerObject, GameObject spear, GameObject damager) {
         var collider = damager.GetComponent<BoxCollider2D>();
         var animator = spear.GetComponentInChildren<Animator>();
@@ -99,9 +101,10 @@ internal class SilkSpear : BaseSilkSkill {
 
         // Try to thunk as long as the spear is doing damage
         while (collider.isActiveAndEnabled) {
-
             // Find a terrain collider within the bounds of the spear
             var y = spear.transform.position.y;
+            // ReSharper disable once Unity.PreferNonAllocApi
+            // Non-alloc version is not used because this method is not called frequently enough for that to matter
             var collisions = Physics2D.LinecastAll(new Vector2(collider.bounds.min.x, y), new Vector2(collider.bounds.max.x, y), LayerMask.GetMask("Terrain"));
 
             var found = collisions.FirstOrDefault(c => c.collider.gameObject.tag != "Piercable Terrain" && c.collider.gameObject.layer == 8);
@@ -131,10 +134,10 @@ internal class SilkSpear : BaseSilkSkill {
     }
 
     /// <summary>
-    /// Attempts to find the silk spear for the player
+    /// Attempts to find the silk spear for the player.
     /// </summary>
-    /// <param name="playerObject">The player using the spear</param>
-    /// <returns>The spear, if found</returns>
+    /// <param name="playerObject">The player object using the spear.</param>
+    /// <returns>The spear, if found.</returns>
     private static GameObject? GetSilkSpear(GameObject playerObject) {
         // Find existing silk spear
         var silkAttacks = GetPlayerSilkSkills(playerObject);

@@ -6,57 +6,68 @@ using UnityEngine;
 namespace SSMP.Fsm;
 
 /// <summary>
-/// A component to copy FSM injections between objects. An instantiated object can't copy Actions, so this bridges the gap.
+/// A component to copy FSM injections between objects. An instantiated object can't copy Actions,
+/// so this bridges the gap.
 /// </summary>
 internal class FsmActionInjectorComponent : MonoBehaviour {
+    /// <summary>
+    /// Dictionary of all injections by their injection index.
+    /// </summary>
     private static readonly Dictionary<int, List<Injection>> AllInjections = [];
 
+    /// <summary>
+    /// List of injections for this object.
+    /// </summary>
     private List<Injection> _injections = [];
 
-    private bool _injected = false;
+    /// <summary>
+    /// Whether injection has taken place.
+    /// </summary>
+    private bool _injected;
 
+    /// <summary>
+    /// Injection index for this object.
+    /// </summary>
     [SerializeField]
-    private int _injectionIndex;
+    private int injectionIndex;
 
     public void Awake() {
         _injected = false;
 
-        if (AllInjections.TryGetValue(_injectionIndex, out var injections)) {
+        if (AllInjections.TryGetValue(injectionIndex, out var injections)) {
             _injections = injections;
             TryDoInjection();
         }
     }
 
     /// <summary>
-    /// Sets the injections for this component and any future copies of it
+    /// Sets the injections for this component and any future copies of it.
     /// </summary>
-    /// <param name="injections">The injections for this Object and any future copies</param>
+    /// <param name="injections">The injections for this Object and any future copies.</param>
     public void SetInjections(List<Injection> injections) {
         // Set injections and index
         _injections = injections;
-        _injectionIndex = AllInjections.Count + 1;
+        injectionIndex = AllInjections.Count + 1;
 
         // Add to static collection of injections and inject
-        AllInjections.Add(_injectionIndex, injections);
+        AllInjections.Add(injectionIndex, injections);
         TryDoInjection();
     }
 
+    /// <summary>
+    /// Tries to do all the defined injections in this instance.
+    /// </summary>
     private void TryDoInjection() {
         // Check if injections need to happen
         if (_injected) return;
         if (_injections.Count == 0) return;
 
         foreach (var injection in _injections) {
-            // Ensure injection is set up correctly
-            if (injection.FsmName == null) return;
-            if (injection.Hook == null) return;
-            if (injection.FsmStateName == null) return;
-
             // Locate and patch the FSM
-            var fsm = gameObject.LocateMyFSM(injection.FsmName);
-            var state = fsm.GetState(injection.FsmStateName);
+            var fsm = gameObject.LocateMyFSM(injection.fsmName);
+            var state = fsm.GetState(injection.fsmStateName);
 
-            FsmStateActionInjector.Inject(state, injection.Hook, injection.ActionIndex, injection.HookName);
+            FsmStateActionInjector.Inject(state, injection.Hook, injection.actionIndex, injection.hookName);
         }
 
         _injected = true;
@@ -65,27 +76,27 @@ internal class FsmActionInjectorComponent : MonoBehaviour {
     [Serializable]
     public class Injection {
         /// <summary>
-        /// The name of the FSM to inject
+        /// The name of the FSM to inject.
         /// </summary>
-        public required string FsmName;
+        public required string fsmName;
 
         /// <summary>
-        /// An optional name for the hook
+        /// An optional name for the hook.
         /// </summary>
-        public string HookName = "Fsm Injection";
+        public string hookName = "Fsm Injection";
 
         /// <summary>
-        /// The state on the FSM to inject
+        /// The state on the FSM to inject.
         /// </summary>
-        public required string FsmStateName;
+        public required string fsmStateName;
 
         /// <summary>
-        /// The index to place the hook action
+        /// The index to place the hook action.
         /// </summary>
-        public int ActionIndex;
+        public int actionIndex;
 
         /// <summary>
-        /// The hook to run when the action index is reached
+        /// The hook to run when the action index is reached.
         /// </summary>
         [NonSerialized]
         public required Action<PlayMakerFSM> Hook;

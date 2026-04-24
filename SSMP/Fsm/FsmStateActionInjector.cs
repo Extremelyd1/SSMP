@@ -5,9 +5,15 @@ using SSMP.Logging;
 
 namespace SSMP.Fsm;
 
+/// <summary>
+/// FSM state action that allows to be injected into an FSM's state.
+/// </summary>
 internal sealed class FsmStateActionInjector : FsmStateAction {
     private static Action? _onUninject;
 
+    /// <summary>
+    /// The action to run when the state for this action is entered.
+    /// </summary>
     private Action<PlayMakerFSM>? _onStateEnter;
 
     /// <summary>

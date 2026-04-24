@@ -9,6 +9,9 @@ using Object = UnityEngine.Object;
 
 namespace SSMP.Animation.Effects.SilkSkills;
 
+/// <summary>
+/// Effect class for the Rune Rage Silk Skill.
+/// </summary>
 internal class RuneRage : BaseSilkSkill {
     /// <summary>
     /// Name of the game object for the normal antic.
@@ -21,12 +24,12 @@ internal class RuneRage : BaseSilkSkill {
     private const string AnticVoltName = "antic_thread_zap";
 
     /// <summary>
-    /// Scale used to keep a higher level of precision when converting a float to a byte
+    /// Scale used to keep a higher level of precision when converting a float to a byte.
     /// </summary>
     private const int PositionScale = 9;
 
     /// <summary>
-    /// Offset to keep negative values when converting an sbyte to a byte
+    /// Offset to keep negative values when converting an sbyte to a byte.
     /// </summary>
     private const int PositionOffset = sbyte.MaxValue;
 
@@ -37,17 +40,17 @@ internal class RuneRage : BaseSilkSkill {
     public bool IsAntic = false;
 
     /// <summary>
-    /// Cached object for Hornet's normal Rune Rage burst
+    /// Cached object for Hornet's normal Rune Rage burst.
     /// </summary>
     private static GameObject? _localRuneBlast;
 
     /// <summary>
-    /// Cached object for Hornet's volt filament Rune Rage burst
+    /// Cached object for Hornet's volt filament Rune Rage burst.
     /// </summary>
     private static GameObject? _localRuneBlastVolt;
 
     /// <summary>
-    /// Cached transform of an object that templates how a Rune Rage Cluster should be laid out
+    /// Cached transform of an object that templates how a Rune Rage Cluster should be laid out.
     /// </summary>
     private static Transform? _clusterSpawnTemplate;
 
@@ -72,17 +75,17 @@ internal class RuneRage : BaseSilkSkill {
 
         PlaySonar(playerObject, isVolt, isShaman);
 
-        // There are runes to spawn. Do at the same time as the sonar.
+        // There are runes to spawn; do at the same time as the sonar
         if (positions.Count > 0) {
             PlayRuneRage(positions, isVolt, isShaman);
         }
     }
 
     /// <summary>
-    /// Plays the silk-based antic for Rune Rage
+    /// Plays the silk-based antic for Rune Rage.
     /// </summary>
-    /// <param name="playerObject">The player using the effect</param>
-    /// <param name="isVolt">If the volt filament effects should be used</param>
+    /// <param name="playerObject">The player using the effect.</param>
+    /// <param name="isVolt">Whether the volt filament effects should be used.</param>
     private static void PlayRageAntic(GameObject playerObject, bool isVolt) {
         PlayHornetAttackSound(playerObject);
 
@@ -98,14 +101,12 @@ internal class RuneRage : BaseSilkSkill {
             }
         }
 
-        var fsm = GetSkillFSM();
+        var fsm = GetSkillFsm();
         
         // Play volt audio
         if (isVolt) {
             var voltAntic = fsm.GetFirstAction<PlayAudioEvent>("S Bomb Zap FX");
-            if (voltAntic != null) {
-                AudioUtil.PlayAudio(voltAntic, playerObject);
-            }
+            AudioUtil.PlayAudio(voltAntic, playerObject);
         }
 
         // Play normal audio
@@ -118,29 +119,24 @@ internal class RuneRage : BaseSilkSkill {
     /// <summary>
     /// Plays the sonar blast effect. Purely visual.
     /// </summary>
-    /// <param name="playerObject">The player using the effect</param>
-    /// <param name="isVolt">If the volt filament effects should be used</param>
-    /// <param name="isShaman">If the shaman crest effects should be used</param>
-    private void PlaySonar(GameObject playerObject, bool isVolt, bool isShaman) {
-        var fsm = GetSkillFSM();
+    /// <param name="playerObject">The player using the effect.</param>
+    /// <param name="isVolt">Whether the volt filament effects should be used.</param>
+    /// <param name="isShaman">Whether the shaman crest effects should be used.</param>
+    private static void PlaySonar(GameObject playerObject, bool isVolt, bool isShaman) {
+        var fsm = GetSkillFsm();
 
         // Play general audio
         var runeBurstAudio = fsm.GetFirstAction<PlayAudioEvent>("Initial Silk Cost");
-        if (runeBurstAudio != null) {
-            AudioUtil.PlayAudio(runeBurstAudio, playerObject);
-        }
+        AudioUtil.PlayAudio(runeBurstAudio, playerObject);
 
         // Play volt audio
         if (isVolt) {
             var zapAudioBug = fsm.GetFirstAction<PlayAudioEvent>("S Bomb Zap FX 2");
-            if (zapAudioBug != null) {
-                AudioUtil.PlayAudio(zapAudioBug, playerObject);
-            }
+            AudioUtil.PlayAudio(zapAudioBug, playerObject);
         }
 
         // Spawn sonar, picking the right one for the volt filament setting
         var sonarPicker = fsm.GetFirstAction<BoolTestToGameObject>("Sonar Cast Effects");
-        if (sonarPicker == null) return;
 
         GameObject localSonar;
 
@@ -170,14 +166,13 @@ internal class RuneRage : BaseSilkSkill {
     }
 
     /// <summary>
-    /// Spawns clusters of Rune Rage blasts at the given positions
+    /// Spawns clusters of Rune Rage blasts at the given positions.
     /// </summary>
-    /// <param name="positions">The positions to spawn blast clusters at</param>
-    /// <param name="isVolt">If the volt filament effects should be used</param>
-    /// <param name="isShaman">If the shaman crest effects should be used</param>
+    /// <param name="positions">The positions to spawn blast clusters at.</param>
+    /// <param name="isVolt">Whether the volt filament effects should be used.</param>
+    /// <param name="isShaman">Whether the shaman crest effects should be used.</param>
     private void PlayRuneRage(List<Vector3> positions, bool isVolt, bool isShaman) {
-        // Generate spawn template
-        // Template layout kinda looks like . * .
+        // Generate spawn template, whose layout kinda looks like . * .
         if (_clusterSpawnTemplate == null) {
             _clusterSpawnTemplate = new GameObject().transform;
             var firstBlast = new GameObject().transform;
@@ -205,11 +200,11 @@ internal class RuneRage : BaseSilkSkill {
     }
 
     /// <summary>
-    /// Gets the Rune Rage antic effect
+    /// Gets the Rune Rage antic effect.
     /// </summary>
-    /// <param name="playerObject">The player that is using the antic</param>
-    /// <param name="antic">The found or created antic</param>
-    /// <returns></returns>
+    /// <param name="playerObject">The player that is using the antic.</param>
+    /// <param name="antic">The found or created antic.</param>
+    /// <returns>True if the effect was found, otherwise false.</returns>
     private static bool TryGetAntic(GameObject playerObject, [MaybeNullWhen(false)] out GameObject antic) {
         // Find or create the antic object
         var created = FindOrCreateSkill(playerObject, AnticName, out var anticObj);
@@ -228,9 +223,9 @@ internal class RuneRage : BaseSilkSkill {
     }
 
     /// <summary>
-    /// Gets the prefab for a single Rune Rage blast
+    /// Gets the prefab for a single Rune Rage blast.
     /// </summary>
-    /// <param name="isVolt">If the volt filament effects should be used</param>
+    /// <param name="isVolt">Whether the volt filament effects should be used.</param>
     /// <returns>The blast prefab, if found.</returns>
     private static GameObject? TryGetLocalBlast(bool isVolt) {
         // Return existing if possible
@@ -241,7 +236,7 @@ internal class RuneRage : BaseSilkSkill {
         }
 
         // Get the rune cluster object from the FSM
-        var fsm = GetSkillFSM();
+        var fsm = GetSkillFsm();
         var cluster = fsm.GetFirstAction<SpawnObjectFromGlobalPool>("Blast Enemy").gameObject.Value;
 
         if (cluster == null) return null;
@@ -251,26 +246,21 @@ internal class RuneRage : BaseSilkSkill {
         if (clusterFsm == null) return null;
 
         var blaster = clusterFsm.GetFirstAction<BoolTestToGameObject>("Do Explosions");
-        if (blaster == null) return null;
 
         // Fill out both blast prefabs
         _localRuneBlastVolt = blaster.TrueGameObject.Value;
         _localRuneBlast = blaster.FalseGameObject.Value;
 
         // Return correct blast
-        if (isVolt) {
-            return _localRuneBlastVolt;
-        } else {
-            return _localRuneBlast;
-        }
+        return isVolt ? _localRuneBlastVolt : _localRuneBlast;
     }
 
     /// <summary>
-    /// Spawns a cluster of three Rune Rage blasts
+    /// Spawns a cluster of three Rune Rage blasts.
     /// </summary>
-    /// <param name="position">The initial position to spawn the cluster</param>
-    /// <param name="isVolt">If the volt filament effects should be used</param>
-    /// <param name="isShaman">If the shaman crest effects should be used</param>
+    /// <param name="position">The initial position to spawn the cluster.</param>
+    /// <param name="isVolt">Whether the volt filament effects should be used.</param>
+    /// <param name="isShaman">Whether the shaman crest effects should be used.</param>
     private IEnumerator PlayRuneCluster(Vector3 position, bool isVolt, bool isShaman) {
         if (!_clusterSpawnTemplate) yield break;
 
@@ -299,12 +289,12 @@ internal class RuneRage : BaseSilkSkill {
     }
 
     /// <summary>
-    /// Spawns a single Rune Rage blast
+    /// Spawns a single Rune Rage blast.
     /// </summary>
-    /// <param name="spawnTransform">The initial parent to use for spawning</param>
-    /// <param name="isVolt">If the volt filament effects should be used</param>
-    /// <param name="isShaman">If the shaman crest effects should be used</param>
-    /// <param name="position">The final position of the blast</param>
+    /// <param name="spawnTransform">The initial parent to use for spawning.</param>
+    /// <param name="isVolt">Whether the volt filament effects should be used.</param>
+    /// <param name="isShaman">Whether the shaman crest effects should be used.</param>
+    /// <param name="position">The final position of the blast.</param>
     private void CreateBlast(Transform spawnTransform, bool isVolt, bool isShaman, Vector3 position) {
         var localBlast = TryGetLocalBlast(isVolt);
         if (localBlast == null) return;
@@ -366,10 +356,10 @@ internal class RuneRage : BaseSilkSkill {
 
     /// <summary>
     /// Converts a Vector3 to an array of bytes that are within a margin of error of the original X and Y values.
-    /// To be used for encoding Rune Rage cluster positions
+    /// To be used for encoding Rune Rage cluster positions.
     /// </summary>
-    /// <param name="runePosition">The position of the Rune Rage cluster</param>
-    /// <returns></returns>
+    /// <param name="runePosition">The position of the Rune Rage cluster.</param>
+    /// <returns>A byte array containing the encoded position.</returns>
     internal static byte[] EncodeRunePosition(Vector3 runePosition) {
         var hornetPosition = HeroController.instance.transform.position;
 
@@ -377,8 +367,8 @@ internal class RuneRage : BaseSilkSkill {
         // Get position relative to the player and offset by max value of sbyte.
         // This allows us to keep negative values while using a byte.
         // Multiplying by a larger number also allows higher precision.
-        var diffX = (byte)((runePosition.x - hornetPosition.x) * PositionScale + PositionOffset);
-        var diffY = (byte)((runePosition.y - hornetPosition.y) * PositionScale + PositionOffset);
+        var diffX = (byte) ((runePosition.x - hornetPosition.x) * PositionScale + PositionOffset);
+        var diffY = (byte) ((runePosition.y - hornetPosition.y) * PositionScale + PositionOffset);
 
         return [
             diffX,
@@ -388,11 +378,11 @@ internal class RuneRage : BaseSilkSkill {
 
     /// <summary>
     /// Converts an array of bytes to Vector3s, using the reverse of the algorithm in <see cref="EncodeRunePosition"/>.
-    /// To be used for decoding Rune Rage cluster positions
+    /// To be used for decoding Rune Rage cluster positions.
     /// </summary>
-    /// <param name="info">The raw positions in byte form</param>
+    /// <param name="info">The raw positions in byte form.</param>
     /// <param name="playerObject">The player that used the effect. Cluster positions are relative to this player.</param>
-    /// <returns></returns>
+    /// <returns>A list of Vector3s that represent the decoded positions.</returns>
     private static List<Vector3> DecodeRunePositions(byte[]? info, GameObject playerObject) {
         if (info == null || info.Length < 3) {
             return [];
@@ -404,8 +394,8 @@ internal class RuneRage : BaseSilkSkill {
         // Loop through all xy pairs
         for (var i = 1; i < info.Length - 1; i += 2) {
             // Restore sbyte from byte, then convert to float for division
-            var x = (float)info[i] - PositionOffset;
-            var y = (float)info[i + 1] - PositionOffset;
+            var x = (float) info[i] - PositionOffset;
+            var y = (float) info[i + 1] - PositionOffset;
 
             // Restore original scale
             var position = new Vector3(x / PositionScale, y / PositionScale, 0) ;

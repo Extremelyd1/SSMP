@@ -84,11 +84,6 @@ public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
             ChangeEvent?.Invoke(nameof(AllowSkins));
         }
     } = true;
-
-    // /// <inheritdoc />
-    // [SettingAlias("parries")]
-    // [ModMenuSetting("Parries", "Whether parrying certain player attacks is possible")]
-    // public bool AllowParries { get; set; } = true;
     
     /// <inheritdoc />
     [SettingAlias("needledmg")]
@@ -245,27 +240,6 @@ public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
             ChangeEvent?.Invoke(nameof(ClawMirrorUpgradedDamage));
         }
     } = 1;
-
-    //
-    // /// <inheritdoc />
-    // [SettingAlias("sporeshroomdmg")]
-    // [ModMenuSetting("Spore Shroom Damage", "The number of masks of damage that a Spore Shroom cloud deals")]
-    // public byte SporeShroomDamage { get; set; } = 1;
-    //
-    // /// <inheritdoc />
-    // [SettingAlias("sporedungshroomdmg", "dungshroomdmg")]
-    // [ModMenuSetting("Spore-Dung Shroom Damage", "The number of masks of damage that a Spore Shroom cloud with Defender's Crest deals")]
-    // public byte SporeDungShroomDamage { get; set; } = 1;
-    //
-    // /// <inheritdoc />
-    // [SettingAlias("thornsofagonydamage", "thornsofagonydmg", "thornsdamage", "thornsdmg")]
-    // [ModMenuSetting("Thorns of Agongy Damage", "The number of masks of damage that the Thorns of Agony lash deals")]
-    // public byte ThornOfAgonyDamage { get; set; } = 1;
-    //
-    // /// <inheritdoc />
-    // [SettingAlias("sharpshadowdmg")]
-    // [ModMenuSetting("Sharp Shadow Damage", "The number of masks of damage that a Sharp Shadow dash deals")]
-    // public byte SharpShadowDamage { get; set; } = 1;
 
     /// <summary>
     /// Set all properties in this <see cref="ServerSettings"/> instance to the values from the given

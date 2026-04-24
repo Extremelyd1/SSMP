@@ -7,19 +7,22 @@ using Object = UnityEngine.Object;
 
 namespace SSMP.Animation.Effects.SilkSkills;
 
+/// <summary>
+/// Base effect class for Silk Skills.
+/// </summary>
 internal abstract class BaseSilkSkill : DamageAnimationEffect {
     /// <summary>
-    /// The name of the silk skills parent
+    /// The name of the silk skills parent.
     /// </summary>
     private const string SilkSkillsObjectName = "Special Attacks";
 
     /// <summary>
-    /// Cached object with silk skills
+    /// Cached object with silk skills.
     /// </summary>
     private static GameObject? _localSilkSkills;
 
     /// <summary>
-    /// See <see cref="GetEffectInfo"/>. Determines if the player is using the Volt Filament
+    /// See <see cref="GetEffectInfo"/>. Determines if the player is using the Volt Filament.
     /// </summary>
     public static byte[] GetEffectFlags() {
         var voltFilament = ToolItemManager.GetToolByName("Zap Imbuement");
@@ -30,24 +33,24 @@ internal abstract class BaseSilkSkill : DamageAnimationEffect {
     }
 
     /// <inheritdoc/>
-    public override byte[]? GetEffectInfo() {
+    public override byte[] GetEffectInfo() {
         return GetEffectFlags();
     }
 
     /// <summary>
-    /// Determines if the player was using the Volt Filament
+    /// Determines if the player was using the Volt Filament.
     /// </summary>
-    /// <param name="effectInfo">The effect info sent with the animation</param>
-    /// <returns>true if the player used Volt Filament</returns>
-    protected bool IsVolt(byte[]? effectInfo) {
+    /// <param name="effectInfo">The effect info sent with the animation.</param>
+    /// <returns>True if the player used Volt Filament, otherwise false.</returns>
+    protected static bool IsVolt(byte[]? effectInfo) {
         return effectInfo is [1];
     }
 
     /// <summary>
-    /// Gets the Silk Skill FSM
+    /// Gets the Silk Skill FSM.
     /// </summary>
-    /// <returns>The found FSM</returns>
-    protected static PlayMakerFSM GetSkillFSM() {
+    /// <returns>The found FSM.</returns>
+    protected static PlayMakerFSM GetSkillFsm() {
         var fsm = HeroController.instance.silkSpecialFSM;
         if (fsm == null) {
             throw new System.Exception("Unable to obtain Silk Skill FSM");
@@ -61,10 +64,10 @@ internal abstract class BaseSilkSkill : DamageAnimationEffect {
     }
 
     /// <summary>
-    /// Attempts to find the local silk skills object
+    /// Attempts to find the local silk skills object.
     /// </summary>
-    /// <param name="localSilkSkills">The silk skills object, if found</param>
-    /// <returns>true if the object was found</returns>
+    /// <param name="localSilkSkills">The silk skills object, if found.</param>
+    /// <returns>True if the object was found, otherwise false.</returns>
     protected static bool TryGetLocalSilkSkills([MaybeNullWhen(false)] out GameObject localSilkSkills) {
         // Find local silk skills
         if (_localSilkSkills == null) {
@@ -82,10 +85,10 @@ internal abstract class BaseSilkSkill : DamageAnimationEffect {
     }
 
     /// <summary>
-    /// Gets the silk skills object on a player
+    /// Gets the silk skills object on a player.
     /// </summary>
-    /// <param name="playerObject">The player to find silk skill son</param>
-    /// <returns>The found silk skills object</returns>
+    /// <param name="playerObject">The player to find silk skills on.</param>
+    /// <returns>The found silk skills object.</returns>
     protected static GameObject GetPlayerSilkSkills(GameObject playerObject) {
         var silkAttacks = playerObject.FindGameObjectInChildren(SilkSkillsObjectName);
         if (silkAttacks == null) {
@@ -97,11 +100,11 @@ internal abstract class BaseSilkSkill : DamageAnimationEffect {
     }
 
     /// <summary>
-    /// Plays a loud attack sound
+    /// Plays a loud attack sound.
     /// </summary>
-    /// <param name="playerObject">The player to play the sound on</param>
+    /// <param name="playerObject">The player to play the sound on.</param>
     protected static void PlayHornetAttackSound(GameObject playerObject) {
-        var fsm = GetSkillFSM();
+        var fsm = GetSkillFsm();
         var anticAudio = fsm.GetAction<PlayRandomAudioClipTable>("A Sphere Antic", 2);
         if (anticAudio != null) {
             AudioUtil.PlayAudio(anticAudio, playerObject);
@@ -111,10 +114,10 @@ internal abstract class BaseSilkSkill : DamageAnimationEffect {
     /// <summary>
     /// Attempts to find or create a silk skill object.
     /// </summary>
-    /// <param name="playerObject">The player using the skill</param>
-    /// <param name="name">The name of the skill object</param>
-    /// <param name="skill">The found or created skill object</param>
-    /// <returns>true if the skill was created, false if it already existed or wasn't found</returns>
+    /// <param name="playerObject">The player using the skill.</param>
+    /// <param name="name">The name of the skill object.</param>
+    /// <param name="skill">The found or created skill object.</param>
+    /// <returns>True if the skill was created, false if it already existed or wasn't found.</returns>
     protected static bool FindOrCreateSkill(GameObject playerObject, string name, out GameObject? skill) {
         // Find existing object
         var skills = GetPlayerSilkSkills(playerObject);
@@ -139,12 +142,12 @@ internal abstract class BaseSilkSkill : DamageAnimationEffect {
     }
 
     /// <summary>
-    /// <see cref="DamageAnimationEffect.SetDamageHeroState"/> with a calculated damage amount for silk skills
+    /// <see cref="DamageAnimationEffect.SetDamageHeroState"/> with a calculated damage amount for silk skills.
     /// </summary>
     /// <param name="damager">The target game object to attach or remove the component from.</param>
-    /// <param name="baseDamage">The base silk skill damage</param>
-    /// <param name="isVolt">If the Volt Filament is equipped</param>
-    /// <param name="isShaman">If the player is using the Shaman Crest</param>
+    /// <param name="baseDamage">The base silk skill damage.</param>
+    /// <param name="isVolt">If the Volt Filament is equipped.</param>
+    /// <param name="isShaman">If the player is using the Shaman Crest.</param>
     protected DamageHero? SetDamageHeroStateCalculated(GameObject damager, int baseDamage, bool isVolt, bool isShaman) {
         float damage = baseDamage;
         if (isVolt) {

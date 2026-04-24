@@ -7,14 +7,17 @@ using Object = UnityEngine.Object;
 
 namespace SSMP.Animation.Effects.SilkSkills;
 
+/// <summary>
+/// Effect class for the Sharp Dark Silk Skill.
+/// </summary>
 internal class SharpDart : BaseSilkSkill {
     /// <summary>
-    /// The name of the volt particles object
+    /// The name of the volt particles object.
     /// </summary>
     private const string VoltParticlesName = "Silk Charge Particles Zap";
 
     /// <summary>
-    /// If this instance of sharp dart is for the volt filament variant
+    /// If this instance of sharp dart is for the volt filament variant.
     /// </summary>
     public bool Volt = false;
 
@@ -25,10 +28,10 @@ internal class SharpDart : BaseSilkSkill {
     }
 
     /// <summary>
-    /// Plays the sharp dart effect
+    /// Plays the sharp dart effect.
     /// </summary>
-    /// <param name="playerObject">The player using the skill</param>
-    /// <param name="isShaman">If the shaman crest effects should be used</param>
+    /// <param name="playerObject">The player using the skill.</param>
+    /// <param name="isShaman">Whether the shaman crest effects should be used.</param>
     private IEnumerator PlayEffect(GameObject playerObject, bool isShaman) {
         // Set up damager
         if (TryGetDamager(playerObject, out var damager)) {
@@ -48,7 +51,7 @@ internal class SharpDart : BaseSilkSkill {
             dashBurst.SetActive(true);
         }
 
-        var fsm = GetSkillFSM();
+        var fsm = GetSkillFsm();
 
         // Play sound effects
         PlayHornetAttackSound(playerObject);
@@ -59,7 +62,7 @@ internal class SharpDart : BaseSilkSkill {
         // Play volt effects
         if (Volt) {
             var voltNoise = fsm.GetFirstAction<PlayAudioEvent>("Silk Charge Zap FX");
-            if (voltNoise != null) AudioUtil.PlayAudio(voltNoise, playerObject);
+            AudioUtil.PlayAudio(voltNoise, playerObject);
 
             if (TryGetParticles(playerObject, out var particles)) {
                 particles.SetActive(false);
@@ -75,11 +78,11 @@ internal class SharpDart : BaseSilkSkill {
     }
 
     /// <summary>
-    /// Attempts to get the dash burst effect
+    /// Attempts to get the dash burst effect.
     /// </summary>
-    /// <param name="playerObject">The player using the skill</param>
-    /// <param name="dashBurst">The effect, if found</param>
-    /// <returns>true if the effect was found</returns>
+    /// <param name="playerObject">The player using the skill.</param>
+    /// <param name="dashBurst">The effect, if found.</param>
+    /// <returns>True if the effect was found, otherwise false.</returns>
     private static bool TryGetDashBurst(GameObject playerObject, [MaybeNullWhen(false)] out GameObject dashBurst) {
         FindOrCreateSkill(playerObject, "Silk Charge DashBurst", out dashBurst);
         
@@ -92,11 +95,11 @@ internal class SharpDart : BaseSilkSkill {
     }
 
     /// <summary>
-    /// Attempts to get the damage object
+    /// Attempts to get the damage object.
     /// </summary>
-    /// <param name="playerObject">The player using the skill</param>
-    /// <param name="damager">The damager, if found</param>
-    /// <returns>true if the damager was found</returns>
+    /// <param name="playerObject">The player using the skill.</param>
+    /// <param name="damager">The damager, if found.</param>
+    /// <returns>True if the damager was found, otherwise false.</returns>
     private static bool TryGetDamager(GameObject playerObject, [MaybeNullWhen(false)] out GameObject damager) {
         // Find or create effect
         var created = FindOrCreateSkill(playerObject, "Silk Charge Damager", out damager);
@@ -123,11 +126,11 @@ internal class SharpDart : BaseSilkSkill {
     }
 
     /// <summary>
-    /// Attempts to get the volt particles
+    /// Attempts to get the volt particles.
     /// </summary>
-    /// <param name="playerObject">The player using the skill</param>
-    /// <param name="particles">The particles, if found</param>
-    /// <returns>true if the particles were found</returns>
+    /// <param name="playerObject">The player using the skill.</param>
+    /// <param name="particles">The particles, if found.</param>
+    /// <returns>True if the particles were found, otherwise false.</returns>
     private static bool TryGetParticles(GameObject playerObject, [MaybeNullWhen(false)] out GameObject particles) {
         // Find effects
         var effects = playerObject.FindGameObjectInChildren("Effects");

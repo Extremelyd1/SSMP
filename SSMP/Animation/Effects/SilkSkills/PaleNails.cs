@@ -13,34 +13,37 @@ using Object = UnityEngine.Object;
 
 namespace SSMP.Animation.Effects.SilkSkills;
 
+/// <summary>
+/// Effect class for the Pale Nails Silk Skill.
+/// </summary>
 internal class PaleNails : BaseSilkSkill {
     /// <summary>
-    /// The name of the blade summoning effect object
+    /// The name of the blade summoning effect object.
     /// </summary>
     private const string AnticName = "Hornet_finger_blade_cast_silk";
 
     /// <summary>
-    /// The number of nails to summon
+    /// The number of nails to summon.
     /// </summary>
     private const int NailCount = 3;
 
     /// <summary>
-    /// Offset to keep negative values when converting a short to a ushort
+    /// Offset to keep negative values when converting a short to an ushort.
     /// </summary>
     private const int PositionOffset = short.MaxValue;
 
     /// <summary>
-    /// Scale used to keep a higher level of precision when converting a float to a short
+    /// Scale used to keep a higher level of precision when converting a float to a short.
     /// </summary>
     private const int PositionScale = 5;
 
     /// <summary>
-    /// Determines if this animation is for the summoning antic
+    /// Determines if this animation is for the summoning antic.
     /// </summary>
     public bool IsAntic = false;
 
     /// <summary>
-    /// Cached nail objects for players. Used when firing.
+    /// Cached nail objects for players mapped to their Unity instance ID. Used when firing.
     /// </summary>
     private static readonly Dictionary<int, GameObject[]> PlayerNails = [];
 
@@ -68,7 +71,7 @@ internal class PaleNails : BaseSilkSkill {
             return;
         }
 
-        // Decode target position. If can't decode, play the unguided variant
+        // Decode target position. If we can't decode, play the unguided variant
         var targetInfo = DecodeTargetInfo(effectInfo);
         if (!targetInfo.HasValue) {
             PlayNailFireUnguided(nails, isVolt, id);
@@ -81,12 +84,12 @@ internal class PaleNails : BaseSilkSkill {
     }
 
     /// <summary>
-    /// Fires a set of nails at a given target
+    /// Fires a set of nails at a given target.
     /// </summary>
-    /// <param name="target">The target object to fire at</param>
-    /// <param name="nails">The set of nails to fire</param>
-    /// <param name="isVolt">If the volt filament effect should be used</param>
-    /// <param name="playerId">The 'id' of the player firing the nails</param>
+    /// <param name="target">The target object to fire at.</param>
+    /// <param name="nails">The set of nails to fire.</param>
+    /// <param name="isVolt">If the volt filament effect should be used.</param>
+    /// <param name="playerId">The 'id' of the player firing the nails.</param>
     private static IEnumerator PlayNailFireTargeted(GameObject target, GameObject[] nails, bool isVolt, int playerId) {
         // Copy nails and clear array before they can be fired by anything else
         GameObject[] playerNails = [.. nails];
@@ -114,11 +117,11 @@ internal class PaleNails : BaseSilkSkill {
     }
 
     /// <summary>
-    /// Fires off a set of nails at their current positions
+    /// Fires off a set of nails at their current positions.
     /// </summary>
-    /// <param name="nails">The set of nails to fire</param>
-    /// <param name="isVolt">If the volt filament effect should be used</param>
-    /// <param name="playerId">The 'id' of the player that summoned the nails</param>
+    /// <param name="nails">The set of nails to fire.</param>
+    /// <param name="isVolt">If the volt filament effect should be used.</param>
+    /// <param name="playerId">The 'id' of the player that summoned the nails.</param>
     private static void PlayNailFireUnguided(GameObject[] nails, bool isVolt, int playerId) {
         // Play audio
         if (isVolt) PlayVoltAudio(nails[0]);
@@ -143,14 +146,14 @@ internal class PaleNails : BaseSilkSkill {
     }
 
     /// <summary>
-    /// Plays the nail summoning antic effect
+    /// Plays the nail summoning antic effect.
     /// </summary>
-    /// <param name="playerObject">The player that summoned the nails</param>
-    /// <param name="isVolt">If the volt filament effect should be used</param>
-    /// <param name="isShaman">If the shaman crest effects should be used</param>
+    /// <param name="playerObject">The player that summoned the nails.</param>
+    /// <param name="isVolt">If the volt filament effect should be used.</param>
+    /// <param name="isShaman">If the shaman crest effects should be used.</param>
     /// <returns></returns>
     private IEnumerator PlayAntic(GameObject playerObject, bool isVolt, bool isShaman) {
-        var fsm = GetSkillFSM();
+        var fsm = GetSkillFsm();
 
         // Fire existing nails
         var id = playerObject.GetInstanceID();
@@ -232,7 +235,7 @@ internal class PaleNails : BaseSilkSkill {
 
         // Set up FSMs for each nail
         for (var i = 0; i < NailCount; i++) {
-            SetupNailFSM(playerObject, nails, i, isVolt);
+            SetupNailFsm(playerObject, nails, i, isVolt);
         }
 
         // Store nails for firing later
@@ -241,31 +244,31 @@ internal class PaleNails : BaseSilkSkill {
         // Wait for nail hover time to expire
         yield return new WaitForSeconds(1.8f);
         
-        // Fire em'
+        // Fire them
         PlayNailFireUnguided(nails, isVolt, id);
     }
 
     /// <summary>
-    /// Plays volt audio when firing
+    /// Plays volt audio when firing.
     /// </summary>
-    /// <param name="nail">The nail to play the sound on</param>
+    /// <param name="nail">The nail to play the sound on.</param>
     private static void PlayVoltAudio(GameObject nail) {
         if (nail == null) return;
         
         // Play audio
         var fsm = nail.LocateMyFSM("Control");
         var audio = fsm.GetFirstAction<PlayAudioEventRandom>("Zap FX");
-        if (audio != null) AudioUtil.PlayAudio(audio, nail);
+        AudioUtil.PlayAudio(audio, nail);
     }
 
     /// <summary>
-    /// Sets FSM variables to help them fly smoothly
+    /// Sets FSM variables to help them fly smoothly.
     /// </summary>
-    /// <param name="playerObject">The player that summoned the nails</param>
-    /// <param name="nails">All nails in the set, for reference</param>
-    /// <param name="index">The index of the nail in the set</param>
-    /// <param name="isVolt">If the volt filament effect should be used</param>
-    private static void SetupNailFSM(GameObject playerObject, GameObject[] nails, int index, bool isVolt) {
+    /// <param name="playerObject">The player that summoned the nails.</param>
+    /// <param name="nails">All nails in the set, for reference.</param>
+    /// <param name="index">The index of the nail in the set.</param>
+    /// <param name="isVolt">Whether the volt filament effect should be used.</param>
+    private static void SetupNailFsm(GameObject playerObject, GameObject[] nails, int index, bool isVolt) {
         // Fix the FSM
         var nail = nails[index];
         var fsm = nail.LocateMyFSM("Control");
@@ -301,9 +304,9 @@ internal class PaleNails : BaseSilkSkill {
     /// <summary>
     /// Changes the control FSM for use with a non-local player.
     /// </summary>
-    /// <param name="fsm">The FSM of the nail</param>
-    /// <param name="playerObject">The player that summoned the nail</param>
-    /// <param name="isVolt">If the volt filament effect should be used</param>
+    /// <param name="fsm">The FSM of the nail.</param>
+    /// <param name="playerObject">The player that summoned the nail.</param>
+    /// <param name="isVolt">Whether the volt filament effect should be used.</param>
     private static void FixFsmForUse(PlayMakerFSM fsm, GameObject playerObject, bool isVolt) {
         fsm.enabled = false;
 
@@ -319,10 +322,10 @@ internal class PaleNails : BaseSilkSkill {
 
         // Set follow targets
         var flyTo = fsm.GetFirstAction<DirectlyFlyTo>(followLeftName);
-        flyTo?.target = hero;
+        flyTo.target = hero;
 
         flyTo = fsm.GetFirstAction<DirectlyFlyTo>(followRightName);
-        flyTo?.target = hero;
+        flyTo.target = hero;
 
         // Set scale target
         var getScale = fsm.GetAction<GetScale>(followLeftName, 4);
@@ -385,24 +388,22 @@ internal class PaleNails : BaseSilkSkill {
         SetVolt(fsm, isVolt, "Launch NoTarget", 11);
 
         var burst = fsm.GetFirstAction<BoolTest>("Burst");
-        if (burst != null) {
-            if (isVolt) {
-                burst.isFalse = burst.isTrue;
-            } else {
-                burst.isTrue = burst.isFalse;
-            }
+        if (isVolt) {
+            burst.isFalse = burst.isTrue;
+        } else {
+            burst.isTrue = burst.isFalse;
         }
 
         fsm.enabled = true;
     }
 
     /// <summary>
-    /// Sets the animation strings for volt/non-volt to the same value, depending on the volt status
+    /// Sets the animation strings for volt/non-volt to the same value, depending on the volt status.
     /// </summary>
-    /// <param name="fsm">The FSM of the nail</param>
-    /// <param name="isVolt">If the volt filament effect should be used</param>
-    /// <param name="state">The name of the state to change</param>
-    /// <param name="index">The index of the action</param>
+    /// <param name="fsm">The FSM of the nail.</param>
+    /// <param name="isVolt">Whether the volt filament effect should be used.</param>
+    /// <param name="state">The name of the state to change.</param>
+    /// <param name="index">The index of the action.</param>
     private static void SetVolt(PlayMakerFSM fsm, bool isVolt, string state, int index) {
         // Get the consumer of the volt state
         var boolToString = fsm.GetAction<ConvertBoolToString>(state, index);
@@ -419,12 +420,12 @@ internal class PaleNails : BaseSilkSkill {
     }
 
     /// <summary>
-    /// Gets the antic effect for summoning nails
+    /// Gets the antic effect for summoning nails.
     /// </summary>
-    /// <param name="playerObject">The player summoning nails</param>
-    /// <param name="antic">The antic, if found</param>
-    /// <returns>true if the antic was found</returns>
-    private bool TryGetAntic(GameObject playerObject, [MaybeNullWhen(false)] out GameObject antic) {
+    /// <param name="playerObject">The player summoning nails.</param>
+    /// <param name="antic">The antic, if found.</param>
+    /// <returns>True if the antic was found, otherwise false.</returns>
+    private static bool TryGetAntic(GameObject playerObject, [MaybeNullWhen(false)] out GameObject antic) {
         // Find existing first
         var effects = playerObject.FindGameObjectInChildren("Effects");
         if (effects == null) {
@@ -456,11 +457,11 @@ internal class PaleNails : BaseSilkSkill {
     }
 
     /// <summary>
-    /// Encodes a target object's position into a byte[].
+    /// Encodes a target object's position into a byte array.
     /// Also includes the volt filament status and if the target is a player or not.
     /// </summary>
-    /// <param name="target">The target of a nail</param>
-    /// <returns>The bytes to send over the network</returns>
+    /// <param name="target">The target of a nail.</param>
+    /// <returns>The bytes to send over the network.</returns>
     public static byte[] EncodeTargetInfo(GameObject target) {
         var position = target.transform.position;
         var isPlayer = target.GetComponent<CoroutineCancelComponent>() != null;
@@ -472,21 +473,21 @@ internal class PaleNails : BaseSilkSkill {
         // Split shorts into bytes
         return [
             GetEffectFlags()[0], // include volt status
-            (byte)(x & 0xFF),
-            (byte)(x >> 8),
-            (byte)(y & 0xFF),
-            (byte)(y >> 8),
-            (byte)(isPlayer ? 1 : 0)
+            (byte) (x & 0xFF),
+            (byte) (x >> 8),
+            (byte) (y & 0xFF),
+            (byte) (y >> 8),
+            (byte) (isPlayer ? 1 : 0)
         ];
 
     }
 
     /// <summary>
-    /// Converts a byte[] to information about a nail target
+    /// Converts a byte array to information about a nail target.
     /// </summary>
-    /// <param name="info">The effect info received over the network</param>
+    /// <param name="info">The effect info received over the network.</param>
     /// <returns>The information about the target, or null if no target.</returns>
-    public static NailTarget? DecodeTargetInfo(byte[]? info) {
+    private static NailTarget? DecodeTargetInfo(byte[]? info) {
         if (info == null || info.Length < 6) return null;
 
         var isVolt = info[0] == 1;
@@ -502,26 +503,32 @@ internal class PaleNails : BaseSilkSkill {
 
         return new NailTarget {
             IsPlayer = isPlayer,
-            IsVolt = isVolt,
             Position = position,
+            IsVolt = isVolt
         };
     }
 
     /// <summary>
-    /// Finds the target of a nail. If a suitable enemy or player wasn't found, the nails will target a new object in the given position.
+    /// Finds the target of a nail. If a suitable enemy or player wasn't found, the nails will target a new object
+    /// in the given position.
     /// </summary>
-    /// <param name="target">The target to find</param>
-    /// <returns>The target object</returns>
-    public GameObject FindTarget(NailTarget target) {
+    /// <param name="target">The target to find.</param>
+    /// <returns>The target object.</returns>
+    private static GameObject FindTarget(NailTarget target) {
         // Find all players and enemies within 2.5 units of the target
         var mask = LayerMask.GetMask("Player", "Default", "Enemies");
+
+        // ReSharper disable once Unity.PreferNonAllocApi
+        // Non-alloc version not preferred, because this method is not called frequently enough
         var inside = Physics2D.OverlapBoxAll(target.Position, new Vector2(2.5f, 2.5f), 0, mask);
 
         // Prioritize player
         if (target.IsPlayer) {
-            // CoroutineCancelComponent is on all player objects and nothing else.
-            // May be a good idea to create a custom component specifically for identifying players.
-            var player = inside.FirstOrDefault(obj => (bool)obj.GetComponent<HeroController>() || (bool)obj.GetComponent<CoroutineCancelComponent>());
+            // CoroutineCancelComponent is on all player objects and nothing else
+            // It may be a good idea to create a custom component specifically for identifying players
+            var player = inside.FirstOrDefault(obj => 
+                (bool) obj.GetComponent<HeroController>() || (bool) obj.GetComponent<CoroutineCancelComponent>()
+            );
             if (player) {
                 return player.gameObject;
             }
@@ -534,21 +541,22 @@ internal class PaleNails : BaseSilkSkill {
         }
 
         // Otherwise just create a placeholder that expires
-        var targetObj = new GameObject();
-        targetObj.transform.position = target.Position;
+        var targetObj = new GameObject {
+            transform = {
+                position = target.Position
+            }
+        };
         targetObj.DestroyAfterTime(5);
 
         return targetObj;
     }
 
     /// <summary>
-    /// Information about where/what a nail is targeting
+    /// Information about where/what a nail is targeting.
     /// </summary>
-    internal struct NailTarget {
+    private struct NailTarget {
         public Vector2 Position;
-
         public bool IsPlayer;
-
         public bool IsVolt;
     }
 }

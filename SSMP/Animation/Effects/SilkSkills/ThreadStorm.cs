@@ -10,8 +10,10 @@ using Object = UnityEngine.Object;
 
 namespace SSMP.Animation.Effects.SilkSkills;
 
+/// <summary>
+/// Effect class for the Thread Storm Silk Skill.
+/// </summary>
 internal class ThreadStorm : BaseSilkSkill {
-
     /// <summary>
     /// A reference for players currently extending their thread storms.
     /// Used to prevent the effect from disappearing early.
@@ -39,11 +41,11 @@ internal class ThreadStorm : BaseSilkSkill {
     }
 
     /// <summary>
-    /// Plays the main loop of the Thread Storm attack
+    /// Plays the main loop of the Thread Storm attack.
     /// </summary>
-    /// <param name="playerObject">The player object that used the attack</param>
-    /// <param name="initial">If the extension is part of the original animation</param>
-    private IEnumerator PlayStormExtension(GameObject playerObject, bool initial = false) {
+    /// <param name="playerObject">The player object that used the attack.</param>
+    /// <param name="initial">Whether the extension is part of the original animation.</param>
+    private static IEnumerator PlayStormExtension(GameObject playerObject, bool initial = false) {
         if (!TryGetThreadStorm(playerObject, out var threadStorm)) {
             yield break;
         }
@@ -65,7 +67,7 @@ internal class ThreadStorm : BaseSilkSkill {
         }
 
         // Play audio
-        var fsm = GetSkillFSM();
+        var fsm = GetSkillFsm();
         var extendAudio = fsm.GetFirstAction<AudioPlaySimple>("Extend");
         if (extendAudio.oneShotClip.Value is AudioClip clip) {
             AudioUtil.PlayAudio(clip, playerObject);
@@ -77,11 +79,11 @@ internal class ThreadStorm : BaseSilkSkill {
     }
 
     /// <summary>
-    /// Initializes and activates the Thread Storm attack, setting up sub-effects
+    /// Initializes and activates the Thread Storm attack, setting up sub-effects.
     /// </summary>
     /// <param name="playerObject">The player object that used the attack.</param>
-    /// <param name="isVolt">Determines if the volt filament effect should be enabled.</param>
-    /// <param name="isShaman">Determines if the shaman crest effect should be displayed.</param>
+    /// <param name="isVolt">Whether the volt filament effect should be enabled.</param>
+    /// <param name="isShaman">Whether the shaman crest effect should be displayed.</param>
     private IEnumerator PlayStormSetup(GameObject playerObject, bool isVolt, bool isShaman) {
         if (!TryGetThreadStorm(playerObject, out var threadStorm)) {
             yield break;
@@ -124,18 +126,18 @@ internal class ThreadStorm : BaseSilkSkill {
     }
 
     /// <summary>
-    /// Animates the thread storm scale back to default
+    /// Animates the thread storm scale back to default.
     /// </summary>
-    /// <param name="ball">The "ball" child on the thread storm object</param>
+    /// <param name="ball">The "ball" child on the thread storm object.</param>
     private static void AnimateScaleReset(GameObject ball) {
         ball.transform.ScaleTo(MonoBehaviourUtil.Instance, new Vector3(1.7f, 1.7f, 1), 0.1f);
     }
 
     /// <summary>
-    /// Stops the effect if no more extensions have been received
+    /// Stops the effect if no more extensions have been received.
     /// </summary>
-    /// <param name="playerObject">The player object that used the attack</param>
-    /// <param name="threadStorm">The thread storm effect object</param>
+    /// <param name="playerObject">The player object that used the attack.</param>
+    /// <param name="threadStorm">The thread storm effect object.</param>
     private static void AttemptStop(GameObject playerObject, GameObject threadStorm) {
         // Decrement extension count
         var playerId = playerObject.GetInstanceID();
@@ -151,15 +153,15 @@ internal class ThreadStorm : BaseSilkSkill {
         ForceStop(threadStorm);
 
         // Play ending audio
-        var fsm = GetSkillFSM();
+        var fsm = GetSkillFsm();
         var endAudio = fsm.GetFirstAction<PlayAudioEvent>("A Sphere End");
         AudioUtil.PlayAudio(endAudio, playerObject);
     }
 
     /// <summary>
-    /// Forces the thread storm to stop
+    /// Forces the thread storm to stop.
     /// </summary>
-    /// <param name="threadStorm">The thread storm effect's object</param>
+    /// <param name="threadStorm">The thread storm effect's object.</param>
     private static void ForceStop(GameObject threadStorm) {
         var audio = threadStorm.GetComponent<AudioSource>();
         audio.Stop();
@@ -167,11 +169,11 @@ internal class ThreadStorm : BaseSilkSkill {
     }
 
     /// <summary>
-    /// Gets or creates the Thread Storm effect
+    /// Gets or creates the Thread Storm effect.
     /// </summary>
-    /// <param name="playerObject">The object of the player that used the attack</param>
-    /// <param name="threadStorm">The found or created Thread Storm effect object</param>
-    /// <returns>false if threadStorm could not be created</returns>
+    /// <param name="playerObject">The object of the player that used the attack.</param>
+    /// <param name="threadStorm">The found or created Thread Storm effect object.</param>
+    /// <returns>True if threadStorm was found or created, otherwise false.</returns>
     private static bool TryGetThreadStorm(
         GameObject playerObject,
         [MaybeNullWhen(false)] out GameObject threadStorm
@@ -204,7 +206,12 @@ internal class ThreadStorm : BaseSilkSkill {
                 // Copy particles
                 var preParticles = runeEffect.runeSpawnEffect;
                 if (preParticles != null) {
-                    var postParticles = EffectUtils.SpawnGlobalPoolObject(preParticles, shamanRune.transform, 0, true);
+                    var postParticles = EffectUtils.SpawnGlobalPoolObject(
+                        preParticles, 
+                        shamanRune.transform, 
+                        0, 
+                        true
+                    );
                     if (postParticles) {
                         postParticles.transform.localScale = new Vector3(3.5f, 3.5f, 1);
                     }
