@@ -293,7 +293,6 @@ internal class MapManager : IMapManager {
         // Otherwise, we have opened the map
         _displayingIcons = true;
         UpdateMapIconsActive();
-        RetryDeferredIcons();
     }
 
     /// <summary>
@@ -303,17 +302,6 @@ internal class MapManager : IMapManager {
         foreach (var mapEntry in _mapEntries.Values) {
             if (mapEntry.HasMapIcon && mapEntry.GameObject != null) {
                 mapEntry.GameObject.SetActive(_displayingIcons);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Retry creating map icons for any player that has a map icon but no icon object yet.
-    /// </summary>
-    private void RetryDeferredIcons() {
-        foreach (var (id, entry) in _mapEntries) {
-            if (entry.HasMapIcon && entry.GameObject == null) {
-                CreatePlayerIcon(id, entry.Position);
             }
         }
     }
