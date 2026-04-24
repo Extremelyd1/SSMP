@@ -106,9 +106,8 @@ internal class MapManager : IMapManager {
             if (!_serverSettings.OnlyBroadcastMapIconWithCompass) {
                 hasMapIcon = false;
             } else {
-                // We do not always show map icons, but only when we are wearing the compass
-                // So we need to check whether we are wearing compass
-                if (Gameplay.CompassTool && Gameplay.CompassTool.IsEquipped) {
+                // OnlyBroadcastMapIconWithCompass: suppress unless the compass tool exists and is equipped.
+                if (!Gameplay.CompassTool || !Gameplay.CompassTool.IsEquipped) {
                     hasMapIcon = false;
                 }
             }
