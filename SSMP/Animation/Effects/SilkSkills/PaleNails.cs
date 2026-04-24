@@ -490,8 +490,6 @@ internal class PaleNails : BaseSilkSkill {
     private static NailTarget? DecodeTargetInfo(byte[]? info) {
         if (info == null || info.Length < 6) return null;
 
-        var isVolt = info[0] == 1;
-
         // Convert two bytes to ushorts, then to floats.
         // Offset to restore the range to a short.
         var x = (float) BitConverter.ToUInt16([info[1], info[2]], 0) - PositionOffset;
@@ -503,8 +501,7 @@ internal class PaleNails : BaseSilkSkill {
 
         return new NailTarget {
             IsPlayer = isPlayer,
-            Position = position,
-            IsVolt = isVolt
+            Position = position
         };
     }
 
@@ -557,6 +554,5 @@ internal class PaleNails : BaseSilkSkill {
     private struct NailTarget {
         public Vector2 Position;
         public bool IsPlayer;
-        public bool IsVolt;
     }
 }

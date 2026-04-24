@@ -43,7 +43,7 @@ internal abstract class BaseSilkSkill : DamageAnimationEffect {
     /// <param name="effectInfo">The effect info sent with the animation.</param>
     /// <returns>True if the player used Volt Filament, otherwise false.</returns>
     protected static bool IsVolt(byte[]? effectInfo) {
-        return effectInfo is [1];
+        return effectInfo?.Length > 0 && effectInfo[0] == 1;
     }
 
     /// <summary>
