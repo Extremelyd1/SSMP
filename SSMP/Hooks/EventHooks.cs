@@ -89,10 +89,6 @@ public static class EventHooks {
     /// Hook for GameMap.CloseQuickMap.
     /// </summary>
     private static Hook? _gameMapCloseQuickMapHook;
-    /// <summary>
-    /// Hook for InventoryWideMap.UpdatePositions.
-    /// </summary>
-    private static Hook? _inventoryWideMapUpdatePositionsHook;
 
     /// <summary>
     /// Hook for ToolItemManager.SetEquippedCrest.
@@ -185,10 +181,6 @@ public static class EventHooks {
     /// Event that is called when GameMap.CloseQuickMap is called.
     /// </summary>
     public static event Action<GameMap>? GameMapCloseQuickMap;
-    /// <summary>
-    /// Event that is called when InventoryWideMap.UpdatePositions is called.
-    /// </summary>
-    public static event Action<InventoryWideMap>? InventoryWideMapUpdatePositions;
 
     /// <summary>
     /// Event that is called when ToolItemManager.SetEquippedCrest is called.
@@ -318,10 +310,6 @@ public static class EventHooks {
         _gameMapCloseQuickMapHook = new Hook(
             typeof(GameMap).GetMethod(nameof(GameMap.CloseQuickMap)),
             OnGameMapCloseQuickMap
-        );
-        _inventoryWideMapUpdatePositionsHook = new Hook(
-            typeof(InventoryWideMap).GetMethod("UpdatePositions", BindingFlags),
-            OnInventoryWideMapUpdatePositions
         );
 
         _toolItemManagerSetEquippedCrestHook = new Hook(
@@ -497,12 +485,6 @@ public static class EventHooks {
         orig(self);
 
         GameMapCloseQuickMap?.Invoke(self);
-    }
-
-    private static void OnInventoryWideMapUpdatePositions(Action<InventoryWideMap> orig, InventoryWideMap self) {
-        orig(self);
-
-        InventoryWideMapUpdatePositions?.Invoke(self);
     }
 
     private static void OnToolItemManagerSetEquippedCrest(Action<string> orig, string crestId) {

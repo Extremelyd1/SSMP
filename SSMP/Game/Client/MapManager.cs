@@ -75,9 +75,6 @@ internal class MapManager : IMapManager {
 
         // Register when the player opens their map, which is when the compass position is calculated
         EventHooks.GameMapPositionCompassAndCorpse += OnPositionCompass;
-
-        // Register when the wide inventory map updates positions, so remote icons are shown there too
-        EventHooks.InventoryWideMapUpdatePositions += OnInventoryWideMapUpdatePositions;
     }
 
     /// <summary>
@@ -89,8 +86,6 @@ internal class MapManager : IMapManager {
         EventHooks.GameMapCloseQuickMap -= OnCloseQuickMap;
 
         EventHooks.GameMapPositionCompassAndCorpse -= OnPositionCompass;
-
-        EventHooks.InventoryWideMapUpdatePositions -= OnInventoryWideMapUpdatePositions;
     }
 
     /// <summary>
@@ -296,15 +291,6 @@ internal class MapManager : IMapManager {
     /// <param name="gameMap">The GameMap instance.</param>
     private void OnPositionCompass(GameMap gameMap) {
         // Otherwise, we have opened the map
-        _displayingIcons = true;
-        UpdateMapIconsActive();
-        RetryDeferredIcons();
-    }
-
-    /// <summary>
-    /// Callback method on the InventoryWideMap#UpdatePositions method.
-    /// </summary>
-    private void OnInventoryWideMapUpdatePositions(InventoryWideMap _) {
         _displayingIcons = true;
         UpdateMapIconsActive();
         RetryDeferredIcons();
