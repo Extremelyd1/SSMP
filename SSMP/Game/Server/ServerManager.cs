@@ -518,26 +518,6 @@ internal abstract class ServerManager : IServerManager {
                     SkinId = otherPlayerData.SkinId,
                     AnimationClipId = otherPlayerData.AnimationId
                 });
-
-                // Also send the current map icon state of this peer to the entering client.
-                if (otherPlayerData.HasMapIcon) {
-                    _netServer.GetUpdateManagerForClient(playerData.Id)?
-                        .UpdatePlayerMapIcon(otherPlayerData.Id, true);
-                    if (otherPlayerData.MapPosition != null) {
-                        _netServer.GetUpdateManagerForClient(playerData.Id)?
-                            .UpdatePlayerMapPosition(otherPlayerData.Id, otherPlayerData.MapPosition);
-                    }
-                }
-
-                // Also send the entering client's current map icon state to this peer.
-                if (playerData.HasMapIcon) {
-                    _netServer.GetUpdateManagerForClient(otherPlayerData.Id)?
-                        .UpdatePlayerMapIcon(playerData.Id, true);
-                    if (playerData.MapPosition != null) {
-                        _netServer.GetUpdateManagerForClient(otherPlayerData.Id)?
-                            .UpdatePlayerMapPosition(playerData.Id, playerData.MapPosition);
-                    }
-                }
             }
         }
 
