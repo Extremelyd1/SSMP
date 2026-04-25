@@ -1,7 +1,6 @@
 using System;
 using System.Buffers;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -199,54 +198,57 @@ internal class DtlsClient {
     /// Continuously tries to receive data from the socket until cancellation is requested.
     /// </summary>
     /// <param name="cancellationToken">The cancellation token to cancel the loop.</param>
-    private void SocketReceiveLoop(CancellationToken cancellationToken)
-    {
-        if (_socket == null)
-        {
+    private void SocketReceiveLoop(CancellationToken cancellationToken) {
+        if (_socket == null) {
             Logger.Error("Socket was null when starting receive loop");
             return;
         }
 
-        if (_clientDatagramTransport == null)
-        {
+        if (_clientDatagramTransport == null) {
             Logger.Error("ClientDatagramTransport was null when starting receive loop");
             return;
         }
 
         var rentedBuffer = ArrayPool<byte>.Shared.Rent(MaxPacketSize);
-        try
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                EndPoint endPoint = new IPEndPoint(IPAddress.Any, 0);
-                int numReceived;
+        while (!cancellationToken.IsCancellationRequested) {
+            EndPoint endPoint = new IPEndPoint(IPAddress.Any, 0);
+            int numReceived;
 
-                try { numReceived = _socket.ReceiveFrom(rentedBuffer, SocketFlags.None, ref endPoint); }
-                catch (SocketException e) when (e.SocketErrorCode is SocketError.Interrupted or SocketError.ConnectionReset) { break; }
-                catch (SocketException e) when (e.SocketErrorCode == SocketError.TimedOut) { continue; }
-                catch (SocketException e) { Logger.Error($"Unexpected socket error in receive loop: {e.SocketErrorCode}"); break; }
-                catch (ObjectDisposedException) { break; }
-                
-                // TODO: If SocketReceiveLoop shows up as an allocation hotspot in profiling, consider reusable buffers
-                // TODO: (for example ArrayPool<byte> or an owned-memory pattern). For now we copy into a dedicated array
-                // TODO: because BouncyCastle's buffer ownership and lifetime expectations are not explicit enough to safely reuse buffers.
-                var packetBuffer = new byte[numReceived];
-                Array.Copy(rentedBuffer, 0, packetBuffer, 0, numReceived);
+            try {
+                numReceived = _socket.ReceiveFrom(rentedBuffer, SocketFlags.None, ref endPoint);
+            } catch (SocketException e) when (
+                e.SocketErrorCode is SocketError.Interrupted or SocketError.ConnectionReset
+            ) {
+                break;
+            } catch (SocketException e) when (e.SocketErrorCode == SocketError.TimedOut) {
+                continue;
+            } catch (SocketException e) {
+                Logger.Error($"Unexpected socket error in receive loop: {e.SocketErrorCode}");
+                break;
+            } catch (ObjectDisposedException) {
+                break;
+            }
 
-                try
-                {
-                    var added = _clientDatagramTransport.TryEnqueueReceivedData(
-                        packetBuffer,
-                        numReceived,
-                        cancellationToken
-                    );
+            // TODO: If SocketReceiveLoop shows up as an allocation hotspot in profiling, consider reusable buffers
+            // TODO: (for example ArrayPool<byte> or an owned-memory pattern). For now we copy into a dedicated array
+            // TODO: because BouncyCastle's buffer ownership and lifetime expectations are not explicit enough to safely reuse buffers.
+            var packetBuffer = new byte[numReceived];
+            Array.Copy(rentedBuffer, 0, packetBuffer, 0, numReceived);
 
-                    if (!added) break;
-                }
-                catch (OperationCanceledException) { break; }
+            try {
+                var added = _clientDatagramTransport.TryEnqueueReceivedData(
+                    packetBuffer,
+                    numReceived,
+                    cancellationToken
+                );
+
+                if (!added) break;
+            } catch (OperationCanceledException) {
+                break;
             }
         }
-        finally { ArrayPool<byte>.Shared.Return(rentedBuffer); }
+        
+        ArrayPool<byte>.Shared.Return(rentedBuffer);
     }
 
     /// <summary>

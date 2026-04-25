@@ -21,7 +21,7 @@ internal abstract class UdpDatagramTransport : DatagramTransport {
     /// Cached fully qualified type name used in diagnostics so logging does not repeatedly resolve it via reflection.
     /// </summary>
     private const string TypeName = nameof(UdpEncryptedTransport);
-    
+
     /// <summary>
     /// A thread-safe queue of complete UDP datagrams handed off from the socket receive loop to DTLS.
     /// Each entry represents exactly one received datagram and must never be treated as a stream fragment.
@@ -55,16 +55,14 @@ internal abstract class UdpDatagramTransport : DatagramTransport {
     /// <param name="len">Usable capacity of <paramref name="buf"/> starting at <paramref name="off"/>.</param>
     /// <param name="waitMillis">Milliseconds to block waiting for a datagram before timing out.</param>
     /// <returns>
-    /// Bytes copied into <paramref name="buf"/>, or <c>-1</c> if the wait timed out or the transport
+    /// Number of bytes copied into <paramref name="buf"/>, or <c>-1</c> if the wait timed out or the transport
     /// was canceled/disposed.
     /// </returns>
-    public int Receive(byte[] buf, int off, int len, int waitMillis)
-    {
+    public int Receive(byte[] buf, int off, int len, int waitMillis) {
         if (_cancellationTokenSource.IsCancellationRequested)
             return -1;
 
-        try
-        {
+        try {
             if (!ReceivedDataCollection.TryTake(out var data, waitMillis, _cancellationTokenSource.Token))
                 return -1;
 
@@ -83,11 +81,15 @@ internal abstract class UdpDatagramTransport : DatagramTransport {
             var bytesToCopy = System.Math.Min(data.Length, len);
             Array.Copy(data.Buffer, 0, buf, off, bytesToCopy);
             return bytesToCopy;
+        } catch (OperationCanceledException) {
+            return -1;
+        } catch (ArgumentNullException) {
+            // Mono bug: BlockingCollection can throw ArgumentNullException instead of ObjectDisposedException
+            // when disposed during TryTake
+            return -1;
+        } catch (ObjectDisposedException) {
+            return -1;
         }
-        catch (OperationCanceledException)  { return -1; }
-        /* Mono bug: BlockingCollection can throw ArgumentNullException instead of ObjectDisposedException when disposed during TryTake. */
-        catch (ArgumentNullException)       { return -1; }
-        catch (ObjectDisposedException)     { return -1; }
     }
 
     /// <summary>
@@ -99,12 +101,15 @@ internal abstract class UdpDatagramTransport : DatagramTransport {
     /// <param name="cancellationToken">Cancellation token for the enqueue operation.</param>
     /// <param name="source">Human-readable source context for diagnostics.</param>
     /// <returns><see langword="true"/> if the datagram was enqueued; otherwise <see langword="false"/>.</returns>
-    public bool TryEnqueueReceivedData(byte[] buffer, int length, CancellationToken cancellationToken, [CallerMemberName] string source = "")
-    {
-        // Unigned cast collapses the negative-length and exceeds-buffer checks into one branch.
+    public bool TryEnqueueReceivedData(
+        byte[] buffer, 
+        int length, 
+        CancellationToken cancellationToken, 
+        [CallerMemberName] string source = ""
+    ) {
+        // Unsigned cast collapses the negative-length and exceeds-buffer checks into one branch.
         // A negative length wraps to a large uint, which is always bigger than the buffer.Length.
-        if ((uint)length > (uint)buffer.Length)
-        {
+        if ((uint) length > (uint) buffer.Length) {
             Logger.Error(
                 $"Refusing to enqueue datagram with invalid length in {TypeName}. " +
                 $"source={source}, length={length}, bufferLength={buffer.Length}"
@@ -113,8 +118,7 @@ internal abstract class UdpDatagramTransport : DatagramTransport {
         }
 
         var receiveLimit = GetReceiveLimit();
-        if (length > receiveLimit)
-        {
+        if (length > receiveLimit) {
             Logger.Error(
                 $"Refusing to enqueue datagram larger than receive limit in {TypeName}. " +
                 $"source={source}, length={length}, receiveLimit={receiveLimit}"
@@ -122,15 +126,16 @@ internal abstract class UdpDatagramTransport : DatagramTransport {
             return false;
         }
 
-        try
-        {
+        try {
             ReceivedDataCollection.Add(new ReceivedData { Buffer = buffer, Length = length }, cancellationToken);
             return true;
+        } catch (OperationCanceledException) {
+            return false;
+        } catch (InvalidOperationException) {
+            return false;
         }
-        catch (OperationCanceledException) { return false; }
-        catch (InvalidOperationException)  { return false; }
     }
-    
+
     /// <summary>
     /// The maximum number of bytes to receive in a single call to <see cref="Receive"/>.
     /// </summary>

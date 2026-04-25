@@ -263,7 +263,7 @@ internal class DtlsServer {
             if (TryRouteToExistingConnection(connInfo, ipEndPoint, buffer, numReceived, cancellationToken))
                 return;
 
-            // Connection was in a terminal or broken state -> evict and fall through to treat as new.
+            // Connection was in a terminal or broken state -> evict and fall through to treat as new
             _connections.TryRemove(ipEndPoint, out _);
 
             if (connInfo.Client != null)
@@ -295,8 +295,9 @@ internal class DtlsServer {
                     if (connInfo.DatagramTransport.TryEnqueueReceivedData(
                             buffer, numReceived, cancellationToken,
                             $"ProcessReceivedPacket(handshaking, endpoint={ipEndPoint})"
-                        ))
+                    )) {
                         return true;
+                    }
 
                     Logger.Warn($"Failed to enqueue datagram for handshaking connection {ipEndPoint}. Evicting.");
                     return false;
@@ -305,12 +306,12 @@ internal class DtlsServer {
                     if (!connInfo.DatagramTransport.TryEnqueueReceivedData(
                             buffer, numReceived, cancellationToken,
                             $"ProcessReceivedPacket(connected, endpoint={ipEndPoint})"
-                        ))
+                    )) {
                         Logger.Warn($"Failed to enqueue datagram for connected client {ipEndPoint}. Packet dropped.");
+                    }
 
                     // Enqueue failure on a connected client is non-fatal -> keep the connection.
                     return true;
-
                 default:
                     return false;
             }
@@ -344,8 +345,11 @@ internal class DtlsServer {
         }
 
         if (!transport.TryEnqueueReceivedData(
-                buffer, numReceived, cancellationToken, $"ProcessReceivedPacket(new-connection, endpoint={ipEndPoint})"
-            )) {
+            buffer, 
+            numReceived, 
+            cancellationToken, 
+            $"ProcessReceivedPacket(new-connection, endpoint={ipEndPoint})"
+        )) {
             Logger.Warn($"Failed to enqueue first datagram for new connection {ipEndPoint}. Aborting handshake.");
             _connections.TryRemove(ipEndPoint, out _);
             transport.Dispose();
@@ -556,4 +560,3 @@ internal class DtlsServer {
         public Thread? ReceiveThread { get; set; }
     }
 }
-
