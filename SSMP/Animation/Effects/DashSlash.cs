@@ -109,7 +109,7 @@ internal class DashSlash : SlashBase {
             ApplyLongclawMultiplier(longclaw, SlashType.Dash, slashObj, scale);
             
             if (ServerSettings.IsPvpEnabled && ShouldDoDamage) {
-                AddDamageHeroComponent(slashObj);
+                AddDamageHeroComponent(slashObj, ServerSettings.NeedleDamage);
             }
 
             // TODO: Nail imbuement (see OnPlaySlash in NailAttackBase.cs)

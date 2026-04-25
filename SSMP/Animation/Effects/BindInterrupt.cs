@@ -56,25 +56,23 @@ internal class BindInterrupt : Bind {
 
         // Remove haze and camera controls
         burst.DestroyGameObjectInChildren("haze2");
-
-        var shaker = burst.GetComponentInChildren<CameraControlAnimationEvents>();
-        if (shaker != null) {
-            Object.DestroyImmediate(shaker);
-        }
+        burst.DestroyComponentsInChildren<CameraControlAnimationEvents>();
     }
 
     /// <summary>
     /// Creates a Warding Bell explosion
     /// </summary>
     private void PlayBellExplode(GameObject bindEffects) {
-        Logger.Debug("Playing Bell Burst");
-        
         // Locate warding bell FSM
         var bellFsm = HeroController.instance.bellBindFSM;
 
         if (bellFsm == null) {
             Logger.Warn("Unable to find warding bell fsm");
             return;
+        }
+
+        if (bellFsm.FsmStates.Length == 1) {
+            bellFsm.Init();
         }
 
         var stateName = "Burst";
@@ -92,18 +90,14 @@ internal class BindInterrupt : Bind {
 
 
         // Remove camera control and haze
-        var shaker = bindBell.GetComponentInChildren<CameraControlAnimationEvents>();
-        if (shaker != null) {
-            Object.DestroyImmediate(shaker);
-        }
-
+        bindBell.DestroyComponentsInChildren<CameraControlAnimationEvents>();
         bindBell.DestroyGameObjectInChildren("haze2 (1)");
 
         // Add hitbox if appropriate
         if (ServerSettings.IsPvpEnabled && ShouldDoDamage) {
             var damager = bindBell.FindGameObjectInChildren("damager");
             if (damager != null) {
-                AddDamageHeroComponent(damager);
+                AddDamageHeroComponent(damager, ServerSettings.WardingBellDamage);
             } else {
                 Logger.Warn("Unable to add damager to warding bell burst");
             }

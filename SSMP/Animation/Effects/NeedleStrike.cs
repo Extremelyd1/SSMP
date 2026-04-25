@@ -131,7 +131,7 @@ internal class NeedleStrike : DamageAnimationEffect {
             return;
         }
 
-        int? damage = ServerSettings.IsPvpEnabled && ShouldDoDamage ? 1 : null;
+        int? damage = ServerSettings.IsPvpEnabled && ShouldDoDamage ? ServerSettings.NeedleStrikeDamage : null;
 
         Logger.Info($"NeedleStrike animation effect for crest: {crestType}");
 

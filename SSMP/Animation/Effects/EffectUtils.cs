@@ -16,6 +16,7 @@ internal static class EffectUtils {
         var recycler = obj.GetComponent<AutoRecycleSelf>();
         if (recycler != null) {
             // Stop listeners before destroying
+            AutoRecycleSelf.activeRecyclers.Remove(recycler);
             recycler.recycleTimerRunning = false;
             recycler.subbed = false;
 
@@ -64,6 +65,8 @@ internal static class EffectUtils {
         if (!keepParent) {
             newObj.transform.SetParent(null);
             newObj.transform.position = spawnLocation.position;
+        } else {
+            newObj.transform.localPosition = Vector3.zero;
         }
 
         newObj.SetActive(true);

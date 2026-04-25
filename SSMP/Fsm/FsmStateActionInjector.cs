@@ -5,23 +5,40 @@ using SSMP.Logging;
 
 namespace SSMP.Fsm;
 
+/// <summary>
+/// An action injected into an FSM to act as a hook for entering a state
+/// </summary>
 internal sealed class FsmStateActionInjector : FsmStateAction {
-    private static Action? _onUninject;
+    /// <summary>
+    /// An action to trigger the removal of all injected actions
+    /// </summary>
+    private static Action? _uninjectAll;
+
+    /// <summary>
+    /// The action to run when the state for this action is entered.
+    /// </summary>
     private Action<PlayMakerFSM>? _onStateEnter;
-    private FsmStateActionInjector(FsmState state, Action<PlayMakerFSM> onEnter) {
-        Init(state);
-        _onStateEnter = onEnter;
-        _onUninject += Uninject;
-    }
 
     /// <summary>
     /// Injects a delegate action into an FSM state
     /// </summary>
     private void DoInjection(int index) {
         var stateActions = State.Actions.ToList();
+
+        if (index < stateActions.Count) {
+            // Replace existing hooks with this one
+            var atIndex = stateActions[index];
+            if (atIndex is FsmStateActionInjector injector && injector.Name == Name) {
+                injector._onStateEnter = _onStateEnter;
+                return;
+            }
+        }
+
         stateActions.Insert(index, this);
         State.Actions = stateActions.ToArray();
         State.SaveActions();
+
+        _uninjectAll += Uninject;
     }
 
     /// <summary>
@@ -34,14 +51,14 @@ internal sealed class FsmStateActionInjector : FsmStateAction {
         State.SaveActions();
 
         _onStateEnter = null;
-        _onUninject -= Uninject;
+        _uninjectAll -= Uninject;
     }
 
     /// <inheritdoc/>
     public override void OnEnter() {
         if (_onStateEnter != null) {
             try {
-                _onStateEnter.Invoke(Fsm.FsmComponent);
+                _onStateEnter?.Invoke(Fsm.FsmComponent);
             } catch (Exception e) {
                 Logger.Error(e.ToString());
             }
@@ -55,13 +72,18 @@ internal sealed class FsmStateActionInjector : FsmStateAction {
     /// <param name="state">The FSM state into which the action will be injected.</param>
     /// <param name="onEnter">An action to execute when the state is entered.</param>
     /// <param name="actionIndex">The index at which to inject the action within the state's action list. Defaults to 0.</param>
+    /// <param name="name">A unique name for the injected FSM Action</param>
     /// <returns>The injected action.</returns>
-    public static FsmStateActionInjector Inject(FsmState state, Action<PlayMakerFSM> onEnter, int actionIndex = 0) {
+    public static FsmStateActionInjector Inject(FsmState state, Action<PlayMakerFSM> onEnter, int actionIndex = 0, string name = "Fsm Injection") {
         if (state == null) {
             throw new NullReferenceException("Received null state when injecting FSM");
         }
 
-        var action = new FsmStateActionInjector(state, onEnter);
+        var action = new FsmStateActionInjector {
+            State = state,
+            _onStateEnter = onEnter,
+            Name = name
+        };
         action.DoInjection(actionIndex);
 
         return action;
@@ -71,6 +93,6 @@ internal sealed class FsmStateActionInjector : FsmStateAction {
     /// Removes all injected FSM actions
     /// </summary>
     public static void UninjectAll() {
-        _onUninject?.Invoke();
+        _uninjectAll?.Invoke();
     }
 }

@@ -103,11 +103,7 @@ internal class BindBurst : Bind {
         }
 
         // Remove camera and haze components
-        var shaker = mirror.GetComponentInChildren<CameraControlAnimationEvents>();
-        if (shaker != null) {
-            Object.DestroyImmediate(shaker);
-        }
-
+        mirror.DestroyComponentsInChildren<CameraControlAnimationEvents>();
         mirror.DestroyGameObjectInChildren("haze2");
 
         return mirror;
@@ -148,7 +144,8 @@ internal class BindBurst : Bind {
 
             damager.layer = (int) GlobalEnums.PhysLayers.HERO_ATTACK;
 
-            var damageComponent = AddDamageHeroComponent(damager);
+            var damage = upgraded ? ServerSettings.ClawMirrorUpgradedDamage : ServerSettings.ClawMirrorDamage;
+            var damageComponent = AddDamageHeroComponent(damager, damage);
             damageComponent.hazardType = GlobalEnums.HazardType.EXPLOSION;
         }
     }
@@ -201,10 +198,7 @@ internal class BindBurst : Bind {
 
         // Remove camera controls if object was created
         if (effectWasCreated) {
-            var shaker = witchBind.GetComponent<CameraControlAnimationEvents>();
-            if (shaker != null) {
-                Object.DestroyImmediate(shaker);
-            }
+            witchBind.DestroyComponent<CameraControlAnimationEvents>();
         }
 
         // Toggle damage depending on if PVP is on or not

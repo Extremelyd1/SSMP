@@ -40,84 +40,69 @@ public interface IServerSettings {
     /// Whether skins are allowed.
     /// </summary>
     bool AllowSkins { get; }
-    
-    // /// <summary>
-    // /// Whether other player's attacks can be parried.
-    // /// </summary>
-    // public bool AllowParries { get; }
-    //
-    // /// <summary>
-    // /// The damage that nail swings from other players deal to the local player.
-    // /// </summary>
-    // public byte NailDamage { get; }
-    //
-    // /// <summary>
-    // /// The damage that the beam from Grubberfly's Elegy from other players deals to the local player.
-    // /// </summary>
-    // public byte GrubberflyElegyDamage { get; }
-    //
-    // /// <summary>
-    // /// The damage that Vengeful Spirit from other players deals to the local player.
-    // /// </summary>
-    // public byte VengefulSpiritDamage { get; }
-    //
-    // /// <summary>
-    // /// The damage that Shade Soul from other players deals to the local player.
-    // /// </summary>
-    // public byte ShadeSoulDamage { get; }
-    //
-    // /// <summary>
-    // /// The damage that Desolate Dive from other players deals to the local player.
-    // /// </summary>
-    // public byte DesolateDiveDamage { get; }
-    //
-    // /// <summary>
-    // /// The damage that Descending Dark from other players deals to the local player.
-    // /// </summary>
-    // public byte DescendingDarkDamage { get; }
-    //
-    // /// <summary>
-    // /// The damage that Howling Wraiths from other players deals to the local player.
-    // /// </summary>
-    // public byte HowlingWraithDamage { get; }
-    //
-    // /// <summary>
-    // /// The damage that Abyss Shriek from other players deals to the local player.
-    // /// </summary>
-    // public byte AbyssShriekDamage { get; }
-    //
-    // /// <summary>
-    // /// The damage that Great Slash from other players deals to the local player.
-    // /// </summary>
-    // public byte GreatSlashDamage { get; }
-    //
-    // /// <summary>
-    // /// The damage that Dash Slash from other players deals to the local player.
-    // /// </summary>
-    // public byte DashSlashDamage { get; }
-    //
-    // /// <summary>
-    // /// The damage that Cyclone Slash from other players deals to the local player.
-    // /// </summary>
-    // public byte CycloneSlashDamage { get; }
-    //
-    // /// <summary>
-    // /// The damage that the Spore Shroom cloud from other players deals to the local player.
-    // /// </summary>
-    // public byte SporeShroomDamage { get; }
-    //
-    // /// <summary>
-    // /// The damage that the Spore Shroom cloud with Defenders crest from other players deals to the local player.
-    // /// </summary>
-    // public byte SporeDungShroomDamage { get; }
-    //
-    // /// <summary>
-    // /// The damage that the activation of Thorns of Agony from other players deals to the local player.
-    // /// </summary>
-    // public byte ThornOfAgonyDamage { get; }
-    //
-    // /// <summary>
-    // /// The damage that a Sharp Shadow dash from others players deals to the local player.
-    // /// </summary>
-    // public byte SharpShadowDamage { get; }
+
+    /// <summary>
+    /// The number of masks of damage that a player's needle swing deals.
+    /// </summary>
+    byte NeedleDamage { get; }
+
+    /// <summary>
+    /// The number of masks of damage that Needle Strikes deal.
+    /// </summary>
+    byte NeedleStrikeDamage { get; }
+
+    /// <summary>
+    /// The number of extra half-masks of damage that silk skills with volt filament should deal.
+    /// </summary>
+    byte VoltFilamentDamage { get; }
+
+    /// <summary>
+    /// The number of extra half-masks of damage that silk skills on shaman crest should deal.
+    /// </summary>
+    byte ShamanDamage { get; }
+
+    /// <summary>
+    /// The number of masks of damage that Cross Stitch deals.
+    /// </summary>
+    byte CrossStitchDamage { get; }
+
+    /// <summary>
+    /// The number of masks of damage that Pale Nails deals.
+    /// </summary>
+    byte PaleNailsDamage { get; }
+
+    /// <summary>
+    /// The number of masks of damage that Rune Rage deals.
+    /// </summary>
+    byte RuneRageDamage { get; }
+
+    /// <summary>
+    /// The number of masks of damage that Sharpdart deals.
+    /// </summary>
+    byte SharpDartDamage { get; }
+
+    /// <summary>
+    /// The number of masks of damage that Silk Spear deals.
+    /// </summary>
+    byte SilkSpearDamage { get; }
+
+    /// <summary>
+    /// The number of masks of damage that Thread Storm deals.
+    /// </summary>
+    byte ThreadStormDamage { get; }
+
+    /// <summary>
+    /// The number of masks of damage that the Warding Bell deals.
+    /// </summary>
+    byte WardingBellDamage { get; }
+
+    /// <summary>
+    /// The number of masks of damage that the base Claw Mirror deals.
+    /// </summary>
+    byte ClawMirrorDamage { get; }
+
+    /// <summary>
+    /// The number of masks of damage that the upgraded Claw Mirror deals.
+    /// </summary>
+    byte ClawMirrorUpgradedDamage { get; }
 }

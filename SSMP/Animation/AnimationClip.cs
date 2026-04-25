@@ -143,6 +143,7 @@ internal enum AnimationClip {
     AirSphereRepeatAntic,
 
     SilkBossNeedleCast,
+    SilkBossNeedleFire,
 
     Taunt,
     TauntBack,
@@ -505,6 +506,7 @@ internal enum AnimationClip {
     /// </summary>
     AirSphereAttack,
     AirSphereEnd,
+    AirSphereRefresh,
     /// <summary>
     /// Sharpdart
     /// </summary>
@@ -521,6 +523,7 @@ internal enum AnimationClip {
     SilkBombAntic,
     SilkBombAnticQ,
     SilkBombLoop,
+    SilkBombLocations,
     SilkBombRecover,
     
     SitCraft,
