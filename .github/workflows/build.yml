@@ -23,7 +23,7 @@ jobs:
 
       - name: Pack NuGet
         working-directory: ./SSMP
-        run: dotnet pack -o SSMP/nuget/
+        run: dotnet pack -o nuget/
 
       # Upload SSMP artifact only for the Linux runner, since it is platform independent
       - name: Upload SSMP artifact
@@ -60,5 +60,5 @@ jobs:
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v7
         with:
-          path: nuget/*.nupkg
+          path: SSMP/nuget/*.nupkg
           archive: false
