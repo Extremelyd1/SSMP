@@ -22,7 +22,8 @@ jobs:
         run: dotnet build -c Release --verbosity normal
 
       - name: Pack NuGet
-        run: dotnet pack -o nuget/
+        working-directory: ./SSMP
+        run: dotnet pack -o SSMP/nuget/
 
       # Upload SSMP artifact only for the Linux runner, since it is platform independent
       - name: Upload SSMP artifact
