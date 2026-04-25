@@ -28,7 +28,7 @@ internal abstract class BaseSilkSkill : DamageAnimationEffect {
         var voltFilament = ToolItemManager.GetToolByName("Zap Imbuement");
 
         return [
-            (byte)(voltFilament.IsEquipped ? 1 : 0)
+            (byte) (voltFilament.IsEquipped ? 1 : 0)
         ];
     }
 

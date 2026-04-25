@@ -42,7 +42,9 @@ internal abstract class AnimationEffect : IAnimationEffect {
     }
 
     /// <summary>
-    /// "Hides" the player character by stopping its animation and setting its sprite to a small texture
+    /// "Hides" the player character by stopping its animation and setting its sprite to a small texture. Since the
+    /// sprite is overridden next time an animation is played, the player will be unhidden when we receive the next
+    /// animation for that player.
     /// </summary>
     /// <param name="playerObject">The player to be hidden.</param>
     protected static void HidePlayer(GameObject playerObject) {
