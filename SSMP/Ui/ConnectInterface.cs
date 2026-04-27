@@ -336,6 +336,13 @@ internal class ConnectInterface {
     private const string ErrorUnknown = "Failed to connect:\nUnknown reason";
 
     /// <summary>
+    /// Warning shown when matchmaking HTTP traffic and UDP discovery use different network paths.
+    /// </summary>
+    private const string ErrorSplitTunnelDetected =
+        "Failed to connect:\nMatchmaking detected split-tunneling or interfering network software. " +
+        "Ensure MMS and gameplay traffic use the same network path.";
+
+    /// <summary>
     /// Large blocking message shown when the client must update before using matchmaking.
     /// </summary>
     private const string MatchmakingUpdateRequiredText =
@@ -1269,6 +1276,11 @@ internal class ConnectInterface {
 
                 if (MmsClient.LastMatchmakingError == MatchmakingError.UpdateRequired) {
                     ActivateMatchmakingVersionBlock();
+                    yield break;
+                }
+
+                if (MmsClient.LastJoinFailureReason == "client_path_mismatch") {
+                    ShowFeedback(Color.red, ErrorSplitTunnelDetected);
                     yield break;
                 }
 

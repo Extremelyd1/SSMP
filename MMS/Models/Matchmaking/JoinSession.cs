@@ -32,6 +32,11 @@ public sealed class JoinSession {
     public int? ClientExternalPort { get; set; }
 
     /// <summary>
+    /// Indicates that the join is waiting for a fresh host mapping after requesting a host refresh.
+    /// </summary>
+    public bool AwaitingHostRefresh { get; set; }
+
+    /// <summary>
     /// The client WebSocket attached to this join attempt, if connected.
     /// </summary>
     public WebSocket? ClientWebSocket { get; set; }
