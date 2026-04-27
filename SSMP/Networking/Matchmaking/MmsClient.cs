@@ -56,10 +56,19 @@ internal sealed class MmsClient {
         int hostPort,
         bool isPublic = true,
         string gameVersion = "unknown",
-        PublicLobbyType lobbyType = PublicLobbyType.Matchmaking
+        PublicLobbyType lobbyType = PublicLobbyType.Matchmaking,
+        string? hostIpOverride = null,
+        string? hostLanIpOverride = null
     ) {
         ClearErrors();
-        var result = await HostSession.CreateLobbyAsync(hostPort, isPublic, gameVersion, lobbyType);
+        var result = await HostSession.CreateLobbyAsync(
+            hostPort,
+            isPublic,
+            gameVersion,
+            lobbyType,
+            hostIpOverride,
+            hostLanIpOverride
+        );
         LastMatchmakingError = result.error;
         return result.result;
     }

@@ -9,6 +9,7 @@ using SSMP.Networking.Matchmaking.Parsing;
 using SSMP.Networking.Matchmaking.Protocol;
 using SSMP.Networking.Matchmaking.Transport;
 using SSMP.Networking.Matchmaking.Utilities;
+using SSMP.Util;
 
 namespace SSMP.Networking.Matchmaking.Host;
 
@@ -102,7 +103,9 @@ internal sealed class MmsHostSessionService : IDisposable {
             int hostPort,
             bool isPublic,
             string gameVersion,
-            PublicLobbyType lobbyType
+            PublicLobbyType lobbyType,
+            string? hostIpOverride = null,
+            string? hostLanIpOverride = null
         ) {
         if (_disposed) throw new ObjectDisposedException(nameof(MmsHostSessionService));
 
@@ -115,8 +118,37 @@ internal sealed class MmsHostSessionService : IDisposable {
                 if (_hostToken != null) return ((null, null, null), MatchmakingError.NetworkFailure);
             }
 
+            var effectiveHostIpOverride = NetworkingUtil.NormalizeConfiguredIpv4(
+                hostIpOverride,
+                nameof(MmsHostSessionService),
+                nameof(hostIpOverride)
+            );
+            var effectiveHostLanIpOverride = NetworkingUtil.NormalizeConfiguredIpv4(
+                hostLanIpOverride,
+                nameof(MmsHostSessionService),
+                nameof(hostLanIpOverride)
+            );
+
+            if (effectiveHostIpOverride != null) {
+                Logger.Info($"MmsHostSessionService: Using HostIpOverride {effectiveHostIpOverride} for lobby creation.");
+                if (isPublic && NetworkingUtil.IsPrivateIpv4(effectiveHostIpOverride)) {
+                    Logger.Warn(
+                        $"MmsHostSessionService: Public lobby is advertising private HostIpOverride {effectiveHostIpOverride}. " +
+                        "This is intended for advanced lab setups and will break ordinary internet matchmaking."
+                    );
+                }
+            }
+
+            if (effectiveHostLanIpOverride != null)
+                Logger.Info($"MmsHostSessionService: Using HostLanIpOverride {effectiveHostLanIpOverride} for lobby creation.");
+
             var jsonString = MmsJsonParser.FormatCreateLobbyJson(
-                hostPort, isPublic, gameVersion, lobbyType, MmsUtilities.GetLocalIpAddress()
+                hostPort,
+                isPublic,
+                gameVersion,
+                lobbyType,
+                effectiveHostIpOverride,
+                effectiveHostLanIpOverride ?? MmsUtilities.GetLocalIpAddress()
             );
 
             var response = await MmsHttpClient.PostJsonAsync(

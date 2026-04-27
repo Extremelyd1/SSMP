@@ -6,6 +6,7 @@ using System.Threading;
 using SSMP.Logging;
 using SSMP.Networking.Client;
 using SSMP.Networking.Transport.Common;
+using SSMP.Util;
 
 namespace SSMP.Networking.Transport.HolePunch;
 
@@ -149,7 +150,7 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     /// Determines if the connection is LAN-based.
     /// </summary>
     private static bool IsLanConnection(string address) =>
-        address == LocalhostAddress || IsPrivateIp(address);
+        address == LocalhostAddress || NetworkingUtil.IsPrivateIpv4(address);
 
     /// <summary>
     /// Establishes a direct DTLS connection for LAN endpoints.
@@ -178,23 +179,9 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
         if (HolePunchSocket == null) {
             return;
         }
+
         HolePunchSocket.Close();
         HolePunchSocket = null;
-    }
-
-    /// <summary>
-    /// Checks if an IP address is a private (LAN) address.
-    /// </summary>
-    private static bool IsPrivateIp(string ipAddress) {
-        if (!IPAddress.TryParse(ipAddress, out var ip)) return false;
-
-        var bytes = ip.GetAddressBytes();
-        return bytes[0] switch {
-            10 => true, // 10.0.0.0/8
-            172 => bytes[1] is >= 16 and <= 31, // 172.16.0.0/12
-            192 => bytes[1] == 168, // 192.168.0.0/16
-            _ => false
-        };
     }
 
     /// <summary>

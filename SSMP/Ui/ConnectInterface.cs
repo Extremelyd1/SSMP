@@ -1202,7 +1202,7 @@ internal class ConnectInterface {
         ShowFeedback(Color.yellow, "Joining lobby...");
 
         // Create hole-punch socket for non-Steam lobbies
-        var holePunchSocket = CreateHolePunchSocket();
+        var holePunchSocket = CreateHolePunchSocket(_modSettings.MmsSettings.LocalBindIp);
         var clientPort = GetSocketPort(holePunchSocket);
 
         // Join lobby and get connection info
@@ -1277,7 +1277,11 @@ internal class ConnectInterface {
             }
 
             ConnectToMatchmakingLobby(
-                $"{joinStart.HostIp}:{joinStart.HostPort}", lanConnectionData, username, holePunchSocket
+                $"{joinStart.HostIp}:{joinStart.HostPort}",
+                lanConnectionData,
+                _modSettings.MmsSettings.PreferLanFastPath,
+                username,
+                holePunchSocket
             );
         }
     }
@@ -1401,14 +1405,16 @@ internal class ConnectInterface {
         var isPublic = visibility == LobbyVisibility.Public;
 
         // Create socket first to get actual port
-        var holePunchSocket = CreateHolePunchSocket();
+        var holePunchSocket = CreateHolePunchSocket(_modSettings.MmsSettings.LocalBindIp);
         var actualPort = GetSocketPort(holePunchSocket);
 
         var task = MmsClient.CreateLobbyAsync(
             hostPort: actualPort,
             isPublic: isPublic,
             gameVersion: Application.version,
-            lobbyType: lobbyType
+            lobbyType: lobbyType,
+            hostIpOverride: _modSettings.MmsSettings.HostIpOverride,
+            hostLanIpOverride: _modSettings.MmsSettings.HostLanIpOverride
         );
 
         yield return new WaitUntil(() => task.IsCompleted);
@@ -1953,17 +1959,19 @@ internal class ConnectInterface {
     /// <summary>
     /// Creates and configures a UDP socket for hole-punching.
     /// </summary>
-    private static Socket CreateHolePunchSocket() {
+    private static Socket CreateHolePunchSocket(string? bindIpAddress) {
         var socket = new Socket(
             AddressFamily.InterNetwork,
             SocketType.Dgram,
             ProtocolType.Udp
         );
 
+        var bindAddress = NetworkingUtil.ResolveBindAddress(bindIpAddress);
+
         try {
-            socket.Bind(new IPEndPoint(IPAddress.Any, 26960));
+            socket.Bind(new IPEndPoint(bindAddress, 26960));
         } catch (SocketException) {
-            socket.Bind(new IPEndPoint(IPAddress.Any, 0));
+            socket.Bind(new IPEndPoint(bindAddress, 0));
         }
 
         return socket;
@@ -1982,10 +1990,11 @@ internal class ConnectInterface {
     private void ConnectToMatchmakingLobby(
         string connectionData,
         string? lanConnectionData,
+        bool preferLanFastPath,
         string username,
         Socket? holePunchSocket
     ) {
-        var connectionInfo = DetermineConnectionInfo(connectionData, lanConnectionData);
+        var connectionInfo = DetermineConnectionInfo(connectionData, lanConnectionData, preferLanFastPath);
 
         if (connectionInfo == null) {
             ShowFeedback(Color.red, "Invalid connection data");
@@ -2010,20 +2019,25 @@ internal class ConnectInterface {
     /// <summary>
     /// Determines the optimal connection strategy (LAN first, then public).
     /// </summary>
-    private static ConnectionInfo? DetermineConnectionInfo(string publicConnectionData, string? lanConnectionData) {
+    private static ConnectionInfo? DetermineConnectionInfo(
+        string publicConnectionData,
+        string? lanConnectionData,
+        bool preferLanFastPath
+    ) {
         // Public connection is required in all cases
         if (!TryParseConnectionData(publicConnectionData, out var publicIp, out var publicPort))
             return null;
 
         // Prefer LAN if available, using public as the fallback relay
-        if (!string.IsNullOrEmpty(lanConnectionData) &&
+        if (preferLanFastPath &&
+            !string.IsNullOrEmpty(lanConnectionData) &&
             TryParseConnectionData(lanConnectionData, out var lanIp, out var lanPort)) {
             return new ConnectionInfo(
-                lanIp, lanPort, $"{publicIp}:{publicPort}", $"Connecting to LAN {lanIp}:{lanPort}..."
+                lanIp, lanPort, $"{publicIp}:{publicPort}", $"Connecting to LAN {lanIp}:{lanPort}...", true
             );
         }
 
-        return new ConnectionInfo(publicIp, publicPort, null, $"Connecting to {publicIp}:{publicPort}...");
+        return new ConnectionInfo(publicIp, publicPort, null, $"Connecting to {publicIp}:{publicPort}...", false);
     }
 
     /// <summary>

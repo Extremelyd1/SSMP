@@ -9,6 +9,12 @@ namespace SSMP.Networking.Matchmaking.Parsing;
 
 /// <summary>Reads and writes the small JSON payloads used by MMS.</summary>
 internal static class MmsJsonParser {
+    
+    /// <summary>
+    /// The create-lobby request field used to send an explicit host IPv4 address to MMS.
+    /// </summary>
+    private const string CreateLobbyHostIpField = "HostIp";
+
     /// <summary>
     /// Parses a JSON string and returns the first property with the requested key.
     /// Returns null when the payload is invalid or the key is missing.
@@ -31,6 +37,7 @@ internal static class MmsJsonParser {
         bool isPublic,
         string gameVersion,
         PublicLobbyType lobbyType,
+        string? hostIp,
         string? hostLanIp
     ) {
         var payload = new JObject {
@@ -39,6 +46,10 @@ internal static class MmsJsonParser {
             [MmsFields.GameVersionRequest] = gameVersion,
             [MmsFields.LobbyTypeRequest]   = SerializeLobbyType(lobbyType)
         };
+
+        if (hostIp != null) {
+            payload[CreateLobbyHostIpField] = hostIp;
+        }
 
         if (hostLanIp != null) {
             payload[MmsFields.HostLanIpRequest] = $"{hostLanIp}:{port}";
