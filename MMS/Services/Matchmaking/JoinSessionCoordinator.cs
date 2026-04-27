@@ -139,6 +139,44 @@ public sealed class JoinSessionCoordinator {
     }
 
     /// <summary>
+    /// Validates that a client discovery packet arrived from the same IP address that created the join session.
+    /// Host discovery packets are ignored by this check.
+    /// </summary>
+    /// <param name="token">The discovery token included in the UDP packet.</param>
+    /// <param name="clientIp">The IP address observed for the UDP packet.</param>
+    /// <param name="cancellationToken">Propagates notification that the operation should be cancelled.</param>
+    /// <returns>
+    /// <see langword="true"/> when discovery processing may continue; otherwise <see langword="false"/>.
+    /// </returns>
+    public async Task<bool> ValidateDiscoveredClientIpAsync(
+        string token,
+        string clientIp,
+        CancellationToken cancellationToken = default
+    ) {
+        if (!_store.TryGetDiscoveryMetadata(token, out var metadata) || metadata == null)
+            return false;
+
+        if (metadata.JoinId == null)
+            return true;
+
+        var session = GetJoinSession(metadata.JoinId);
+        if (session == null)
+            return false;
+
+        if (string.Equals(session.ClientIp, clientIp, StringComparison.Ordinal))
+            return true;
+
+        _logger.LogWarning(
+            "Client path mismatch for join {JoinId}: HTTPS join used {JoinIp}, UDP discovery used {DiscoveryIp}",
+            metadata.JoinId,
+            session.ClientIp,
+            clientIp
+        );
+        await FailJoinSessionAsync(metadata.JoinId, "client_path_mismatch", cancellationToken);
+        return false;
+    }
+
+    /// <summary>
     /// Returns the externally observed UDP port for a discovery token, or
     /// <see langword="null"/> if the port has not yet been recorded.
     /// </summary>
