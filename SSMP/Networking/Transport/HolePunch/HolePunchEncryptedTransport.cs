@@ -139,10 +139,7 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     /// - Fallback: If LAN fails and FallbackAddress is set, retry with fallback
     /// </remarks>
     public void Connect(string address, int port) {
-        var forceRemote = ForceRemoteForNextConnect;
-        ForceRemoteForNextConnect = false;
-
-        if (!forceRemote && IsLanConnection(address)) {
+        if (IsLanConnection(address)) {
             ConnectLan(address, port);
         } else {
             ConnectRemote(address, port);
@@ -170,8 +167,8 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     /// Establishes a connection to a remote endpoint with NAT traversal.
     /// </summary>
     private void ConnectRemote(string address, int port) {
-        Logger.Info($"HolePunch: Starting NAT traversal to {address}:{port} using {ClientPunchStrategy}");
-        var socket = PerformHolePunch(address, port, ClientPunchStrategy);
+        Logger.Info($"HolePunch: Starting NAT traversal to {address}:{port}");
+        var socket = PerformHolePunch(address, port);
         _dtlsClient.Connect(address, port, socket);
     }
 
@@ -220,23 +217,11 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     public static Socket? HolePunchSocket { get; set; }
 
     /// <summary>
-    /// Configured client-side hole-punch cadence for the next remote matchmaking connect attempt.
-    /// </summary>
-    public static HolePunchPunchStrategy ClientPunchStrategy { get; set; } =
-        HolePunchPunchStrategy.WarmupBurstThenSteady;
-
-    /// <summary>
-    /// Forces the next connect attempt to use the remote hole-punch path even if the target IP is private.
-    /// </summary>
-    public static bool ForceRemoteForNextConnect { get; set; }
-
-    /// <summary>
     /// Performs UDP hole punching to the specified endpoint.
     /// Opens NAT mapping by sending packets, then returns connected socket for DTLS.
     /// </summary>
     /// <param name="address">Target IP address</param>
     /// <param name="port">Target port</param>
-    /// <param name="strategy">The client-side punching cadence to apply before returning the socket for DTLS.</param>
     /// <returns>Connected UDP socket ready for DTLS communication</returns>
     /// <exception cref="InvalidOperationException">Thrown if hole punching fails</exception>
     /// <remarks>
@@ -251,7 +236,7 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     /// While step 5 shouldn't be necessary as the DTLS handshake also sends packets over the same socket, which should
     /// maintain the NAT UDP port mapping, it doesn't work without it.
     /// </remarks>
-    private static Socket PerformHolePunch(string address, int port, HolePunchPunchStrategy strategy) {
+    private static Socket PerformHolePunch(string address, int port) {
         // Attempt to reuse the socket passed from ConnectInterface
         // This is important because the NAT mapping was created with this socket
         var socket = HolePunchSocket;
@@ -278,36 +263,19 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
             // Parse target endpoint
             var endpoint = new IPEndPoint(IPAddress.Parse(address), port);
 
-            switch (strategy) {
-                case HolePunchPunchStrategy.WarmupBurstThenSteady:
-                    Logger.Debug($"HolePunch: Sending initial punch burst ({InitialPunchPacketCount} packets) to {endpoint}");
+            Logger.Debug($"HolePunch: Sending initial punch burst ({InitialPunchPacketCount} packets) to {endpoint}");
 
-                    // Prime the NAT mapping immediately before DTLS begins.
-                    for (var i = 0; i < InitialPunchPacketCount; i++) {
-                        socket.SendTo(PunchPacket, endpoint);
-                        Thread.Sleep(PunchPacketDelayMs);
-                    }
-
-                    // "Connect" the socket to filter incoming packets to only this peer
-                    // This is important for DTLS which expects point-to-point communication
-                    socket.Connect(endpoint);
-                    StartBackgroundPunchBurst(socket, endpoint);
-                    break;
-
-                case HolePunchPunchStrategy.LegacySteadyStream:
-                    Logger.Debug($"HolePunch: Sending legacy steady punch stream ({PunchPacketCount} packets) to {endpoint}");
-                    for (var i = 0; i < PunchPacketCount; i++) {
-                        socket.SendTo(PunchPacket, endpoint);
-                        Thread.Sleep(PunchPacketDelayMs);
-                    }
-
-                    socket.Connect(endpoint);
-                    break;
-
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(strategy), strategy, "Unsupported hole-punch strategy.");
+            // Prime the NAT mapping immediately before DTLS begins.
+            for (var i = 0; i < InitialPunchPacketCount; i++) {
+                socket.SendTo(PunchPacket, endpoint);
+                Thread.Sleep(PunchPacketDelayMs);
             }
 
+            // "Connect" the socket to filter incoming packets to only this peer
+            // This is important for DTLS which expects point-to-point communication
+            socket.Connect(endpoint);
+
+            StartBackgroundPunchBurst(socket, endpoint);
             Logger.Info($"HolePunch: NAT traversal complete, socket connected to {endpoint}");
             return socket;
         } catch (Exception ex) {

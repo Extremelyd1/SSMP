@@ -521,11 +521,6 @@ internal class ConnectInterface {
     private Tab _activeTab = Tab.Matchmaking;
 
     /// <summary>
-    /// Whether the current matchmaking attempt should be retried once with the legacy punch strategy on timeout.
-    /// </summary>
-    private bool _retryMatchmakingWithLegacyPunch;
-
-    /// <summary>
     /// Public accessor for the MMS client.
     /// Used by server manager to pass to HolePunch transport for lobby cleanup.
     /// </summary>
@@ -1197,19 +1192,13 @@ internal class ConnectInterface {
         }
 
         ShowFeedback(Color.yellow, "Connecting...");
-        MonoBehaviourUtil.Instance.StartCoroutine(
-            JoinLobbyCoroutine(lobbyId, username, HolePunchPunchStrategy.WarmupBurstThenSteady)
-        );
+        MonoBehaviourUtil.Instance.StartCoroutine(JoinLobbyCoroutine(lobbyId, username));
     }
 
     /// <summary>
     /// Coroutine to join a lobby, handling both Matchmaking and Steam types.
     /// </summary>
-    private IEnumerator JoinLobbyCoroutine(
-        string lobbyId,
-        string username,
-        HolePunchPunchStrategy punchStrategy
-    ) {
+    private IEnumerator JoinLobbyCoroutine(string lobbyId, string username) {
         ShowFeedback(Color.yellow, "Joining lobby...");
 
         // Create hole-punch socket for non-Steam lobbies
@@ -1292,8 +1281,7 @@ internal class ConnectInterface {
                 lanConnectionData,
                 _modSettings.MmsSettings.PreferLanFastPath,
                 username,
-                holePunchSocket,
-                punchStrategy
+                holePunchSocket
             );
         }
     }
@@ -1756,7 +1744,6 @@ internal class ConnectInterface {
     /// Resets UI state and displays success message.
     /// </summary>
     public void OnSuccessfulConnect() {
-        ClearPunchStrategyRetry();
         ShowFeedback(Color.green, MsgConnected);
         ResetConnectionButtons();
     }
@@ -1766,7 +1753,6 @@ internal class ConnectInterface {
     /// Resets the connection UI to allow reconnection.
     /// </summary>
     public void OnClientDisconnect() {
-        ClearPunchStrategyRetry();
         ResetConnectionButtons();
     }
 
@@ -1780,7 +1766,6 @@ internal class ConnectInterface {
         // If we have a fallback connection to try, we do so now
         if (!string.IsNullOrEmpty(fallbackAddress) &&
             TryParseConnectionData(fallbackAddress, out var address, out var port)) {
-            ClearPunchStrategyRetry();
             ShowFeedback(Color.yellow, "LAN failed, retrying Public...");
             Logger.Info($"ConnectInterface: LAN connection failed, retrying Public at {address}:{port}");
 
@@ -1790,19 +1775,6 @@ internal class ConnectInterface {
             return;
         }
 
-        if (result.Reason == ConnectionFailedReason.TimedOut && _retryMatchmakingWithLegacyPunch) {
-            ClearPunchStrategyRetry();
-            ShowFeedback(Color.yellow, "Retrying with legacy steady punch strategy...");
-            var retryLobbyId = _lobbyIdInput.GetInput();
-            var retryUsername = _usernameInput.GetInput();
-            Logger.Info($"ConnectInterface: Matchmaking connect timed out, retrying lobby {retryLobbyId} with LegacySteadyStream");
-            MonoBehaviourUtil.Instance.StartCoroutine(
-                JoinLobbyCoroutine(retryLobbyId, retryUsername, HolePunchPunchStrategy.LegacySteadyStream)
-            );
-            return;
-        }
-
-        ClearPunchStrategyRetry();
         var message = GetFailureMessage(result);
         ShowFeedback(Color.red, message);
         ResetConnectionButtons();
@@ -2013,13 +1985,6 @@ internal class ConnectInterface {
     }
 
     /// <summary>
-    /// Clears the pending automatic matchmaking retry state.
-    /// </summary>
-    private void ClearPunchStrategyRetry() {
-        _retryMatchmakingWithLegacyPunch = false;
-    }
-
-    /// <summary>
     /// Handles connection to a matchmaking lobby with LAN/public fallback.
     /// </summary>
     private void ConnectToMatchmakingLobby(
@@ -2027,8 +1992,7 @@ internal class ConnectInterface {
         string? lanConnectionData,
         bool preferLanFastPath,
         string username,
-        Socket? holePunchSocket,
-        HolePunchPunchStrategy punchStrategy
+        Socket? holePunchSocket
     ) {
         var connectionInfo = DetermineConnectionInfo(connectionData, lanConnectionData, preferLanFastPath);
 
@@ -2042,9 +2006,6 @@ internal class ConnectInterface {
 
         // Pass the pre-bound socket to the transport layer before connecting
         HolePunchEncryptedTransport.HolePunchSocket = holePunchSocket;
-        HolePunchEncryptedTransport.ClientPunchStrategy = punchStrategy;
-        HolePunchEncryptedTransport.ForceRemoteForNextConnect = !connectionInfo.Value.UseLanDirectPath;
-        _retryMatchmakingWithLegacyPunch = punchStrategy == HolePunchPunchStrategy.WarmupBurstThenSteady;
 
         ConnectButtonPressed?.Invoke(
             connectionInfo.Value.PrimaryIp,
@@ -2072,21 +2033,11 @@ internal class ConnectInterface {
             !string.IsNullOrEmpty(lanConnectionData) &&
             TryParseConnectionData(lanConnectionData, out var lanIp, out var lanPort)) {
             return new ConnectionInfo(
-                lanIp,
-                lanPort,
-                $"{publicIp}:{publicPort}",
-                $"Connecting to LAN {lanIp}:{lanPort}...",
-                true
+                lanIp, lanPort, $"{publicIp}:{publicPort}", $"Connecting to LAN {lanIp}:{lanPort}...", true
             );
         }
 
-        return new ConnectionInfo(
-            publicIp,
-            publicPort,
-            null,
-            $"Connecting to {publicIp}:{publicPort}...",
-            false
-        );
+        return new ConnectionInfo(publicIp, publicPort, null, $"Connecting to {publicIp}:{publicPort}...", false);
     }
 
     /// <summary>
