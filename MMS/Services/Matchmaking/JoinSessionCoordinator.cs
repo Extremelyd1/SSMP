@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.WebSockets;
 using MMS.Models;
 using MMS.Models.Lobbies;
@@ -113,42 +112,29 @@ public sealed class JoinSessionCoordinator {
     }
 
     /// <summary>
-    /// Records the externally observed UDP endpoint for a discovery token and advances the punch flow.
+    /// Records the externally observed UDP port for a discovery token and advances the punch flow.
     /// </summary>
     /// <remarks>
     /// The token determines whether this is a host or client port discovery event and
     /// dispatches to the appropriate handler.
     /// </remarks>
     /// <param name="token">The discovery token included in the UDP packet.</param>
-    /// <param name="remoteEndPoint">The external UDP endpoint observed by the server.</param>
+    /// <param name="port">The external port observed by the server.</param>
     /// <param name="cancellationToken">Propagates notification that the operation should be cancelled.</param>
-    public async Task SetDiscoveredPortAsync(
-        string token,
-        IPEndPoint remoteEndPoint,
-        CancellationToken cancellationToken = default
-    ) {
+    public async Task SetDiscoveredPortAsync(string token, int port, CancellationToken cancellationToken = default) {
         if (!_store.TryGetDiscoveryMetadata(token, out var metadata) || metadata == null)
             return;
 
-        if (!_store.TrySetDiscoveredPort(token, remoteEndPoint.Port))
+        if (!_store.TrySetDiscoveredPort(token, port))
             return;
 
         if (metadata.HostConnectionData != null) {
-            await HandleHostPortDiscoveredAsync(
-                metadata.HostConnectionData,
-                remoteEndPoint.Port,
-                cancellationToken
-            );
+            await HandleHostPortDiscoveredAsync(metadata.HostConnectionData, port, cancellationToken);
             return;
         }
 
         if (metadata.JoinId != null) {
-            await HandleClientPortDiscoveredAsync(
-                metadata.JoinId,
-                remoteEndPoint.Address.ToString(),
-                remoteEndPoint.Port,
-                cancellationToken
-            );
+            await HandleClientPortDiscoveredAsync(metadata.JoinId, port, cancellationToken);
         }
     }
 
@@ -295,24 +281,11 @@ public sealed class JoinSessionCoordinator {
     /// </summary>
     private async Task HandleClientPortDiscoveredAsync(
         string joinId,
-        string discoveredClientIp,
         int port,
         CancellationToken cancellationToken
     ) {
         var session = GetJoinSession(joinId);
         if (session == null) return;
-
-        if (!string.Equals(session.ClientIp, discoveredClientIp, StringComparison.Ordinal)) {
-            _logger.LogWarning(
-                "Client path mismatch for join {JoinId}: HTTPS join used {JoinIp}, UDP discovery used {DiscoveryIp}:{DiscoveryPort}",
-                joinId,
-                session.ClientIp,
-                discoveredClientIp,
-                port
-            );
-            await FailJoinSessionAsync(joinId, "client_path_mismatch", cancellationToken);
-            return;
-        }
 
         session.ClientExternalPort = port;
         session.AwaitingHostRefresh = true;
