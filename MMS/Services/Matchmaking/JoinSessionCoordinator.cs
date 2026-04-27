@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.WebSockets;
 using MMS.Models;
 using MMS.Models.Lobbies;
@@ -112,29 +113,43 @@ public sealed class JoinSessionCoordinator {
     }
 
     /// <summary>
-    /// Records the externally observed UDP port for a discovery token and advances the punch flow.
+    /// Records the externally observed UDP endpoint for a discovery token and advances the punch flow.
     /// </summary>
     /// <remarks>
     /// The token determines whether this is a host or client port discovery event and
     /// dispatches to the appropriate handler.
     /// </remarks>
     /// <param name="token">The discovery token included in the UDP packet.</param>
-    /// <param name="port">The external port observed by the server.</param>
+    /// <param name="remoteEndPoint">The external UDP endpoint observed by the server.</param>
     /// <param name="cancellationToken">Propagates notification that the operation should be cancelled.</param>
-    public async Task SetDiscoveredPortAsync(string token, int port, CancellationToken cancellationToken = default) {
+    public async Task SetDiscoveredPortAsync(
+        string token,
+        IPEndPoint remoteEndPoint,
+        CancellationToken cancellationToken = default
+    ) {
         if (!_store.TryGetDiscoveryMetadata(token, out var metadata) || metadata == null)
             return;
 
-        if (!_store.TrySetDiscoveredPort(token, port))
+        if (!_store.TrySetDiscoveredPort(token, remoteEndPoint.Port))
             return;
 
         if (metadata.HostConnectionData != null) {
-            await HandleHostPortDiscoveredAsync(metadata.HostConnectionData, port, cancellationToken);
+            await HandleHostPortDiscoveredAsync(
+                metadata.HostConnectionData,
+                remoteEndPoint.Port,
+                cancellationToken
+            );
             return;
         }
 
-        if (metadata.JoinId != null)
-            await HandleClientPortDiscoveredAsync(metadata.JoinId, port, cancellationToken);
+        if (metadata.JoinId != null) {
+            await HandleClientPortDiscoveredAsync(
+                metadata.JoinId,
+                remoteEndPoint.Address.ToString(),
+                remoteEndPoint.Port,
+                cancellationToken
+            );
+        }
     }
 
     /// <summary>
@@ -262,23 +277,34 @@ public sealed class JoinSessionCoordinator {
         if (lobby == null) return;
 
         lobby.ExternalPort = port;
+
+        foreach (var joinId in _store.GetJoinIdsForLobby(lobbyConnectionData)) {
+            var session = GetJoinSession(joinId);
+            if (session != null) {
+                session.AwaitingHostRefresh = false;
+            }
+        }
+
         await JoinSessionMessenger.SendHostMappingReceivedAsync(lobby, port, cancellationToken);
         await TryStartPendingJoinSessionsAsync(lobbyConnectionData, cancellationToken);
     }
 
     /// <summary>
     /// Handles a UDP port discovery event originating from the client side.
-    /// Records the client's external port, requests a host refresh, and attempts to start punching.
+    /// Records the client's external endpoint, requests a host refresh, and attempts to start punching.
     /// </summary>
     private async Task HandleClientPortDiscoveredAsync(
         string joinId,
+        string clientIp,
         int port,
         CancellationToken cancellationToken
     ) {
         var session = GetJoinSession(joinId);
         if (session == null) return;
 
+        session.ClientDiscoveredIp = clientIp;
         session.ClientExternalPort = port;
+        session.AwaitingHostRefresh = true;
         await JoinSessionMessenger.SendClientMappingReceivedAsync(session, port, cancellationToken);
 
         var hostRefreshed = await _messenger.SendHostRefreshRequestAsync(
@@ -318,6 +344,8 @@ public sealed class JoinSessionCoordinator {
         var session = GetJoinSession(joinId);
         if (session?.ClientExternalPort == null) return;
 
+        if (session.AwaitingHostRefresh) return;
+
         var lobby = _lobbyService.GetLobby(session.LobbyConnectionData);
         if (lobby == null) {
             await FailJoinSessionAsync(joinId, "lobby_closed", cancellationToken);
@@ -348,7 +376,7 @@ public sealed class JoinSessionCoordinator {
             var hostSent = await JoinSessionMessenger.SendStartPunchToHostAsync(
                 lobby,
                 joinId,
-                session.ClientIp,
+                session.ClientDiscoveredIp ?? session.ClientIp,
                 session.ClientExternalPort.Value,
                 lobby.ExternalPort.Value,
                 startTimeMs,

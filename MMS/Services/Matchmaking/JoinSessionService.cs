@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.WebSockets;
 using MMS.Models.Lobbies;
 using MMS.Models.Matchmaking;
@@ -49,9 +50,12 @@ public class JoinSessionService {
     public bool AttachJoinWebSocket(string joinId, WebSocket webSocket) =>
         _coordinator.AttachJoinWebSocket(joinId, webSocket);
 
-    /// <summary>Records the externally observed UDP port for a discovery token and advances the punch flow.</summary>
-    public Task SetDiscoveredPortAsync(string token, int port, CancellationToken cancellationToken = default) =>
-        _coordinator.SetDiscoveredPortAsync(token, port, cancellationToken);
+    /// <summary>Records the externally observed UDP endpoint for a discovery token and advances the punch flow.</summary>
+    public Task SetDiscoveredPortAsync(
+        string token,
+        IPEndPoint remoteEndPoint,
+        CancellationToken cancellationToken = default
+    ) => _coordinator.SetDiscoveredPortAsync(token, remoteEndPoint, cancellationToken);
 
     /// <summary>Returns the externally observed UDP port for a discovery token, or <see langword="null"/> if not yet recorded.</summary>
     public int? GetDiscoveredPort(string token) =>

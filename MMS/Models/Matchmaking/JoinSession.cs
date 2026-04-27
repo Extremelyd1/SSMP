@@ -22,6 +22,11 @@ public sealed class JoinSession {
     public required string ClientIp { get; init; }
 
     /// <summary>
+    /// Public IP address observed from the client's UDP discovery packet, if available.
+    /// </summary>
+    public string? ClientDiscoveredIp { get; set; }
+
+    /// <summary>
     /// Client discovery token used to map the external port.
     /// </summary>
     public required string ClientDiscoveryToken { get; init; }
@@ -30,6 +35,11 @@ public sealed class JoinSession {
     /// Externally visible client port once discovery completes.
     /// </summary>
     public int? ClientExternalPort { get; set; }
+
+    /// <summary>
+    /// Indicates that the join is waiting for a fresh host mapping after requesting a host refresh.
+    /// </summary>
+    public bool AwaitingHostRefresh { get; set; }
 
     /// <summary>
     /// The client WebSocket attached to this join attempt, if connected.
