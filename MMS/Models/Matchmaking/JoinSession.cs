@@ -22,11 +22,6 @@ public sealed class JoinSession {
     public required string ClientIp { get; init; }
 
     /// <summary>
-    /// Public IP address observed from the client's UDP discovery packet, if available.
-    /// </summary>
-    public string? ClientDiscoveredIp { get; set; }
-
-    /// <summary>
     /// Client discovery token used to map the external port.
     /// </summary>
     public required string ClientDiscoveryToken { get; init; }

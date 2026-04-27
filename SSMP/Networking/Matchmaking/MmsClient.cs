@@ -22,6 +22,9 @@ internal sealed class MmsClient {
     /// <summary>Last error from most recent operation.</summary>
     public MatchmakingError LastMatchmakingError { get; private set; } = MatchmakingError.None;
 
+    /// <summary>Last machine-readable join failure reason returned by MMS.</summary>
+    public string? LastJoinFailureReason { get; private set; }
+
     public MmsClient(
         string baseUrl,
         int discoveryPort,
@@ -128,8 +131,9 @@ internal sealed class MmsClient {
     /// Signals a join failure with a specific reason.
     /// </summary>
     private void SetJoinFailed(string reason) {
-        Logger.Warn($"MmsClient: matchmaking join failed – {reason}");
+        Logger.Warn($"MmsClient: matchmaking join failed - {reason}");
         LastMatchmakingError = MatchmakingError.JoinFailed;
+        LastJoinFailureReason = reason;
     }
 
     /// <summary>
@@ -137,5 +141,6 @@ internal sealed class MmsClient {
     /// </summary>
     private void ClearErrors() {
         LastMatchmakingError = MatchmakingError.None;
+        LastJoinFailureReason = null;
     }
 }

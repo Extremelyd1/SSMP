@@ -291,18 +291,29 @@ public sealed class JoinSessionCoordinator {
 
     /// <summary>
     /// Handles a UDP port discovery event originating from the client side.
-    /// Records the client's external endpoint, requests a host refresh, and attempts to start punching.
+    /// Records the client's external port, requests a host refresh, and attempts to start punching.
     /// </summary>
     private async Task HandleClientPortDiscoveredAsync(
         string joinId,
-        string clientIp,
+        string discoveredClientIp,
         int port,
         CancellationToken cancellationToken
     ) {
         var session = GetJoinSession(joinId);
         if (session == null) return;
 
-        session.ClientDiscoveredIp = clientIp;
+        if (!string.Equals(session.ClientIp, discoveredClientIp, StringComparison.Ordinal)) {
+            _logger.LogWarning(
+                "Client path mismatch for join {JoinId}: HTTPS join used {JoinIp}, UDP discovery used {DiscoveryIp}:{DiscoveryPort}",
+                joinId,
+                session.ClientIp,
+                discoveredClientIp,
+                port
+            );
+            await FailJoinSessionAsync(joinId, "client_path_mismatch", cancellationToken);
+            return;
+        }
+
         session.ClientExternalPort = port;
         session.AwaitingHostRefresh = true;
         await JoinSessionMessenger.SendClientMappingReceivedAsync(session, port, cancellationToken);
@@ -376,7 +387,7 @@ public sealed class JoinSessionCoordinator {
             var hostSent = await JoinSessionMessenger.SendStartPunchToHostAsync(
                 lobby,
                 joinId,
-                session.ClientDiscoveredIp ?? session.ClientIp,
+                session.ClientIp,
                 session.ClientExternalPort.Value,
                 lobby.ExternalPort.Value,
                 startTimeMs,
