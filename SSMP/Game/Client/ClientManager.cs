@@ -1190,8 +1190,9 @@ internal class ClientManager : IClientManager {
             return;
         }
 
-        // Update all remote player interpolations in one centralized loop
-        _playerManager.UpdateInterpolations(Time.deltaTime);
+        // Update all remote player interpolations in one centralized loop.
+        // We also pass the latest measured RTT so the interpolator can adapt to ping.
+        _playerManager.UpdateInterpolations(Time.deltaTime, _netClient.UpdateManager.AverageRtt);
 
         var heroTransform = HeroController.instance.transform;
 
