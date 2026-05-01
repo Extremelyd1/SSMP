@@ -29,7 +29,7 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
     }
 
     /// <summary>
-    /// Adds a <see cref="DamageHero"/> component to the given game object that deals the given damage when the player
+    /// Adds <see cref="DamageHero"/> and <see cref="EffectOwnerComponent"/> components to the given game object that deals the given damage when the player
     /// collides with it.
     /// </summary>
     /// <param name="target">The target game object to attach the component to.</param>
@@ -39,6 +39,9 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
         var damageHero = target.AddComponentIfNotPresent<DamageHero>();
         damageHero.damageDealt = damage;
         damageHero.OnDamagedHero = new UnityEvent();
+
+        var identifier = target.AddComponentIfNotPresent<EffectOwnerComponent>();
+        identifier.Owner = target;
 
         return damageHero;
     }
