@@ -11,18 +11,19 @@ internal class BaseTool : DamageAnimationEffect {
 
     public static BaseTool Instance = new();
 
-    private static readonly Dictionary<AttackTool, BaseTool> ToolEffectMap = new Dictionary<AttackTool, BaseTool> {
+    private static readonly Dictionary<AttackTool, BaseTool> ToolEffectMap = new() {
         //{ AttackTool.FleaBrew, FleaBrew.Instance },
         { AttackTool.StraightPin, new StraightPin() },
-        { AttackTool.ThreefoldPin, new ThreefoldPin() }
+        { AttackTool.ThreefoldPin, new ThreefoldPin() },
+        { AttackTool.LongPin, new LongPin() },
     };
 
-    private static readonly Dictionary<string, AttackTool> ToolNameMap = new Dictionary<string, AttackTool> {
+    private static readonly Dictionary<string, AttackTool> ToolNameMap = new() {
         { "Straight Pin", AttackTool.StraightPin },
         { "Tri Pin", AttackTool.ThreefoldPin } ,
         //{ "Sting Shard", AttackTool.StingShard } ,
         //{ "Tack", AttackTool.Tacks } ,
-        //{ "Harpoon", AttackTool.Longpin } ,
+        { "Harpoon", AttackTool.LongPin } ,
         //{ "Curve Claws", AttackTool.Curveclaw } ,
         //{ "Curve Claws Upgraded", AttackTool.Curvesickle } ,
         //{ "Shakra Ring", AttackTool.ThrowingRing } ,
@@ -154,7 +155,7 @@ internal enum AttackTool {
     ThreefoldPin,
     StingShard,
     Tacks,
-    Longpin,
+    LongPin,
     Curveclaw,
     Curvesickle,
     ThrowingRing,
