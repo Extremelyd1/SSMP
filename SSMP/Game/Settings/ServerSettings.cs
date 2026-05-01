@@ -260,7 +260,7 @@ public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
 
     /// <inheritdoc />
     [SettingAlias("poisonbrewdmg", "brewdmg", "fleabrewdmg")]
-    [ModMenuSetting("Sawtooth Circlet Damage", "The number of masks of damage that a cloud from the poisoned Flea Brew deals")]
+    [ModMenuSetting("Poisoned Flea Brew Damage", "The number of masks of damage that a cloud from the poisoned Flea Brew deals")]
     public byte PoisonBrewDamage {
         get;
         init {
