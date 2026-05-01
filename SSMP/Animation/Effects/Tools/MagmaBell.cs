@@ -8,12 +8,12 @@ namespace SSMP.Animation.Effects.Tools;
 
 internal class MagmaBell : BaseTool {
     /// <summary>
-    /// Name of the magma bell starting object name
+    /// Name of the magma bell starting object name.
     /// </summary>
     private const string MagmaBellStartName = "Magma Bell Start";
 
     /// <summary>
-    /// Name of the magma bell recharging object name
+    /// Name of the magma bell recharging object name.
     /// </summary>
     private const string MagmaBellRechargeName = "Magma Bell Recharge";
 
@@ -52,15 +52,14 @@ internal class MagmaBell : BaseTool {
     }
 
     /// <summary>
-    /// Plays the recharge animation
+    /// Plays the recharge animation.
     /// </summary>
-    /// <param name="playerObject"></param>
-    /// <returns></returns>
+    /// <param name="playerObject">The player to use the animation on.</param>
     private static IEnumerator PlayRecharge(GameObject playerObject) {
         // Wait for bell to recharge
         yield return new WaitForSeconds(Gameplay.LavaBellCooldownTime - 1);
 
-        // Player has exited the scene
+        // Player has exited the scene, don't play.
         if (!playerObject.activeInHierarchy) yield break;
 
         // Find existing effect

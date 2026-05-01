@@ -12,12 +12,12 @@ namespace SSMP.Animation.Effects.Tools;
 
 internal class SawtoothCirclet : BaseTool {
     /// <summary>
-    /// The name of the sawtooth circlet object
+    /// The name of the sawtooth circlet object.
     /// </summary>
     private const string SpikedCircletName = "Tool_brolly_spike";
 
     /// <summary>
-    /// Cached reference to the local sawtooth circlet object
+    /// Cached reference to the local sawtooth circlet object.
     /// </summary>
     private static GameObject? _localCirclet;
 
@@ -32,10 +32,10 @@ internal class SawtoothCirclet : BaseTool {
     }
 
     /// <summary>
-    /// Plays the sawtooth circlet
+    /// Plays the sawtooth circlet.
     /// </summary>
-    /// <param name="playerObject">The player using the circlet</param>
-    /// <param name="doDamage">If the circlet should do damage</param>
+    /// <param name="playerObject">The player using the circlet.</param>
+    /// <param name="doDamage">If the circlet should do damage.</param>
     public static void PlayCirclet(GameObject playerObject, bool doDamage, ServerSettings serverSettings) {
         // Get the circlet
         if (!TryGetCirclet(playerObject, out var circlet)) {
@@ -68,11 +68,11 @@ internal class SawtoothCirclet : BaseTool {
     }
 
     /// <summary>
-    /// Attempts to find or create the sawtooth circlet object
+    /// Attempts to find or create the sawtooth circlet object.
     /// </summary>
-    /// <param name="playerObject">The player using the circlet</param>
-    /// <param name="circlet">The circlet, if found</param>
-    /// <returns>true if the circlet was found</returns>
+    /// <param name="playerObject">The player using the circlet.</param>
+    /// <param name="circlet">The circlet, if found.</param>
+    /// <returns>true if the circlet was found.</returns>
     private static bool TryGetCirclet(GameObject playerObject, [MaybeNullWhen(false)] out GameObject circlet) {
         // Find or create effects
         var effects = playerObject.FindGameObjectInChildren("Effects");

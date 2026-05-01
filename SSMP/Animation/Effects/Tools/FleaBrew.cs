@@ -9,17 +9,17 @@ namespace SSMP.Animation.Effects.Tools;
 
 internal class FleaBrew : BaseTool {
     /// <summary>
-    /// Cached reference to a modified version of the poisoned flea brew trail
+    /// Cached reference to a modified version of the poisoned flea brew trail.
     /// </summary>
     private static GameObject? _modifiedPoisonTrail;
 
     /// <summary>
-    /// Cached values of sprite flashes for flea brews
+    /// Cached values of sprite flashes for flea brews.
     /// </summary>
     private static readonly Dictionary<int, SpriteFlash.FlashHandle> BrewFlashes = [];
 
     /// <summary>
-    /// Instance of the effect class
+    /// Instance of the effect class.
     /// </summary>
     public static FleaBrew Instance = new();
 
@@ -77,10 +77,10 @@ internal class FleaBrew : BaseTool {
     }
 
     /// <summary>
-    /// Stops the flew brew sprite flash
+    /// Stops the flew brew sprite flash.
     /// </summary>
-    /// <param name="playerObject">The player that used the tool</param>
-    /// <param name="handle">The flash's handle</param>
+    /// <param name="playerObject">The player that used the tool.</param>
+    /// <param name="handle">The flash's handle.</param>
     private static IEnumerator StopBrewFlash(GameObject playerObject, SpriteFlash.FlashHandle handle) {
         // Wait for effect to end
         yield return new WaitForSeconds(HeroController.instance.QUICKENING_DURATION);
@@ -94,9 +94,9 @@ internal class FleaBrew : BaseTool {
     }
 
     /// <summary>
-    /// Sets up a poison trail that deals damage
+    /// Sets up a poison trail that deals damage.
     /// </summary>
-    /// <param name="particles">The poisoned flea brew particle spawner</param>
+    /// <param name="particles">The poisoned flea brew particle spawner.</param>
     private void SetPoisonTrail(GameObject particles) {
         // Find the prefab spawner
         var spawnerObj = particles.FindGameObjectInChildren("Trail Spawner");

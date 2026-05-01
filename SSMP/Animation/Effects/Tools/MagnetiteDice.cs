@@ -8,17 +8,23 @@ using Object = UnityEngine.Object;
 namespace SSMP.Animation.Effects.Tools;
 
 internal class MagnetiteDice : BaseTool {
+    /// <summary>
+    /// Name of the magnetite dice effect object.
+    /// </summary>
 
     private const string DiceName = "dice_shield_effect";
 
+    /// <inheritdoc/>
     public override byte[]? GetEffectInfo() {
         return null;
     }
-
+    /// <inheritdoc/>
     public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
+        // Get existing effect
         var effects = GetPlayerEffects(playerObject);
         var dice = effects.FindGameObjectInChildren(DiceName);
 
+        // Set up effect if needed
         if (dice == null) {
             var localDice = HeroController.instance.spawnedLuckyDiceShieldEffect;
             if (localDice == null) return;
@@ -31,14 +37,15 @@ internal class MagnetiteDice : BaseTool {
             dice.DestroyGameObjectInChildren("Vignette Cutout");
         }
 
+        // Toggle effect
         dice.SetActive(false);
         dice.SetActive(true);
     }
 
     /// <summary>
-    /// Adds a hook for when the dice are enabled
+    /// Adds a hook for when the dice are enabled.
     /// </summary>
-    /// <param name="onTrigger">The hook to run</param>
+    /// <param name="onTrigger">The hook to run.</param>
     public static void Hook(Action onTrigger) {
         // Create coroutine since we have to wait for the prefab to be set
         static IEnumerator DoHook(Action onTrigger) {
@@ -55,11 +62,12 @@ internal class MagnetiteDice : BaseTool {
 
             hook.Enabled += onTrigger;
         }
+
         MonoBehaviourUtil.Instance.StartCoroutine(DoHook(onTrigger));
     }
 
     /// <summary>
-    /// Removes the hook from the dice
+    /// Removes the hook from the dice.
     /// </summary>
     public static void Unhook() {
         var prefab = HeroController.SilentInstance?.spawnedLuckyDiceShieldEffect;

@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Text;
 using HutongGames.PlayMaker.Actions;
 using SSMP.Internals;
 using SSMP.Util;
@@ -16,6 +13,7 @@ internal class FracturedMask : BaseTool {
 
     /// <inheritdoc/>
     public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
+        // Find effect
         var fsm = HeroController.instance.gameObject
             .FindGameObjectInChildren("Charm Effects")?
             .FindGameObjectInChildren("Fractured Mask Break")?
@@ -23,6 +21,7 @@ internal class FracturedMask : BaseTool {
 
         if (fsm == null) return;
 
+        // Spawn in the shatter particles
         var localMaskShatter = fsm.GetFirstAction<CreateObject>("Instantiate Effect");
         var mask = EffectUtils.SpawnGlobalPoolObject(localMaskShatter.gameObject.Value, playerObject.transform, 5);
 
