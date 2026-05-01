@@ -1226,7 +1226,7 @@ internal class AnimationManager {
         foreach (var nail in nails) {
             var injector = nail.AddComponent<FsmActionInjectorComponent>();
             List<FsmActionInjectorComponent.Injection> injections = [
-                new () {
+                new() {
                     fsmName = nailFsm.FsmName,
                     fsmStateName = "Follow HeroFacingLeft",
                     actionIndex = 12,
@@ -1234,7 +1234,7 @@ internal class AnimationManager {
                     hookName = "Nail Target"
                 },
 
-                new () {
+                new() {
                     fsmName = nailFsm.FsmName,
                     fsmStateName = "Follow HeroFacingRight",
                     actionIndex = 12,
@@ -1242,7 +1242,7 @@ internal class AnimationManager {
                     hookName = "Nail Target"
                 },
 
-                new () {
+                new() {
                     fsmName = nailFsm.FsmName,
                     fsmStateName = "Fire Antic",
                     actionIndex = 0,
