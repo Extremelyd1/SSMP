@@ -14,7 +14,6 @@ namespace SSMP.Animation.Effects.SilkSkills;
 /// Effect class for the Thread Storm Silk Skill.
 /// </summary>
 internal class ThreadStorm : BaseSilkSkill {
-
     /// <summary>
     /// A reference for players currently extending their thread storms.
     /// Used to prevent the effect from disappearing early.

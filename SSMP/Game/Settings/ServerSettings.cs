@@ -84,18 +84,6 @@ public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
             ChangeEvent?.Invoke(nameof(AllowSkins));
         }
     } = true;
-    
-    /// <inheritdoc />
-    [SettingAlias("needledmg")]
-    [ModMenuSetting("Needle Damage", "The number of masks of damage that a player's needle swing deals")]
-    public byte NeedleDamage {
-        get;
-        init {
-            if (field == value) return;
-            field = value;
-            ChangeEvent?.Invoke(nameof(NeedleDamage));
-        }
-    } = 1;
 
     // /// <inheritdoc />
     // [SettingAlias("parries")]

@@ -1188,13 +1188,13 @@ internal class AnimationManager {
             return;
         }
 
-        // Thread storm
+        // Thread Storm
         var threadStormExtend = silkSkillFsm.GetState("Extend");
-        FsmStateActionInjector.Inject(threadStormExtend, OnThreadStormExtend, 0);
+        FsmStateActionInjector.Inject(threadStormExtend, OnThreadStormExtend);
 
         // Rune Rage
         var sonarBuildArray = silkSkillFsm.GetState("Build Enemy Array");
-        FsmStateActionInjector.Inject(sonarBuildArray, OnBuildRuneRageArray, 0);
+        FsmStateActionInjector.Inject(sonarBuildArray, OnBuildRuneRageArray);
 
         var blastEnemy = silkSkillFsm.GetState("Blast Enemy");
         FsmStateActionInjector.Inject(blastEnemy, OnRuneBlastEnemy, 4);
@@ -1203,7 +1203,7 @@ internal class AnimationManager {
         FsmStateActionInjector.Inject(blastRandom, OnRuneBlastRandom, 3);
 
         var blastFinished = silkSkillFsm.GetState("Silk Bomb Recover");
-        FsmStateActionInjector.Inject(blastFinished, OnRuneBlastFinished, 0);
+        FsmStateActionInjector.Inject(blastFinished, OnRuneBlastFinished);
 
         // Pale Nails
         var nailObject = silkSkillFsm.GetAction<SpawnObjectFromGlobalPool>("BossNeedle Cast", 5)?.gameObject.Value;
@@ -1226,28 +1226,28 @@ internal class AnimationManager {
         foreach (var nail in nails) {
             var injector = nail.AddComponent<FsmActionInjectorComponent>();
             List<FsmActionInjectorComponent.Injection> injections = [
-                new FsmActionInjectorComponent.Injection {
-                    FsmName = nailFsm.FsmName,
-                    FsmStateName = "Follow HeroFacingLeft",
-                    ActionIndex = 12,
+                new () {
+                    fsmName = nailFsm.FsmName,
+                    fsmStateName = "Follow HeroFacingLeft",
+                    actionIndex = 12,
                     Hook = OnPaleNailAttackCheck,
-                    HookName = "Nail Target"
+                    hookName = "Nail Target"
                 },
 
-                new FsmActionInjectorComponent.Injection {
-                    FsmName = nailFsm.FsmName,
-                    FsmStateName = "Follow HeroFacingRight",
-                    ActionIndex = 12,
+                new () {
+                    fsmName = nailFsm.FsmName,
+                    fsmStateName = "Follow HeroFacingRight",
+                    actionIndex = 12,
                     Hook = OnPaleNailAttackCheck,
-                    HookName = "Nail Target"
+                    hookName = "Nail Target"
                 },
 
-                new FsmActionInjectorComponent.Injection {
-                    FsmName = nailFsm.FsmName,
-                    FsmStateName = "Fire Antic",
-                    ActionIndex = 0,
+                new () {
+                    fsmName = nailFsm.FsmName,
+                    fsmStateName = "Fire Antic",
+                    actionIndex = 0,
                     Hook = OnPaleNailFire,
-                    HookName = "Nail Fire"
+                    hookName = "Nail Fire"
                 }
             ];
 
@@ -1441,7 +1441,7 @@ internal class AnimationManager {
     }
 
     /// <summary>
-    /// Creates hooks for tools
+    /// Creates hooks for tools.
     /// </summary>
     private void CreateToolHooks() {
         MagnetiteDice.Hook(OnDiceEnable);
@@ -1462,7 +1462,7 @@ internal class AnimationManager {
     }
 
     /// <summary>
-    /// Hook for the magnetite dice being triggered
+    /// Hook for the magnetite dice being triggered.
     /// </summary>
     private void OnDiceEnable() {
         // If we are not connected, there is nothing to send to
@@ -1473,6 +1473,9 @@ internal class AnimationManager {
         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagnetiteDice, 0);
     }
 
+    /// <summary>
+    /// Hook for the flea brew being triggered.
+    /// </summary>
     private void OnFleaBrew(PlayMakerFSM fsm) {
         // If we are not connected, there is nothing to send to
         if (!_netClient.IsConnected) {
@@ -1484,7 +1487,7 @@ internal class AnimationManager {
     }
 
     /// <summary>
-    /// Hook for the fractured mask being triggered
+    /// Hook for the fractured mask being triggered.
     /// </summary>
     private void OnFracturedMaskBreak(PlayMakerFSM fsm) {
         // If we are not connected, there is nothing to send to
@@ -1496,14 +1499,14 @@ internal class AnimationManager {
     }
 
     /// <summary>
-    /// Hook for the magma bell being triggered
+    /// Hook for the magma bell being triggered.
     /// </summary>
     private void OnMagmaBell() {
         // If we are not connected, there is nothing to send to
         if (!_netClient.IsConnected) {
             return;
         }
-        Logger.Info("magma bell sending");
+
         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagmaBell, 0);
     }
 

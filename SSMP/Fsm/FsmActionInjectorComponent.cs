@@ -63,11 +63,6 @@ internal class FsmActionInjectorComponent : MonoBehaviour {
         if (_injections.Count == 0) return;
 
         foreach (var injection in _injections) {
-            // Ensure injection is set up correctly
-            if (injection.FsmName == null) return;
-            if (injection.Hook == null) return;
-            if (injection.FsmStateName == null) return;
-
             // Locate and patch the FSM
             var fsm = gameObject.LocateMyFSM(injection.fsmName);
             var state = fsm.GetState(injection.fsmStateName);

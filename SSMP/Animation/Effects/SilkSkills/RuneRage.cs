@@ -106,9 +106,7 @@ internal class RuneRage : BaseSilkSkill {
         // Play volt audio
         if (isVolt) {
             var voltAntic = fsm.GetFirstAction<PlayAudioEvent>("S Bomb Zap FX");
-            if (voltAntic != null) {
             AudioUtil.PlayAudio(voltAntic, playerObject);
-        }
         }
 
         // Play normal audio
@@ -129,21 +127,16 @@ internal class RuneRage : BaseSilkSkill {
 
         // Play general audio
         var runeBurstAudio = fsm.GetFirstAction<PlayAudioEvent>("Initial Silk Cost");
-        if (runeBurstAudio != null) {
         AudioUtil.PlayAudio(runeBurstAudio, playerObject);
-        }
 
         // Play volt audio
         if (isVolt) {
             var zapAudioBug = fsm.GetFirstAction<PlayAudioEvent>("S Bomb Zap FX 2");
-            if (zapAudioBug != null) {
             AudioUtil.PlayAudio(zapAudioBug, playerObject);
-        }
         }
 
         // Spawn sonar, picking the right one for the volt filament setting
         var sonarPicker = fsm.GetFirstAction<BoolTestToGameObject>("Sonar Cast Effects");
-        if (sonarPicker == null) return;
 
         GameObject localSonar;
 
@@ -253,7 +246,6 @@ internal class RuneRage : BaseSilkSkill {
         if (clusterFsm == null) return null;
 
         var blaster = clusterFsm.GetFirstAction<BoolTestToGameObject>("Do Explosions");
-        if (blaster == null) return null;
 
         // Fill out both blast prefabs
         _localRuneBlastVolt = blaster.TrueGameObject.Value;

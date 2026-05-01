@@ -101,7 +101,6 @@ internal class SilkSpear : BaseSilkSkill {
 
         // Try to thunk as long as the spear is doing damage
         while (collider.isActiveAndEnabled) {
-
             // Find a terrain collider within the bounds of the spear
             var y = spear.transform.position.y;
             // ReSharper disable once Unity.PreferNonAllocApi
