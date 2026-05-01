@@ -9,17 +9,20 @@ using Object = UnityEngine.Object;
 
 namespace SSMP.Animation.Effects.SilkSkills;
 
+/// <summary>
+/// Effect class for the Cross Stitch Silk Skill.
+/// </summary>
 internal class CrossStitch : BaseSilkSkill {
 
     /// <summary>
-    /// Determines if this instance is for the starting animation
+    /// Determines if this instance is for the starting animation.
     /// </summary>
-    public bool IsStarting = false;
+    private bool _isStarting;
 
     /// <summary>
-    /// Reference to an instance for the starting animation
+    /// Reference to an instance for the starting animation.
     /// </summary>
-    public static CrossStitch StartingInstance = new() { IsStarting = true };
+    public static readonly CrossStitch StartingInstance = new() { _isStarting = true };
 
     /// <inheritdoc/>
     public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
@@ -27,7 +30,7 @@ internal class CrossStitch : BaseSilkSkill {
         var isVolt = IsVolt(effectInfo);
 
         // Determine which animation to play
-        if (IsStarting) {
+        if (_isStarting) {
             PlayStart(playerObject, isShaman, isVolt);
             return;
         }
@@ -37,17 +40,17 @@ internal class CrossStitch : BaseSilkSkill {
     }
 
     /// <summary>
-    /// Plays the parry preparation animation
+    /// Plays the parry preparation animation.
     /// </summary>
-    /// <param name="playerObject">The player who used the skill</param>
-    /// <param name="isShaman">If shaman effects should be used</param>
-    /// <param name="isVolt">If volt filament effects should be used</param>
-    private void PlayStart(GameObject playerObject, bool isShaman, bool isVolt) {
-        var fsm = GetSkillFSM();
+    /// <param name="playerObject">The player who used the skill.</param>
+    /// <param name="isShaman">Whether shaman effects should be used.</param>
+    /// <param name="isVolt">Whether volt filament effects should be used.</param>
+    private static void PlayStart(GameObject playerObject, bool isShaman, bool isVolt) {
+        var fsm = GetSkillFsm();
 
         // Play normal hornet noise
         var normalAudio = fsm.GetFirstAction<PlayRandomAudioClipTableV3>("Parry Start");
-        if (normalAudio != null) AudioUtil.PlayAudio(normalAudio, playerObject);
+        AudioUtil.PlayAudio(normalAudio, playerObject);
 
         // Play stance audio
         var stanceAudio = fsm.GetAction<AudioPlayerOneShotSingle>("Parry Start", 15);
@@ -71,14 +74,14 @@ internal class CrossStitch : BaseSilkSkill {
     /// <summary>
     /// Plays the post-hit clash effect, then the dash.
     /// </summary>
-    /// <param name="playerObject">The player who used the skill</param>
-    /// <param name="isShaman">If shaman effects should be used</param>
-    /// <param name="isVolt">If volt filament effects should be used</param>
+    /// <param name="playerObject">The player who used the skill.</param>
+    /// <param name="isShaman">Whether shaman effects should be used.</param>
+    /// <param name="isVolt">Whether volt filament effects should be used.</param>
     private IEnumerator PlayClash(GameObject playerObject, bool isShaman, bool isVolt) {
         // Play parry audio
-        var fsm = GetSkillFSM();
+        var fsm = GetSkillFsm();
         var clashAudio = fsm.GetFirstAction<AudioPlayerOneShotSingle>("Parry Clash");
-        if (clashAudio != null) AudioUtil.PlayAudio(clashAudio, playerObject);
+        AudioUtil.PlayAudio(clashAudio, playerObject);
 
         // Activate clash object
         if (TryGetClashEffect(playerObject, out var clash)) {
@@ -95,11 +98,11 @@ internal class CrossStitch : BaseSilkSkill {
     }
 
     /// <summary>
-    /// Plays the cross stitch dashing animation that does damage (if appropriate)
+    /// Plays the cross stitch dashing animation that does damage (if appropriate).
     /// </summary>
-    /// <param name="playerObject">The player who used the skill</param>
-    /// <param name="isShaman">If shaman effects should be used</param>
-    /// <param name="isVolt">If volt filament effects should be used</param>
+    /// <param name="playerObject">The player who used the skill.</param>
+    /// <param name="isShaman">Whether shaman effects should be used.</param>
+    /// <param name="isVolt">Whether volt filament effects should be used.</param>
     private IEnumerator PlayDash(GameObject playerObject, bool isShaman, bool isVolt) {
         // Play louder sound
         PlayHornetAttackSound(playerObject);
@@ -137,13 +140,17 @@ internal class CrossStitch : BaseSilkSkill {
     }
 
     /// <summary>
-    /// Attempts to get the parry thread effect for the preparation animation
+    /// Attempts to get the parry thread effect for the preparation animation.
     /// </summary>
-    /// <param name="playerObject">The player using the skill</param>
-    /// <param name="isVolt">If volt filament effects should be used</param>
-    /// <param name="thread">The effect, if found</param>
-    /// <returns>true if found</returns>
-    private static bool TryGetParryThread(GameObject playerObject, bool isVolt, [MaybeNullWhen(false)] out GameObject thread) {
+    /// <param name="playerObject">The player using the skill.</param>
+    /// <param name="isVolt">If volt filament effects should be used.</param>
+    /// <param name="thread">The effect, if found.</param>
+    /// <returns>True if the effect was found, otherwise false.</returns>
+    private static bool TryGetParryThread(
+        GameObject playerObject, 
+        bool isVolt, 
+        [MaybeNullWhen(false)] out GameObject thread
+    ) {
         // Find existing object
         var name = isVolt ? "Parry Thread Zap" : "Parry Thread";
         var created = FindOrCreateSkill(playerObject, name, out var threadObj);
@@ -167,11 +174,11 @@ internal class CrossStitch : BaseSilkSkill {
     }
 
     /// <summary>
-    /// Attempts to get the flash effect for the preparation animation
+    /// Attempts to get the flash effect for the preparation animation.
     /// </summary>
-    /// <param name="playerObject">The player using the skill</param>
-    /// <param name="flash">The effect, if found</param>
-    /// <returns>true if found</returns>
+    /// <param name="playerObject">The player using the skill.</param>
+    /// <param name="flash">The effect, if found.</param>
+    /// <returns>True if the effect was found, otherwise false.</returns>
     private static bool TryGetStanceFlash(GameObject playerObject, [MaybeNullWhen(false)] out GameObject flash) {
         // Find or create
         var created = FindOrCreateSkill(playerObject, "Parry Stance Flash", out var flashObj);
@@ -191,11 +198,11 @@ internal class CrossStitch : BaseSilkSkill {
     }
 
     /// <summary>
-    /// Attempts to get the parry activation clash effect
+    /// Attempts to get the parry activation clash effect.
     /// </summary>
-    /// <param name="playerObject">The player using the skill</param>
-    /// <param name="clash">The effect, if found</param>
-    /// <returns>true if found</returns>
+    /// <param name="playerObject">The player using the skill.</param>
+    /// <param name="clash">The effect, if found.</param>
+    /// <returns>True if the effect was found, otherwise false.</returns>
     private static bool TryGetClashEffect(GameObject playerObject, [MaybeNullWhen(false)] out GameObject clash) {
         // Find or create
         var created = FindOrCreateSkill(playerObject, "Parry Clash Effect", out var clashObj);
@@ -214,13 +221,17 @@ internal class CrossStitch : BaseSilkSkill {
     }
 
     /// <summary>
-    /// Attempts to get the parry activation slash dash effect
+    /// Attempts to get the parry activation slash dash effect.
     /// </summary>
-    /// <param name="playerObject">The player using the skill</param>
-    /// <param name="isVolt">If volt filament effects should be used</param>
-    /// <param name="slash">The effect, if found</param>
-    /// <returns>true if found</returns>
-    private static bool TryGetSlashEffect(GameObject playerObject, bool isVolt, [MaybeNullWhen(false)] out GameObject slash) {
+    /// <param name="playerObject">The player using the skill.</param>
+    /// <param name="isVolt">If volt filament effects should be used.</param>
+    /// <param name="slash">The effect, if found.</param>
+    /// <returns>True if the effect was found, otherwise false.</returns>
+    private static bool TryGetSlashEffect(
+        GameObject playerObject, 
+        bool isVolt, 
+        [MaybeNullWhen(false)] out GameObject slash
+    ) {
         var name = isVolt ? "Parry Slash Effect Zap" : "Parry Slash Effect";
 
         // Find existing slash
@@ -232,7 +243,7 @@ internal class CrossStitch : BaseSilkSkill {
         }
 
         // Get the correct slash
-        var fsm = GetSkillFSM();
+        var fsm = GetSkillFsm();
         var boolTest = fsm.GetAction<BoolTestToGameObject>("Parry Cross Slash", 8);
         if (boolTest == null) {
             return false;

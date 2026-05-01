@@ -17,8 +17,9 @@ internal class TextComponent : Component, ITextComponent {
         string text,
         int fontSize,
         FontStyle fontStyle = FontStyle.Normal,
-        TextAnchor alignment = TextAnchor.MiddleCenter
-    ) : this(componentGroup, position, size, new Vector2(0.5f, 0.5f), text, fontSize, fontStyle, alignment) {
+        TextAnchor alignment = TextAnchor.MiddleCenter,
+        bool wrap = false
+    ) : this(componentGroup, position, size, new Vector2(0.5f, 0.5f), text, fontSize, fontStyle, alignment, wrap) {
     }
 
     public TextComponent(
@@ -29,9 +30,10 @@ internal class TextComponent : Component, ITextComponent {
         string text,
         int fontSize,
         FontStyle fontStyle = FontStyle.Normal,
-        TextAnchor alignment = TextAnchor.MiddleCenter
+        TextAnchor alignment = TextAnchor.MiddleCenter,
+        bool wrap = false
     ) : base(componentGroup, position, size) {
-        _textObject = CreateTextObject(text, fontSize, fontStyle, alignment, pivot);
+        _textObject = CreateTextObject(text, fontSize, fontStyle, alignment, pivot, wrap);
         AddSizeFitter();
         AddOutline();
     }
@@ -85,7 +87,14 @@ internal class TextComponent : Component, ITextComponent {
     /// Create the Unity Text object with all the parameters.
     /// </summary>
     /// <returns>The Unity <see cref="Text"/> object.</returns>
-    private Text CreateTextObject(string text, int fontSize, FontStyle fontStyle, TextAnchor alignment, Vector2 pivot) {
+    private Text CreateTextObject(
+        string text,
+        int fontSize,
+        FontStyle fontStyle,
+        TextAnchor alignment,
+        Vector2 pivot,
+        bool wrap
+    ) {
         var textObj = GameObject.AddComponent<Text>();
         
         textObj.supportRichText = true;
@@ -94,7 +103,7 @@ internal class TextComponent : Component, ITextComponent {
         textObj.fontSize = fontSize;
         textObj.fontStyle = fontStyle;
         textObj.alignment = alignment;
-        textObj.horizontalOverflow = HorizontalWrapMode.Overflow;
+        textObj.horizontalOverflow = wrap ? HorizontalWrapMode.Wrap : HorizontalWrapMode.Overflow;
         textObj.verticalOverflow = VerticalWrapMode.Overflow;
         textObj.rectTransform.pivot = pivot;
         textObj.raycastTarget = false; // do not block input

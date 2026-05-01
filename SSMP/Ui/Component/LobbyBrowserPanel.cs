@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using SSMP.Networking.Matchmaking;
+using SSMP.Networking.Matchmaking.Protocol;
 using UnityEngine;
 using UnityEngine.UI;
 using Object = UnityEngine.Object;

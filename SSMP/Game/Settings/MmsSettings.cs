@@ -9,6 +9,10 @@ internal class MmsSettings {
     /// Default points to a domain name for the standard MMS.
     /// </summary>
     public string MmsUrl { get; set; } = "https://mms.ssmp.gg";
+
+    /// <summary>The UDP port used for NAT discovery.</summary>
+    public int UdpDiscoveryPort { get; set; } = 5001;
+
     /// <summary>
     /// The version of the MMS URL entry. This version will be updated in this variable when a new domain name
     /// is being used for the MMS server. Then, if the version that is saved in the mod settings on disk is older than

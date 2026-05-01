@@ -711,9 +711,13 @@ internal class AnimationManager {
     private readonly PlayerManager _playerManager;
 
     /// <summary>
+    /// Copied instance of the player data to get positions for targeting of Silk Skills.
     /// </summary>
     private readonly Dictionary<ushort, ClientPlayerData> _playerData;
 
+    /// <summary>
+    /// Copied instance of the server settings for checking whether PvP, Teams, etc. are enabled.
+    /// </summary>
     private ServerSettings _serverSettings;
 
     /// <summary>
@@ -736,7 +740,11 @@ internal class AnimationManager {
     /// </summary>
     private bool _dashHasEnded = true;
 
-    private List<byte> _runeRagePositions = new();
+    /// <summary>
+    /// List of encoded positions for Rune Rage blasts. Used to gather encoded positions before sending effect info to
+    /// server.
+    /// </summary>
+    private readonly List<byte> _runeRagePositions = [];
 
     // /// <summary>
     // /// Whether the player has sent that they stopped crystal dashing.
@@ -1136,39 +1144,41 @@ internal class AnimationManager {
     }
 
     /// <summary>
-    /// Animation subanimation hook for the Witch Tentacles FSM state
+    /// Animation subanimation hook for the Witch Tentacles FSM state.
     /// </summary>
     private void OnWitchTentacles(PlayMakerFSM fsm) {
-        var dummyClip = new tk2dSpriteAnimationClip();
-        dummyClip.name = "Witch Tentacles!";
-        dummyClip.wrapMode = tk2dSpriteAnimationClip.WrapMode.Once;
+        var dummyClip = new tk2dSpriteAnimationClip {
+            name = "Witch Tentacles!",
+            wrapMode = tk2dSpriteAnimationClip.WrapMode.Once
+        };
         OnAnimationEvent(dummyClip);
     }
 
     /// <summary>
-    /// Animation subanimation hook for the Shaman Air Cancel FSM state
+    /// Animation subanimation hook for the Shaman Air Cancel FSM state.
     /// </summary>
     
     private void OnShamanCancel(PlayMakerFSM fsm) {
-        var dummyClip = new tk2dSpriteAnimationClip();
-        dummyClip.name = "Shaman Cancel";
-        dummyClip.wrapMode = tk2dSpriteAnimationClip.WrapMode.Once;
+        var dummyClip = new tk2dSpriteAnimationClip {
+            name = "Shaman Cancel",
+            wrapMode = tk2dSpriteAnimationClip.WrapMode.Once
+        };
         OnAnimationEvent(dummyClip);
     }
     
     /// <summary>
-    /// Animation subanimation hook for interrupted binds
+    /// Animation subanimation hook for interrupted binds.
     /// </summary>
     private void OnBindInterrupt(PlayMakerFSM fsm) {
-        var dummyClip = new tk2dSpriteAnimationClip();
-        dummyClip.name = "Bind Fail Burst";
-        dummyClip.wrapMode = tk2dSpriteAnimationClip.WrapMode.Once;
+        var dummyClip = new tk2dSpriteAnimationClip {
+            name = "Bind Fail Burst",
+            wrapMode = tk2dSpriteAnimationClip.WrapMode.Once
+        };
         OnAnimationEvent(dummyClip);
     }
 
-
     /// <summary>
-    /// Creates hooks for silk skills
+    /// Creates hooks for silk skills.
     /// </summary>
     private void CreateSkillHooks() {
         // Silk skill injections
@@ -1246,7 +1256,7 @@ internal class AnimationManager {
     }
 
     /// <summary>
-    /// Animation subanimation hook for extending a thread storm
+    /// Animation subanimation hook for extending a thread storm.
     /// </summary>
     private void OnThreadStormExtend(PlayMakerFSM fsm) {
         var effectInfo = BaseSilkSkill.GetEffectFlags();
@@ -1254,7 +1264,7 @@ internal class AnimationManager {
     }
 
     /// <summary>
-    /// Influences Rune Rage to be able to target players that can be attacked
+    /// Influences Rune Rage to be able to target players that can be attacked.
     /// </summary>
     private void OnBuildRuneRageArray(PlayMakerFSM fsm) {
         // If we are not connected, there is nothing to send to
@@ -1318,7 +1328,7 @@ internal class AnimationManager {
     }
 
     /// <summary>
-    /// Intercepts the spawn locations for targeted Rune Rages
+    /// Intercepts the spawn locations for targeted Rune Rages.
     /// </summary>
     private void OnRuneBlastEnemy(PlayMakerFSM fsm) {
         // At this point the rune cluster has been created with a position and a given offset from the object.
@@ -1331,25 +1341,23 @@ internal class AnimationManager {
     }
 
     /// <summary>
-    /// Intercepts the spawn locations for random Rune Rages
+    /// Intercepts the spawn locations for random Rune Rages.
     /// </summary>
     private void OnRuneBlastRandom(PlayMakerFSM fsm) {
         // If there aren't enough targets, rune rage will spawn up to 3 other blasts
         var spawnRadial = fsm.GetFirstAction<SpawnRandomObjectsRadialRandom>("Random Blasts");
-        if (spawnRadial != null) {
-            // Get the positions of spawned blasts
-            var positions = spawnRadial.tempPosStore;
+        // Get the positions of spawned blasts
+        var positions = spawnRadial.tempPosStore;
 
-            // Add to collection of positions
-            foreach (var position in positions) {
-                var encodedPosition = RuneRage.EncodeRunePosition((Vector3)position);
-                _runeRagePositions.AddRange(encodedPosition);
-            }
+        // Add to collection of positions
+        foreach (var position in positions) {
+            var encodedPosition = RuneRage.EncodeRunePosition(position);
+            _runeRagePositions.AddRange(encodedPosition);
         }
     }
 
     /// <summary>
-    /// Animation hook to send Rune Rage positions
+    /// Animation hook to send Rune Rage positions.
     /// </summary>
     private void OnRuneBlastFinished(PlayMakerFSM fsm) {
         var effectInfo = BaseSilkSkill.GetEffectFlags().ToList();
@@ -1360,7 +1368,7 @@ internal class AnimationManager {
     }
 
     /// <summary>
-    /// Influences Pail Nails to be able to target players that can be attacked
+    /// Influences Pail Nails to be able to target players that can be attacked.
     /// </summary>
     private void OnPaleNailAttackCheck(PlayMakerFSM fsm) {
         // If we are not connected, there is nothing to send to
@@ -1413,11 +1421,12 @@ internal class AnimationManager {
     }
 
     /// <summary>
-    /// Sends an update to fire a set of nails at a specific target
+    /// Sends an update to fire a set of nails at a specific target.
     /// </summary>
     private void OnPaleNailFire(PlayMakerFSM fsm) {
         // Only get info from one needle position (the first one)
         var needleOffset = fsm.FsmVariables.GetFsmVector3("Offset");
+        // ReSharper disable once CompareOfFloatsByEqualityOperator
         if (needleOffset.Value.x != 3) return;
 
         // Don't send if no target, it'll go off on its own.

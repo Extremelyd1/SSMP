@@ -5,9 +5,18 @@ using SSMP.Logging;
 
 namespace SSMP.Fsm;
 
+/// <summary>
+/// An action injected into an FSM to act as a hook for entering a state
+/// </summary>
 internal sealed class FsmStateActionInjector : FsmStateAction {
-    private static Action? _onUninject;
+    /// <summary>
+    /// An action to trigger the removal of all injected actions
+    /// </summary>
+    private static Action? _uninjectAll;
 
+    /// <summary>
+    /// The action to run when the state for this action is entered.
+    /// </summary>
     private Action<PlayMakerFSM>? _onStateEnter;
 
     /// <summary>
@@ -28,6 +37,8 @@ internal sealed class FsmStateActionInjector : FsmStateAction {
         stateActions.Insert(index, this);
         State.Actions = stateActions.ToArray();
         State.SaveActions();
+
+        _uninjectAll += Uninject;
     }
 
     /// <summary>
@@ -40,7 +51,7 @@ internal sealed class FsmStateActionInjector : FsmStateAction {
         State.SaveActions();
 
         _onStateEnter = null;
-        _onUninject -= Uninject;
+        _uninjectAll -= Uninject;
     }
 
     /// <inheritdoc/>
@@ -82,6 +93,6 @@ internal sealed class FsmStateActionInjector : FsmStateAction {
     /// Removes all injected FSM actions
     /// </summary>
     public static void UninjectAll() {
-        _onUninject?.Invoke();
+        _uninjectAll?.Invoke();
     }
 }

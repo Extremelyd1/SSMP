@@ -1,5 +1,5 @@
 using System;
-using SSMP.Networking.Matchmaking;
+using SSMP.Networking.Matchmaking.Protocol;
 using UnityEngine;
 using UnityEngine.UI;
 using Object = UnityEngine.Object;
@@ -289,51 +289,6 @@ internal class LobbyConfigPanel : IComponent {
         txt.fontSize = fontSize;
         txt.alignment = alignment;
         txt.color = color;
-
-        return go;
-    }
-
-    private static GameObject CreateInputField(Vector2 pos, float width, float height, string placeholder) {
-        var go = new GameObject("InputField");
-        var rect = go.AddComponent<RectTransform>();
-        rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f);
-        rect.pivot = new Vector2(0.5f, 0.5f);
-        rect.anchoredPosition = new Vector2(pos.x, pos.y - height / 2f);
-        rect.sizeDelta = new Vector2(width, height);
-
-        var bg = go.AddComponent<Image>();
-        bg.color = new Color(0.15f, 0.15f, 0.18f, 1f);
-
-        var textGo = new GameObject("Text");
-        var textRect = textGo.AddComponent<RectTransform>();
-        textRect.anchorMin = Vector2.zero;
-        textRect.anchorMax = Vector2.one;
-        textRect.offsetMin = new Vector2(10f, 5f);
-        textRect.offsetMax = new Vector2(-10f, -5f);
-        var text = textGo.AddComponent<Text>();
-        text.font = Resources.FontManager.UIFontRegular;
-        text.fontSize = 14;
-        text.color = Color.white;
-        text.alignment = TextAnchor.MiddleLeft;
-        textGo.transform.SetParent(go.transform, false);
-
-        var placeholderGo = new GameObject("Placeholder");
-        var phRect = placeholderGo.AddComponent<RectTransform>();
-        phRect.anchorMin = Vector2.zero;
-        phRect.anchorMax = Vector2.one;
-        phRect.offsetMin = new Vector2(10f, 5f);
-        phRect.offsetMax = new Vector2(-10f, -5f);
-        var phText = placeholderGo.AddComponent<Text>();
-        phText.font = Resources.FontManager.UIFontRegular;
-        phText.fontSize = 14;
-        phText.color = new Color(0.5f, 0.5f, 0.5f, 1f);
-        phText.alignment = TextAnchor.MiddleLeft;
-        phText.text = placeholder;
-        placeholderGo.transform.SetParent(go.transform, false);
-
-        var input = go.AddComponent<InputField>();
-        input.textComponent = text;
-        input.placeholder = phText;
 
         return go;
     }
