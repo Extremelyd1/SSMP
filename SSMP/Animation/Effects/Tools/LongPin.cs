@@ -18,42 +18,6 @@ internal class LongPin : BaseTool {
     /// <inheritdoc/>
     public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
         var poisoned = EffectIsPoisoned(effectInfo);
-        var fsm = HeroController.instance.toolsFSM;
-
-        // Set up modified prefab
-        if (!_modifiedPrefab) {
-            var prefab = fsm.GetFirstAction<SpawnProjectileV2>("Fisherpin");
-            if (prefab == null) return;
-
-            _modifiedPrefab = EffectUtils.SpawnGlobalPoolObject(prefab.Prefab.Value, playerObject.transform, 0, false);
-            if (!_modifiedPrefab) return;
-
-            _modifiedPrefab.SetActive(false);
-            _modifiedPrefab.name = "LONGPIN";
-
-            var longPinTool = _modifiedPrefab.GetComponent<ToolPin>();
-
-            // Set up rebound effect
-            var straightPin = ToolItemManager.GetToolByName("Straight Pin");
-            if (straightPin is ToolItemBasic pinTool) {
-                var pinPrefab = pinTool.usageOptions.ThrowPrefab;
-                var pinReboundHit = pinPrefab.GetComponent<ToolPin>()?.reboundHitEffectGameobject;
-
-                longPinTool.reboundHitEffectGameobject = pinReboundHit;
-            }
-
-            // Set up rebound box
-            var reboundBoxObject = new GameObject("Rebound Box");
-            var reboundBox = reboundBoxObject.AddComponent<Rigidbody2D>();
-            reboundBoxObject.SetActive(false);
-            reboundBox.bodyType = RigidbodyType2D.Kinematic;
-
-            longPinTool.reboundBox = reboundBoxObject;
-
-            AddDamageHeroComponent(_modifiedPrefab);
-        }
-
-        // Spawn pin
         var isOnWall = EffectIsOnWall(effectInfo);
 
         // Determine spawn position
@@ -64,17 +28,8 @@ internal class LongPin : BaseTool {
             facingRight = !facingRight;
         }
 
-        // Spawn pin
-        var pin = _modifiedPrefab.Spawn(spawnPosition);
-        if (!pin) return;
-
-        pin.SetActive(false);
-        pin.transform.localScale = _modifiedPrefab.transform.localScale;
-
-        // Set initial velocity
-        if (!pin.TryGetComponent<Rigidbody2D>(out var body)) {
-            return;
-        }
+        var prefab = GetPrefab(playerObject);
+        if (!prefab) return;
 
         // Get the last time a longpin was fired
         var key = playerObject.GetInstanceID();
@@ -93,8 +48,80 @@ internal class LongPin : BaseTool {
             angle = UnityEngine.Random.Range(134, 140);
         }
 
+        SpawnPin(prefab, spawnPosition, angle, facingRight, poisoned);
+    }
+
+    /// <summary>
+    /// Gets the modified longpin prefab.
+    /// </summary>
+    /// <param name="playerObject">The player using the longpin.</param>
+    /// <returns>The longpin prefab.</returns>
+    private static GameObject? GetPrefab(GameObject playerObject) {
+        // Set up modified prefab
+        if (!_modifiedPrefab) {
+            // Locate the original prefab
+            var fsm = HeroController.instance.toolsFSM;
+
+            var prefab = fsm.GetFirstAction<SpawnProjectileV2>("Fisherpin");
+            if (prefab == null) return null;
+
+            // Create a new version to modify
+            _modifiedPrefab = EffectUtils.SpawnGlobalPoolObject(prefab.Prefab.Value, playerObject.transform, 0, false);
+            if (!_modifiedPrefab) return null;
+
+            _modifiedPrefab.SetActive(false);
+            _modifiedPrefab.name = "LONGPIN";
+
+
+            // Set up rebound effect
+            var longPinTool = _modifiedPrefab.GetComponent<ToolPin>();
+            var straightPin = ToolItemManager.GetToolByName("Straight Pin");
+
+            if (straightPin is ToolItemBasic pinTool) {
+                var pinPrefab = pinTool.usageOptions.ThrowPrefab;
+                var pinReboundHit = pinPrefab.GetComponent<ToolPin>()?.reboundHitEffectGameobject;
+
+                longPinTool.reboundHitEffectGameobject = pinReboundHit;
+            }
+
+            // Set up rebound box
+            var reboundBoxObject = new GameObject("Rebound Box");
+            var reboundBox = reboundBoxObject.AddComponent<Rigidbody2D>();
+            reboundBoxObject.SetActive(false);
+            reboundBox.bodyType = RigidbodyType2D.Kinematic;
+
+            longPinTool.reboundBox = reboundBoxObject;
+
+            // Set up damager
+            AddDamageHeroComponent(_modifiedPrefab);
+        }
+
+        return _modifiedPrefab;
+    }
+
+    /// <summary>
+    /// Spawns a longpin at the given position.
+    /// </summary>
+    /// <param name="prefab">The longpin prefab.</param>
+    /// <param name="spawnPosition">The position to spawn the longpin.</param>
+    /// <param name="angle">The angle to fire the longpin at.</param>
+    /// <param name="facingRight">Whether the player is facing right.</param>
+    /// <param name="poisoned">Whether the longpin is poisoned</param>
+    private void SpawnPin(GameObject prefab, Vector3 spawnPosition, float angle, bool facingRight, bool poisoned) {
+        // Spawn pin
+        var pin = prefab.Spawn(spawnPosition);
+        if (!pin) return;
+
+        pin.SetActive(false);
+        pin.transform.localScale = prefab.transform.localScale;
+
         var x = 35 * Mathf.Cos(angle * (Mathf.PI / 180f));
         var y = 35 * Mathf.Sin(angle * (Mathf.PI / 180f));
+
+        // Set initial velocity
+        if (!pin.TryGetComponent<Rigidbody2D>(out var body)) {
+            return;
+        }
 
         // Make the pin face the correct way
         if (facingRight) {
