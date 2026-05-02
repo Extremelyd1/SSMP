@@ -16,13 +16,14 @@ internal class BaseTool : DamageAnimationEffect {
         { AttackTool.StraightPin, new StraightPin() },
         { AttackTool.ThreefoldPin, new ThreefoldPin() },
         { AttackTool.LongPin, new LongPin() },
+        { AttackTool.Tacks, new Tacks() }
     };
 
     private static readonly Dictionary<string, AttackTool> ToolNameMap = new() {
         { "Straight Pin", AttackTool.StraightPin },
         { "Tri Pin", AttackTool.ThreefoldPin } ,
         //{ "Sting Shard", AttackTool.StingShard } ,
-        //{ "Tack", AttackTool.Tacks } ,
+        { "Tack", AttackTool.Tacks } ,
         { "Harpoon", AttackTool.LongPin } ,
         //{ "Curve Claws", AttackTool.Curveclaw } ,
         //{ "Curve Claws Upgraded", AttackTool.Curvesickle } ,

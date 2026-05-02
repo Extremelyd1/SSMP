@@ -293,6 +293,10 @@ internal class ClientManager : IClientManager {
         // Register client connect and timeout handler
         _netClient.ConnectEvent += OnClientConnect;
         _netClient.TimeoutEvent += OnTimeout;
+
+        // Handle effects of disconnects and leaves in animations
+        PlayerLeaveSceneEvent += _animationManager.OnPlayerLeaveScene;
+        PlayerDisconnectEvent += _animationManager.OnPlayerLeaveScene;
     }
 
     /// <summary>

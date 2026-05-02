@@ -5,6 +5,7 @@ using SSMP.Animation.Effects;
 using SSMP.Animation.Effects.Movement;
 using SSMP.Animation.Effects.SilkSkills;
 using SSMP.Animation.Effects.Tools;
+using SSMP.Api.Client;
 using SSMP.Collection;
 using SSMP.Fsm;
 using SSMP.Game;
@@ -1019,6 +1020,10 @@ internal class AnimationManager {
     private void OnSceneChange(Scene oldScene, Scene newScene) {
         // A scene change occurs, so we can send again
         _stopSendingAnimationUntilSceneChange = false;
+    }
+
+    public void OnPlayerLeaveScene(IClientPlayer player) {
+        Tacks.DestroyPlayerTacks(player.PlayerObject);
     }
 
     /// <summary>
