@@ -628,6 +628,14 @@ internal class Entity {
                 Object.Host.SetActive(false);
             }
 
+            if (
+                Object.Client != null && 
+                Object.Client.TryGetComponent<PredictiveInterpolation>(out var interpolation)
+            ) {
+                interpolation.AdaptToRTT(_netClient.UpdateManager.AverageRtt);
+                interpolation.ManualUpdate(Time.deltaTime);
+            }
+
             return;
         }
 
