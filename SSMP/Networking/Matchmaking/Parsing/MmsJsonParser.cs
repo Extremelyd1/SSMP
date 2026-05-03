@@ -12,6 +12,9 @@ internal static class MmsJsonParser {
     
     /// <summary>
     /// The create-lobby request field used to send an explicit host IPv4 address to MMS.
+    /// This is kept local to the parser instead of being moved to <see cref="MmsFields"/>
+    /// because it is currently only relevant to the create-lobby flow and is not
+    /// considered part of the shared MMS schema.
     /// </summary>
     private const string CreateLobbyHostIpField = "HostIp";
 
