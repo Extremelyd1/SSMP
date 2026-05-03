@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using MMS.Models.Matchmaking;
 
 namespace MMS.Services.Matchmaking;
@@ -87,7 +88,7 @@ public sealed class JoinSessionStore {
     public bool ContainsDiscoveryToken(string token) => _discoveryMetadata.ContainsKey(token);
 
     /// <summary>Attempts to retrieve the metadata for a discovery token.</summary>
-    public bool TryGetDiscoveryMetadata(string token, out DiscoveryTokenMetadata? metadata) {
+    public bool TryGetDiscoveryMetadata(string token, [NotNullWhen(true)] out DiscoveryTokenMetadata? metadata) {
         if (!_discoveryMetadata.TryGetValue(token, out var stored)) {
             metadata = null;
             return false;

@@ -98,6 +98,13 @@ public sealed class UdpDiscoveryService : BackgroundService {
             PrivacyFormatter.Format(remoteEndPoint)
         );
 
+        if (!await _joinSessionService.ValidateDiscoveredClientIpAsync(
+                token,
+                remoteEndPoint.Address.ToString(),
+                cancellationToken
+            ))
+            return;
+
         await _joinSessionService.SetDiscoveredPortAsync(token, remoteEndPoint.Port, cancellationToken);
     }
 
