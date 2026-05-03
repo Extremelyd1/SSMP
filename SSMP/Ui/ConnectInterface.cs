@@ -2033,11 +2033,11 @@ internal class ConnectInterface {
             !string.IsNullOrEmpty(lanConnectionData) &&
             TryParseConnectionData(lanConnectionData, out var lanIp, out var lanPort)) {
             return new ConnectionInfo(
-                lanIp, lanPort, $"{publicIp}:{publicPort}", $"Connecting to LAN {lanIp}:{lanPort}...", true
+                lanIp, lanPort, $"{publicIp}:{publicPort}", $"Connecting to LAN {lanIp}:{lanPort}..."
             );
         }
 
-        return new ConnectionInfo(publicIp, publicPort, null, $"Connecting to {publicIp}:{publicPort}...", false);
+        return new ConnectionInfo(publicIp, publicPort, null, $"Connecting to {publicIp}:{publicPort}...");
     }
 
     /// <summary>
