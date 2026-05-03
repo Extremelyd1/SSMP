@@ -153,7 +153,7 @@ public sealed class JoinSessionCoordinator {
         string clientIp,
         CancellationToken cancellationToken = default
     ) {
-        if (!_store.TryGetDiscoveryMetadata(token, out var metadata) || metadata == null)
+        if (!_store.TryGetDiscoveryMetadata(token, out var metadata))
             return false;
 
         if (metadata.JoinId == null)
