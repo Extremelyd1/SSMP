@@ -1,7 +1,6 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
-using System.Threading.Tasks;
 using System.Threading;
 using SSMP.Logging;
 using SSMP.Networking.Client;
@@ -56,11 +55,6 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     /// 50ms provides good balance between NAT mapping refresh and network overhead.
     /// </summary>
     private const int PunchPacketDelayMs = 50;
-
-    /// <summary>
-    /// Small synchronous burst sent before DTLS starts so port-restricted NATs see the peer endpoint immediately.
-    /// </summary>
-    private const int InitialPunchPacketCount = 5;
 
     /// <summary>
     /// The IP address used for self-connecting (host connecting to own server).
@@ -276,10 +270,10 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
             // Parse target endpoint
             var endpoint = new IPEndPoint(IPAddress.Parse(address), port);
 
-            Logger.Debug($"HolePunch: Sending initial punch burst ({InitialPunchPacketCount} packets) to {endpoint}");
+            Logger.Debug($"HolePunch: Sending ({PunchPacketCount} evenly spaced punch packets) to {endpoint}");
 
             // Prime the NAT mapping immediately before DTLS begins.
-            for (var i = 0; i < InitialPunchPacketCount; i++) {
+            for (var i = 0; i < PunchPacketCount; i++) {
                 socket.SendTo(PunchPacket, endpoint);
                 Thread.Sleep(PunchPacketDelayMs);
             }
@@ -288,7 +282,6 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
             // This is important for DTLS which expects point-to-point communication
             socket.Connect(endpoint);
 
-            StartBackgroundPunchBurst(socket, endpoint);
             Logger.Info($"HolePunch: NAT traversal complete, socket connected to {endpoint}");
             return socket;
         } catch (Exception ex) {
@@ -296,31 +289,6 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
             socket.Dispose();
             throw new InvalidOperationException($"Hole punch failed: {ex.Message}", ex);
         }
-    }
-
-    /// <summary>
-    /// Continues sending punch packets while DTLS handshakes so stricter NATs keep the mapping alive.
-    /// </summary>
-    private static void StartBackgroundPunchBurst(Socket socket, IPEndPoint endpoint) {
-        Task.Run(() => {
-            try {
-                Logger.Debug(
-                    $"HolePunch: Continuing background punch burst ({PunchPacketCount - InitialPunchPacketCount} packets) to {endpoint}"
-                );
-                for (var i = InitialPunchPacketCount; i < PunchPacketCount; i++) {
-                    socket.Send(PunchPacket);
-                    Thread.Sleep(PunchPacketDelayMs);
-                }
-
-                Logger.Debug($"HolePunch: Background punch burst complete to {endpoint}");
-            } catch (ObjectDisposedException) {
-                // Socket closed during disconnect or failed handshake.
-            } catch (SocketException ex) {
-                Logger.Debug($"HolePunch: Background punch burst stopped for {endpoint}: {ex.Message}");
-            } catch (Exception ex) {
-                Logger.Warn($"HolePunch: Background punch burst failed for {endpoint}: {ex.Message}");
-            }
-        });
     }
 
     /// <summary>
