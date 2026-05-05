@@ -3,213 +3,355 @@
 namespace SSMP.Fsm;
 
 /// <summary>
-/// Handles smooth client-side interpolation of networked entities using 
-/// explicit extrapolation with RTT-adaptive error correction.
+/// Client-side interpolation for networked entities using dead reckoning
+/// with RTT-adaptive visual error correction.
 /// </summary>
+/// <remarks>
+/// Two layered techniques bridge the gap between server tick rate and render rate:
+/// <para><b>Dead reckoning</b><br/>
+/// Between updates, the object is projected forward using its last known velocity.
+/// Keeps motion smooth during packet loss at the cost of occasionally predicting
+/// the wrong position.</para>
+///
+/// <para><b>Visual offset correction</b><br/>
+/// When a server update corrects the logical position, the visual error is absorbed
+/// into an offset that smoothly decays to zero over a short window instead of snapping.
+/// The logical position is corrected instantly; only the rendered position is eased.</para>
+///
+/// <para><b>RTT adaptation</b><br/>
+/// Scales all smoothing parameters automatically. LAN players get tight, accurate
+/// parameters; poor-connection players get looser ones that prioritize smoothness
+/// over precision.</para>
+/// </remarks>
 internal class PredictiveInterpolation : MonoBehaviour {
     #region Settings
 
     /// <summary>
-    /// Threshold (seconds) where prediction is hard-stopped to prevent huge de-syncs.
+    /// Seconds without a server update before dead reckoning is hard-stopped.
+    /// Normal velocity decay handles mild packet loss long before this triggers.
     /// </summary>
     [Header("Prediction Limits")] [SerializeField]
     private float extremeLossThreshold = 1.0f;
 
     /// <summary>
-    /// Squared distance threshold for valid prediction vs teleport.
+    /// Squared distance (units²) beyond which a position correction snaps
+    /// instead of smoothing. Avoids a sqrt per frame; 16 ≈ 4 m gap.
     /// </summary>
     [SerializeField] private float snapThresholdSq = 16.0f;
 
     /// <summary>
-    /// Minimum squared speed to consider moving.
+    /// Squared speed (units/s)² below which the object is treated as stationary.
+    /// Prevents micro-jitter when velocity has nearly, but not fully, zeroed out.
     /// </summary>
     [SerializeField] private float minPredictionSpeedSq = 0.001f;
 
     /// <summary>
-    /// Maximum allowed speed for prediction to prevent explosions on lag spikes.
+    /// Maximum extrapolation speed (units/s).
+    /// Clamps velocity estimates inflated by packets arriving in rapid succession
+    /// after a lag spike.
     /// </summary>
     [SerializeField] private float maxProjectedSpeed = 50.0f;
 
+    /// <summary>
+    /// Server update interval in seconds (e.g. 1/20 for 20 Hz).
+    /// Governs extrapolation caps and velocity fallback timing.
+    /// </summary>
     [Header("Network Timing")]
-    [Tooltip("The fixed tick rate of your server (e.g. 0.05 for 20 ticks/sec).")]
+    [Tooltip("The fixed tick rate of the server, e.g. 0.05 for 20 ticks/sec.")]
     [SerializeField]
     private float serverDeltaTime = 1.0f / 20.0f;
 
-    [SerializeField] private float minServerDeltaTime = 1.0f / 128.0f; // ~7ms
+    /// <summary>
+    /// Minimum local inter-packet interval before two arrivals are flagged as
+    /// bunched. Bunched packets produce unreliable velocity estimates and are
+    /// skipped during the velocity update step.
+    /// </summary>
+    [SerializeField] private float minServerDeltaTime = 1.0f / 128.0f;
 
+    /// <summary>
+    /// Blend weight applied when merging a new instantaneous velocity sample
+    /// into the running estimate (0 = ignore new, 1 = replace entirely).
+    /// </summary>
     [Header("Smoothing Weights")] [SerializeField, Range(0f, 1f)]
     private float velocityBlendFactor = 0.7f;
 
+    /// <summary>
+    /// Visual offset correction time (seconds) used when RTT adaptation is off.
+    /// Larger values are smoother but keep the visual lag around longer.
+    /// </summary>
     [SerializeField] private float visualCorrectionTime = 0.1f;
+
+    /// <summary>
+    /// Base rate at which velocity decays once packets stop arriving.
+    /// Scaled by the per-RTT <see cref="DecayMultipliers"/> tier when adaptation
+    /// is enabled.
+    /// </summary>
     [SerializeField] private float velocityDecayRate = 2.0f;
 
+    /// <summary>
+    /// When enabled, correction time, prediction cap, and velocity decay
+    /// are scaled automatically based on measured RTT.
+    /// </summary>
     [Header("RTT Adaptation")] [SerializeField]
     private bool enableRttAdaptation = true;
 
-    [SerializeField] private float rttSmoothingSpeed = 3.0f; // How fast to transition between RTT tiers
+    /// <summary>
+    /// Exponent controlling how quickly adapted parameters track RTT changes.
+    /// Used as the rate in <c>1 - e^(-k·dt)</c> exponential smoothing.
+    /// </summary>
+    [SerializeField] private float rttSmoothingSpeed = 3.0f;
+
+    #endregion
+
+    #region Constants
+
+    // Starting RTT assumption before any measurement is available.
+    private const float DefaultRttMs = 75.0f;
+
+    // Default extrapolation cap: serverDeltaTime × this multiplier.
+    private const float DefaultPredictionCapMultiplier = 2.0f;
+
+    // Guards division-by-zero in velocity and prediction calculations.
+    private const float MinDeltaTime = 0.0001f;
+
+    // Guards against a correction time of zero, which would cause instant snapping.
+    private const float MinCorrectionTime = 0.0001f;
+
+    // Squared-magnitude threshold below which a vector is treated as zero.
+    private const float TinySq = 0.000001f;
 
     #endregion
 
     #region RTT Tier Definitions
 
-    // RTT thresholds (in milliseconds)
-    private static readonly float[] RttThresholds = [20f, 50f, 100f, 180f];
+    // Piecewise-linear lookup table: RttSamples is the input domain (ms),
+    // and each parallel array below is a separate output range.
+    // Values between tiers are linearly interpolated; values outside clamp
+    // to the nearest endpoint. See InterpolateValueForRtt().
+    //
+    // Tiers: [0] LAN ~20ms  [1] Excellent ~50ms  [2] Good ~100ms
+    //        [3] Fair ~180ms  [4] Poor ~260ms
 
-    // Visual correction time per tier: LAN, Excellent, Good, Fair, Poor
-    // Higher values = smoother but more latent visual corrections
-    private static readonly float[] CorrectionTimes = [0.05f, 0.06f, 0.10f, 0.14f, 0.20f];
+    private static readonly float[] RttSamples = [
+        20f,
+        50f,
+        100f,
+        180f,
+        260f
+    ];
 
-    // Prediction time cap multiplier per tier (multiplied by serverDeltaTime)
-    // Higher values = more extrapolation allowed before clamping
-    private static readonly float[] PredictionCaps = [1.8f, 2.0f, 2.5f, 3.0f, 3.5f];
+    // Seconds for the visual offset to decay to zero per tier.
+    // Poor connections warrant longer windows because corrections are larger
+    // and more frequent.
+    private static readonly float[] CorrectionTimes = [
+        0.05f,
+        0.06f,
+        0.10f,
+        0.14f,
+        0.20f
+    ];
 
-    // Decay rate multiplier per tier
-    // Lower values = slower decay, smoother movement but more gliding risk
-    private static readonly float[] DecayMultipliers = [18f, 15f, 10f, 6f, 3f];
+    // Extrapolation cap expressed as a multiplier of serverDeltaTime per tier.
+    // Poor connections get a larger cap to bridge irregular update gaps without
+    // stopping dead mid-motion.
+    private static readonly float[] PredictionCaps = [
+        1.8f,
+        2.0f,
+        2.5f,
+        3.0f,
+        3.5f
+    ];
+
+    // Multiplier on velocityDecayRate per tier.
+    // LAN (18×) decays fast because missing packets are genuinely anomalous.
+    // Poor (3×) decays slowly because gaps are routine and stopping looks wrong.
+    private static readonly float[] DecayMultipliers = [
+        18f,
+        15f,
+        10f,
+        6f,
+        3f
+    ];
 
     #endregion
 
     #region State Variables
 
-    // The last authoritative position received from the server (used for velocity calculation)
+    // Most recent position confirmed by the server.
+    // Dead reckoning projects forward from this using _velocity.
     private Vector3 _lastServerPosition;
 
-    // The current predicted position (integrated frame-by-frame)
+    // Current predicted position, integrated each frame via dead reckoning,
+    // then snapped to the authoritative position on each server update.
+    // The rendered position is _logicalPosition + _visualOffset.
     private Vector3 _logicalPosition;
 
+    // Velocity estimate (units/s) derived from successive authoritative positions.
     private Vector3 _velocity;
 
+    // Seconds elapsed since the last server update arrived.
     private float _timeSinceLastPacket;
-    private float _lastUpdateTime;
 
-    // Visual Offsets
+    // Wall-clock time of the last received packet, used to compute local
+    // inter-packet intervals when the server supplies no tick-count delta.
+    private float _lastPacketReceiveTime;
+
+    // Difference between the rendered position and the current logical position.
+    // Absorbs the visual jump when a server correction moves the logical position,
+    // then decays to zero over correctionTime.
     private Vector3 _visualOffset;
+
+    // Spring tracking velocity for the _visualOffset damper. Maintained across frames.
     private Vector3 _visualOffsetVelocity;
 
     private Transform _cachedTransform = null!;
+
+    // Last accepted server sequence number, used to discard stale packets.
     private uint _lastServerSequenceId;
-    private bool _predictionDisabled;
+
+    // False until the first sequenced packet arrives; skips ordering checks
+    // until the baseline sequence ID is established.
+    private bool _hasSequencedPacket;
+
+    // False until the first valid server packet is processed.
+    // Prevents extrapolation from a stale spawn position before data arrives.
     private bool _isInitialized;
+
+    // Latched true on the first valid server packet; lets OnEnable decide
+    // whether to snap to the last known position or wait for fresh data.
     private bool _hasNewServerData;
 
-    // RTT-Adaptive values (smoothly interpolated)
+    // Smoothly interpolated adaptive parameters, updated by AdaptToRTT().
+    // Kept separate from raw RTT to avoid jarring jumps on sudden network changes.
     private float _adaptedCorrectionTime;
     private float _adaptedPredictionCapMultiplier;
     private float _adaptedDecayMultiplier;
+
+    // Exponentially smoothed RTT in milliseconds.
     private float _currentRtt;
 
     #endregion
 
     private void Awake() {
         EnsureTransformCached();
-        _lastServerPosition = _cachedTransform.position;
-        _logicalPosition = _cachedTransform.position;
-        _lastUpdateTime = Time.time;
 
-        // Initialize adaptive values to defaults (Good tier ~75ms)
-        _adaptedCorrectionTime = visualCorrectionTime;
-        _adaptedPredictionCapMultiplier = 1.5f;
-        _adaptedDecayMultiplier = 15f;
-        _currentRtt = 75f;
+        var startPos = _cachedTransform.position;
+
+        _lastServerPosition = startPos;
+        _logicalPosition = startPos;
+
+        var now = Time.time;
+        _lastPacketReceiveTime = now;
+
+        // Pre-warm adaptive parameters so the first frames behave predictably.
+        _currentRtt = DefaultRttMs;
+        _adaptedCorrectionTime = InterpolateValueForRtt(_currentRtt, CorrectionTimes);
+        _adaptedPredictionCapMultiplier = InterpolateValueForRtt(_currentRtt, PredictionCaps);
+        _adaptedDecayMultiplier = InterpolateValueForRtt(_currentRtt, DecayMultipliers);
     }
 
     private void OnEnable() {
-        // If we are initialized and have valid server data, snap to it.
-        // If we don't have data, we wait for the first packet rather than snapping to an arbitrary pool position.
+        EnsureTransformCached();
+
+        // Re-enabled after pooling: snap back to the last known authoritative position.
         if (_isInitialized && _hasNewServerData) {
             ForceSnap(_lastServerPosition);
-        } else {
-            // Reset smoothing to prevent jump-scares on spawn
-            _visualOffsetVelocity = Vector3.zero;
-            // _visualRotationVel = 0f;
+            return;
         }
+
+        // First enable: hold the current transform position until the first packet.
+        _velocity = Vector3.zero;
+        _visualOffset = Vector3.zero;
+        _visualOffsetVelocity = Vector3.zero;
+
+        var pos = _cachedTransform.position;
+
+        _lastServerPosition = pos;
+        _logicalPosition = pos;
+
+        _timeSinceLastPacket = 0f;
+        _lastPacketReceiveTime = Time.time;
     }
 
     /// <summary>
-    /// Manually update interpolation. Call this from a centralized update loop.
+    /// Advances interpolation by one frame. Call from a centralized manager
+    /// to control update order across all networked entities.
     /// </summary>
-    /// <param name="dt">The delta time for this frame.</param>
+    /// <param name="dt">Frame delta time in seconds.</param>
     public void ManualUpdate(float dt) {
-        if (_predictionDisabled) return;
+        if (dt <= 0f) return;
+
+        EnsureTransformCached();
+
+        var safeServerDeltaTime = GetSafeServerDeltaTime();
 
         _timeSinceLastPacket += dt;
 
-        // Cache adapted values once (avoid repeated ternary evaluation)
-        var decayMult = _adaptedDecayMultiplier;
-        var predCapMult = _adaptedPredictionCapMultiplier;
-        var corrTime = _adaptedCorrectionTime;
+        var decayMultiplier = enableRttAdaptation ? _adaptedDecayMultiplier : 1f;
+        var predictionCapMultiplier =
+            enableRttAdaptation ? _adaptedPredictionCapMultiplier : DefaultPredictionCapMultiplier;
+        var correctionTime = enableRttAdaptation ? _adaptedCorrectionTime : visualCorrectionTime;
 
-        // 1. Handle Packet Loss / Decay
-        if (_velocity.x != 0f || _velocity.y != 0f || _velocity.z != 0f) {
-            if (_timeSinceLastPacket > serverDeltaTime) {
-                var decayFactor = velocityDecayRate * decayMult * dt;
+        correctionTime = Mathf.Max(correctionTime, MinCorrectionTime);
+
+        // Step 1: Velocity decay
+        // Once the expected update window passes with no packet, decay velocity
+        // exponentially. 1/(1+rate·dt) is a stable first-order approximation that
+        // avoids overshoot at large dt.
+        if (_velocity.sqrMagnitude > TinySq) {
+            if (_timeSinceLastPacket > safeServerDeltaTime) {
+                var decayFactor = velocityDecayRate * decayMultiplier * dt;
                 var decay = 1f / (1f + decayFactor);
 
-                _velocity.x *= decay;
-                _velocity.y *= decay;
-                _velocity.z *= decay;
+                _velocity *= decay;
 
-                const float threshold = 0.01f;
-                if (_velocity.x is > -threshold and < threshold &&
-                    _velocity.y is > -threshold and < threshold &&
-                    _velocity.z is > -threshold and < threshold) {
+                if (_velocity.sqrMagnitude < minPredictionSpeedSq) {
                     _velocity = Vector3.zero;
                 }
             }
 
+            // Hard stop after extreme loss; the object is better treated as
+            // stationary than allowed to drift indefinitely.
             if (_timeSinceLastPacket > extremeLossThreshold) {
                 _velocity = Vector3.zero;
             }
         }
 
         // 2. Explicit Extrapolation (Dead Reckoning)
-        var clampedTime = _timeSinceLastPacket;
-        var maxTime = serverDeltaTime * predCapMult;
-        if (clampedTime > maxTime) clampedTime = maxTime;
+        // Project forward from the last authoritative position. The cap prevents
+        // a long packet gap from sending the object unrealistically far.
+        var maxPredictionTime = safeServerDeltaTime * Mathf.Max(0f, predictionCapMultiplier);
+        var clampedPredictionTime = Mathf.Min(_timeSinceLastPacket, maxPredictionTime);
 
-        // Inline position calculation
-        var px = _lastServerPosition.x + _velocity.x * clampedTime;
-        var py = _lastServerPosition.y + _velocity.y * clampedTime;
-        var pz = _lastServerPosition.z + _velocity.z * clampedTime;
+        _logicalPosition = _lastServerPosition + _velocity * clampedPredictionTime;
 
-        // 3. Smooth Visual Offsets - Padé Approximation for performance
-        if (_visualOffset.x != 0f || _visualOffset.y != 0f || _visualOffset.z != 0f) {
-            var omega = 2f / corrTime;
-            var x = omega * dt;
-            var exp = 1f / (1f + x + 0.48f * x * x + 0.235f * x * x * x);
+        // 3. Visual correction
+        // Ease the residual offset from the last server correction back to zero.
+        SmoothOffsetToZero(ref _visualOffset, ref _visualOffsetVelocity, correctionTime, dt);
 
-            _visualOffset.x = (_visualOffset.x + _visualOffsetVelocity.x * dt) * exp;
-            _visualOffset.y = (_visualOffset.y + _visualOffsetVelocity.y * dt) * exp;
-            _visualOffset.z = (_visualOffset.z + _visualOffsetVelocity.z * dt) * exp;
-
-            _visualOffsetVelocity.x = (_visualOffsetVelocity.x - omega * _visualOffset.x) * exp;
-            _visualOffsetVelocity.y = (_visualOffsetVelocity.y - omega * _visualOffset.y) * exp;
-            _visualOffsetVelocity.z = (_visualOffsetVelocity.z - omega * _visualOffset.z) * exp;
-        }
-
-        // 4. Apply Final State - direct position set
-        _cachedTransform.position = new Vector3(
-            px + _visualOffset.x,
-            py + _visualOffset.y,
-            pz + _visualOffset.z
-        );
+        // 4. Rendered position
+        // logical (authoritative projection) + visual (residual correction error).
+        _cachedTransform.position = _logicalPosition + _visualOffset;
     }
 
     /// <summary>
-    /// Updates the entity's position using the latest prediction state.
+    /// Feeds a new authoritative server position into the interpolator.
+    /// Corrects the logical position immediately; eases the visual position
+    /// to avoid a visible jump.
     /// </summary>
-    public void SetNewPosition(Vector3 newPos) {
-        SetNewState(newPos);
-    }
-
-    /// <summary>
-    /// Updates the prediction state with a new authoritative snapshot from the server.
-    /// </summary>
-    /// <param name="newPos">The new authoritative position.</param>
-    /// <param name="snapshotsSinceLast">Number of ticks since the last update (for velocity calc).</param>
-    /// <param name="sequenceId">Optional sequence ID to discard out-of-order packets.</param>
-    /// <param name="isTeleport">If true, snaps immediately without smoothing.</param>
-    public void SetNewState(
+    /// <param name="newPos">Server-confirmed world position.</param>
+    /// <param name="snapshotsSinceLast">
+    /// Server ticks elapsed since the previous update.
+    /// Pass 0 to fall back to local wall-clock timing.
+    /// </param>
+    /// <param name="sequenceId">
+    /// Monotonic sequence counter. Pass 0 to disable ordering checks.
+    /// Non-zero values cause out-of-order packets to be discarded.
+    /// </param>
+    /// <param name="isTeleport">
+    /// Skips all smoothing and snaps immediately to <paramref name="newPos"/>.
+    /// </param>
+    public void SetNewPosition(
         Vector3 newPos,
         int snapshotsSinceLast = 1,
         uint sequenceId = 0,
@@ -217,83 +359,103 @@ internal class PredictiveInterpolation : MonoBehaviour {
     ) {
         EnsureTransformCached();
 
-        // 1. Sequence Safety (Allow 0 for non-sequenced updates)
-        if (sequenceId != 0) {
-            // Unsigned arithmetic handles wrap-around automatically
-            if ((int) (sequenceId - _lastServerSequenceId) <= 0) return;
-            _lastServerSequenceId = sequenceId;
+        if (!AcceptSequence(sequenceId)) {
+            return;
         }
 
         _hasNewServerData = true;
 
-        // 2. Initialization Safety
-        if (!_isInitialized || _predictionDisabled) {
+        var now = Time.time;
+        var localArrivalDelta = now - _lastPacketReceiveTime;
+
+        if (localArrivalDelta < 0f) {
+            localArrivalDelta = 0f;
+        }
+
+        _lastPacketReceiveTime = now;
+
+        // First valid packet: velocity cannot be estimated yet, so snap.
+        if (!_isInitialized) {
             _isInitialized = true;
             ForceSnap(newPos);
             return;
         }
 
-        // 3. Time Safety
-        var now = Time.time;
-        float actualDeltaTime;
+        var safeServerDeltaTime = GetSafeServerDeltaTime();
+        var hasServerTickDelta = snapshotsSinceLast > 0;
 
-        if (snapshotsSinceLast > 0) {
-            actualDeltaTime = snapshotsSinceLast * serverDeltaTime;
-        } else {
-            // Fallback: calculate local time difference
-            actualDeltaTime = now - _lastUpdateTime;
+        // Server tick count is preferred over local timing; it reflects
+        // simulation time rather than network jitter.
+        var actualDeltaTime = hasServerTickDelta
+            ? snapshotsSinceLast * safeServerDeltaTime
+            : localArrivalDelta;
+
+        if (actualDeltaTime < MinDeltaTime) {
+            actualDeltaTime = safeServerDeltaTime;
         }
 
-        // Detect bunched packets (arriving too fast)
-        var isPacketBunched = actualDeltaTime < minServerDeltaTime;
+        // After a long gap (e.g. OS sleep), the first resumed packet would produce
+        // a near-zero velocity estimate by dividing small displacement by a huge dt.
+        // Cap prevents that distortion.
+        actualDeltaTime = Mathf.Min(
+            actualDeltaTime,
+            Mathf.Max(extremeLossThreshold, safeServerDeltaTime)
+        );
 
-        // Clamp for safety in calculations
-        if (actualDeltaTime < 0.0001f) actualDeltaTime = serverDeltaTime;
+        // Packets delivered in a burst by the OS/network stack arrive with
+        // impossibly short local intervals. Local timing is meaningless here;
+        // skip the velocity update rather than computing an inflated speed.
+        var isPacketBunched =
+            !hasServerTickDelta &&
+            localArrivalDelta > 0f &&
+            localArrivalDelta < minServerDeltaTime;
 
-        _lastUpdateTime = now;
+        // Large prediction error means the object was visually wrong for too long;
+        // smooth correction would look worse than a snap.
+        var predictionErrorSq = (newPos - _logicalPosition).sqrMagnitude;
 
-        // 4. Snap / Teleport Check
-        // Compare against logical position to detect large prediction errors
-        var distSq = (newPos - _logicalPosition).sqrMagnitude;
-        if (isTeleport || distSq > snapThresholdSq) {
+        if (isTeleport || predictionErrorSq > snapThresholdSq) {
             ForceSnap(newPos);
             return;
         }
 
-        // 5. Visual Offset Calculation (Continuity Logic)
-        // Maintain visual continuity: VisualPos = LogicalPos + Offset. 
-        // NewOffset = OldVisualPos - NewLogicalPos (which will be newPos)
-        // This ensures the object doesn't visually jump when logical position updates.
+        // Visual continuity: keep the rendered position stable across the logical
+        // correction by recording the new gap as a visual offset.
+        //
+        //   newVisualOffset = currentRendered − newAuthoritative
+        //                   = (logicalOld + visualOffsetOld) − newPos
+        //
+        // The smoother then decays this to zero over correctionTime.
         _visualOffset = _cachedTransform.position - newPos;
 
-        // FIX: Dampen velocity slightly on new packet to reduce oscillation from SmoothDamp
+        if (_visualOffset.sqrMagnitude > snapThresholdSq) {
+            ForceSnap(newPos);
+            return;
+        }
+
+        // Partially reset the correction spring to reduce oscillation when
+        // rapid packets alternate between under- and over-prediction.
         _visualOffsetVelocity *= 0.9f;
 
-        // 6. Velocity Estimation
-        // First, check if player has stopped (must be done even for bunched packets)
-        var movementSq = (newPos - _lastServerPosition).sqrMagnitude;
-        var playerStopped = movementSq < minPredictionSpeedSq;
+        // Velocity estimation
+        var deltaPos = newPos - _lastServerPosition;
+        var instantVelocity = deltaPos / actualDeltaTime;
+        var instantSpeedSq = instantVelocity.sqrMagnitude;
 
-        if (playerStopped) {
-            // Player has stopped - zero velocity immediately to prevent gliding
+        if (instantSpeedSq < minPredictionSpeedSq) {
             _velocity = Vector3.zero;
         } else if (!isPacketBunched) {
-            // Only update velocity from non-bunched packets (to avoid noise)
-            var instantVel = (newPos - _lastServerPosition) / actualDeltaTime;
+            var maxSpeedSq = maxProjectedSpeed * maxProjectedSpeed;
 
-            // Clamp velocity to prevent physics explosions on lag spikes
-            if (instantVel.sqrMagnitude > maxProjectedSpeed * maxProjectedSpeed) {
-                instantVel = instantVel.normalized * maxProjectedSpeed;
+            if (instantSpeedSq > maxSpeedSq) {
+                instantVelocity = instantVelocity.normalized * maxProjectedSpeed;
             }
 
-            // Blend toward new velocity for smooth prediction
-            _velocity = Vector3.Lerp(_velocity, instantVel, velocityBlendFactor);
+            _velocity = Vector3.Lerp(_velocity, instantVelocity, velocityBlendFactor);
         }
-        // If bunched and still moving, keep previous velocity estimate
+        // Bunched packet: retain the previous estimate rather than using noisy timing.
 
-        // 7. Commit State
         _lastServerPosition = newPos;
-        // Snap logical position to authoritative state
         _logicalPosition = newPos;
         _timeSinceLastPacket = 0f;
     }
@@ -313,74 +475,175 @@ internal class PredictiveInterpolation : MonoBehaviour {
         _visualOffsetVelocity = Vector3.zero;
 
         _timeSinceLastPacket = 0f;
-        _lastUpdateTime = Time.time;
+        _lastPacketReceiveTime = Time.time;
 
         _cachedTransform.position = position;
     }
 
     /// <summary>
-    /// Sets whether prediction should be enabled.
-    /// </summary>
-    /// <param name="shouldEnable">True if prediction should be enabled, otherwise false.</param>
-    public void SetPredictionEnabled(bool shouldEnable) {
-        EnsureTransformCached();
-        _predictionDisabled = !shouldEnable;
-        if (_predictionDisabled) {
-            ForceSnap(_cachedTransform.position);
-        }
-    }
-
-    /// <summary>
-    /// Helper to prevent NullRef if called before Awake.
+    /// Lazily caches the transform reference. Avoids a per-frame allocation in
+    /// older Unity versions and handles calls made before <c>Awake</c>.
     /// </summary>
     private void EnsureTransformCached() {
-        if (_cachedTransform == null) _cachedTransform = transform;
+        if (_cachedTransform == null) {
+            _cachedTransform = transform;
+        }
     }
 
     /// <summary>
-    /// Adapts interpolation parameters based on measured RTT.
-    /// Call this whenever you measure/update the client's RTT.
+    /// Updates adaptive parameters for the given RTT. Prefer the overload
+    /// with explicit <c>dt</c> when called outside the Unity update loop.
     /// </summary>
-    /// <param name="rttMs">Round-trip time in milliseconds</param>
+    /// <param name="rttMs">Round-trip time in milliseconds.</param>
     public void AdaptToRTT(float rttMs) {
+        AdaptToRTT(rttMs, Time.deltaTime);
+    }
+
+    /// <summary>
+    /// Updates adaptive parameters for the given RTT.
+    /// </summary>
+    /// <param name="rttMs">Round-trip time in milliseconds.</param>
+    /// <param name="dt">Time since the last adaptation call, in seconds.</param>
+    public void AdaptToRTT(float rttMs, float dt) {
         if (!enableRttAdaptation) return;
 
-        // Smooth the RTT transition to prevent jarring changes
-        _currentRtt = Mathf.Lerp(_currentRtt, rttMs, Time.deltaTime * rttSmoothingSpeed);
+        rttMs = Mathf.Max(0f, rttMs);
+        dt = Mathf.Max(0f, dt);
 
-        // Calculate target values based on current RTT
+        // blend = 1 - e^(-k·dt): frame-rate-independent exponential smoothing.
+        // A larger dt produces a proportionally larger step.
+        var blend = 1f - Mathf.Exp(-rttSmoothingSpeed * dt);
+
+        // Smooth the raw measurement first, then look up targets for the smoothed
+        // value. Double-smoothing prevents sharp parameter jumps on noisy RTT spikes.
+        _currentRtt = Mathf.Lerp(_currentRtt, rttMs, blend);
+
         var targetCorrectionTime = InterpolateValueForRtt(_currentRtt, CorrectionTimes);
         var targetPredictionCap = InterpolateValueForRtt(_currentRtt, PredictionCaps);
-        var targetDecayMult = InterpolateValueForRtt(_currentRtt, DecayMultipliers);
+        var targetDecayMultiplier = InterpolateValueForRtt(_currentRtt, DecayMultipliers);
 
-        // Smoothly transition adapted values
-        var smoothFactor = Time.deltaTime * rttSmoothingSpeed;
-        _adaptedCorrectionTime = Mathf.Lerp(_adaptedCorrectionTime, targetCorrectionTime, smoothFactor);
-        _adaptedPredictionCapMultiplier = Mathf.Lerp(
-            _adaptedPredictionCapMultiplier, targetPredictionCap, smoothFactor
-        );
-        _adaptedDecayMultiplier = Mathf.Lerp(_adaptedDecayMultiplier, targetDecayMult, smoothFactor);
+        _adaptedCorrectionTime = Mathf.Lerp(_adaptedCorrectionTime, targetCorrectionTime, blend);
+        _adaptedPredictionCapMultiplier = Mathf.Lerp(_adaptedPredictionCapMultiplier, targetPredictionCap, blend);
+        _adaptedDecayMultiplier = Mathf.Lerp(_adaptedDecayMultiplier, targetDecayMultiplier, blend);
     }
 
     /// <summary>
-    /// Interpolates a value from the tier arrays based on RTT.
+    /// Accepts or rejects a packet based on its sequence number.
+    /// Out-of-order and duplicate packets are discarded to prevent the object's
+    /// position from rolling back.
     /// </summary>
+    /// <remarks>
+    /// Unsigned 32-bit subtraction handles counter wraparound correctly:
+    /// casting (sequenceId - _lastServerSequenceId) to int yields a positive
+    /// result even when the counter wraps from 0xFFFFFFFF to 0x00000001.
+    /// </remarks>
+    private bool AcceptSequence(uint sequenceId) {
+        // 0 is a sentinel meaning "no ordering required".
+        if (sequenceId == 0) {
+            return true;
+        }
+
+        if (!_hasSequencedPacket) {
+            _hasSequencedPacket = true;
+            _lastServerSequenceId = sequenceId;
+            return true;
+        }
+
+        if ((int) (sequenceId - _lastServerSequenceId) <= 0) {
+            return false;
+        }
+
+        _lastServerSequenceId = sequenceId;
+        return true;
+    }
+
+    /// <summary>
+    /// Drives <paramref name="offset"/> to zero using a Padé-approximated
+    /// critically-damped spring.
+    /// </summary>
+    /// <remarks>
+    /// The Padé approximation of e^(-ω·dt) keeps the integrator stable at large
+    /// dt (e.g. a frame hitch), unlike a naive Euler step which overshoots and
+    /// oscillates. Both <paramref name="offset"/> and <paramref name="velocity"/>
+    /// are zeroed exactly once both fall below <see cref="TinySq"/>.
+    /// </remarks>
+    /// <param name="offset">Current offset; driven toward zero in place.</param>
+    /// <param name="velocity">Spring tracking velocity; updated alongside offset.</param>
+    /// <param name="smoothTime">Approximate time to reach zero, in seconds.</param>
+    /// <param name="dt">Frame delta time in seconds.</param>
+    private static void SmoothOffsetToZero(
+        ref Vector3 offset,
+        ref Vector3 velocity,
+        float smoothTime,
+        float dt
+    ) {
+        if (offset.sqrMagnitude < TinySq && velocity.sqrMagnitude < TinySq) {
+            offset = Vector3.zero;
+            velocity = Vector3.zero;
+            return;
+        }
+
+        smoothTime = Mathf.Max(smoothTime, MinCorrectionTime);
+
+        // ω = 2/smoothTime; x = ω·dt; exp ≈ e^(-x) via Padé rational approximation.
+        var omega = 2f / smoothTime;
+        var x = omega * dt;
+        var exp = 1f / (1f + x + 0.48f * x * x + 0.235f * x * x * x);
+
+        // Symplectic-style integration: temp couples the position and velocity
+        // updates so both are advanced in the same step.
+        var temp = (velocity + omega * offset) * dt;
+        velocity = (velocity - omega * temp) * exp;
+        offset = (offset + temp) * exp;
+
+        if (!(offset.sqrMagnitude < TinySq) || !(velocity.sqrMagnitude < TinySq)) {
+            return;
+        }
+
+        offset = Vector3.zero;
+        velocity = Vector3.zero;
+    }
+
+    /// <summary>
+    /// Linearly interpolates a value from <paramref name="tierValues"/> using
+    /// <see cref="RttSamples"/> as the input domain.
+    /// Values below the first sample clamp to <c>tierValues[0]</c>;
+    /// values above the last sample clamp to <c>tierValues[^1]</c>.
+    /// </summary>
+    /// <param name="rtt">Round-trip time in milliseconds.</param>
+    /// <param name="tierValues">
+    /// Output values per tier. Must match <see cref="RttSamples"/> in length;
+    /// returns <c>tierValues[^1]</c> on a length mismatch.
+    /// </param>
     private static float InterpolateValueForRtt(float rtt, float[] tierValues) {
-        // Below minimum threshold - use LAN tier
-        if (rtt <= RttThresholds[0]) {
-            return tierValues[0];
+        switch (tierValues.Length) {
+            case 0: return 0f;
+            case 1: return tierValues[0];
         }
 
-        // Find which tier range we're in and interpolate
-        for (var i = 0; i < RttThresholds.Length; i++) {
-            if (rtt <= RttThresholds[i]) {
-                var prevThreshold = (i == 0) ? 0f : RttThresholds[i - 1];
-                var t = Mathf.InverseLerp(prevThreshold, RttThresholds[i], rtt);
-                return Mathf.Lerp(tierValues[i], tierValues[i + 1], t);
+        // Misconfigured table: fall back to the most conservative tier.
+        if (tierValues.Length != RttSamples.Length) {
+            return tierValues[^1];
+        }
+
+        rtt = Mathf.Max(0f, rtt);
+
+        if (rtt <= RttSamples[0]) return tierValues[0];
+
+        for (var i = 1; i < RttSamples.Length; i++) {
+            if (rtt > RttSamples[i]) {
+                continue;
             }
+
+            var t = Mathf.InverseLerp(RttSamples[i - 1], RttSamples[i], rtt);
+            return Mathf.Lerp(tierValues[i - 1], tierValues[i], t);
         }
 
-        // Above maximum threshold - use Poor tier
         return tierValues[^1];
     }
+
+    /// <summary>
+    /// Returns <see cref="serverDeltaTime"/> clamped to <see cref="MinDeltaTime"/>.
+    /// </summary>
+    private float GetSafeServerDeltaTime() => Mathf.Max(serverDeltaTime, MinDeltaTime);
 }
