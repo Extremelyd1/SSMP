@@ -30,9 +30,6 @@ internal class HolePunchEncryptedTransportClient : IEncryptedTransportClient {
     IPEndPoint IEncryptedTransportClient.EndPoint => EndPoint;
 
     /// <inheritdoc />
-    public bool RequiresCongestionManagement => true;
-
-    /// <inheritdoc />
     public bool RequiresReliability => true;
 
     /// <inheritdoc />
