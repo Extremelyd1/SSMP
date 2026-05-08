@@ -6,6 +6,9 @@ using UnityEngine;
 
 namespace SSMP.Animation.Effects.Tools;
 
+/// <summary>
+/// Class for the tool effect of Magma Bell (fire protection).
+/// </summary>
 internal class MagmaBell : BaseTool {
     /// <summary>
     /// Name of the magma bell starting object name.
@@ -24,7 +27,7 @@ internal class MagmaBell : BaseTool {
 
     /// <inheritdoc/>
     public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
-        // two parts, when hit and when recovering after some delay
+        // Two parts: 1. when hit and 2. when recovering after some delay
 
         // Find existing effect
         var effects = GetPlayerEffects(playerObject);

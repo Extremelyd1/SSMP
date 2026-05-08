@@ -668,8 +668,8 @@ internal class AnimationManager {
         { AnimationClip.BindBurstAir, BindBurst.Instance },
         { AnimationClip.RageBindBurst, BindBurst.Instance },
         { AnimationClip.Death, new Death() },
-        { AnimationClip.DoubleJump, new DoubleJump() },
-        { AnimationClip.UmbrellaInflate, new UmbrellaInflate() },
+        { AnimationClip.DoubleJump, new FaydownCloak() },
+        { AnimationClip.UmbrellaInflate, new DriftersCloak() },
 
         // Silk Skills
         { AnimationClip.NeedleThrowThrowing, new SilkSpear() },
@@ -1470,7 +1470,7 @@ internal class AnimationManager {
             return;
         }
 
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagnetiteDice, 0);
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagnetiteDice);
     }
 
     /// <summary>
@@ -1495,7 +1495,7 @@ internal class AnimationManager {
             return;
         }
 
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.FracturedMask, 0);
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.FracturedMask);
     }
 
     /// <summary>
@@ -1507,7 +1507,7 @@ internal class AnimationManager {
             return;
         }
 
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagmaBell, 0);
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagmaBell);
     }
 
     // /// <summary>

@@ -55,10 +55,11 @@ internal abstract class AnimationEffect : IAnimationEffect {
     }
 
     /// <summary>
-    /// Gets the Effects object for a given player
+    /// Gets the Effects object for a given player object. If the player object does not have an Effects object, it
+    /// will be created.
     /// </summary>
-    /// <param name="playerObject">The player using the effect</param>
-    /// <returns>The player's effects object</returns>
+    /// <param name="playerObject">The player object for the player using the effect.</param>
+    /// <returns>The player's effects object.</returns>
     protected static GameObject GetPlayerEffects(GameObject playerObject) {
         var effects = playerObject.FindGameObjectInChildren("Effects");
         if (effects == null) {
@@ -70,12 +71,12 @@ internal abstract class AnimationEffect : IAnimationEffect {
     }
 
     /// <summary>
-    /// Attempts to get or create an effect from the Effects sub-object
+    /// Attempts to get or create an effect from the Effects sub-object.
     /// </summary>
-    /// <param name="playerObject">The player using the effect</param>
-    /// <param name="effectName">The name of the effect object</param>
-    /// <param name="effect">The effect, if found or created</param>
-    /// <returns>true if created, false otherwise</returns>
+    /// <param name="playerObject">The player object for the player using the effect.</param>
+    /// <param name="effectName">The name of the effect object.</param>
+    /// <param name="effect">The effect, if found or created.</param>
+    /// <returns>True if created, false otherwise.</returns>
     protected static bool TryGetEffect(GameObject playerObject, string effectName, out GameObject? effect) {
         // Find or create effects for player
         var effects = GetPlayerEffects(playerObject);

@@ -7,17 +7,20 @@ using Object = UnityEngine.Object;
 
 namespace SSMP.Animation.Effects.Tools;
 
+/// <summary>
+/// Class for the tool effect of Magnetite Dice (chance to negate damage).
+/// </summary>
 internal class MagnetiteDice : BaseTool {
     /// <summary>
     /// Name of the magnetite dice effect object.
     /// </summary>
-
     private const string DiceName = "dice_shield_effect";
 
     /// <inheritdoc/>
     public override byte[]? GetEffectInfo() {
         return null;
     }
+
     /// <inheritdoc/>
     public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
         // Get existing effect
@@ -77,5 +80,4 @@ internal class MagnetiteDice : BaseTool {
 
         prefab.DestroyComponent<UnityMessageListener>();
     }
-
 }

@@ -5,11 +5,17 @@ using UnityEngine;
 
 namespace SSMP.Animation.Effects.Movement;
 
-internal class DoubleJump : DamageAnimationEffect {
+/// <summary>
+/// Class for the animation effect of Faydown Cloak (double jump).
+/// </summary>
+internal class FaydownCloak : DamageAnimationEffect {
+    /// <summary>
+    /// The name of the game object for the effect for checking if it exists on a player object already.
+    /// </summary>
     private const string JumpEffectName = "double_jump_feathers";
 
     /// <inheritdoc/>
-    public override byte[]? GetEffectInfo() {
+    public override byte[] GetEffectInfo() {
         return [
             (byte)(ToolItemManager.IsToolEquipped("Brolly Spike") ? 1 : 0)
         ];

@@ -5,6 +5,9 @@ using UnityEngine;
 
 namespace SSMP.Animation.Effects.Tools;
 
+/// <summary>
+/// Class for the tool effect of Fractured Mask (extra health point).
+/// </summary>
 internal class FracturedMask : BaseTool {
     /// <inheritdoc/>
     public override byte[]? GetEffectInfo() {
@@ -23,7 +26,11 @@ internal class FracturedMask : BaseTool {
 
         // Spawn in the shatter particles
         var localMaskShatter = fsm.GetFirstAction<CreateObject>("Instantiate Effect");
-        var mask = EffectUtils.SpawnGlobalPoolObject(localMaskShatter.gameObject.Value, playerObject.transform, 5);
+        var mask = EffectUtils.SpawnGlobalPoolObject(
+            localMaskShatter.gameObject.Value, 
+            playerObject.transform, 
+            5
+        );
 
         mask?.DestroyComponent<CameraControlAnimationEvents>();
     }

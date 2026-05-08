@@ -5,10 +5,13 @@ using UnityEngine;
 
 namespace SSMP.Animation.Effects.Movement;
 
-internal class UmbrellaInflate : DamageAnimationEffect {
+/// <summary>
+/// Class for the animation effect of Drifter's Cloak (slow fall, ride updrafts).
+/// </summary>
+internal class DriftersCloak : DamageAnimationEffect {
 
     /// <inheritdoc/>
-    public override byte[]? GetEffectInfo() {
+    public override byte[] GetEffectInfo() {
         return [
             (byte)(ToolItemManager.IsToolEquipped("Brolly Spike") ? 1 : 0)
         ];
