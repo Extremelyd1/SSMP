@@ -528,6 +528,11 @@ internal class ConnectInterface {
     private Tab _activeTab = Tab.Matchmaking;
 
     /// <summary>
+    /// If non-null, indicates the Lobby ID we should retry connecting to once if a hole punch times out.
+    /// </summary>
+    private string? _pendingHolePunchRetryLobbyId;
+
+    /// <summary>
     /// Public accessor for the MMS client.
     /// Used by server manager to pass to HolePunch transport for lobby cleanup.
     /// </summary>
@@ -1198,6 +1203,9 @@ internal class ConnectInterface {
             return;
         }
 
+        // Arm the one-time retry for a hole-punch failure
+        _pendingHolePunchRetryLobbyId = lobbyId;
+
         ShowFeedback(Color.yellow, "Connecting...");
         MonoBehaviourUtil.Instance.StartCoroutine(JoinLobbyCoroutine(lobbyId, username));
     }
@@ -1787,9 +1795,25 @@ internal class ConnectInterface {
             return;
         }
 
+        ResetConnectionButtons();
+
+        // If this was a timeout and we have a pending retry, consume it and re-run the full connect flow.
+        if (_pendingHolePunchRetryLobbyId != null && result.Reason == ConnectionFailedReason.TimedOut) {
+            var lobbyIdToRetry = _pendingHolePunchRetryLobbyId;
+            _pendingHolePunchRetryLobbyId = null;
+
+            if (ValidateUsername(out var username)) {
+                Logger.Info($"ConnectInterface: Connection timed out. Retrying full join flow for lobby {lobbyIdToRetry} once.");
+                ShowFeedback(Color.yellow, "Connection timed out. Retrying...");
+                MonoBehaviourUtil.Instance.StartCoroutine(JoinLobbyCoroutine(lobbyIdToRetry, username));
+                return;
+            }
+        }
+
+        _pendingHolePunchRetryLobbyId = null;
+
         var message = GetFailureMessage(result);
         ShowFeedback(Color.red, message);
-        ResetConnectionButtons();
     }
 
     #endregion
