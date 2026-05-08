@@ -1369,6 +1369,9 @@ internal abstract class ServerManager : IServerManager {
             }
         }
 
+        // If this is the same player reconnecting, clear the old session before we evaluate username collisions
+        ReplaceExistingSessionIfPresent(netServerClient, clientInfo, uniqueIdentifier);
+
         // Check whether the username is not already in use
         foreach (var existingPlayerData in _playerData.Values) {
             if (existingPlayerData.Username.ToLower().Equals(clientInfo.Username.ToLower())) {
@@ -1482,6 +1485,33 @@ internal abstract class ServerManager : IServerManager {
         } catch (Exception e) {
             Logger.Error($"Exception thrown while invoking PlayerConnect event:\n{e}");
         }
+    }
+    
+    /// <summary>
+    /// If the connecting client matches an active player identity, disconnect the old session so the new
+    /// transport can take over cleanly.
+    /// </summary>
+    /// <param name="netServerClient">The connecting net server client.</param>
+    /// <param name="clientInfo">The connection info for the new session.</param>
+    /// <param name="uniqueIdentifier">The transport-level unique identifier for the new session.</param>
+    private void ReplaceExistingSessionIfPresent(
+        NetServerClient netServerClient,
+        ClientInfo clientInfo,
+        string uniqueIdentifier
+    ) {
+        var existingPlayer = _playerData.Values.FirstOrDefault(playerData =>
+            playerData.Id != netServerClient.Id
+            && (string.Equals(playerData.UniqueClientIdentifier, uniqueIdentifier, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(playerData.AuthKey, clientInfo.AuthKey, StringComparison.OrdinalIgnoreCase)));
+
+        if (existingPlayer is null)
+            return;
+
+        Logger.Warn(
+            $"Replacing existing session for player '{existingPlayer.Username}' " +
+            $"(ID {existingPlayer.Id}) with new connection from {uniqueIdentifier}");
+
+        ProcessPlayerDisconnect(existingPlayer.Id);
     }
 
     /// <summary>
