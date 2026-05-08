@@ -40,9 +40,6 @@ internal sealed class SteamEncryptedTransport : IReliableTransport {
     public event Action<byte[], int>? DataReceivedEvent;
 
     /// <inheritdoc />
-    public bool RequiresCongestionManagement => false;
-
-    /// <inheritdoc />
     public bool RequiresReliability => false;
 
     /// <inheritdoc />

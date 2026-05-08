@@ -86,12 +86,6 @@ internal class HolePunchEncryptedTransport : IEncryptedTransport {
     public event Action<byte[], int>? DataReceivedEvent;
 
     /// <summary>
-    /// Indicates whether this transport requires congestion management.
-    /// UDP provides no congestion control, so higher layers must implement it.
-    /// </summary>
-    public bool RequiresCongestionManagement => true;
-
-    /// <summary>
     /// Indicates whether this transport requires reliability mechanisms.
     /// UDP is unreliable, so higher layers must implement retransmission.
     /// </summary>

@@ -27,9 +27,6 @@ internal class UdpEncryptedTransportClient : IEncryptedTransportClient {
     public IPEndPoint EndPoint => _dtlsServerClient.EndPoint;
 
     /// <inheritdoc />
-    public bool RequiresCongestionManagement => true;
-
-    /// <inheritdoc />
     public bool RequiresReliability => true;
 
     /// <inheritdoc />
