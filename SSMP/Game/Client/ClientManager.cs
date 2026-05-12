@@ -879,6 +879,7 @@ internal class ClientManager : IClientManager {
             enterSceneData.Username,
             enterSceneData.Position,
             enterSceneData.Scale,
+            enterSceneData.CrestType,
             enterSceneData.Team,
             enterSceneData.SkinId
         );

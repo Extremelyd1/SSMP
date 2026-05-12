@@ -437,6 +437,7 @@ internal class PlayerManager : IPlayerManager {
     /// <param name="name">The username of the player.</param>
     /// <param name="position">The Vector2 denoting the position of the player.</param>
     /// <param name="scale">The boolean representing the scale of the player.</param>
+    /// <param name="crestType">The crest the player is using.</param>
     /// <param name="team">The team the player is on.</param>
     /// <param name="skinId">The ID of the skin the player is using.</param>
     public void SpawnPlayer(
@@ -444,6 +445,7 @@ internal class PlayerManager : IPlayerManager {
         string name,
         Math_Vector2 position,
         bool scale,
+        CrestType crestType,
         Team team,
         byte skinId
     ) {
@@ -485,6 +487,7 @@ internal class PlayerManager : IPlayerManager {
         // Store the player data
         playerData.PlayerContainer = playerContainer;
         playerData.PlayerObject = playerObject;
+        playerData.CrestType = crestType;
         playerData.Team = team;
         playerData.SkinId = skinId;
     }

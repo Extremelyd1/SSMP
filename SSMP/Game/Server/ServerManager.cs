@@ -498,6 +498,7 @@ internal abstract class ServerManager : IServerManager {
                     playerData.Username,
                     playerData.Position ?? Vector2.Zero,
                     playerData.Scale,
+                    playerData.CrestType,
                     playerData.Team,
                     playerData.SkinId,
                     playerData.AnimationId
@@ -514,6 +515,7 @@ internal abstract class ServerManager : IServerManager {
                     Username = otherPlayerData.Username,
                     Position = otherPlayerData.Position ?? Vector2.Zero,
                     Scale = otherPlayerData.Scale,
+                    CrestType = otherPlayerData.CrestType,
                     Team = otherPlayerData.Team,
                     SkinId = otherPlayerData.SkinId,
                     AnimationClipId = otherPlayerData.AnimationId

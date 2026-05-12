@@ -1,5 +1,6 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using SSMP.Game;
+using SSMP.Internals;
 using SSMP.Math;
 
 namespace SSMP.Networking.Packet.Data;
@@ -22,6 +23,11 @@ internal class ClientPlayerEnterScene : GenericClientData {
     /// The scale of the player.
     /// </summary>
     public bool Scale { get; set; }
+
+    /// <summary>
+    /// The crest of the player.
+    /// </summary>
+    public CrestType CrestType { get; set; }
 
     /// <summary>
     /// The team of the player.
@@ -53,6 +59,7 @@ internal class ClientPlayerEnterScene : GenericClientData {
 
         packet.Write(Position);
         packet.Write(Scale);
+        packet.Write((byte) CrestType);
         packet.Write((byte) Team);
         packet.Write(SkinId);
 
@@ -66,6 +73,7 @@ internal class ClientPlayerEnterScene : GenericClientData {
 
         Position = packet.ReadVector2();
         Scale = packet.ReadBool();
+        CrestType = (CrestType) packet.ReadByte();
         Team = (Team) packet.ReadByte();
         SkinId = packet.ReadByte();
         AnimationClipId = packet.ReadUShort();

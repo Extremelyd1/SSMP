@@ -166,6 +166,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     /// <param name="username">The username of the player.</param>
     /// <param name="position">The position of the player.</param>
     /// <param name="scale">The scale of the player.</param>
+    /// <param name="crestType">The crest the player is using.</param>
     /// <param name="team">The team of the player.</param>
     /// <param name="skinId">The ID of the skin of the player.</param>
     /// <param name="animationClipId">The ID of the animation clip of the player.</param>
@@ -174,6 +175,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
         string username,
         Vector2 position,
         bool scale,
+        CrestType crestType,
         Team team,
         byte skinId,
         ushort animationClipId
@@ -184,6 +186,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
             playerEnterScene.Username = username;
             playerEnterScene.Position = position;
             playerEnterScene.Scale = scale;
+            playerEnterScene.CrestType = crestType;
             playerEnterScene.Team = team;
             playerEnterScene.SkinId = skinId;
             playerEnterScene.AnimationClipId = animationClipId;
