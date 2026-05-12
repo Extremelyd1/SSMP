@@ -11,6 +11,8 @@ namespace SSMP.Animation.Effects.Tools;
 /// Class for the tool effect of Flea Brew (attack buff).
 /// </summary>
 internal class FleaBrew : BaseTool {
+    private const string ParticlesName = "Flea Brew Particles";
+
     /// <summary>
     /// Cached reference to a modified version of the poisoned flea brew trail.
     /// </summary>
@@ -52,10 +54,12 @@ internal class FleaBrew : BaseTool {
         var particles = EffectUtils.SpawnGlobalPoolObject(
             localPrefab.gameObject, 
             playerObject.transform, 
-            duration, 
+            duration,
             true
         );
         if (particles == null) return;
+
+        particles.name = ParticlesName;
 
         // Set up poison clouds
         if (isPoison && ShouldDoDamage && ServerSettings.IsPvpEnabled) {
@@ -91,25 +95,52 @@ internal class FleaBrew : BaseTool {
         );
         BrewFlashes[id] = flashHandle;
 
-        MonoBehaviourUtil.Instance.StartCoroutine(StopBrewFlash(playerObject, flashHandle));
+        MonoBehaviourUtil.Instance.StartCoroutine(StopBrewFlashAfterDelay(playerObject, flashHandle));
 
     }
 
     /// <summary>
-    /// Stops the Flea Brew sprite flash.
+    /// Stops the Flea Brew flashing and particles.
+    /// </summary>
+    /// <param name="playerObject">The player object with the Flea Brew animation.</param>
+    public static void StopBrew(GameObject playerObject) {
+        var id = playerObject.GetInstanceID();
+        if (!BrewFlashes.TryGetValue(id, out var handle)) {
+            return;
+        }
+
+        StopBrew(playerObject, handle);
+    }
+
+    /// <summary>
+    /// Stops the Flea Brew flashing and particles.
+    /// </summary>
+    /// <param name="playerObject">The player object with the Flea Brew animation.</param>
+    /// <param name="handle">The current sprite flash handle.</param>
+    private static void StopBrew(GameObject playerObject, SpriteFlash.FlashHandle handle) {
+        // Stop sprite flash
+        if (playerObject.TryGetComponent<SpriteFlash>(out var flash)) {
+            flash.CancelRepeatingFlash(handle);
+        }
+
+        // Stop particles
+        var particles = playerObject.FindGameObjectInChildren(ParticlesName);
+        if (particles) {
+            Object.Destroy(particles);
+        }
+    }
+
+    /// <summary>
+    /// Stops the Flea Brew sprite flash after a delay.
     /// </summary>
     /// <param name="playerObject">The player that used the tool.</param>
     /// <param name="handle">The flash's handle.</param>
-    private static IEnumerator StopBrewFlash(GameObject playerObject, SpriteFlash.FlashHandle handle) {
+    private static IEnumerator StopBrewFlashAfterDelay(GameObject playerObject, SpriteFlash.FlashHandle handle) {
         // Wait for effect to end
         yield return new WaitForSeconds(HeroController.instance.QUICKENING_DURATION);
 
         // Cancel flash
-        if (!playerObject.TryGetComponent<SpriteFlash>(out var flash)) {
-            yield break;
-        }
-
-        flash.CancelRepeatingFlash(handle);
+        StopBrew(playerObject, handle);
     }
 
     /// <summary>

@@ -623,6 +623,8 @@ internal class AnimationManager {
         { "Wound Double Strike", AnimationClip.WoundDoubleStrike },
         { "Wound Zap", AnimationClip.WoundZap },
 
+        { "Bench", AnimationClip.Bench },
+
         { "Witch Tentacles!", AnimationClip.WitchTentacles },
         { "Shaman Cancel", AnimationClip.ShamanCancel },
         { "Bind Fail Burst", AnimationClip.BindInterrupt },
@@ -687,6 +689,7 @@ internal class AnimationManager {
         { AnimationClip.WitchTentacles, BindBurst.Instance },
         { AnimationClip.ShamanCancel, new Bind { BindState = Bind.State.ShamanCancel } },
         { AnimationClip.BindInterrupt, BindInterrupt.Instance },
+        { AnimationClip.Bench, new Bench() },
 
         // Silk Skills
         { AnimationClip.AirSphereRefresh, new ThreadStorm() },
@@ -860,6 +863,12 @@ internal class AnimationManager {
 
         EventHooks.HeroControllerDie -= OnDeath;
         EventHooks.UseLavaBell -= OnMagmaBell;
+
+        // Remove listener for benching
+        var eventRegister = HeroController.SilentInstance?.gameObject.GetComponents<EventRegister>().FirstOrDefault(r => r.SubscribedEvent == "BENCHREST START");
+        if (eventRegister) {
+            eventRegister.ReceivedEvent -= OnBench;
+        }
         // On.HeroAnimationController.Play -= HeroAnimationControllerOnPlay;
         // On.HeroAnimationController.PlayFromFrame -= HeroAnimationControllerOnPlayFromFrame;
 
@@ -1140,6 +1149,12 @@ internal class AnimationManager {
             FsmStateActionInjector.Inject(bindInterrupt, OnBindInterrupt, 2);
         } else {
             Logger.Warn("Unable to find Bind FSM to hook.");
+        }
+
+        // Add listener for benching
+        var eventRegister = hc.gameObject.GetComponents<EventRegister>().FirstOrDefault(r => r.SubscribedEvent == "BENCHREST START");
+        if (eventRegister) {
+            eventRegister.ReceivedEvent += OnBench;
         }
     }
 
@@ -1508,6 +1523,18 @@ internal class AnimationManager {
         }
 
         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagmaBell);
+    }
+
+    /// <summary>
+    /// Hook for resting on a bench.
+    /// </summary>
+    private void OnBench() {
+        // If we are not connected, there is nothing to send to
+        if (!_netClient.IsConnected) {
+            return;
+        }
+
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.Bench);
     }
 
     // /// <summary>

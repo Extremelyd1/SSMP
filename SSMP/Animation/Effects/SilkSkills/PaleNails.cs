@@ -146,6 +146,29 @@ internal class PaleNails : BaseSilkSkill {
     }
 
     /// <summary>
+    /// De-spawns all sets of nails belonging to a given player.
+    /// </summary>
+    /// <param name="playerObject">The player object with nails to de-spawn.</param>
+    public static void DespawnAllPlayerNails(GameObject playerObject) {
+        // Get existing nails
+        var id = playerObject.GetInstanceID();
+        if (!PlayerNails.TryGetValue(id, out var nails) || nails.Length == 0) {
+            return;
+        }
+
+        // Send bench event to all nails
+        foreach (var nail in nails) {
+            if (nail == null) continue;
+
+            var fsm = nail.LocateMyFSM("Control");
+            fsm.Fsm.Event("BENCHREST");
+        }
+
+        // Clear nails
+        PlayerNails[id] = [];
+    }
+
+    /// <summary>
     /// Plays the nail summoning antic effect.
     /// </summary>
     /// <param name="playerObject">The player that summoned the nails.</param>
@@ -370,14 +393,16 @@ internal class PaleNails : BaseSilkSkill {
         // Remove transitions
         var left = fsm.GetState(followLeftName);
         left.Transitions = [
-            left.Transitions[0],
-            left.Transitions[5]
+            left.Transitions[0], // TURN
+            left.Transitions[3], // BENCHREST
+            left.Transitions[5] // FOLLOW BUDDY
         ];
 
         var right = fsm.GetState(followRightName);
         right.Transitions = [
-            right.Transitions[0],
-            right.Transitions[5],
+            right.Transitions[0], // TURN
+            right.Transitions[3], // BENCHREST
+            right.Transitions[5] // FOLLOW BUDDY
         ];
 
         // Set volt state

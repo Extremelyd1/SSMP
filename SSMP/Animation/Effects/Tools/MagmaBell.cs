@@ -60,7 +60,7 @@ internal class MagmaBell : BaseTool {
     /// <param name="playerObject">The player to use the animation on.</param>
     private static IEnumerator PlayRecharge(GameObject playerObject) {
         // Wait for bell to recharge
-        yield return new WaitForSeconds(Gameplay.LavaBellCooldownTime - 1);
+        yield return new WaitForSeconds(Gameplay.LavaBellCooldownTime - 1.25f);
 
         // Player has exited the scene, don't play.
         if (!playerObject.activeInHierarchy) yield break;
