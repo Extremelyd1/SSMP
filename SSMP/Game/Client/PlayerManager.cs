@@ -175,9 +175,7 @@ internal class PlayerManager : IPlayerManager {
             typeof(tk2dSpriteAnimator),
             typeof(Rigidbody2D),
             typeof(CoroutineCancelComponent)
-        ) {
-            layer = 9
-        };
+        );
 
         playerPrefab.transform.SetParent(_playerContainerPrefab.transform);
 
