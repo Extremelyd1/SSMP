@@ -260,7 +260,7 @@ internal class ClientManager : IClientManager {
         _animationManager.Initialize(_serverSettings);
         _mapManager.Initialize();
 
-        // _entityManager.Initialize();
+        _entityManager.Initialize();
         // _saveManager.Initialize();
 
         RegisterCommands();
@@ -306,11 +306,11 @@ internal class ClientManager : IClientManager {
         _pauseManager.RegisterHooks();
         _gamePatcher.RegisterHooks();
         _fsmPatcher.RegisterHooks();
-
-        // if (_fullSynchronisation) {
-        //     _entityManager.RegisterHooks();
-        //     _saveManager.RegisterHooks();
-        // }
+        
+        if (_fullSynchronisation) {
+            _entityManager.RegisterHooks();
+             //_saveManager.RegisterHooks();
+        }
 
         // Register handlers for various things
         SceneManager.activeSceneChanged += OnSceneChange;
@@ -335,10 +335,10 @@ internal class ClientManager : IClientManager {
         _gamePatcher.DeregisterHooks();
         _fsmPatcher.DeregisterHooks();
 
-        // if (_fullSynchronisation) {
-        //     _entityManager.DeregisterHooks();
-        //     _saveManager.DeregisterHooks();
-        // }
+         if (_fullSynchronisation) {
+             _entityManager.DeregisterHooks();
+             //_saveManager.DeregisterHooks();
+         }
 
         // Deregister handlers for various things
         SceneManager.activeSceneChanged -= OnSceneChange;
