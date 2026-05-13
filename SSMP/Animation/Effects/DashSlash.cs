@@ -112,6 +112,8 @@ internal class DashSlash : SlashBase {
                 AddDamageHeroComponent(slashObj, ServerSettings.NeedleDamage);
             }
 
+            FixDamageEnemies(slashObj);
+
             // TODO: Nail imbuement (see OnPlaySlash in NailAttackBase.cs)
             
             // Activate game object in ActivateGameObject action in "Witch?" state

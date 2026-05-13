@@ -142,11 +142,13 @@ internal class BindBurst : Bind {
                 return;
             }
 
-            damager.layer = (int) GlobalEnums.PhysLayers.HERO_ATTACK;
+            damager.layer = AttackLayer;
 
             var damage = upgraded ? ServerSettings.ClawMirrorUpgradedDamage : ServerSettings.ClawMirrorDamage;
             var damageComponent = AddDamageHeroComponent(damager, damage);
             damageComponent.hazardType = GlobalEnums.HazardType.EXPLOSION;
+
+            FixDamageEnemies(damager);
         }
     }
 
@@ -225,6 +227,7 @@ internal class BindBurst : Bind {
 
             // Add or remove damage component from Damager object
             SetDamageHeroState(child.gameObject);
+            FixDamageEnemies(child.gameObject);
         }
     }
 
