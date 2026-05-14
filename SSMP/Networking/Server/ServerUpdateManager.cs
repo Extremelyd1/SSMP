@@ -163,29 +163,20 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     /// Add player enter scene data to the current packet.
     /// </summary>
     /// <param name="id">The ID of the player.</param>
-    /// <param name="username">The username of the player.</param>
     /// <param name="position">The position of the player.</param>
     /// <param name="scale">The scale of the player.</param>
-    /// <param name="team">The team of the player.</param>
-    /// <param name="skinId">The ID of the skin of the player.</param>
     /// <param name="animationClipId">The ID of the animation clip of the player.</param>
     public void AddPlayerEnterSceneData(
         ushort id,
-        string username,
         Vector2 position,
         bool scale,
-        Team team,
-        byte skinId,
         ushort animationClipId
     ) {
         lock (Lock) {
             var playerEnterScene =
                 FindOrCreatePacketData<ClientPlayerEnterScene>(id, ClientUpdatePacketId.PlayerEnterScene);
-            playerEnterScene.Username = username;
             playerEnterScene.Position = position;
             playerEnterScene.Scale = scale;
-            playerEnterScene.Team = team;
-            playerEnterScene.SkinId = skinId;
             playerEnterScene.AnimationClipId = animationClipId;
         }
     }

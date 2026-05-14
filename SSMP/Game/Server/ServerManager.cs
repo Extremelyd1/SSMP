@@ -495,11 +495,8 @@ internal abstract class ServerManager : IServerManager {
 
                 _netServer.GetUpdateManagerForClient(idPlayerDataPair.Key)?.AddPlayerEnterSceneData(
                     playerData.Id,
-                    playerData.Username,
                     playerData.Position ?? Vector2.Zero,
                     playerData.Scale,
-                    playerData.Team,
-                    playerData.SkinId,
                     playerData.AnimationId
                 );
 
@@ -511,11 +508,8 @@ internal abstract class ServerManager : IServerManager {
                 // notifying that these players are already in this new scene.
                 enterSceneList.Add(new ClientPlayerEnterScene {
                     Id = idPlayerDataPair.Key,
-                    Username = otherPlayerData.Username,
                     Position = otherPlayerData.Position ?? Vector2.Zero,
                     Scale = otherPlayerData.Scale,
-                    Team = otherPlayerData.Team,
-                    SkinId = otherPlayerData.SkinId,
                     AnimationClipId = otherPlayerData.AnimationId
                 });
             }
@@ -1444,7 +1438,7 @@ internal abstract class ServerManager : IServerManager {
         serverInfo.FullSynchronisation = FullSynchronisation;
         
         // Construct the player info to send to the new client in the server info
-        var playerInfo = new List<(ushort, string)>();
+        var playerInfo = new List<ServerInfo.PlayerInfo>();
 
         foreach (var idPlayerDataPair in _playerData) {
             var otherId = idPlayerDataPair.Key;
@@ -1454,7 +1448,13 @@ internal abstract class ServerManager : IServerManager {
 
             var otherPd = idPlayerDataPair.Value;
 
-            playerInfo.Add((otherId, otherPd.Username));
+            playerInfo.Add(new ServerInfo.PlayerInfo {
+                Id = otherId,
+                Username = otherPd.Username,
+                Team = otherPd.Team,
+                SkinId = otherPd.SkinId,
+                CrestType = otherPd.CrestType
+            });
 
             // Send to the other players that this client has just connected
             _netServer.GetUpdateManagerForClient(otherId)?.AddPlayerConnectData(
@@ -1463,7 +1463,7 @@ internal abstract class ServerManager : IServerManager {
             );
         }
 
-        serverInfo.PlayerInfo = playerInfo;
+        serverInfo.PlayerInfos = playerInfo;
 
         // if (FullSynchronisation) {
         //     // Obtain the save data for the connecting client and add it to the server info

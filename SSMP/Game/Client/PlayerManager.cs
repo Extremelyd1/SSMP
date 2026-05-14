@@ -434,18 +434,12 @@ internal class PlayerManager : IPlayerManager {
     /// Spawn a new player object with the given data.
     /// </summary>
     /// <param name="playerData">The client player data for the player.</param>
-    /// <param name="name">The username of the player.</param>
     /// <param name="position">The Vector2 denoting the position of the player.</param>
     /// <param name="scale">The boolean representing the scale of the player.</param>
-    /// <param name="team">The team the player is on.</param>
-    /// <param name="skinId">The ID of the skin the player is using.</param>
     public void SpawnPlayer(
         ClientPlayerData playerData,
-        string name,
         Math_Vector2 position,
-        bool scale,
-        Team team,
-        byte skinId
+        bool scale
     ) {
         // First recycle the player by player data if they have an active container
         RecyclePlayerByData(playerData);
@@ -477,16 +471,14 @@ internal class PlayerManager : IPlayerManager {
         playerContainer.SetActive(true);
         playerContainer.SetActiveChildren(true);
 
-        AddNameToPlayer(playerContainer, name, team);
+        AddNameToPlayer(playerContainer, playerData.Username, playerData.Team);
 
         // Let the SkinManager update the skin
-        _skinManager.UpdatePlayerSkin(playerObject, skinId);
+        _skinManager.UpdatePlayerSkin(playerObject, playerData.SkinId);
 
         // Store the player data
         playerData.PlayerContainer = playerContainer;
         playerData.PlayerObject = playerObject;
-        playerData.Team = team;
-        playerData.SkinId = skinId;
     }
 
     /// <summary>
