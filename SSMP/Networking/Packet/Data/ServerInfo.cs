@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using SSMP.Api.Addon;
+using SSMP.Game;
 using SSMP.Internals;
 
 namespace SSMP.Networking.Packet.Data;
@@ -163,6 +164,14 @@ internal class ServerInfo : IPacketData {
         /// </summary>
         public required string Username { get; init; }
         /// <summary>
+        /// The team of the player.
+        /// </summary>
+        public required Team Team { get; init; }
+        /// <summary>
+        /// The skin ID of the player.
+        /// </summary>
+        public required byte SkinId { get; init; }
+        /// <summary>
         /// The current crest type of the player.
         /// </summary>
         public required CrestType CrestType { get; init; }
@@ -171,6 +180,8 @@ internal class ServerInfo : IPacketData {
         public void WriteData(IPacket packet) {
             packet.Write(Id);
             packet.Write(Username);
+            packet.Write((byte) Team);
+            packet.Write(SkinId);
             packet.Write((byte) CrestType);
         }
 
@@ -183,6 +194,8 @@ internal class ServerInfo : IPacketData {
             return new PlayerInfo {
                 Id = packet.ReadUShort(),
                 Username = packet.ReadString(),
+                Team = (Team) packet.ReadByte(),
+                SkinId = packet.ReadByte(),
                 CrestType = (CrestType) packet.ReadByte()
             };
         }

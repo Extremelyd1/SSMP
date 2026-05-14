@@ -699,7 +699,9 @@ internal class ClientManager : IClientManager {
         foreach (var playerInfo in serverInfo.PlayerInfos) {
             _playerData[playerInfo.Id] = new ClientPlayerData {
                 Id = playerInfo.Id, 
-                Username = playerInfo.Username, 
+                Username = playerInfo.Username,
+                Team = playerInfo.Team,
+                SkinId = playerInfo.SkinId,
                 CrestType = playerInfo.CrestType
             };
         }

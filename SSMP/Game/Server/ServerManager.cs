@@ -1451,6 +1451,8 @@ internal abstract class ServerManager : IServerManager {
             playerInfo.Add(new ServerInfo.PlayerInfo {
                 Id = otherId,
                 Username = otherPd.Username,
+                Team = otherPd.Team,
+                SkinId = otherPd.SkinId,
                 CrestType = otherPd.CrestType
             });
 
