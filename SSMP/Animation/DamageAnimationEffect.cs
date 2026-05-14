@@ -73,10 +73,11 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
     }
 
     /// <summary>
-    /// Fixes an attack's <see cref="DamageEnemies"/> component.
+    /// Fixes a remote attack's <see cref="DamageEnemies"/> component by disabling various properties that would
+    /// interfere with the local player.
     /// </summary>
     /// <param name="target">The object with the <see cref="DamageEnemies"/> component.</param>
-    protected void FixDamageEnemies(GameObject target) {
+    protected static void FixDamageEnemies(GameObject target) {
         // Add if we want to disable enemy damage
         //if (!ServerSettings.AllowDamageEnemies) {
         //    target.DestroyComponent<DamageEnemies>();
