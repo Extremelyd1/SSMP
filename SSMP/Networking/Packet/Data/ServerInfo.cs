@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using SSMP.Api.Addon;
+using SSMP.Internals;
 
 namespace SSMP.Networking.Packet.Data;
 
@@ -53,7 +54,7 @@ internal class ServerInfo : IPacketData {
     /// <summary>
     /// List of ID, username pairs for each connected client.
     /// </summary>
-    public List<(ushort, string)> PlayerInfo { get; set; } = null!;
+    public List<PlayerInfo> PlayerInfos { get; set; } = null!;
 
     /// <inheritdoc />
     public void WriteData(IPacket packet) {
@@ -72,19 +73,16 @@ internal class ServerInfo : IPacketData {
 
             // CurrentSave.WriteData(packet);
         
-            packet.Write((ushort) PlayerInfo.Count);
+            packet.Write((ushort) PlayerInfos.Count);
 
-            foreach (var (id, username) in PlayerInfo) {
-                packet.Write(id);
-                packet.Write(username);
+            foreach (var playerInfo in PlayerInfos) {
+                playerInfo.WriteData(packet);
             }
 
             return;
         }
 
         if (ConnectionResult == ServerConnectionResult.InvalidAddons) {
-            AddonData ??= [];
-            
             var addonDataLength = (byte) System.Math.Min(byte.MaxValue, AddonData.Count);
 
             packet.Write(addonDataLength);
@@ -122,12 +120,9 @@ internal class ServerInfo : IPacketData {
         
             var length = packet.ReadUShort();
 
-            PlayerInfo = new List<(ushort, string)>();
+            PlayerInfos = [];
             for (var i = 0; i < length; i++) {
-                PlayerInfo.Add((
-                    packet.ReadUShort(),
-                    packet.ReadString()
-                ));
+                PlayerInfos.Add(PlayerInfo.ReadData(packet));
             }
 
             return;
@@ -153,5 +148,43 @@ internal class ServerInfo : IPacketData {
         }
 
         ConnectionRejectedMessage = packet.ReadString();
+    }
+
+    /// <summary>
+    /// Class for player info that is used in the server info sent to the player.
+    /// </summary>
+    public class PlayerInfo {
+        /// <summary>
+        /// The ID of the player.
+        /// </summary>
+        public required ushort Id { get; init; }
+        /// <summary>
+        /// The username of the player.
+        /// </summary>
+        public required string Username { get; init; }
+        /// <summary>
+        /// The current crest type of the player.
+        /// </summary>
+        public required CrestType CrestType { get; init; }
+
+        /// <inheritdoc cref="IPacketData.WriteData" />
+        public void WriteData(IPacket packet) {
+            packet.Write(Id);
+            packet.Write(Username);
+            packet.Write((byte) CrestType);
+        }
+
+        /// <summary>
+        /// Read the data from the given packet into a new instance of <see cref="PlayerInfo"/>.
+        /// </summary>
+        /// <param name="packet">The packet to read from.</param>
+        /// <returns>A new instance of <see cref="PlayerInfo"/>.</returns>
+        public static PlayerInfo ReadData(IPacket packet) {
+            return new PlayerInfo {
+                Id = packet.ReadUShort(),
+                Username = packet.ReadString(),
+                CrestType = (CrestType) packet.ReadByte()
+            };
+        }
     }
 }
