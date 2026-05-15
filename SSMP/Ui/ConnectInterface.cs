@@ -1685,6 +1685,8 @@ internal class ConnectInterface {
             return;
         }
 
+        SaveConnectionSettings(null, port, username);
+
         StartHostButtonPressed?.Invoke("", port, username, TransportType.Udp, null);
     }
 
@@ -1851,10 +1853,13 @@ internal class ConnectInterface {
     }
 
     /// <summary>
-    /// Saves connection settings (address, port, username) to persistent storage.
+    /// Saves connection settings (address if non-null, port, username) to persistent storage.
     /// </summary>
-    private void SaveConnectionSettings(string address, int port, string username) {
-        _modSettings.ConnectAddress = address;
+    private void SaveConnectionSettings(string? address, int port, string username) {
+        if (address != null) {
+            _modSettings.ConnectAddress = address;
+        }
+
         _modSettings.ConnectPort = port;
         _modSettings.Username = username;
         _modSettings.Save();
