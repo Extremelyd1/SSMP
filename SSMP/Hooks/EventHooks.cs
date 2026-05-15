@@ -57,6 +57,10 @@ public static class EventHooks {
     /// Hook for GameManager.ContinueGame.
     /// </summary>
     private static Hook? _gameManagerContinueGameHook;
+    /// <summary>
+    /// Hook for GameManager.QuitGame.
+    /// </summary>
+    private static Hook? _gameManagerQuitGameHook;
 
     /// <summary>
     /// Hook for tk2dSpriteAnimator.Play.
@@ -148,6 +152,10 @@ public static class EventHooks {
     /// Event that is called when GameManager.ContinueGame is called.
     /// </summary>
     public static event Action? GameManagerContinueGame;
+    /// <summary>
+    /// Event that is called before GameManager.QuitGame is called.
+    /// </summary>
+    public static event Action? GameManagerQuitGame;
 
     /// <summary>
     /// Event that is called when tk2dSpriteAnimator.Play is called.
@@ -269,6 +277,10 @@ public static class EventHooks {
         _gameManagerContinueGameHook = new Hook(
             typeof(GameManager).GetMethod(nameof(GameManager.ContinueGame)),
             OnGameManagerContinueGame
+        );
+        _gameManagerQuitGameHook = new Hook(
+            typeof(GameManager).GetMethod(nameof(GameManager.QuitGame)),
+            OnGameManagerQuitGame
         );
 
         _spriteAnimatorPlayHook = new Hook(
@@ -421,6 +433,12 @@ public static class EventHooks {
         orig(self);
 
         GameManagerContinueGame?.Invoke();
+    }
+
+    private static IEnumerator OnGameManagerQuitGame(Func<GameManager, IEnumerator> orig, GameManager self) {
+        GameManagerQuitGame?.Invoke();
+
+        return orig(self);
     }
 
     private static void OnSpriteAnimatorPlay(
