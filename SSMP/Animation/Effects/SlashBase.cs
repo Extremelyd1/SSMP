@@ -130,8 +130,6 @@ internal abstract class SlashBase : ParryableEffect {
         var mesh = slashObj.GetComponent<MeshRenderer>();
         var anim = slashObj.GetComponent<tk2dSpriteAnimator>();
 
-        FixDamageEnemies(slashObj);
-
         string animName;
         Vector3 scale;
         if (nailSlash != null) {
