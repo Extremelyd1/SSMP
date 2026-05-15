@@ -11,6 +11,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using Logger = SSMP.Logging.Logger;
 using Object = UnityEngine.Object;
+
 #pragma warning disable CS8604 // Possible null reference argument.
 #pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
 #pragma warning disable CS0618 // Type or member is obsolete
@@ -34,7 +35,7 @@ internal class EntityManager {
     /// <summary>
     /// Whether the scene host is determined for this scene locally.
     /// </summary>
-    public bool IsSceneHostDetermined { get; private set; }
+    private bool IsSceneHostDetermined { get; set; }
 
     /// <summary>
     /// Whether the client user is the scene host.
@@ -67,12 +68,10 @@ internal class EntityManager {
     public void RegisterHooks() {
         FsmActionHooks.RegisterHooks();
         MusicComponent.RegisterHooks();
-        
+
         EntityFsmActions.EntitySpawnEvent += OnGameObjectSpawned;
         SceneManager.sceneLoaded += OnSceneLoaded;
         SceneManager.activeSceneChanged += OnSceneChanged;
-        
-        // FindGameObject.Find += OnFindGameObject;
     }
 
     /// <summary>
@@ -81,13 +80,10 @@ internal class EntityManager {
     public void DeregisterHooks() {
         FsmActionHooks.DeregisterHooks();
         MusicComponent.DeregisterHooks();
-        
+
         EntityFsmActions.EntitySpawnEvent -= OnGameObjectSpawned;
         SceneManager.sceneLoaded -= OnSceneLoaded;
         SceneManager.activeSceneChanged -= OnSceneChanged;
-        
-        // FindGameObject.Find -= OnFindGameObject;
-
         ClearEntities();
     }
 
@@ -102,9 +98,9 @@ internal class EntityManager {
         foreach (var entity in _entities.Values) {
             entity.InitializeHost();
         }
-        
+
         IsSceneHostDetermined = true;
-        
+
         CheckReceivedUpdates();
     }
 
@@ -119,9 +115,9 @@ internal class EntityManager {
         foreach (var entity in _entities.Values) {
             entity.InitializeClient();
         }
-        
+
         IsSceneHostDetermined = true;
-        
+
         CheckReceivedUpdates();
     }
 
@@ -155,8 +151,7 @@ internal class EntityManager {
 
         // Find an entity that has the same type as the spawning type. Doesn't matter if it is the correct instance,
         // because the FSMs and components will be identical
-        var spawningEntity = _entities.Values.FirstOrDefault(
-            e => e.Type == spawningType
+        var spawningEntity = _entities.Values.FirstOrDefault(e => e.Type == spawningType
         );
 
         if (spawningEntity == null) {
@@ -183,7 +178,7 @@ internal class EntityManager {
             Logger.Warn($"Could not process game object of spawned entity: {spawnedObject.name}");
         }
     }
-    
+
     /// <summary>
     /// Method for handling received entity updates.
     /// </summary>
@@ -195,14 +190,14 @@ internal class EntityManager {
         }
 
         if (!_entities.TryGetValue(entityUpdate.Id, out var entity) || !IsSceneHostDetermined) {
-            if (IsSceneHostDetermined) {
-                Logger.Debug($"Could not find entity ({entityUpdate.Id}) to apply update for; storing update for now");
-            } else {
-                Logger.Debug("Scene host is not determined yet to apply update; storing update for now");
-            }
+            Logger.Debug(
+                IsSceneHostDetermined
+                    ? $"Could not find entity ({entityUpdate.Id}) to apply update for; storing update for now"
+                    : "Scene host is not determined yet to apply update; storing update for now"
+            );
 
             _receivedUpdates.Enqueue(entityUpdate);
-            
+
             return false;
         }
 
@@ -213,10 +208,10 @@ internal class EntityManager {
         if (entityUpdate.UpdateTypes.Contains(EntityUpdateType.Scale)) {
             entity.UpdateScale(entityUpdate.Scale);
         }
-            
+
         if (entityUpdate.UpdateTypes.Contains(EntityUpdateType.Animation)) {
             entity.UpdateAnimation(
-                entityUpdate.AnimationId, 
+                entityUpdate.AnimationId,
                 (tk2dSpriteAnimationClip.WrapMode) entityUpdate.AnimationWrapMode,
                 alreadyInSceneUpdate
             );
@@ -232,12 +227,12 @@ internal class EntityManager {
     /// <param name="alreadyInSceneUpdate">Whether this is the update from the already in scene packet.</param>
     public bool HandleReliableEntityUpdate(ReliableEntityUpdate entityUpdate, bool alreadyInSceneUpdate = false) {
         if (!_entities.TryGetValue(entityUpdate.Id, out var entity) || !IsSceneHostDetermined) {
-            if (IsSceneHostDetermined) {
-                Logger.Debug($"Could not find entity ({entityUpdate.Id}) to apply update for; storing update for now");
-            } else {
-                Logger.Debug("Scene host is not determined yet to apply update; storing update for now");
-            }
-            
+            Logger.Debug(
+                IsSceneHostDetermined
+                    ? $"Could not find entity ({entityUpdate.Id}) to apply update for; storing update for now"
+                    : "Scene host is not determined yet to apply update; storing update for now"
+            );
+
             _receivedUpdates.Enqueue(entityUpdate);
 
             return false;
@@ -249,7 +244,7 @@ internal class EntityManager {
             if (entityUpdate.UpdateTypes.Contains(EntityUpdateType.Active)) {
                 entity.UpdateIsActive(entityUpdate.IsActive);
             }
-            
+
             if (entityUpdate.UpdateTypes.Contains(EntityUpdateType.HostFsm)) {
                 entity.UpdateHostFsmData(entityUpdate.HostFsmData);
             }
@@ -288,35 +283,42 @@ internal class EntityManager {
             Logger.Warn("Game object was spawned while not scene host, this shouldn't happen");
             return false;
         }
-        
+
         string spawningObjectName;
         EntityType spawningType;
         var topLevelEntity = processor.Entities[0];
 
-        if (details.Type == EntitySpawnType.FsmAction) {
-            spawningObjectName = details.Action.Fsm.GameObject.name;
-            if (EntityRegistry.TryGetEntry(details.Action.Fsm.GameObject, out var entry)) {
-                spawningType = entry.Type;
-            } else {
-                Logger.Warn("Could not find registry entry for spawning type of object");
-                return false;
+        switch (details.Type) {
+            case EntitySpawnType.FsmAction: {
+                spawningObjectName = details.Action.Fsm.GameObject.name;
+                if (EntityRegistry.TryGetEntry(details.Action.Fsm.GameObject, out var entry)) {
+                    spawningType = entry.Type;
+                } else {
+                    Logger.Warn("Could not find registry entry for spawning type of object");
+                    return false;
+                }
+
+                break;
             }
-        } else if (details.Type == EntitySpawnType.EnemySpawnerComponent) {
-            spawningObjectName = "Vengefly Summon";
-            spawningType = EntityType.VengeflySummon;
-        } else if (details.Type == EntitySpawnType.SpawnJarComponent) {
-            spawningObjectName = "Spawn Jar";
-            spawningType = EntityType.CollectorJar;
-        } else {
-            Logger.Error($"Invalid EntitySpawnDetails type: {details.Type}");
-            return false;
+            case EntitySpawnType.EnemySpawnerComponent:
+                spawningObjectName = "Vengefly Summon";
+                spawningType = EntityType.VengeflySummon;
+                break;
+            case EntitySpawnType.SpawnJarComponent:
+                spawningObjectName = "Spawn Jar";
+                spawningType = EntityType.CollectorJar;
+                break;
+            default:
+                Logger.Error($"Invalid EntitySpawnDetails type: {details.Type}");
+                return false;
         }
 
         Logger.Info(
-            $"Notifying server of entity ({spawningObjectName}, {spawningType}) spawning entity ({details.GameObject.name}, {topLevelEntity.Type}) with ID {topLevelEntity.Id}");
+            $"Notifying server of entity ({spawningObjectName}, {spawningType}) spawning entity ({details.GameObject.name}, {topLevelEntity.Type}) with ID {topLevelEntity.Id}"
+        );
         _netClient.UpdateManager.SetEntitySpawn(
-            topLevelEntity.Id, 
-            spawningType, 
+            topLevelEntity.Id,
+            spawningType,
             topLevelEntity.Type
         );
 
@@ -329,22 +331,24 @@ internal class EntityManager {
     private void CheckReceivedUpdates() {
         while (_receivedUpdates.Count != 0) {
             var update = _receivedUpdates.Peek();
-            
-            if (_entities.TryGetValue(update.Id, out _)) {
-                Logger.Debug("Found un-applied entity update, applying now");
 
-                bool handled;
-                if (update is EntityUpdate entityUpdate) {
-                    handled = HandleEntityUpdate(entityUpdate);
-                } else if (update is ReliableEntityUpdate reliableEntityUpdate) {
-                    handled = HandleReliableEntityUpdate(reliableEntityUpdate);
-                } else {
-                    continue;
-                }
+            if (!_entities.TryGetValue(update.Id, out _)) {
+                continue;
+            }
 
-                if (handled) {
-                    _receivedUpdates.Dequeue();
-                }
+            Logger.Debug("Found un-applied entity update, applying now");
+
+            bool handled;
+            if (update is EntityUpdate entityUpdate) {
+                handled = HandleEntityUpdate(entityUpdate);
+            } else if (update is ReliableEntityUpdate reliableEntityUpdate) {
+                handled = HandleReliableEntityUpdate(reliableEntityUpdate);
+            } else {
+                continue;
+            }
+
+            if (handled) {
+                _receivedUpdates.Dequeue();
             }
         }
     }
@@ -357,7 +361,7 @@ internal class EntityManager {
     /// <param name="newScene">The new scene.</param>
     private void OnSceneChanged(Scene oldScene, Scene newScene) {
         Logger.Info("Scene changed, clearing registered entities");
-            
+
         ClearEntities();
 
         if (!_netClient.IsConnected) {
@@ -367,7 +371,7 @@ internal class EntityManager {
         IsSceneHostDetermined = false;
 
         FindEntitiesInScene(newScene, false);
-        
+
         // Since we have tried finding entities in the scene, we also check whether there are un-applied updates for
         // those entities
         CheckReceivedUpdates();
@@ -384,7 +388,7 @@ internal class EntityManager {
         // Clear the list of entities and the queue of received updates that have not been applied yet
         _entities.Clear();
         _receivedUpdates.Clear();
-        
+
         MusicComponent.ClearInstance();
     }
 
@@ -418,76 +422,97 @@ internal class EntityManager {
     private void FindEntitiesInScene(Scene scene, bool lateLoad) {
         // Find all EnemyDeathEffects components
         var objectsToCheck = Object.FindObjectsOfType<EnemyDeathEffects>()
-            // Filter out EnemyDeathEffects components not in the current scene
-            .Where(e => e.gameObject.scene == scene)
-            // Project each death effect to their GameObject and the corpse of the pre-instantiated EnemyDeathEffects
-            // component
-            .SelectMany(enemyDeathEffects => {
-                try {
-                    enemyDeathEffects.PreInstantiate();
-                } catch (Exception) {
-                    // If we get an exception it might not be possible to pre-instantiate the enemy death effects
-                    // This can happen when the object uses a PersonalObjectPool, which can't be pre-instantiated
-                    // this early, so we return only the original gameobject
-                    return new[] { enemyDeathEffects.gameObject };
-                }
+                                   // Filter out EnemyDeathEffects components not in the current scene
+                                   .Where(e => e.gameObject.scene == scene)
+                                   // Project each death effect to their GameObject and the corpse of the
+                                   // pre-instantiated EnemyDeathEffects
+                                   // component
+                                   .SelectMany(enemyDeathEffects => {
+                                           try {
+                                               enemyDeathEffects.PreInstantiate();
+                                           } catch (Exception) {
+                                               // If we get an exception it might not be possible to pre-instantiate the
+                                               // enemy death effects
+                                               // This can happen when the object uses a PersonalObjectPool, which can't
+                                               // be pre-instantiated
+                                               // this early, so we return only the original gameobject
+                                               return [enemyDeathEffects.gameObject];
+                                           }
 
-                // TODO: this is just a prefab, probably not compatible with original code
-                var corpse = enemyDeathEffects.CorpsePrefab;
+                                           // TODO: this is just a prefab, probably not compatible with original code
+                                           var corpse = enemyDeathEffects.CorpsePrefab;
 
-                return new[] { enemyDeathEffects.gameObject, corpse };
-            })
-            // Concatenate all GameObjects for PlayMakerFSM components in the current scene, and check whether it is the
-            // FSM for a Colosseum Cage, in which case we pre-instantiate the enemy inside and concatenate it as well
-            .Concat(Object.FindObjectsOfType<PlayMakerFSM>(true)
-                .Where(fsm => fsm.gameObject.scene == scene)
-                .SelectMany(fsm => {
-                    if (!fsm.name.StartsWith("Colosseum Cage Small") &&
-                        !fsm.name.StartsWith("Colosseum Cage Large") &&
-                        !fsm.name.StartsWith("Colosseum Cage Zote")) {
-                        return new[] { fsm.gameObject };
-                    }
-                
-                    if (!fsm.Fsm.Name.Equals("Spawn") &&
-                        !fsm.Fsm.Name.Equals("Control")
-                    ) {
-                        return new[] { fsm.gameObject };
-                    }
-                    
-                    var createAction = fsm.GetFirstAction<CreateObject>("Init");
-                    EntityFsmActions.ApplyNetworkDataFromAction(null, createAction);
+                                           return new[] { enemyDeathEffects.gameObject, corpse };
+                                       }
+                                   )
+                                   // Concatenate all GameObjects for PlayMakerFSM components in the current scene, and
+                                   // check whether it is the
+                                   // FSM for a Colosseum Cage, in which case we pre-instantiate the enemy inside and
+                                   // concatenate it as well
+                                   .Concat(
+                                       Object.FindObjectsOfType<PlayMakerFSM>(true)
+                                             .Where(fsm => fsm.gameObject.scene == scene)
+                                             .SelectMany(fsm => {
+                                                     if (!fsm.name.StartsWith("Colosseum Cage Small") &&
+                                                         !fsm.name.StartsWith("Colosseum Cage Large") &&
+                                                         !fsm.name.StartsWith("Colosseum Cage Zote") ||
+                                                         !fsm.Fsm.Name.Equals("Spawn") &&
+                                                         !fsm.Fsm.Name.Equals("Control")
+                                                        ) {
+                                                         return [
+                                                             fsm.gameObject
+                                                         ];
+                                                     }
 
-                    createAction.Enabled = false;
+                                                     var createAction = fsm.GetFirstAction<CreateObject>("Init");
+                                                     EntityFsmActions.ApplyNetworkDataFromAction(null, createAction);
 
-                    var createdObject = createAction.storeObject.Value;
-                    if (createdObject == null) {
-                        return new[] { fsm.gameObject };
-                    }
+                                                     createAction.Enabled = false;
 
-                    var fsmTransform = fsm.gameObject.transform;
-                    
-                    createdObject.transform.position = fsmTransform.position;
-                    createdObject.transform.rotation = Quaternion.Euler(fsmTransform.eulerAngles);
-                    createdObject.SetActive(false);
+                                                     var createdObject = createAction.storeObject.Value;
+                                                     if (createdObject == null) {
+                                                         return [fsm.gameObject];
+                                                     }
 
-                    return new[] { fsm.gameObject, createdObject };
-                })
-            )
-            // Project each GameObject into its children including itself
-            .SelectMany(obj => obj == null ? Array.Empty<GameObject>() : obj.GetChildren().Prepend(obj))
-            // Concatenate all GameObjects for Climber components (Tiktiks)
-            .Concat(Object.FindObjectsOfType<Climber>(true).Select(climber => climber.gameObject))
-            // Concatenate all GameObjects for Walker components (Amblooms)
-            .Concat(Object.FindObjectsOfType<Walker>(true).Select(walker => walker.gameObject))
-            // Concatenate all GameObjects for BigCentipede components (Garpedes)
-            .Concat(Object.FindObjectsOfType<BigCentipede>(true).Select(centipede => centipede.gameObject))
-            // Concatenate all GameObjects for CameraLockArea components
-            .Concat(Object.FindObjectsOfType<CameraLockArea>(true).Select(cameraLockArea => cameraLockArea.gameObject))
-            // Concatenate all GameObjects for DreamPlatform components
-            .Concat(Object.FindObjectsOfType<DreamPlatform>(true).Select(dreamPlatform => dreamPlatform.gameObject))
-            // Filter out GameObjects not in the current scene
-            .Where(obj => obj.scene == scene)
-            .Distinct();
+                                                     var fsmTransform = fsm.gameObject.transform;
+
+                                                     createdObject.transform.position = fsmTransform.position;
+                                                     createdObject.transform.rotation =
+                                                         Quaternion.Euler(fsmTransform.eulerAngles);
+                                                     createdObject.SetActive(false);
+
+                                                     return new[] { fsm.gameObject, createdObject };
+                                                 }
+                                             )
+                                   )
+                                   // Project each GameObject into its children including itself
+                                   .SelectMany(obj =>
+                                       obj == null ? Array.Empty<GameObject>() : obj.GetChildren().Prepend(obj)
+                                   )
+                                   // Concatenate all GameObjects for Climber components (Tiktiks)
+                                   .Concat(
+                                       Object.FindObjectsOfType<Climber>(true).Select(climber => climber.gameObject)
+                                   )
+                                   // Concatenate all GameObjects for Walker components (Amblooms)
+                                   .Concat(Object.FindObjectsOfType<Walker>(true).Select(walker => walker.gameObject))
+                                   // Concatenate all GameObjects for BigCentipede components (Garpedes)
+                                   .Concat(
+                                       Object.FindObjectsOfType<BigCentipede>(true)
+                                             .Select(centipede => centipede.gameObject)
+                                   )
+                                   // Concatenate all GameObjects for CameraLockArea components
+                                   .Concat(
+                                       Object.FindObjectsOfType<CameraLockArea>(true)
+                                             .Select(cameraLockArea => cameraLockArea.gameObject)
+                                   )
+                                   // Concatenate all GameObjects for DreamPlatform components
+                                   .Concat(
+                                       Object.FindObjectsOfType<DreamPlatform>(true)
+                                             .Select(dreamPlatform => dreamPlatform.gameObject)
+                                   )
+                                   // Filter out GameObjects not in the current scene
+                                   .Where(obj => obj.scene == scene)
+                                   .Distinct();
 
         foreach (var obj in objectsToCheck) {
             new EntityProcessor {
@@ -498,46 +523,4 @@ internal class EntityManager {
             }.Process();
         }
     }
-
-    // /// <summary>
-    // /// Callback method for when the find method of FindGameObject is called. This is to look for objects that are
-    // /// normally not found by the action due to our entity system making certain objects inactive. If we notice that
-    // /// the find failed, but the name to look for was one of our host objects in the entity system, we set that object
-    // /// instead.
-    // /// </summary>
-    // private void OnFindGameObject(FindGameObject.orig_Find orig, FindGameObject self) {
-    //     orig(self);
-    //
-    //     // If the object was found after the method executed, we skip
-    //     if (self.store.Value != null) {
-    //         return;
-    //     }
-    //     
-    //     // Check for specific instances where we don't want to manually find the entity, because it messes
-    //     // with the logic of the FSM
-    //     if (self.State.Name.Equals("Can Roller?") && self.Fsm.Name.Equals("Blocker Control")) {
-    //         return;
-    //     }
-    //     
-    //     Logger.Debug($"OnFindGameObject, find failed: looking for '{self.objectName.Value}'");
-    //     
-    //     // If the object to find is tagged we skip, since this doesn't happen in our case
-    //     if (self.withTag.Value != "Untagged") {
-    //         return;
-    //     }
-    //
-    //     // Check if the name we are looking for is one of our registered entity's host objects
-    //     foreach (var entity in _entities.Values) {
-    //         var obj = entity.Object.Host;
-    //         if (obj != null && obj.name == self.objectName.Value) {
-    //             // The host object of the entity matches the name the action was looking for, so we set the variable
-    //             self.store.Value = obj;
-    //             
-    //             Logger.Debug($"  Name matches host object of entity: ({entity.Id}, {entity.Type})");
-    //             return;
-    //         }
-    //     }
-    //     
-    //     Logger.Debug("  Name did not match any entity");
-    // }
 }

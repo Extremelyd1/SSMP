@@ -17,25 +17,25 @@ internal class FsmSnapshot {
     /// <summary>
     /// Dictionary of names of float variables and corresponding (current/last) value.
     /// </summary>
-    public float[] Floats { set; get; }
+    public float[] Floats { get; init; }
     /// <summary>
     /// Dictionary of names of int variables and corresponding (current/last) value.
     /// </summary>
-    public int[] Ints { set; get; }
+    public int[] Ints { get; init; }
     /// <summary>
     /// Dictionary of names of bool variables and corresponding (current/last) value.
     /// </summary>
-    public bool[] Bools { set; get; }
+    public bool[] Bools { get; init; }
     /// <summary>
     /// Dictionary of names of string variables and corresponding (current/last) value.
     /// </summary>
-    public string[] Strings { set; get; }
+    public string[] Strings { get; init; }
     /// <summary>
     /// Dictionary of names of vector2 variables and corresponding (current/last) value.
     /// </summary>
-    public Vector2[] Vector2s { set; get; }
+    public Vector2[] Vector2s { get; init; }
     /// <summary>
     /// Dictionary of names of vector3 variables and corresponding (current/last) value.
     /// </summary>
-    public Vector3[] Vector3s { set; get; }
+    public Vector3[] Vector3s { get; init; }
 }

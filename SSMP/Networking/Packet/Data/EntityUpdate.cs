@@ -621,12 +621,15 @@ internal class EntityNetworkData : IPoolable {
         Type = (EntityComponentType) packet.ReadUShort();
 
         var length = packet.ReadUShort();
-        
-        // Clear and reuse existing Packet instance to avoid allocations
+
+        // Clear and reuse the existing Packet instance, then write the payload bytes into it.
+        // Packet.cs read methods fall back to _buffer when _readableBuffer is empty, so this
+        // is safe to read back via ReadBool()/ReadByte() etc. without allocations.
         Packet.Clear();
         for (var i = 0; i < length; i++) {
             Packet.Write(packet.ReadByte());
         }
+        Packet.ResetReadPosition();
     }
 }
 

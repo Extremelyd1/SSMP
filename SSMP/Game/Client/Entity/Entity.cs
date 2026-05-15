@@ -13,12 +13,14 @@ using SSMP.Util;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
 using Math_Vector2 = SSMP.Math.Vector2;
+
 // ReSharper disable ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
 #pragma warning disable CS8604 // Possible null reference argument.
 #pragma warning disable CS8602 // Dereference of a possibly null reference.
 #pragma warning disable CS0618 // Type or member is obsolete
 #pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider
+// adding the 'required' modifier or declaring as nullable.
 #pragma warning disable CS0414 // Field is assigned but its value is never used
 
 namespace SSMP.Game.Client.Entity;
@@ -77,6 +79,7 @@ internal class Entity {
     /// Dictionary mapping FSM actions to their entity action data instances.
     /// </summary>
     private readonly Dictionary<FsmStateAction, HookedEntityAction> _hookedActions;
+
     /// <summary>
     /// Set of FSM action types that have been hooked to prevent duplicate hooks.
     /// </summary>
@@ -101,10 +104,12 @@ internal class Entity {
     /// The last position of the entity.
     /// </summary>
     private Vector3 _lastPosition;
+
     /// <summary>
     /// The last scale of the entity.
     /// </summary>
     private Vector3 _lastScale;
+
     /// <summary>
     /// Whether the game object for the entity was last active.
     /// </summary>
@@ -158,8 +163,8 @@ internal class Entity {
             _hasParent = true;
         }
 
-        Object.Client.transform.localScale = _lastScale = _hasParent 
-            ? Object.Host.transform.localScale 
+        Object.Client.transform.localScale = _lastScale = _hasParent
+            ? Object.Host.transform.localScale
             : Object.Host.transform.lossyScale;
 
         // Store whether the host object was active and set it not active until we know if we are scene host
@@ -168,7 +173,8 @@ internal class Entity {
         _lastIsActive = _hasParent ? Object.Host.activeSelf : Object.Host.activeInHierarchy;
 
         Logger.Info(
-            $"Entity '{Object.Host.name}' was original active: {_originalIsActive}, last active: {_lastIsActive}");
+            $"Entity '{Object.Host.name}' was original active: {_originalIsActive}, last active: {_lastIsActive}"
+        );
 
         // Add a position interpolation component to the enemy so we can smooth out position updates
         Object.Client.AddComponent<PredictiveInterpolation>();
@@ -189,20 +195,21 @@ internal class Entity {
                     continue;
                 }
 
-                _animationClipNameIds.Add(animationClip.name, (byte)index++);
+                _animationClipNameIds.Add(animationClip.name, (byte) index++);
 
-                if (index > byte.MaxValue) {
-                    Logger.Error($"Too many animation clips to fit in a byte for entity: {Object.Client.name}");
-                    break;
-                }
+                if (index <= byte.MaxValue)
+                    continue;
+
+                Logger.Error($"Too many animation clips to fit in a byte for entity: {Object.Client.name}");
+                break;
             }
 
-            // On.tk2dSpriteAnimator.Play_tk2dSpriteAnimationClip_float_float += OnAnimationPlayed;
+            On.tk2dSpriteAnimator.Play_tk2dSpriteAnimationClip_float_float += OnAnimationPlayed;
         }
-        
+
         // Always disallow the client object from being recycled, because it will simply be destroyed
-        // On.ObjectPool.Recycle_GameObject += ObjectPoolOnRecycleGameObject;
-        
+        On.ObjectPool.Recycle_GameObject += ObjectPoolOnRecycleGameObject;
+
         // Register a hook for the ActivateGameObject action to update the active state of the host game object
         // before scene host is determined
         // ActivateGameObject.DoActivateGameObject += OnDoActivateGameObject;
@@ -213,8 +220,8 @@ internal class Entity {
         };
 
         _hookedActions = new Dictionary<FsmStateAction, HookedEntityAction>();
-        _hookedTypes = new HashSet<Type>();
-        _fsmSnapshots = new List<FsmSnapshot>();
+        _hookedTypes = [];
+        _fsmSnapshots = [];
         foreach (var fsm in _fsms.Host) {
             ProcessHostFsm(fsm);
         }
@@ -231,14 +238,12 @@ internal class Entity {
 
         _components = new Dictionary<EntityComponentType, EntityComponent>();
         HandleComponents(types);
-        
+
         HandleEnemyDeathEffects();
 
         Object.Host.SetActive(false);
         Object.Client.SetActive(false);
-        
-        CheckGodhome();
-        
+
         // // Debug code that logs each action's OnEnter method call
         // foreach (var fsm in _fsms.Host) {
         //     foreach (var state in fsm.FsmStates) {
@@ -248,7 +253,8 @@ internal class Entity {
         //                     return;
         //                 }
         //                 
-        //                 Logger.Debug($"Entity ({Id}, {Type}) has host FSM enter action: {state.Name}, {action.GetType()}, {state.Actions.ToList().IndexOf(action)}");
+        //                 Logger.Debug($"Entity ({Id}, {Type}) has host FSM enter action: {state.Name},
+        // {action.GetType()}, {state.Actions.ToList().IndexOf(action)}");
         //             });
         //         }
         //     }
@@ -260,7 +266,7 @@ internal class Entity {
     /// Recursively go through the non-registered children as well.
     /// </summary>
     /// <param name="root">The root game object to start searching for children.</param>
-    private void DestroyManagedChildren(GameObject root) {
+    private static void DestroyManagedChildren(GameObject root) {
         foreach (var child in root.GetChildren()) {
             if (EntityRegistry.TryGetEntry(child, out var entry)) {
                 Logger.Debug($"Found managed child: {child.name}, {entry.Type}, destroying it");
@@ -279,7 +285,7 @@ internal class Entity {
         Logger.Info($"Processing host FSM: {fsm.Fsm.Name}");
 
         EntityInitializer.CheckPreProcessFsm(fsm);
-        
+
         for (var i = 0; i < fsm.FsmStates.Length; i++) {
             var state = fsm.FsmStates[i];
             var stateName = state.Name;
@@ -295,7 +301,9 @@ internal class Entity {
                 }
 
                 if (action.Fsm == null) {
-                    Logger.Error($"FSM in action for state ({i}, {state.Name}), action ({j}, {action.GetType()}) is null");
+                    Logger.Error(
+                        $"FSM in action for state ({i}, {state.Name}), action ({j}, {action.GetType()}) is null"
+                    );
                     continue;
                 }
 
@@ -306,7 +314,8 @@ internal class Entity {
                     ActionIndex = j
                 };
                 Logger.Info(
-                    $"Created hooked action: {action.GetType()}, {_fsms.Host.IndexOf(fsm)}, {stateName}, {j}");
+                    $"Created hooked action: {action.GetType()}, {_fsms.Host.IndexOf(fsm)}, {stateName}, {j}"
+                );
 
                 if (_hookedTypes.Add(action.GetType())) {
                     FsmActionHooks.RegisterFsmStateActionType(action.GetType(), OnActionEntered);
@@ -315,15 +324,14 @@ internal class Entity {
         }
 
         var snapshot = new FsmSnapshot {
-            CurrentState = fsm.ActiveStateName
+            CurrentState = fsm.ActiveStateName,
+            Floats = fsm.FsmVariables.FloatVariables.Select(f => f.Value).ToArray(),
+            Ints = fsm.FsmVariables.IntVariables.Select(i => i.Value).ToArray(),
+            Bools = fsm.FsmVariables.BoolVariables.Select(b => b.Value).ToArray(),
+            Strings = fsm.FsmVariables.StringVariables.Select(s => s.Value).ToArray(),
+            Vector2s = fsm.FsmVariables.Vector2Variables.Select(v => v.Value).ToArray(),
+            Vector3s = fsm.FsmVariables.Vector3Variables.Select(v => v.Value).ToArray()
         };
-
-        snapshot.Floats = fsm.FsmVariables.FloatVariables.Select(f => f.Value).ToArray();
-        snapshot.Ints = fsm.FsmVariables.IntVariables.Select(i => i.Value).ToArray();
-        snapshot.Bools = fsm.FsmVariables.BoolVariables.Select(b => b.Value).ToArray();
-        snapshot.Strings = fsm.FsmVariables.StringVariables.Select(s => s.Value).ToArray();
-        snapshot.Vector2s = fsm.FsmVariables.Vector2Variables.Select(v => v.Value).ToArray();
-        snapshot.Vector3s = fsm.FsmVariables.Vector3Variables.Select(v => v.Value).ToArray();
 
         _fsmSnapshots.Add(snapshot);
     }
@@ -332,7 +340,7 @@ internal class Entity {
     /// Processes the given FSM for the client entity by disabling it.
     /// </summary>
     /// <param name="fsm">The Playmaker FSM to process.</param>
-    private void ProcessClientFsm(PlayMakerFSM fsm) {
+    private static void ProcessClientFsm(PlayMakerFSM fsm) {
         Logger.Info($"Processing client FSM: {fsm.Fsm.Name}");
         EntityInitializer.InitializeFsm(fsm);
         fsm.enabled = false;
@@ -343,7 +351,7 @@ internal class Entity {
     /// </summary>
     private void HandleComponents(EntityComponentType[] types) {
         var addedComponentsString = $"Adding components to entity ({Object.Host.name}, {Id}):";
-        
+
         var hostHealthManager = Object.Host.GetComponent<HealthManager>();
         var clientHealthManager = Object.Client.GetComponent<HealthManager>();
         if (hostHealthManager != null && clientHealthManager != null) {
@@ -386,7 +394,7 @@ internal class Entity {
                 Id,
                 Object
             );
-            
+
             addedComponentsString += " Climber Rotation";
         }
 
@@ -406,7 +414,7 @@ internal class Entity {
                 Object,
                 collider
             );
-            
+
             addedComponentsString += " Collider";
         }
 
@@ -426,10 +434,10 @@ internal class Entity {
                 Object,
                 damageHero
             );
-            
+
             addedComponentsString += " DamageHero";
         }
-        
+
         var hostMeshRenderer = Object.Host.GetComponent<MeshRenderer>();
         var clientMeshRenderer = Object.Client.GetComponent<MeshRenderer>();
         if (hostMeshRenderer != null && clientMeshRenderer != null) {
@@ -446,7 +454,7 @@ internal class Entity {
                 Object,
                 meshRenderer
             );
-            
+
             addedComponentsString += " MeshRenderer";
         }
 
@@ -460,7 +468,7 @@ internal class Entity {
             } else {
                 _components[type] = component;
             }
-            
+
             addedComponentsString += $" {type}";
         }
 
@@ -473,37 +481,19 @@ internal class Entity {
     private void HandleEnemyDeathEffects() {
         string corpseName;
         switch (Type) {
-            case EntityType.Ooma:
-                corpseName = "Corpse Jellyfish(Clone)";
-                break;
-            case EntityType.Flukemon:
-                corpseName = "Corpse Flukeman(Clone)";
-                break;
-            case EntityType.HuskHornhead:
-                corpseName = "Zombie Spider 2(Clone)";
-                break;
-            case EntityType.WanderingHusk:
-                corpseName = "Zombie Spider 1(Clone)";
-                break;
-            case EntityType.DungDefender:
-                corpseName = "Corpse Dung Defender(Clone)";
-                break;
-            case EntityType.BrokenVessel:
-                corpseName = "Corpse Infected Knight(Clone)";
-                break;
-            case EntityType.LostKin:
-                corpseName = "Corpse Infected Knight Dream(Clone)";
-                break;
             default:
                 return;
         }
-        
-        Logger.Debug($"Entity ({Id}, {Type}) has corpse that is also enemy, deleting death effects and corpse from client entity");
-        
+
+        Logger.Debug(
+            $"Entity ({Id}, {Type}) has corpse that is also enemy, deleting death effects and corpse from client entity"
+        );
+
         var enemyDeathEffects = Object.Client.GetComponent<EnemyDeathEffects>();
         if (enemyDeathEffects == null) {
             Logger.Debug("  EnemyDeathEffects is null, cannot remove");
         }
+
         UnityEngine.Object.Destroy(enemyDeathEffects);
 
         var corpse = Object.Client.FindGameObjectInChildren(corpseName);
@@ -513,45 +503,6 @@ internal class Entity {
         } else {
             Logger.Debug("  Could not find corpse of client object");
         }
-    }
-
-    /// <summary>
-    /// Checks whether this is an enemy in a godhome fight. If that's the case, the health manager of the client
-    /// object will have their death be registered as a trigger for the boss scene controller. This ensures that
-    /// fights will end on scene clients if the client objects die.
-    /// </summary>
-    private void CheckGodhome() {
-        var bossSceneControllers = UnityEngine.Object.FindObjectsOfType<BossSceneController>();
-        var bossSceneController = bossSceneControllers.FirstOrDefault(
-            con => con.gameObject.scene.Equals(UnityEngine.SceneManagement.SceneManager.GetActiveScene())
-        );
-        if (bossSceneController == null) {
-            return;
-        }
-        
-        var hostHealthManager = Object.Host.GetComponent<HealthManager>();
-        if (hostHealthManager == null) {
-            return;
-        }
-        
-        var clientHealthManager = Object.Client.GetComponent<HealthManager>();
-        if (clientHealthManager == null) {
-            Logger.Debug($"Entity ({Id}, {Type}) has HealthManager on host but not on client");
-            return;
-        }
-        
-        if (!bossSceneController.bosses.Contains(hostHealthManager)) {
-            return;
-        }
-        
-        Logger.Debug($"Entity ({Id}, {Type}) is contained in the boss scene controller, registering on death");
-        
-        clientHealthManager.OnDeath += () => {
-            Logger.Debug("OnDeath triggered for health manager in boss scene controller");
-
-            bossSceneController.bossesLeft -= 1;
-            bossSceneController.CheckBossesDead();
-        };
     }
 
     /// <summary>
@@ -568,18 +519,19 @@ internal class Entity {
         }
 
         Logger.Info(
-            $"Entity ({Id}, {Type}) hooked action: {self.Fsm.Name}, {self.State.Name}, {self.GetType()} ({hookedEntityAction.FsmIndex}, {hookedEntityAction.StateIndex}, {hookedEntityAction.ActionIndex})");
+            $"Entity ({Id}, {Type}) hooked action: {self.Fsm.Name}, {self.State.Name}, {self.GetType()} ({hookedEntityAction.FsmIndex}, {hookedEntityAction.StateIndex}, {hookedEntityAction.ActionIndex})"
+        );
 
         var networkData = new EntityNetworkData {
             Type = EntityComponentType.Fsm
         };
 
         if (_fsms.Host.Count > 1) {
-            networkData.Packet.Write((byte)hookedEntityAction.FsmIndex);
+            networkData.Packet.Write((byte) hookedEntityAction.FsmIndex);
         }
 
-        networkData.Packet.Write((byte)hookedEntityAction.StateIndex);
-        networkData.Packet.Write((byte)hookedEntityAction.ActionIndex);
+        networkData.Packet.Write((byte) hookedEntityAction.StateIndex);
+        networkData.Packet.Write((byte) hookedEntityAction.ActionIndex);
 
         // Only if the GetNetworkDataFromAction method returns true do we add the entity data
         // for sending
@@ -619,7 +571,9 @@ internal class Entity {
         if (_isControlled) {
             if (hostObjectActive) {
                 if (!_isSceneHostDetermined) {
-                    Logger.Info($"Entity '{Object.Host.name}' host object became active, but scene host is not determined yet, re-disabling for now");
+                    Logger.Info(
+                        $"Entity '{Object.Host.name}' host object became active, but scene host is not determined yet, re-disabling for now"
+                    );
                     _originalIsActive = true;
                 } else {
                     Logger.Info($"Entity '{Object.Host.name}' host object became active, re-disabling");
@@ -629,7 +583,7 @@ internal class Entity {
             }
 
             if (
-                Object.Client != null && 
+                Object.Client != null &&
                 Object.Client.TryGetComponent<PredictiveInterpolation>(out var interpolation)
             ) {
                 interpolation.AdaptToRTT(_netClient.UpdateManager.AverageRtt);
@@ -667,7 +621,7 @@ internal class Entity {
                     scaleData.xFlipped = true;
                 }
             }
-            
+
             if (newScale.y != _lastScale.y) {
                 scaleData.y = true;
                 scaleData.yScale = newScale.y;
@@ -676,7 +630,7 @@ internal class Entity {
                     scaleData.yFlipped = true;
                 }
             }
-            
+
             if (newScale.z != _lastScale.z) {
                 scaleData.z = true;
                 scaleData.zScale = newScale.z;
@@ -687,7 +641,7 @@ internal class Entity {
             }
 
             _netClient.UpdateManager.UpdateEntityScale(Id, scaleData);
-            
+
             _lastScale = newScale;
         }
 
@@ -715,7 +669,7 @@ internal class Entity {
 
                 data.Types.Add(EntityHostFsmData.Type.State);
                 data.CurrentState = (byte) Array.IndexOf(fsm.FsmStates, fsm.Fsm.ActiveState);
-                
+
                 Logger.Debug($"Entity ({Id}, {Type}) host changed states: {lastStateName}, {fsm.ActiveStateName}");
             }
 
@@ -757,42 +711,42 @@ internal class Entity {
             }
 
             CondAddData(
-                fsm.FsmVariables.FloatVariables, 
+                fsm.FsmVariables.FloatVariables,
                 snapshot.Floats,
                 fsmFloat => fsmFloat.Value,
                 EntityHostFsmData.Type.Floats,
                 data.Floats
             );
             CondAddData(
-                fsm.FsmVariables.IntVariables, 
+                fsm.FsmVariables.IntVariables,
                 snapshot.Ints,
                 fsmInt => fsmInt.Value,
                 EntityHostFsmData.Type.Ints,
                 data.Ints
             );
             CondAddData(
-                fsm.FsmVariables.BoolVariables, 
+                fsm.FsmVariables.BoolVariables,
                 snapshot.Bools,
                 fsmBool => fsmBool.Value,
                 EntityHostFsmData.Type.Bools,
                 data.Bools
             );
             CondAddData(
-                fsm.FsmVariables.StringVariables, 
+                fsm.FsmVariables.StringVariables,
                 snapshot.Strings,
                 fsmString => fsmString.Value,
                 EntityHostFsmData.Type.Strings,
                 data.Strings
             );
             CondAddData(
-                fsm.FsmVariables.Vector2Variables, 
+                fsm.FsmVariables.Vector2Variables,
                 snapshot.Vector2s,
                 fsmVec2 => fsmVec2.Value,
                 EntityHostFsmData.Type.Vector2s,
                 data.Vec2s
             );
             CondAddData(
-                fsm.FsmVariables.Vector3Variables, 
+                fsm.FsmVariables.Vector3Variables,
                 snapshot.Vector3s,
                 fsmVec3 => fsmVec3.Value,
                 EntityHostFsmData.Type.Vector3s,
@@ -805,95 +759,100 @@ internal class Entity {
         }
     }
 
-    // /// <summary>
-    // /// Callback method for when the sprite animator plays an animation.
-    // /// </summary>
-    // /// <param name="orig">The original method.</param>
-    // /// <param name="self">The sprite animator instance.</param>
-    // /// <param name="clip">The animation clip that was played.</param>
-    // /// <param name="clipStartTime">The start time of the animation clip.</param>
-    // /// <param name="overrideFps">The FPS override for the clip.</param>
-    // private void OnAnimationPlayed(
-    //     On.tk2dSpriteAnimator.orig_Play_tk2dSpriteAnimationClip_float_float orig,
-    //     tk2dSpriteAnimator self,
-    //     tk2dSpriteAnimationClip clip,
-    //     float clipStartTime,
-    //     float overrideFps
-    // ) {
-    //     if (self == _animator.Client) {
-    //         if (!_allowClientAnimation) {
-    //             Logger.Info($"Entity '{Object.Client.name}' client animator tried playing animation");
-    //         } else {
-    //             // Logger.Info($"Entity '{_object.Client.name}' client animator was allowed to play animation");
-    //
-    //             orig(self, clip, clipStartTime, overrideFps);
-    //
-    //             _allowClientAnimation = false;
-    //         }
-    //
-    //         return;
-    //     }
-    //
-    //     orig(self, clip, clipStartTime, overrideFps);
-    //
-    //     if (self != _animator.Host) {
-    //         return;
-    //     }
-    //
-    //     if (_isControlled) {
-    //         return;
-    //     }
-    //
-    //     if (!_animationClipNameIds.TryGetValue(clip.name, out var animationId)) {
-    //         Logger.Warn($"Entity '{Object.Client.name}' played unknown animation: {clip.name}");
-    //         return;
-    //     }
-    //
-    //     Logger.Info($"Entity '{Object.Host.name}' sends animation: {clip.name}, {animationId}, {clip.wrapMode}");
-    //     _netClient.UpdateManager.UpdateEntityAnimation(
-    //         Id,
-    //         animationId,
-    //         (byte)clip.wrapMode
-    //     );
-    // }
-    
-    // /// <summary>
-    // /// Callback method for when a game object is recycled. Used to prevent client objects from being recycled, which
-    // /// shouldn't happen because they are instantiated manually instead of from a pool.
-    // /// </summary>
-    // private void ObjectPoolOnRecycleGameObject(On.ObjectPool.orig_Recycle_GameObject orig, GameObject obj) {
-    //     if (obj == Object.Client) {
-    //         Logger.Debug($"Client object of entity: {Id}, {Type} tried to be recycled");
-    //         return;
-    //     }
-    //
-    //     orig(obj);
-    // }
-    
-    // /// <summary>
-    // /// Callback method for when the 'active' of the host game object is changed. Used to update whether the host
-    // /// game object should return to what active state after the scene host is determined.
-    // /// </summary>
-    // private void OnDoActivateGameObject(ActivateGameObject.orig_DoActivateGameObject orig, HutongGames.PlayMaker.Actions.ActivateGameObject self) {
-    //     // If the game object in the action is not our host game object, we skip it
-    //     if (self.Fsm.GetOwnerDefaultTarget(self.gameObject) != Object.Host || Object.Host == null) {
-    //         orig(self);
-    //         return;
-    //     }
-    //     
-    //     // If the host client is determined already we skip (although this hook should have been deregistered
-    //     if (_isSceneHostDetermined) {
-    //         orig(self);
-    //         return;
-    //     }
-    //     
-    //     Logger.Debug($"Entity '{Object.Host.name}' tried changing active of host object, while host is not determined yet, updating original active to: {self.activate.Value}");
-    //
-    //     // Update the original active value to whatever this action will set
-    //     // Also, we do not let this action execute any further since we do not want it to modify our host object
-    //     // before the scene host is determined
-    //     _originalIsActive = self.activate.Value;
-    // }
+    /// <summary>
+    /// Callback method for when the sprite animator plays an animation.
+    /// </summary>
+    /// <param name="orig">The original method.</param>
+    /// <param name="self">The sprite animator instance.</param>
+    /// <param name="clip">The animation clip that was played.</param>
+    /// <param name="clipStartTime">The start time of the animation clip.</param>
+    /// <param name="overrideFps">The FPS override for the clip.</param>
+    private void OnAnimationPlayed(
+        On.tk2dSpriteAnimator.orig_Play_tk2dSpriteAnimationClip_float_float orig,
+        tk2dSpriteAnimator self,
+        tk2dSpriteAnimationClip clip,
+        float clipStartTime,
+        float overrideFps
+    ) {
+        if (self == _animator.Client) {
+            if (!_allowClientAnimation) {
+                Logger.Info($"Entity '{Object.Client.name}' client animator tried playing animation");
+            } else {
+                // Logger.Info($"Entity '{_object.Client.name}' client animator was allowed to play animation");
+
+                orig(self, clip, clipStartTime, overrideFps);
+
+                _allowClientAnimation = false;
+            }
+
+            return;
+        }
+
+        orig(self, clip, clipStartTime, overrideFps);
+
+        if (self != _animator.Host) {
+            return;
+        }
+
+        if (_isControlled) {
+            return;
+        }
+
+        if (!_animationClipNameIds.TryGetValue(clip.name, out var animationId)) {
+            Logger.Warn($"Entity '{Object.Client.name}' played unknown animation: {clip.name}");
+            return;
+        }
+
+        Logger.Info($"Entity '{Object.Host.name}' sends animation: {clip.name}, {animationId}, {clip.wrapMode}");
+        _netClient.UpdateManager.UpdateEntityAnimation(
+            Id,
+            animationId,
+            (byte) clip.wrapMode
+        );
+    }
+
+    /// <summary>
+    /// Callback method for when a game object is recycled. Used to prevent client objects from being recycled, which
+    /// shouldn't happen because they are instantiated manually instead of from a pool.
+    /// </summary>
+    private void ObjectPoolOnRecycleGameObject(On.ObjectPool.orig_Recycle_GameObject orig, GameObject obj) {
+        if (obj == Object.Client) {
+            Logger.Debug($"Client object of entity: {Id}, {Type} tried to be recycled");
+            return;
+        }
+
+        orig(obj);
+    }
+
+    /// <summary>
+    /// Callback method for when the 'active' of the host game object is changed. Used to update whether the host
+    /// game object should return to what active state after the scene host is determined.
+    /// </summary>
+    private void OnDoActivateGameObject(
+        ActivateGameObject.orig_DoActivateGameObject orig,
+        HutongGames.PlayMaker.Actions.ActivateGameObject self
+    ) {
+        // If the game object in the action is not our host game object, we skip it
+        if (self.Fsm.GetOwnerDefaultTarget(self.gameObject) != Object.Host || Object.Host == null) {
+            orig(self);
+            return;
+        }
+
+        // If the host client is determined already we skip (although this hook should have been deregistered
+        if (_isSceneHostDetermined) {
+            orig(self);
+            return;
+        }
+
+        Logger.Debug(
+            $"Entity '{Object.Host.name}' tried changing active of host object, while host is not determined yet, updating original active to: {self.activate.Value}"
+        );
+
+        // Update the original active value to whatever this action will set
+        // Also, we do not let this action execute any further since we do not want it to modify our host object
+        // before the scene host is determined
+        _originalIsActive = self.activate.Value;
+    }
 
     /// <summary>
     /// Initializes the entity when the client user is the scene host.
@@ -906,7 +865,8 @@ internal class Entity {
         _lastIsActive = _hasParent ? Object.Host.activeSelf : Object.Host.activeInHierarchy;
 
         Logger.Info(
-            $"Initializing entity '{Object.Host.name}' with active: {_originalIsActive}, sending active: {_lastIsActive}");
+            $"Initializing entity '{Object.Host.name}' with active: {_originalIsActive}, sending active: {_lastIsActive}"
+        );
 
         _netClient.UpdateManager.UpdateEntityIsActive(Id, _lastIsActive);
 
@@ -917,7 +877,7 @@ internal class Entity {
             component.IsControlled = false;
             component.InitializeHost();
         }
-        
+
         // Deregister the hook for updating the active value of the host object
         // ActivateGameObject.DoActivateGameObject -= OnDoActivateGameObject;
     }
@@ -928,7 +888,7 @@ internal class Entity {
     /// </summary>
     public void InitializeClient() {
         _isSceneHostDetermined = true;
-        
+
         // Deregister the hook for updating the active value of the host object
         // ActivateGameObject.DoActivateGameObject -= OnDoActivateGameObject;
     }
@@ -944,7 +904,7 @@ internal class Entity {
             if (Object.Host != null) {
                 Object.Host.SetActive(false);
             }
-            
+
             _isControlled = false;
 
             foreach (var component in _components.Values) {
@@ -968,19 +928,19 @@ internal class Entity {
             if (Object.Host.transform.parent != null) {
                 parentPos = Object.Host.transform.parent.position;
             }
-        
+
             var newPosX = clientPos.x - parentPos.x;
             var newPosY = clientPos.y - parentPos.y;
             var newPosZ = clientPos.z - parentPos.z;
-        
+
             Object.Host.transform.localPosition = _lastPosition = new Vector3(newPosX, newPosY, newPosZ);
-            
+
             // Since the scale of the client object is the entire scale we have and the host object scale can be in a
             // hierarchy, we need to calculate what the new local scale of the host will be to match the client scale
             var clientScale = Object.Client.transform.localScale;
             var hostLocalScale = Object.Host.transform.localScale;
             var hostLossyScale = Object.Host.transform.lossyScale;
-            
+
             var newScaleX = hostLocalScale.x == 0 || hostLossyScale.x == 0
                 ? 0f
                 : clientScale.x / (hostLossyScale.x / hostLocalScale.x);
@@ -990,7 +950,7 @@ internal class Entity {
             var newScaleZ = hostLocalScale.z == 0 || hostLossyScale.z == 0
                 ? 0f
                 : clientScale.z / (hostLossyScale.z / hostLocalScale.z);
-        
+
             Object.Host.transform.localScale = _lastScale = new Vector3(newScaleX, newScaleY, newScaleZ);
         }
 
@@ -1016,7 +976,7 @@ internal class Entity {
         }
 
         _lastIsActive = _hasParent ? Object.Host.activeSelf : Object.Host.activeInHierarchy;
-        
+
         _isControlled = false;
 
         foreach (var component in _components.Values) {
@@ -1028,10 +988,10 @@ internal class Entity {
             if (currentClip != null) {
                 var clientAnimation = currentClip.name;
                 var wrapMode = currentClip.wrapMode;
-            
+
                 Logger.Debug($"  Animator and current clip present, updating animation: {clientAnimation}, {wrapMode}");
-            
-                LateUpdateAnimation(_animator.Host, clientAnimation, wrapMode);   
+
+                LateUpdateAnimation(_animator.Host, clientAnimation, wrapMode);
             }
         }
 
@@ -1044,24 +1004,29 @@ internal class Entity {
 
             // Force initialize the host FSM, since it might have been disabled before initializing
             EntityInitializer.InitializeFsm(fsm);
-            
+
             var snapshot = _fsmSnapshots[fsmIndex];
 
             for (var i = 0; i < snapshot.Floats.Length; i++) {
                 fsm.FsmVariables.FloatVariables[i].Value = snapshot.Floats[i];
             }
+
             for (var i = 0; i < snapshot.Ints.Length; i++) {
                 fsm.FsmVariables.IntVariables[i].Value = snapshot.Ints[i];
             }
+
             for (var i = 0; i < snapshot.Bools.Length; i++) {
                 fsm.FsmVariables.BoolVariables[i].Value = snapshot.Bools[i];
             }
+
             for (var i = 0; i < snapshot.Strings.Length; i++) {
                 fsm.FsmVariables.StringVariables[i].Value = snapshot.Strings[i];
             }
+
             for (var i = 0; i < snapshot.Vector2s.Length; i++) {
                 fsm.FsmVariables.Vector2Variables[i].Value = snapshot.Vector2s[i];
             }
+
             for (var i = 0; i < snapshot.Vector3s.Length; i++) {
                 fsm.FsmVariables.Vector3Variables[i].Value = snapshot.Vector3s[i];
             }
@@ -1074,9 +1039,9 @@ internal class Entity {
                 Logger.Debug("  Not setting FSM state, because current state is empty");
                 continue;
             }
-            
+
             Logger.Debug($"  Setting FSM state: {snapshot.CurrentState}");
-            
+
             var oldActions = state.Actions;
             var newActions = oldActions.Where(ActionRegistry.IsActionContinuous).ToArray();
 
@@ -1098,9 +1063,9 @@ internal class Entity {
             Logger.Warn($"Cannot update position for entity ({Id}, {Type}), client or host object is null");
             return;
         }
-        
+
         var unityPos = new Vector3(
-            position.X, 
+            position.X,
             position.Y,
             _hasParent ? Object.Host.transform.localPosition.z : Object.Host.transform.position.z
         );
@@ -1122,10 +1087,10 @@ internal class Entity {
             Logger.Warn($"Cannot update scale for entity ({Id}, {Type}), client object is null");
             return;
         }
-        
+
         var transform = Object.Client.transform;
         var localScale = transform.localScale;
-        
+
         if (scale.x) {
             if (scale.xFlipped) {
                 var currentScaleX = localScale.x;
@@ -1139,7 +1104,7 @@ internal class Entity {
                 localScale.x = scale.xScale;
             }
         }
-        
+
         if (scale.y) {
             if (scale.yFlipped) {
                 var currentScaleY = localScale.y;
@@ -1178,8 +1143,8 @@ internal class Entity {
     /// <param name="wrapMode">The wrap mode of the animation clip.</param>
     /// <param name="alreadyInSceneUpdate">Whether this update is when entering a new scene.</param>
     public void UpdateAnimation(
-        byte animationId, 
-        tk2dSpriteAnimationClip.WrapMode wrapMode, 
+        byte animationId,
+        tk2dSpriteAnimationClip.WrapMode wrapMode,
         bool alreadyInSceneUpdate
     ) {
         if (_animator.Client == null) {
@@ -1216,8 +1181,8 @@ internal class Entity {
     /// <param name="clipName">The name of the animation clip.</param>
     /// <param name="wrapMode">The wrap mode for the animation.</param>
     private void LateUpdateAnimation(
-        tk2dSpriteAnimator animator, 
-        string? clipName, 
+        tk2dSpriteAnimator animator,
+        string? clipName,
         tk2dSpriteAnimationClip.WrapMode wrapMode
     ) {
         if (wrapMode == tk2dSpriteAnimationClip.WrapMode.Loop) {
@@ -1226,7 +1191,7 @@ internal class Entity {
         }
 
         var clip = animator.GetClipByName(clipName);
-        
+
         Logger.Debug($"Entity ({Id}, {Type}) LateUpdateAnimation: {clip.name}, {wrapMode}");
 
         if (wrapMode == tk2dSpriteAnimationClip.WrapMode.LoopSection) {
@@ -1244,7 +1209,8 @@ internal class Entity {
             animator.PlayFromFrame(clipName, clipLength - 1);
 
             // Logger.Info(
-            // $"  Played animation: {clipName}, {clipLength - 1} on {_animator.Client.name}, {_animator.Client.GetHashCode()}");
+            // $"  Played animation: {clipName}, {clipLength - 1} on {_animator.Client.name},
+            // {_animator.Client.GetHashCode()}");
         }
     }
 
@@ -1298,8 +1264,10 @@ internal class Entity {
 
                 var state = fsm.FsmStates[stateIndex];
                 var action = state.Actions[actionIndex];
-                
-                Logger.Info($"Received entity network data for FSM: {fsm.Fsm.Name}, {state.Name}, {actionIndex} ({action.GetType()})");
+
+                Logger.Info(
+                    $"Received entity network data for FSM: {fsm.Fsm.Name}, {state.Name}, {actionIndex} ({action.GetType()})"
+                );
 
                 EntityFsmActions.ApplyNetworkDataFromAction(data, action);
 
@@ -1335,9 +1303,9 @@ internal class Entity {
                     Logger.Warn($"Tried to update host FSM state for unknown state index: {data.CurrentState}");
                 } else {
                     var stateName = states[data.CurrentState].Name;
-                    
+
                     snapshot.CurrentState = stateName;
-                    
+
                     // Also propagate this state change to the EntityFsmActions class with the client FSM for the
                     // same index
                     EntityFsmActions.RegisterStateChange(_fsms.Client[fsmIndex].Fsm, stateName);
@@ -1355,7 +1323,9 @@ internal class Entity {
                 if (data.Types.Contains(type)) {
                     foreach (var pair in dataDict) {
                         if (fsmVarArray.Length <= pair.Key) {
-                            Logger.Warn($"Tried to update host FSM var ({typeof(TBase)}) for unknown index: {pair.Key}");
+                            Logger.Warn(
+                                $"Tried to update host FSM var ({typeof(TBase)}) for unknown index: {pair.Key}"
+                            );
                         } else {
                             setValueAction.Invoke(pair.Key, fsmVarArray[pair.Key], pair.Value);
                         }
@@ -1427,8 +1397,8 @@ internal class Entity {
     /// </summary>
     public void Destroy() {
         MonoBehaviourUtil.Instance.OnUpdateEvent -= OnUpdate;
-        // On.tk2dSpriteAnimator.Play_tk2dSpriteAnimationClip_float_float -= OnAnimationPlayed;
-        // On.ObjectPool.Recycle_GameObject -= ObjectPoolOnRecycleGameObject;
+        On.tk2dSpriteAnimator.Play_tk2dSpriteAnimationClip_float_float -= OnAnimationPlayed;
+        On.ObjectPool.Recycle_GameObject -= ObjectPoolOnRecycleGameObject;
 
         foreach (var component in _components.Values.Distinct()) {
             component.Destroy();

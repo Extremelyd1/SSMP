@@ -665,30 +665,22 @@ internal class ClientManager : IClientManager {
         _addonManager.UpdateNetworkedAddonOrder(serverInfo.AddonOrder);
 
         if (!_autoConnect) {
-            if (_fullSynchronisation) {
-                // This was not an auto-connect and full synchronisation is enabled, so we set save data.
-                // Otherwise, with hosting we already have the save data, or with no full synchronisation, we don't
-                // need it.
-                // _saveManager.SetSaveWithData(serverInfo.CurrentSave);
-                // _uiManager.EnterGameFromMultiplayerMenu(serverInfo.CurrentSave.NewForPlayer);
-            } else {
-                // This was not an auto-connect and full synchronisation is disabled, so we need to prompt the user
-                // with a local save file that they want to use
-                _uiManager.OpenSaveSlotSelection(saveSelected => {
-                        // If this callback executes, but we have not selected a save (by pressing the back button on
-                        // the save selection screen, we need to disconnect from the server again, because we are not
-                        // entering the world
-                        if (saveSelected) {
-                            _netClient.UpdateManager.AddPlayerSettingUpdate(
-                                crestType: CrestTypeExt.FromInternal(PlayerData.instance.CurrentCrestID)
-                            );
-                            return;
-                        }
-
-                        Disconnect();
+            // Not a host auto-connect: prompt the player to pick a local save file to load into the game.
+            // NOTE: When the full-sync save handoff is implemented (_saveManager.SetSaveWithData), this block
+            // should be replaced with auto-entering the game using the server-provided save data instead.
+            _uiManager.OpenSaveSlotSelection(saveSelected => {
+                    // If the back button was pressed without selecting a save, disconnect from the server
+                    // because the player is not entering the world.
+                    if (saveSelected) {
+                        _netClient.UpdateManager.AddPlayerSettingUpdate(
+                            crestType: CrestTypeExt.FromInternal(PlayerData.instance.CurrentCrestID)
+                        );
+                        return;
                     }
-                );
-            }
+
+                    Disconnect();
+                }
+            );
         } else {
             _netClient.UpdateManager.AddPlayerSettingUpdate(
                 crestType: CrestTypeExt.FromInternal(PlayerData.instance.CurrentCrestID)
