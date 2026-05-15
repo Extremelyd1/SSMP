@@ -293,6 +293,10 @@ internal class ClientManager : IClientManager {
         // Register client connect and timeout handler
         _netClient.ConnectEvent += OnClientConnect;
         _netClient.TimeoutEvent += OnTimeout;
+
+        EventHooks.GameManagerQuitGame += () => {
+            _modSettings.Save();
+        };
     }
 
     /// <summary>
