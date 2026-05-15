@@ -145,7 +145,7 @@ internal class NeedleStrike : DamageAnimationEffect {
             }
 
             var strikeObj = Object.Instantiate(_chargeSlashBasic, playerAttacks.transform);
-            strikeObj.layer = 17;
+            strikeObj.layer = AttackLayer;
             strikeObj.name = "Needle Strike (Hunter)";
 
             ModifyDamagingSlashObject(strikeObj.FindGameObjectInChildren("slash 01"), damage);
@@ -168,7 +168,7 @@ internal class NeedleStrike : DamageAnimationEffect {
             AudioUtil.PlayAudio(_reaperAudioEvent, playerObject);
 
             var strikeObj = Object.Instantiate(_chargeSlashScythe, playerAttacks.transform);
-            strikeObj.layer = 17;
+            strikeObj.layer = AttackLayer;
             strikeObj.name = "Needle Strike (Reaper)";
 
             ModifyDamagingSlashObject(strikeObj.FindGameObjectInChildren("slash 01"), damage);
@@ -189,7 +189,7 @@ internal class NeedleStrike : DamageAnimationEffect {
             }
 
             var strikeObj = Object.Instantiate(_chargeSlashWanderer, playerAttacks.transform);
-            strikeObj.layer = 17;
+            strikeObj.layer = AttackLayer;
             strikeObj.name = "Needle Strike (Wanderer)";
             
             ModifyDamagingSlashObject(strikeObj, damage);
@@ -235,7 +235,7 @@ internal class NeedleStrike : DamageAnimationEffect {
                 }
 
                 var strikeObj = Object.Instantiate(prefab, playerAttacks.transform);
-                strikeObj.layer = 17;
+                strikeObj.layer = AttackLayer;
                 strikeObj.name = "Needle Strike (Beast)";
                 
                 ModifyDamagingSlashObject(
@@ -282,7 +282,7 @@ internal class NeedleStrike : DamageAnimationEffect {
             _witchAudioEvent ??= GetOrFindNailArtsFsm().GetFirstAction<PlayAudioEvent>("Begin Spin");
 
             var strikeObj = Object.Instantiate(_chargeSlashWitch, playerAttacks.transform);
-            strikeObj.layer = 17;
+            strikeObj.layer = AttackLayer;
             strikeObj.name = "Needle Strike (Witch)";
             
             ModifyDamagingSlashObject(strikeObj.FindGameObjectInChildren("damager 01"), damage);
@@ -311,7 +311,7 @@ internal class NeedleStrike : DamageAnimationEffect {
             _architectAudioEvent ??= GetOrFindNailArtsFsm().GetFirstAction<PlayAudioEvent>("Drill Sfx");
 
             var strikeObj = Object.Instantiate(_chargeSlashArchitect, playerAttacks.transform);
-            strikeObj.layer = 17;
+            strikeObj.layer = AttackLayer;
             strikeObj.name = "Needle Strike (Architect)";
 
             Object.Destroy(strikeObj.GetComponent<KeepWorldPosition>());
@@ -340,7 +340,7 @@ internal class NeedleStrike : DamageAnimationEffect {
             }
 
             var strikeObj = Object.Instantiate(_chargeSlashShaman, playerAttacks.transform);
-            strikeObj.layer = 17;
+            strikeObj.layer = AttackLayer;
             strikeObj.name = "Needle Strike (Shaman)";
 
             ModifyDamagingSlashObject(strikeObj.FindGameObjectInChildren("damager"), damage);
@@ -395,6 +395,8 @@ internal class NeedleStrike : DamageAnimationEffect {
         }
 
         Object.DestroyImmediate(gameObject.GetComponent<NailSlashTerrainThunk>());
+
+        FixDamageEnemies(gameObject);
 
         if (damage.HasValue) {
             AddDamageHeroComponent(gameObject, damage.Value);

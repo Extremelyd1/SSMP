@@ -119,6 +119,8 @@ internal abstract class SlashBase : ParryableEffect {
         // Instantiate the slash gameObject from the given prefab
         // and use the attack gameObject as transform reference
         var slashObj = Object.Instantiate(nailAttackBase.gameObject, slashParent.transform);
+        slashObj.layer = AttackLayer;
+        // slashObj.tag = "Nail Beam"; // Add if we want to disable hitting other peoples interactable objects
 
         var nailSlash = slashObj.GetComponent<NailSlash>();
         var downSpike = slashObj.GetComponent<Downspike>();
@@ -188,7 +190,9 @@ internal abstract class SlashBase : ParryableEffect {
         if (ServerSettings.IsPvpEnabled && ShouldDoDamage) {
             AddDamageHeroComponent(slashObj, ServerSettings.NeedleDamage);
         }
-        
+
+        FixDamageEnemies(slashObj);
+
         // TODO: nail imbued from NailAttackBase
     }
 
