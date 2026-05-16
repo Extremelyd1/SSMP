@@ -1826,7 +1826,9 @@ internal class ConnectInterface {
             _pendingHolePunchRetryLobbyId = null;
 
             if (ValidateUsername(out var username)) {
-                Logger.Info($"ConnectInterface: Connection timed out. Retrying full join flow for lobby {lobbyIdToRetry} once.");
+                Logger.Info(
+                    $"ConnectInterface: Connection timed out. Retrying full join flow for lobby {lobbyIdToRetry} once."
+                );
                 SetLobbyJoinInProgress();
                 ShowFeedback(Color.yellow, "Connection timed out. Retrying...");
                 MonoBehaviourUtil.Instance.StartCoroutine(JoinLobbyCoroutine(lobbyIdToRetry, username));
@@ -2103,15 +2105,19 @@ internal class ConnectInterface {
             return null;
 
         // Prefer LAN if available, using public as the fallback relay
-        if (preferLanFastPath &&
-            !string.IsNullOrEmpty(lanConnectionData) &&
-            TryParseConnectionData(lanConnectionData, out var lanIp, out var lanPort)) {
-            return new ConnectionInfo(
-                lanIp, lanPort, $"{publicIp}:{publicPort}", $"Connecting to LAN {lanIp}:{lanPort}..."
-            );
+        if (!preferLanFastPath || string.IsNullOrEmpty(lanConnectionData) ||
+            !TryParseConnectionData(lanConnectionData, out var lanIp, out var lanPort)) {
+            return new ConnectionInfo(publicIp, publicPort, null, $"Connecting to {publicIp}:{publicPort}...");
         }
 
-        return new ConnectionInfo(publicIp, publicPort, null, $"Connecting to {publicIp}:{publicPort}...");
+        // If the LAN endpoint resolves to one of this machine's own IPv4 addresses,
+        // the client and host are running on the same device. In that case, prefer
+        // loopback instead of connecting back through the LAN adapter, since some
+        // network setups handle that path inconsistently.
+        // The public endpoint is still kept as the fallback if the local attempt fails.
+        return NetworkingUtil.IsLocalInterfaceIpv4(lanIp)
+            ? new ConnectionInfo("127.0.0.1", lanPort, $"{publicIp}:{publicPort}", $"Connecting locally on 127.0.0.1:{lanPort}...")
+            : new ConnectionInfo(lanIp, lanPort, $"{publicIp}:{publicPort}", $"Connecting to LAN {lanIp}:{lanPort}...");
     }
 
     /// <summary>

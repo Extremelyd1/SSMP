@@ -72,6 +72,17 @@ internal static class NetworkingUtil {
         return IPAddress.Any;
     }
 
+    /// <summary>
+    /// Returns <see langword="true"/> when <paramref name="value"/> is an IPv4 address assigned
+    /// to this machine, including loopback.
+    /// </summary>
+    public static bool IsLocalInterfaceIpv4(string? value) {
+        return TryNormalizeIpv4(value, out var normalized) &&
+               IPAddress.TryParse(normalized, out var address) &&
+               address.AddressFamily == AddressFamily.InterNetwork &&
+               IsLocalInterfaceAddress(address);
+    }
+
     #endregion
 
     #region Private Helpers
