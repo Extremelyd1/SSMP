@@ -133,6 +133,10 @@ internal sealed class MmsClient {
     public void StartHostDiscoveryRefresh(string hostDiscoveryToken, Action<byte[], IPEndPoint> sendRawAction) =>
         HostSession.StartHostDiscoveryRefresh(hostDiscoveryToken, sendRawAction);
 
+    /// <summary>Starts startup-time host UDP discovery using the current lobby's initial token, if present.</summary>
+    public void StartInitialHostDiscoveryRefresh(Action<byte[], IPEndPoint> sendRawAction) =>
+        HostSession.StartInitialHostDiscoveryRefresh(sendRawAction);
+
     /// <summary>Stops active host discovery refresh loop.</summary>
     public void StopHostDiscoveryRefresh() => HostSession.StopHostDiscoveryRefresh();
 

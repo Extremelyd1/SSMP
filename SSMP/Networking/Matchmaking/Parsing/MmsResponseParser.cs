@@ -28,11 +28,11 @@ internal static class MmsResponseParser {
         out string? hostDiscoveryToken
     ) {
         var root = ParseJsonObject(response);
-        lobbyId             = root?.Value<string>(MmsFields.ConnectionData);
-        hostToken           = root?.Value<string>(MmsFields.HostToken);
-        lobbyName           = root?.Value<string>(MmsFields.LobbyName);
-        lobbyCode           = root?.Value<string>(MmsFields.LobbyCode);
-        hostDiscoveryToken  = root?.Value<string>(MmsFields.HostDiscoveryToken);
+        lobbyId            = root?.Value<string>(MmsFields.ConnectionData);
+        hostToken          = root?.Value<string>(MmsFields.HostToken);
+        lobbyName          = root?.Value<string>(MmsFields.LobbyName);
+        lobbyCode          = root?.Value<string>(MmsFields.LobbyCode);
+        hostDiscoveryToken = root?.Value<string>(MmsFields.HostDiscoveryToken);
 
         return lobbyId != null && hostToken != null && lobbyName != null && lobbyCode != null;
     }
@@ -47,8 +47,8 @@ internal static class MmsResponseParser {
             return null;
         }
 
-        var connectionData   = root.Value<string>(MmsFields.ConnectionData);
-        var lobbyTypeString  = root.Value<string>(MmsFields.LobbyType);
+        var connectionData  = root.Value<string>(MmsFields.ConnectionData);
+        var lobbyTypeString = root.Value<string>(MmsFields.LobbyType);
 
         if (connectionData == null || lobbyTypeString == null) {
             return null;
@@ -86,30 +86,34 @@ internal static class MmsResponseParser {
             return null;
         }
 
-        var hostIp   = root.Value<string>(MmsFields.HostIp);
-        var hostPort = root.Value<int?>(MmsFields.HostPort);
-        var startTime = root.Value<long?>(MmsFields.StartTimeMs);
+        var hostIp     = root.Value<string>(MmsFields.HostIp);
+        var hostPort   = root.Value<int?>(MmsFields.HostPort);
+        var serverTime = root.Value<long?>(MmsFields.ServerTimeMs);
+        var startTime  = root.Value<long?>(MmsFields.StartTimeMs);
 
-        if (hostIp == null || hostPort == null || startTime == null) {
+        if (hostIp == null || hostPort == null || serverTime == null || startTime == null) {
             return null;
         }
 
         return new MatchmakingJoinStartResult {
-            HostIp      = hostIp,
-            HostPort    = hostPort.Value,
-            StartTimeMs = startTime.Value
+            HostIp       = hostIp,
+            HostPort     = hostPort.Value,
+            ServerTimeMs = serverTime.Value,
+            StartTimeMs  = startTime.Value
         };
     }
 
     /// <summary>Normalizes lobby-list payloads so callers can always iterate a JSON array.</summary>
     private static JArray ParseLobbiesAsArray(string response) {
         return JToken.Parse(response) switch {
-            JArray  array => array,
-            var other     => LogAndReturnEmpty(other)
+            JArray array => array,
+            var other => LogAndReturnEmpty(other)
         };
 
         static JArray LogAndReturnEmpty(JToken other) {
-            Logger.Debug($"MmsResponseParser: Unexpected lobby payload token type '{other.Type}', expected array or object.");
+            Logger.Debug(
+                $"MmsResponseParser: Unexpected lobby payload token type '{other.Type}', expected array or object."
+            );
             return [];
         }
     }
