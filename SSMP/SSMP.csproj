@@ -66,8 +66,9 @@
             <Binaries Include="$(TargetPath)"/>
             <Binaries Include="$(TargetDir)/$(TargetName).pdb"/>
             <Binaries Include="$(TargetDir)/*.dll"/>
+            <SilksongFolders Include="$(SilksongFolder)"/>
         </ItemGroup>
 
-        <Copy SourceFiles="@(Binaries)" DestinationFolder="$(SilksongFolder)/BepInEx/plugins/$(TargetName)"/>
+        <Copy SourceFiles="@(Binaries)" DestinationFolder="%(SilksongFolders.Identity)"/>
     </Target>
 </Project>
