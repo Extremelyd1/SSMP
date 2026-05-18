@@ -61,12 +61,12 @@
         <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2" PrivateAssets="all"/>
     </ItemGroup>
 
-    <Target Name="CopyMod" AfterTargets="PostBuildEvent" Condition="'$(SilksongFolder)' != ''">
+    <Target Name="CopyMod" AfterTargets="PostBuildEvent" Condition="'$(SSMPDeployPaths)' != ''">
         <ItemGroup>
             <Binaries Include="$(TargetPath)"/>
             <Binaries Include="$(TargetDir)/$(TargetName).pdb"/>
             <Binaries Include="$(TargetDir)/*.dll"/>
-            <SilksongFolders Include="$(SilksongFolder)"/>
+            <SilksongFolders Include="$(SSMPDeployPaths)"/>
         </ItemGroup>
 
         <Copy SourceFiles="@(Binaries)" DestinationFolder="%(SilksongFolders.Identity)"/>
