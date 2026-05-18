@@ -52,11 +52,11 @@ internal class DebugCommand : IClientCommand, ICommandWithDescription {
     }
 
     private void EquipCloaklessCrest() {
-        ToolItemManager.AutoEquip(ToolItemManager.GetCrestByName("Cloakless"), true, true);
+        //ToolItemManager.AutoEquip(ToolItemManager.GetCrestByName("Cloakless"), true, true);
     }
 
     private void EquipCursedCrest() {
-        ToolItemManager.AutoEquip(ToolItemManager.GetCrestByName("Cursed"), true, true);
+        //ToolItemManager.AutoEquip(ToolItemManager.GetCrestByName("Cursed"), true, true);
     }
 
     private void Test() {

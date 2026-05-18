@@ -300,14 +300,6 @@ internal class EntityManager {
 
                 break;
             }
-            case EntitySpawnType.EnemySpawnerComponent:
-                spawningObjectName = "Vengefly Summon";
-                spawningType = EntityType.VengeflySummon;
-                break;
-            case EntitySpawnType.SpawnJarComponent:
-                spawningObjectName = "Spawn Jar";
-                spawningType = EntityType.CollectorJar;
-                break;
             default:
                 Logger.Error($"Invalid EntitySpawnDetails type: {details.Type}");
                 return false;

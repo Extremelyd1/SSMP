@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using HutongGames.PlayMaker;
+using On.HutongGames.PlayMaker.Actions;
 using SSMP.Collection;
 using SSMP.Fsm;
 using SSMP.Game.Client.Entity.Action;
@@ -212,7 +213,7 @@ internal class Entity {
 
         // Register a hook for the ActivateGameObject action to update the active state of the host game object
         // before scene host is determined
-        // ActivateGameObject.DoActivateGameObject += OnDoActivateGameObject;
+        ActivateGameObject.DoActivateGameObject += OnDoActivateGameObject;
 
         _fsms = new HostClientPair<List<PlayMakerFSM>> {
             Host = Object.Host.GetComponents<PlayMakerFSM>().ToList(),
@@ -479,30 +480,29 @@ internal class Entity {
     /// Handle specifics for a set of enemies that rely on EnemyDeathEffects for additional enemies.
     /// </summary>
     private void HandleEnemyDeathEffects() {
-        string corpseName;
         switch (Type) {
             default:
                 return;
         }
 
-        Logger.Debug(
-            $"Entity ({Id}, {Type}) has corpse that is also enemy, deleting death effects and corpse from client entity"
-        );
+      // Logger.Debug(
+      //     $"Entity ({Id}, {Type}) has corpse that is also enemy, deleting death effects and corpse from client entity"
+      // );
 
-        var enemyDeathEffects = Object.Client.GetComponent<EnemyDeathEffects>();
-        if (enemyDeathEffects == null) {
-            Logger.Debug("  EnemyDeathEffects is null, cannot remove");
-        }
+      // var enemyDeathEffects = Object.Client.GetComponent<EnemyDeathEffects>();
+      // if (enemyDeathEffects == null) {
+      //     Logger.Debug("  EnemyDeathEffects is null, cannot remove");
+      // }
 
-        UnityEngine.Object.Destroy(enemyDeathEffects);
+      // UnityEngine.Object.Destroy(enemyDeathEffects);
 
-        var corpse = Object.Client.FindGameObjectInChildren(corpseName);
-        if (corpse != null) {
-            Logger.Debug($"  Destroying corpse of client object: {corpse.name}");
-            UnityEngine.Object.Destroy(corpse);
-        } else {
-            Logger.Debug("  Could not find corpse of client object");
-        }
+      // var corpse = Object.Client.FindGameObjectInChildren(corpseName);
+      // if (corpse != null) {
+      //     Logger.Debug($"  Destroying corpse of client object: {corpse.name}");
+      //     UnityEngine.Object.Destroy(corpse);
+      // } else {
+      //     Logger.Debug("  Could not find corpse of client object");
+      // }
     }
 
     /// <summary>
@@ -815,8 +815,8 @@ internal class Entity {
     /// Callback method for when a game object is recycled. Used to prevent client objects from being recycled, which
     /// shouldn't happen because they are instantiated manually instead of from a pool.
     /// </summary>
-    private void ObjectPoolOnRecycleGameObject(On.ObjectPool.orig_Recycle_GameObject orig, GameObject obj) {
-        if (obj == Object.Client) {
+    private void ObjectPoolOnRecycleGameObject(On.ObjectPool.orig_Recycle_GameObject orig, object obj) {
+        if (obj is GameObject gameObject && gameObject == Object.Client) {
             Logger.Debug($"Client object of entity: {Id}, {Type} tried to be recycled");
             return;
         }
@@ -879,7 +879,7 @@ internal class Entity {
         }
 
         // Deregister the hook for updating the active value of the host object
-        // ActivateGameObject.DoActivateGameObject -= OnDoActivateGameObject;
+        ActivateGameObject.DoActivateGameObject -= OnDoActivateGameObject;
     }
 
     /// <summary>
@@ -890,7 +890,7 @@ internal class Entity {
         _isSceneHostDetermined = true;
 
         // Deregister the hook for updating the active value of the host object
-        // ActivateGameObject.DoActivateGameObject -= OnDoActivateGameObject;
+        ActivateGameObject.DoActivateGameObject -= OnDoActivateGameObject;
     }
 
     /// <summary>
@@ -970,10 +970,11 @@ internal class Entity {
         // fight. See the "Wake" or "Refight Ready" state of the "Control" FSM on Hornet 1.
         // For the Mantis Lord and City Elevator entity, this should never be disabled, since they are always kinematic.
         var rigidBody = Object.Host.GetComponent<Rigidbody2D>();
-        if (rigidBody != null && Type != EntityType.MantisLord && Type != EntityType.CityElevator) {
-            Logger.Debug("  Resetting isKinematic of Rigidbody to ensure physics work for host object");
-            rigidBody.isKinematic = false;
-        }
+        // TODO:
+        //if (rigidBody != null && Type != EntityType.MantisLord && Type != EntityType.CityElevator) {
+        //    Logger.Debug("  Resetting isKinematic of Rigidbody to ensure physics work for host object");
+        //    rigidBody.isKinematic = false;
+        //}
 
         _lastIsActive = _hasParent ? Object.Host.activeSelf : Object.Host.activeInHierarchy;
 

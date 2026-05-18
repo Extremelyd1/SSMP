@@ -57,17 +57,36 @@
         <PackageReference Include="Hamunii.BepInEx.AutoPlugin" Version="2.1.0" PrivateAssets="all"/>
         <PackageReference Include="UnityEngine.Modules" Version="6000.0.50" IncludeAssets="compile" PrivateAssets="all"/>
         <!--If you're unable resolve this dependency, check that you're using the nuget v3 package feed instead of v2.-->
-        <PackageReference Include="Silksong.GameLibs" Version="*-*" PrivateAssets="all"/>
         <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2" PrivateAssets="all"/>
+        <PackageReference Include="Silksong.GameLibs" Version="*-*" PrivateAssets="all"/>
     </ItemGroup>
 
-    <Target Name="CopyMod" AfterTargets="PostBuildEvent" Condition="'$(SilksongFolder)' != ''">
+    <ItemGroup>
+        <Reference Include="MMHOOK_TeamCherry.TK2D">
+            <HintPath>$(NuGetPackageRoot)silksong.gamelibs\1.2.0-localhookgen-silksong1.0.28324\ref\netstandard2.1\MMHOOK_TeamCherry.TK2D.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+
+        <Reference Include="MMHOOK_Assembly-CSharp">
+            <HintPath>$(NuGetPackageRoot)silksong.gamelibs\1.2.0-localhookgen-silksong1.0.28324\ref\netstandard2.1\MMHOOK_Assembly-CSharp.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+
+        <Reference Include="MMHOOK_PlayMaker">
+            <HintPath>$(NuGetPackageRoot)silksong.gamelibs\1.2.0-localhookgen-silksong1.0.28324\ref\netstandard2.1\MMHOOK_PlayMaker.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+    </ItemGroup>
+
+    <Target Name="CopyMod" AfterTargets="PostBuildEvent" Condition="'$(SSMPDeployPaths)' != ''">
         <ItemGroup>
             <Binaries Include="$(TargetPath)"/>
             <Binaries Include="$(TargetDir)/$(TargetName).pdb"/>
             <Binaries Include="$(TargetDir)/*.dll"/>
+            <SilksongFolders Include="$(SSMPDeployPaths)"/>
         </ItemGroup>
 
-        <Copy SourceFiles="@(Binaries)" DestinationFolder="$(SilksongFolder)/BepInEx/plugins/$(TargetName)"/>
+        <MakeDir Directories="@(SilksongFolders)"/>
+        <Copy SourceFiles="@(Binaries)" DestinationFolder="%(SilksongFolders.Identity)"/>
     </Target>
 </Project>

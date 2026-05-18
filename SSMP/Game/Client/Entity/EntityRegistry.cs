@@ -87,38 +87,6 @@ internal static class EntityRegistry {
                 }
             }
 
-            // Specifically check for entries that don't have a defined FSM whether they contain the
-            // correct component(s)
-            if (entry.Type == EntityType.DreamPlatform) {
-                if (!gameObject.GetComponent<DreamPlatform>()) {
-                    continue;
-                }
-            } else if (entry.Type == EntityType.Tiktik) {
-                if (!gameObject.GetComponent<Climber>()) {
-                    continue;
-                }
-            } else if (entry.Type == EntityType.VengeflySummon) {
-                if (!gameObject.GetComponent<EnemySpawner>()) {
-                    continue;
-                }
-            } else if (entry.Type == EntityType.CollectorJar) {
-                if (!gameObject.GetComponent<SpawnJarControl>()) {
-                    continue;
-                }
-            } else if (entry.Type == EntityType.Garpede) {
-                if (!gameObject.GetComponent<BigCentipede>()) {
-                    continue;
-                }
-            } else if (entry.Type == EntityType.ShadowCreeper) {
-                if (!gameObject.GetComponent<Crawler>()) {
-                    continue;
-                }
-            } else if (entry.Type == EntityType.GrimmFireball) {
-                if (!gameObject.GetComponent<GrimmballControl>()) {
-                    continue;
-                }
-            }
-
             var baseNameLength = entry.BaseObjectName.Length;
             if (baseNameLength > longestBaseName) {
                 longestBaseName = baseNameLength;
