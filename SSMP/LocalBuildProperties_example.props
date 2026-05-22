@@ -1,0 +1,8 @@
+<Project>
+    <ItemGroup>
+        <!-- You can define multiple OutputDirectory tags below here to indicate where the build output should be
+         copied to, for example the below paths -->
+        <OutputDirectory Include="/Hollow Knight Silksong/BepInEx/plugins/SSMP"/>
+        <OutputDirectory Include="/some/directories/here"/>
+    </ItemGroup>
+</Project>

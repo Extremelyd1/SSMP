@@ -495,11 +495,8 @@ internal abstract class ServerManager : IServerManager {
 
                 _netServer.GetUpdateManagerForClient(idPlayerDataPair.Key)?.AddPlayerEnterSceneData(
                     playerData.Id,
-                    playerData.Username,
                     playerData.Position ?? Vector2.Zero,
                     playerData.Scale,
-                    playerData.Team,
-                    playerData.SkinId,
                     playerData.AnimationId
                 );
 
@@ -511,11 +508,8 @@ internal abstract class ServerManager : IServerManager {
                 // notifying that these players are already in this new scene.
                 enterSceneList.Add(new ClientPlayerEnterScene {
                     Id = idPlayerDataPair.Key,
-                    Username = otherPlayerData.Username,
                     Position = otherPlayerData.Position ?? Vector2.Zero,
                     Scale = otherPlayerData.Scale,
-                    Team = otherPlayerData.Team,
-                    SkinId = otherPlayerData.SkinId,
                     AnimationClipId = otherPlayerData.AnimationId
                 });
             }
@@ -1369,6 +1363,9 @@ internal abstract class ServerManager : IServerManager {
             }
         }
 
+        // If this is the same player reconnecting, clear the old session before we evaluate username collisions
+        ReplaceExistingSessionIfPresent(netServerClient, clientInfo, uniqueIdentifier);
+
         // Check whether the username is not already in use
         foreach (var existingPlayerData in _playerData.Values) {
             if (existingPlayerData.Username.ToLower().Equals(clientInfo.Username.ToLower())) {
@@ -1441,7 +1438,7 @@ internal abstract class ServerManager : IServerManager {
         serverInfo.FullSynchronisation = FullSynchronisation;
         
         // Construct the player info to send to the new client in the server info
-        var playerInfo = new List<(ushort, string)>();
+        var playerInfo = new List<ServerInfo.PlayerInfo>();
 
         foreach (var idPlayerDataPair in _playerData) {
             var otherId = idPlayerDataPair.Key;
@@ -1451,7 +1448,13 @@ internal abstract class ServerManager : IServerManager {
 
             var otherPd = idPlayerDataPair.Value;
 
-            playerInfo.Add((otherId, otherPd.Username));
+            playerInfo.Add(new ServerInfo.PlayerInfo {
+                Id = otherId,
+                Username = otherPd.Username,
+                Team = otherPd.Team,
+                SkinId = otherPd.SkinId,
+                CrestType = otherPd.CrestType
+            });
 
             // Send to the other players that this client has just connected
             _netServer.GetUpdateManagerForClient(otherId)?.AddPlayerConnectData(
@@ -1460,7 +1463,7 @@ internal abstract class ServerManager : IServerManager {
             );
         }
 
-        serverInfo.PlayerInfo = playerInfo;
+        serverInfo.PlayerInfos = playerInfo;
 
         // if (FullSynchronisation) {
         //     // Obtain the save data for the connecting client and add it to the server info
@@ -1482,6 +1485,33 @@ internal abstract class ServerManager : IServerManager {
         } catch (Exception e) {
             Logger.Error($"Exception thrown while invoking PlayerConnect event:\n{e}");
         }
+    }
+    
+    /// <summary>
+    /// If the connecting client matches an active player identity, disconnect the old session so the new
+    /// transport can take over cleanly.
+    /// </summary>
+    /// <param name="netServerClient">The connecting net server client.</param>
+    /// <param name="clientInfo">The connection info for the new session.</param>
+    /// <param name="uniqueIdentifier">The transport-level unique identifier for the new session.</param>
+    private void ReplaceExistingSessionIfPresent(
+        NetServerClient netServerClient,
+        ClientInfo clientInfo,
+        string uniqueIdentifier
+    ) {
+        var existingPlayer = _playerData.Values.FirstOrDefault(playerData =>
+            playerData.Id != netServerClient.Id
+            && (string.Equals(playerData.UniqueClientIdentifier, uniqueIdentifier, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(playerData.AuthKey, clientInfo.AuthKey, StringComparison.OrdinalIgnoreCase)));
+
+        if (existingPlayer is null)
+            return;
+
+        Logger.Warn(
+            $"Replacing existing session for player '{existingPlayer.Username}' " +
+            $"(ID {existingPlayer.Id}) with new connection from {uniqueIdentifier}");
+
+        ProcessPlayerDisconnect(existingPlayer.Id);
     }
 
     /// <summary>

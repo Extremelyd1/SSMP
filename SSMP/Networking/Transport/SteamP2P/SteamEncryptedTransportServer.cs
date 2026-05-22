@@ -196,14 +196,14 @@ internal sealed class SteamEncryptedTransportServer : IEncryptedTransportServer 
         var remoteSteamId = request.m_steamIDRemote;
         Logger.Info($"Steam P2P: Received session request from {remoteSteamId}");
 
-        // Check if we already have a connection for this user
+        // If we already have a connection for this user, remove the stale entry first so the new session
+        // request can replace it.
         if (_clients.TryGetValue(remoteSteamId, out var existingClient)) {
-            Logger.Warn($"Steam P2P: Received new session request from already connected client {remoteSteamId} - closing stale session and ignoring this request to force client retry");
+            Logger.Warn($"Steam P2P: Received new session request from already connected client {remoteSteamId} - closing stale session and accepting new request");
             DisconnectClientInternal(existingClient);
-            return;
         }
 
-        // Accept the session (only if no stale session existed)
+        // Accept the session
         if (!SteamNetworking.AcceptP2PSessionWithUser(remoteSteamId)) {
             Logger.Warn($"Steam P2P: Failed to accept session from {remoteSteamId}");
             return;

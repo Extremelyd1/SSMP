@@ -293,6 +293,10 @@ internal class ClientManager : IClientManager {
         // Register client connect and timeout handler
         _netClient.ConnectEvent += OnClientConnect;
         _netClient.TimeoutEvent += OnTimeout;
+
+        EventHooks.GameManagerQuitGame += () => {
+            _modSettings.Save();
+        };
     }
 
     /// <summary>
@@ -688,8 +692,14 @@ internal class ClientManager : IClientManager {
         }
 
         // Fill the player data dictionary with the info from the packet
-        foreach (var (id, username) in serverInfo.PlayerInfo) {
-            _playerData[id] = new ClientPlayerData(id, username);
+        foreach (var playerInfo in serverInfo.PlayerInfos) {
+            _playerData[playerInfo.Id] = new ClientPlayerData {
+                Id = playerInfo.Id, 
+                Username = playerInfo.Username,
+                Team = playerInfo.Team,
+                SkinId = playerInfo.SkinId,
+                CrestType = playerInfo.CrestType
+            };
         }
 
         // Add the username to the player if we are in-game already
@@ -752,7 +762,10 @@ internal class ClientManager : IClientManager {
     private void OnPlayerConnect(PlayerConnect playerConnect) {
         Logger.Info($"Received PlayerConnect data for ID: {playerConnect.Id}");
 
-        var playerData = new ClientPlayerData(playerConnect.Id, playerConnect.Username);
+        var playerData = new ClientPlayerData {
+            Id = playerConnect.Id,
+            Username = playerConnect.Username,
+        };
         _playerData[playerConnect.Id] = playerData;
 
         UiManager.InternalChatBox.AddMessage($"Player '{playerConnect.Username}' connected to the server");
@@ -857,22 +870,19 @@ internal class ClientManager : IClientManager {
         // Read ID from player data
         var id = enterSceneData.Id;
 
-        Logger.Info($"Player {id} entered scene");
-
         if (!_playerData.TryGetValue(id, out var playerData)) {
-            playerData = new ClientPlayerData(id, enterSceneData.Username);
-            _playerData[id] = playerData;
+            Logger.Warn($"Could not find player data for player '{id}' entering scene");
+            return;
         }
+
+        Logger.Info($"Player {id} entered scene");
 
         playerData.IsInLocalScene = true;
 
         _playerManager.SpawnPlayer(
             playerData,
-            enterSceneData.Username,
             enterSceneData.Position,
-            enterSceneData.Scale,
-            enterSceneData.Team,
-            enterSceneData.SkinId
+            enterSceneData.Scale
         );
         _animationManager.UpdatePlayerAnimation(id, enterSceneData.AnimationClipId, 0, playerData.CrestType);
 
