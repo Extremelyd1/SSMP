@@ -1,10 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <!-- 
-    Imports silksong path properties only if present in order to allow CI builds. The file should be gitignored.
-    If you are checking out from git and need to create a new one, you can use `dotnet new silksongpath` to generate one.
+    Imports local build properties only if present in order to allow CI builds. The file should be gitignored.
+    If you are checking out from git and need to create a new one, copy the 'LocalBuildProperties_example.props' to
+    'LocalBuildProperties.props'.
     -->
-    <Import Condition="Exists('SilksongPath.props')" Project="SilksongPath.props"/>
+    <Import Condition="Exists('LocalBuildProperties.props')" Project="LocalBuildProperties.props"/>
 
     <PropertyGroup>
         <TargetFramework>netstandard2.1</TargetFramework>
@@ -61,14 +62,13 @@
         <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2" PrivateAssets="all"/>
     </ItemGroup>
 
-    <Target Name="CopyMod" AfterTargets="PostBuildEvent" Condition="'$(SSMPDeployPaths)' != ''">
+    <Target Name="CopyMod" AfterTargets="PostBuildEvent" Condition="'@(OutputDirectory)' != ''">
         <ItemGroup>
             <Binaries Include="$(TargetPath)"/>
             <Binaries Include="$(TargetDir)/$(TargetName).pdb"/>
             <Binaries Include="$(TargetDir)/*.dll"/>
-            <SilksongFolders Include="$(SSMPDeployPaths)"/>
         </ItemGroup>
 
-        <Copy SourceFiles="@(Binaries)" DestinationFolder="%(SilksongFolders.Identity)"/>
+        <Copy SourceFiles="@(Binaries)" DestinationFolder="%(OutputDirectory.Identity)/"/>
     </Target>
 </Project>
