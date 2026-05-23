@@ -43,16 +43,16 @@ internal class PacketManager {
     #region Standard Packet Registries
 
     private readonly PacketHandlerRegistry<ClientUpdatePacketId, ClientPacketHandler> _clientUpdateRegistry = new(
-        "client update", true
+        "client update", new ClientPacketHandlerRegistryDispatcher()
     );
     private readonly PacketHandlerRegistry<ClientConnectionPacketId, ClientPacketHandler> _clientConnectionRegistry = new(
-        "client connection", true
+        "client connection", new ClientPacketHandlerRegistryDispatcher()
     );
     private readonly PacketHandlerRegistry<ServerUpdatePacketId, ServerPacketHandler> _serverUpdateRegistry = new(
-        "server update", false
+        "server update", new ServerPacketHandlerRegistryDispatcher()
     );
     private readonly PacketHandlerRegistry<ServerConnectionPacketId, ServerPacketHandler> _serverConnectionRegistry = new(
-        "server connection", false
+        "server connection", new ServerPacketHandlerRegistryDispatcher()
     );
     
     #endregion
@@ -268,7 +268,7 @@ internal class PacketManager {
     ) {
         if (!registryDict.TryGetValue(addonId, out var registry)) {
             registry = new PacketHandlerRegistry<byte, ClientPacketHandler>(
-                $"client addon {nameType} (Addon {addonId})", true
+                $"client addon {nameType} (Addon {addonId})", new ClientPacketHandlerRegistryDispatcher()
             );
             registryDict[addonId] = registry;
         }
@@ -323,7 +323,7 @@ internal class PacketManager {
     ) {
         if (!registryDict.TryGetValue(addonId, out var registry)) {
             registry = new PacketHandlerRegistry<byte, ServerPacketHandler>(
-                $"server addon {nameType} (Addon {addonId})", false
+                $"server addon {nameType} (Addon {addonId})", new ServerPacketHandlerRegistryDispatcher()
             );
             registryDict[addonId] = registry;
         }
