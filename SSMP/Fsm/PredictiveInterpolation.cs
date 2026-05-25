@@ -144,6 +144,11 @@ internal class PredictiveInterpolation : MonoBehaviour {
     public void ManualUpdate(float dt) {
         if (_predictionDisabled) return;
 
+        // Skip integration until the first authoritative packet arrives. Without
+        // this guard, a freshly-recycled container would run decay/extrapolation
+        // against its seed position before the server has confirmed anything.
+        if (!_hasNewServerData) return;
+
         _timeSinceLastPacket += dt;
 
         // Cache adapted values once (avoid repeated ternary evaluation)
