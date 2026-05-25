@@ -128,11 +128,13 @@ internal class PredictiveInterpolation : MonoBehaviour {
         _visualOffset = Vector3.zero;
         _visualOffsetVelocity = Vector3.zero;
 
-        // Initialize adaptive values to defaults (Good tier ~75ms)
-        _adaptedCorrectionTime = visualCorrectionTime;
-        _adaptedPredictionCapMultiplier = 1.5f;
-        _adaptedDecayMultiplier = 15f;
-        _currentRtt = 75f;
+        // Initialize adaptive values from the "Good" tier so the first few frames
+        // after spawn match the tier system instead of arbitrary magic numbers.
+        // AdaptToRTT will smoothly converge from here once real RTT data flows in.
+        _adaptedCorrectionTime = CorrectionTimes[2];
+        _adaptedPredictionCapMultiplier = PredictionCaps[2];
+        _adaptedDecayMultiplier = DecayMultipliers[2];
+        _currentRtt = RttThresholds[1];
     }
 
     /// <summary>
