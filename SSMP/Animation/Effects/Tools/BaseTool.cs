@@ -4,6 +4,7 @@ using GlobalSettings;
 using SSMP.Internals;
 using SSMP.Util;
 using UnityEngine;
+using Logger = SSMP.Logging.Logger;
 
 namespace SSMP.Animation.Effects.Tools;
 
@@ -111,9 +112,12 @@ internal class BaseTool : DamageAnimationEffect {
         var toolType = (AttackTool) effectInfo[1];
 
         if (ToolEffectMap.TryGetValue(toolType, out var tool)) {
+            Logger.Info($"Found tool in map for tool {toolType}");
             tool.ServerSettings = ServerSettings;
             tool.SetShouldDoDamage(ShouldDoDamage);
             tool.Play(playerObject, crestType, effectInfo);
+        } else {
+            Logger.Info($"No tool in map for tool {toolType}");
         }
     }
 

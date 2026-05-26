@@ -863,6 +863,8 @@ internal class AnimationManager {
 
         EventHooks.HeroControllerDie -= OnDeath;
         EventHooks.UseLavaBell -= OnMagmaBell;
+
+        ToolItemManager.BoundAttackToolUsed -= AttackToolUsed;
         // On.HeroAnimationController.Play -= HeroAnimationControllerOnPlay;
         // On.HeroAnimationController.PlayFromFrame -= HeroAnimationControllerOnPlayFromFrame;
 
