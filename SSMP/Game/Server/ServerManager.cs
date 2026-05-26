@@ -1501,8 +1501,7 @@ internal abstract class ServerManager : IServerManager {
     ) {
         var existingPlayer = _playerData.Values.FirstOrDefault(playerData =>
             playerData.Id != netServerClient.Id
-            && (string.Equals(playerData.UniqueClientIdentifier, uniqueIdentifier, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(playerData.AuthKey, clientInfo.AuthKey, StringComparison.OrdinalIgnoreCase)));
+            && string.Equals(playerData.UniqueClientIdentifier, uniqueIdentifier, StringComparison.OrdinalIgnoreCase));
 
         if (existingPlayer is null)
             return;
