@@ -53,5 +53,299 @@
       "Tendril Cooldown",
       "Death Control"
     ]
+  },
+  {
+    "base_object_name": "Bone Hunter Tiny",
+    "type": "Skarrlid",
+    "fsm_names": [
+      "Control"
+    ]
+  },
+  {
+    "base_object_name": "Bone Hunter Buzzer",
+    "type": "Skarrwing",
+    "fsm_names": [
+      "Control"
+    ]
+  },
+  {
+    "base_object_name": "Bone Hunter",
+    "type": "SkarrStalker",
+    "fsm_names": [
+      "Control",
+      "Detect Offscreen"
+    ]
+  },
+  {
+    "base_object_name": "Bone Hunter Child",
+    "type": "SkarrScout",
+    "fsm_names": [
+      "Control"
+    ]
+  },
+  {
+    "base_object_name": "Bone Hunter Fly",
+    "type": "SpearSkarr",
+    "fsm_names": [
+      "Control",
+      "Go Up"
+    ]
+  },
+  {
+    "base_object_name": "Bone Hunter Throw",
+    "type": "Skarrgard",
+    "fsm_names": [
+      "Controls",
+      "FSM"
+    ]
+  },
+  {
+    "base_object_name": "Mite",
+    "type": "Mite",
+    "fsm_names": [
+      "Control"
+    ]
+  },
+  {
+    "base_object_name": "Mitefly",
+    "type": "Fluttermite",
+    "fsm_names": [
+      "Control"
+    ]
+  },
+  {
+    "base_object_name": "Bone Circler",
+    "type": "Caranid",
+    "fsm_names": [
+      "Control"
+    ]
+  },
+  {
+    "base_object_name": "Bone Flyer",
+    "type": "Beastfly",
+    "fsm_names": [
+      "Control"
+    ]
+  },
+  {
+    "base_object_name": "Bone Circler Vicious",
+    "type": "ViciousCaranid",
+    "fsm_names": [
+      "Control"
+    ]
+  },
+  {
+    "base_object_name": "Swamp Ductsucker",
+    "type": "Ductsucker",
+    "fsm_names": [
+      "Control",
+      "Detect Water Entry"
+    ]
+  },
+  {
+    "base_object_name": "Swamp Mosquito Skinny",
+    "type": "SpitSquit",
+    "fsm_names": [
+      "Control",
+      "Shoot"
+    ]
+  },
+  {
+    "base_object_name": "Swamp Barnacle",
+    "type": "Barnak",
+    "fsm_names": [
+      "Control"
+    ]
+  },
+  {
+    "base_object_name": "MossBone Fly",
+    "type": "Mossmir",
+    "fsm_names": [
+      "Control"
+    ]
+  },
+  {
+    "base_object_name": "MossBone Crawler",
+    "type": "Mossgrub",
+    "fsm_names": [
+      "Noise Reaction"
+    ]
+  },
+  {
+    "base_object_name": "Arborium Keeper",
+    "type": "Memoria",
+    "fsm_names": [
+      "Control"
+    ]
+  },
+  {
+    "base_object_name": "Bone Goomba Large",
+    "type": "SkullBrute",
+    "fsm_names": [
+      "Control"
+    ]
+  },
+  {
+    "base_object_name": "Bone Goomba",
+    "type": "SkullScuttler",
+    "fsm_names": [
+      "Control"
+    ]
+  },
+  {
+    "base_object_name": "Bloom Shooter",
+    "type": "Pollenica",
+    "fsm_names": [
+      "Control"
+    ]
+  },
+  {
+    "base_object_name": "Bone Roller",
+    "type": "Mawling",
+    "fsm_names": [
+      "Control"
+    ]
+  },
+  {
+    "base_object_name": "Flower Drifter",
+    "type": "Phacia",
+    "fsm_names": [
+      "Control"
+    ]
+  },
+  {
+    "base_object_name": "Bone Thumper",
+    "type": "Marrowmaw",
+    "fsm_names": [
+      "Control"
+    ]
+  },
+  {
+    "base_object_name": "Bloom Puncher",
+    "type": "Gahlia",
+    "fsm_names": [
+      "Control"
+    ]
+  },
+  {
+    "base_object_name": "Shellwood Goomba",
+    "type": "ShellwoodGnat",
+    "fsm_names": [
+      "Control"
+    ]
+  },
+  {
+    "base_object_name": "Pond Skater",
+    "type": "PondSkipper",
+    "fsm_names": [
+      "Control"
+    ]
+  },
+  {
+    "base_object_name": "Shellwood Goomba Flyer",
+    "type": "ShellwoodGnat",
+    "fsm_names": [
+      "Control"
+    ]
+  },
+  {
+    "base_object_name": "Coral Goomba Large",
+    "type": "Crustcrag",
+    "fsm_names": [
+      "Behaviour"
+    ]
+  },
+  {
+    "base_object_name": "Coral Conch Shooter",
+    "type": "Driznit",
+    "fsm_names": [
+      "Control",
+      "flyer_go_up_response"
+    ]
+  },
+  {
+    "base_object_name": "Coral Conch Shooter Heavy",
+    "type": "Driznarga",
+    "fsm_names": [
+      "Control",
+      "flyer_go_up_response"
+    ]
+  },
+  {
+    "base_object_name": "Mossbone Crawler Fat",
+    "type": "MassiveMossgrub",
+    "fsm_names": [
+      "Behaviour"
+    ]
+  },
+  {
+    "base_object_name": "Aspid Collector",
+    "type": "Aknid",
+    "fsm_names": [
+      "Control",
+      "Sync Berry Sprite"
+    ]
+  },
+  {
+    "base_object_name": "Bell Goomba",
+    "type": "Furm",
+    "fsm_names": [
+      "Control"
+    ]
+  },
+  {
+    "base_object_name": "Bell Fly",
+    "type": "WingedFurm",
+    "fsm_names": [
+      "Behaviour",
+      "Tween"
+    ]
+  },
+  {
+    "base_object_name": "Giant Centipede Coil",
+    "type": "BellEater",
+    "fsm_names": [
+      "Control"
+    ]
+  },
+  {
+    "base_object_name": "Giant Centipede Head",
+    "type": "BellEater",
+    "fsm_names": [
+      "Control",
+      "Death Control"
+    ]
+  },
+  {
+    "base_object_name": "Giant Centipede Butt",
+    "type": "BellEater",
+    "fsm_names": [
+      "Control",
+      "Death Control"
+    ]
+  },
+  {
+    "base_object_name": "Pilgrim Moss Spitter",
+    "type": "OvergrownPilgrim",
+    "fsm_names": [
+      "Control"
+    ]
+  },
+  {
+    "base_object_name": "Rosary Pilgrim",
+    "type": "CovetousPilgrim",
+    "fsm_names": [
+      "Drop Rosaries",
+      "Control"
+    ]
+  },
+  {
+    "base_object_name": "Rosary Thief",
+    "type": "Snitchfly",
+    "fsm_names": [
+      "Control",
+      "Grab Cooldown Timer",
+      "Rummage Voice"
+    ]
   }
 ]

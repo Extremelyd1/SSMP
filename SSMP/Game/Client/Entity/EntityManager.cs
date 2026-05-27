@@ -506,7 +506,14 @@ internal class EntityManager {
                                    .Where(obj => obj.scene == scene)
                                    .Distinct();
 
-        foreach (var obj in objectsToCheck) {
+        var candidateObjects = objectsToCheck.ToList();
+        var entityCountBefore = _entities.Count;
+
+        Logger.Info(
+            $"Checking {candidateObjects.Count} candidate object(s) for entities in scene '{scene.name}' (lateLoad: {lateLoad})"
+        );
+
+        foreach (var obj in candidateObjects) {
             new EntityProcessor {
                 GameObject = obj,
                 IsSceneHost = IsSceneHost,
@@ -514,5 +521,9 @@ internal class EntityManager {
                 LateLoad = lateLoad
             }.Process();
         }
+
+        Logger.Info(
+            $"Registered {_entities.Count - entityCountBefore} entity/entities in scene '{scene.name}'"
+        );
     }
 }

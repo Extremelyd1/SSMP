@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using HutongGames.PlayMaker;
-using On.HutongGames.PlayMaker.Actions;
+using HutongGames.PlayMaker.Actions;
+using MonoMod.RuntimeDetour;
 using SSMP.Collection;
 using SSMP.Fsm;
 using SSMP.Game.Client.Entity.Action;
@@ -31,6 +32,11 @@ namespace SSMP.Game.Client.Entity;
 /// updates from the server.
 /// </summary>
 internal class Entity {
+    private const System.Reflection.BindingFlags HookBindingFlags =
+        System.Reflection.BindingFlags.Public |
+        System.Reflection.BindingFlags.NonPublic |
+        System.Reflection.BindingFlags.Instance;
+
     /// <summary>
     /// The net client for networking.
     /// </summary>
@@ -127,6 +133,10 @@ internal class Entity {
     /// </summary>
     private readonly List<FsmSnapshot> _fsmSnapshots;
 
+    private readonly Hook? _spriteAnimatorPlayHook;
+    private readonly Hook? _objectPoolRecycleHook;
+    private readonly Hook? _activateGameObjectHook;
+
     public Entity(
         NetClient netClient,
         ushort id,
@@ -205,15 +215,24 @@ internal class Entity {
                 break;
             }
 
-            On.tk2dSpriteAnimator.Play_tk2dSpriteAnimationClip_float_float += OnAnimationPlayed;
+            _spriteAnimatorPlayHook = new Hook(
+                typeof(tk2dSpriteAnimator).GetMethod(
+                    nameof(tk2dSpriteAnimator.Play),
+                    [typeof(tk2dSpriteAnimationClip), typeof(float), typeof(float)]
+                ),
+                OnAnimationPlayed
+            );
         }
 
-        // Always disallow the client object from being recycled, because it will simply be destroyed
-        On.ObjectPool.Recycle_GameObject += ObjectPoolOnRecycleGameObject;
+        _objectPoolRecycleHook = new Hook(
+            typeof(ObjectPool).GetMethod(nameof(ObjectPool.Recycle), [typeof(GameObject)]),
+            ObjectPoolOnRecycleGameObject
+        );
 
-        // Register a hook for the ActivateGameObject action to update the active state of the host game object
-        // before scene host is determined
-        ActivateGameObject.DoActivateGameObject += OnDoActivateGameObject;
+        _activateGameObjectHook = new Hook(
+            typeof(ActivateGameObject).GetMethod("DoActivateGameObject", HookBindingFlags),
+            OnDoActivateGameObject
+        );
 
         _fsms = new HostClientPair<List<PlayMakerFSM>> {
             Host = Object.Host.GetComponents<PlayMakerFSM>().ToList(),
@@ -768,7 +787,7 @@ internal class Entity {
     /// <param name="clipStartTime">The start time of the animation clip.</param>
     /// <param name="overrideFps">The FPS override for the clip.</param>
     private void OnAnimationPlayed(
-        On.tk2dSpriteAnimator.orig_Play_tk2dSpriteAnimationClip_float_float orig,
+        Action<tk2dSpriteAnimator, tk2dSpriteAnimationClip, float, float> orig,
         tk2dSpriteAnimator self,
         tk2dSpriteAnimationClip clip,
         float clipStartTime,
@@ -815,8 +834,8 @@ internal class Entity {
     /// Callback method for when a game object is recycled. Used to prevent client objects from being recycled, which
     /// shouldn't happen because they are instantiated manually instead of from a pool.
     /// </summary>
-    private void ObjectPoolOnRecycleGameObject(On.ObjectPool.orig_Recycle_GameObject orig, object obj) {
-        if (obj is GameObject gameObject && gameObject == Object.Client) {
+    private void ObjectPoolOnRecycleGameObject(Action<GameObject> orig, GameObject obj) {
+        if (obj == Object.Client) {
             Logger.Debug($"Client object of entity: {Id}, {Type} tried to be recycled");
             return;
         }
@@ -829,8 +848,8 @@ internal class Entity {
     /// game object should return to what active state after the scene host is determined.
     /// </summary>
     private void OnDoActivateGameObject(
-        ActivateGameObject.orig_DoActivateGameObject orig,
-        HutongGames.PlayMaker.Actions.ActivateGameObject self
+        Action<ActivateGameObject> orig,
+        ActivateGameObject self
     ) {
         // If the game object in the action is not our host game object, we skip it
         if (self.Fsm.GetOwnerDefaultTarget(self.gameObject) != Object.Host || Object.Host == null) {
@@ -877,9 +896,6 @@ internal class Entity {
             component.IsControlled = false;
             component.InitializeHost();
         }
-
-        // Deregister the hook for updating the active value of the host object
-        ActivateGameObject.DoActivateGameObject -= OnDoActivateGameObject;
     }
 
     /// <summary>
@@ -888,9 +904,6 @@ internal class Entity {
     /// </summary>
     public void InitializeClient() {
         _isSceneHostDetermined = true;
-
-        // Deregister the hook for updating the active value of the host object
-        ActivateGameObject.DoActivateGameObject -= OnDoActivateGameObject;
     }
 
     /// <summary>
@@ -1398,8 +1411,9 @@ internal class Entity {
     /// </summary>
     public void Destroy() {
         MonoBehaviourUtil.Instance.OnUpdateEvent -= OnUpdate;
-        On.tk2dSpriteAnimator.Play_tk2dSpriteAnimationClip_float_float -= OnAnimationPlayed;
-        On.ObjectPool.Recycle_GameObject -= ObjectPoolOnRecycleGameObject;
+        _spriteAnimatorPlayHook?.Dispose();
+        _objectPoolRecycleHook?.Dispose();
+        _activateGameObjectHook?.Dispose();
 
         foreach (var component in _components.Values.Distinct()) {
             component.Destroy();

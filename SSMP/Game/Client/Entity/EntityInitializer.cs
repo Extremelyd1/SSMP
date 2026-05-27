@@ -40,6 +40,13 @@ internal static class EntityInitializer {
     };
 
     /// <summary>
+    /// Array of component types that should be removed from client-side entity children as well as the root object.
+    /// </summary>
+    private static readonly Type[] ToRemoveTypesInChildren = {
+        typeof(ActiveCorpse)
+    };
+
+    /// <summary>
     /// Array of types of actions that should be skipped during initialization. 
     /// </summary>
     private static readonly Type[] ToSkipTypes = {
@@ -116,6 +123,12 @@ internal static class EntityInitializer {
             var component = gameObject.GetComponent(type);
             if (component != null) {
                 UnityEngine.Object.Destroy(component);
+            }
+        }
+
+        foreach (var type in ToRemoveTypesInChildren) {
+            foreach (var component in gameObject.GetComponentsInChildren(type, true)) {
+                UnityEngine.Object.DestroyImmediate(component);
             }
         }
     }
