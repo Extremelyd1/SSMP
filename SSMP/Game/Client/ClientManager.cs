@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using GlobalEnums;
 using Steamworks;
 using SSMP.Animation;
@@ -143,10 +142,11 @@ internal class ClientManager : IClientManager {
     private Vector3 _lastPosition;
 
     /// <summary>
-    /// Stopwatch to keep track of the last time that the position of the local player object was updated.
-    /// Used to throttle position updates to 60 Hz maximum to avoid having to update the packet every frame.
+    /// Seconds accumulated since the last local player position update, driven by
+    /// <see cref="Time.unscaledDeltaTime"/>. Used to throttle position updates to 60 Hz maximum to avoid
+    /// having to update the packet every frame.
     /// </summary>
-    private readonly Stopwatch _lastPositionStopwatch;
+    private float _timeSinceLastPosition;
 
     /// <summary>
     /// Keeps track of the last updated scale of the local player object.
@@ -250,8 +250,6 @@ internal class ClientManager : IClientManager {
 
         var clientApi = new ClientApi(this, _commandManager, uiManager, netClient, eventAggregator);
         _addonManager = new ClientAddonManager(clientApi, _modSettings);
-
-        _lastPositionStopwatch = new Stopwatch();
     }
 
     #region Internal client-manager methods
@@ -1218,24 +1216,21 @@ internal class ClientManager : IClientManager {
 
         var heroTransform = HeroController.instance.transform;
 
-        // For position updating, we use a stopwatch to check whether the latest update wasn't too soon ago.
-        // Because each update of the player position in a packet needs to acquire the packet lock, which without
-        // this rate-limit might happen every frame
-        if (!_lastPositionStopwatch.IsRunning) {
-            _lastPositionStopwatch.Start();
-        }
+        // Accumulate unscaled real time so throttling pauses cleanly when the app is suspended or
+        // backgrounded, instead of bursting an update on resume like a wall-clock stopwatch would.
+        _timeSinceLastPosition += Time.unscaledDeltaTime;
 
         // Update rate of 60 Hz
-        const int updateRate = 1000 / 60;
-        // Heartbeat (ms) so a stationary player is re-broadcast for late-joining peers.
-        const int heartbeat = 500;
-        if (_lastPositionStopwatch.ElapsedMilliseconds > updateRate) {
+        const float updateRate = 1f / 60f;
+        // Heartbeat (seconds) so a stationary player is re-broadcast for late-joining peers.
+        const float heartbeat = 0.5f;
+        if (_timeSinceLastPosition > updateRate) {
             var newPosition = heroTransform.position;
 
             // Send if the position changed, or if the heartbeat interval has elapsed
-            if (newPosition != _lastPosition || _lastPositionStopwatch.ElapsedMilliseconds > heartbeat) {
+            if (newPosition != _lastPosition || _timeSinceLastPosition > heartbeat) {
                 _lastPosition = newPosition;
-                _lastPositionStopwatch.Restart();
+                _timeSinceLastPosition = 0f;
 
                 _netClient.UpdateManager.UpdatePlayerPosition(new Vector2(newPosition.x, newPosition.y));
             }
