@@ -20,11 +20,10 @@ internal class SliceData : IPacketData {
     /// <summary>
     /// The ID of this slice.
     /// </summary>
-    public byte SliceId { get; set; }
+    public ushort SliceId { get; set; }
 
     /// <summary>
-    /// The total number of slices in this chunk. It is an unsigned short because we can have 256 slices in a chunk.
-    /// It is encoded as a byte, where all values are shifted by one since 0 is not used.
+    /// The total number of slices in this chunk.
     /// </summary>
     public ushort NumSlices { get; set; }
 
@@ -37,14 +36,11 @@ internal class SliceData : IPacketData {
     public void WriteData(IPacket packet) {
         packet.Write(ChunkId);
         packet.Write(SliceId);
-
-        // Shift all values by -1 so that we can encode 256 as a number of slices
-        var encodedNumSlices = (byte) (NumSlices - 1);
-        packet.Write(encodedNumSlices);
+        packet.Write(NumSlices);
 
         var length = Data.Length;
         if (length > ConnectionManager.MaxSliceSize) {
-            throw new ArgumentOutOfRangeException(nameof(Data), "Length of data for slice cannot exceed 1024");
+            throw new ArgumentOutOfRangeException(nameof(Data), $"Length of data for slice cannot exceed {ConnectionManager.MaxSliceSize}");
         }
 
         if (SliceId == NumSlices - 1) {
@@ -59,11 +55,8 @@ internal class SliceData : IPacketData {
     /// <inheritdoc />
     public void ReadData(IPacket packet) {
         ChunkId = packet.ReadByte();
-        SliceId = packet.ReadByte();
-
-        // Read the encoded byte and shift it by 1 again
-        var encodedNumSlices = packet.ReadByte();
-        NumSlices = (ushort) (encodedNumSlices + 1);
+        SliceId = packet.ReadUShort();
+        NumSlices = packet.ReadUShort();
 
         ushort length;
         if (SliceId == NumSlices - 1) {

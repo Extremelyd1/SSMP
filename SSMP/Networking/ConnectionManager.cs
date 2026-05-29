@@ -19,7 +19,7 @@ internal abstract class ConnectionManager(PacketManager packetManager) {
     /// <summary>
     /// The maximum number of slices in a chunk.
     /// </summary>
-    public const int MaxSlicesPerChunk = 256;
+    public const int MaxSlicesPerChunk = 32768;
 
     /// <summary>
     /// The maximum size of a chunk in bytes.

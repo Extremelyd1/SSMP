@@ -14,17 +14,13 @@ namespace SSMP.Networking.Chunk;
 /// <param name="sliceId">The ID of the slice.</param>
 /// <param name="numSlices">The number of slices in the chunk.</param>
 /// <param name="data">The slice data.</param>
-internal delegate void SetSliceDataDelegate(byte chunkId, byte sliceId, byte numSlices, byte[] data);
+internal delegate void SetSliceDataDelegate(byte chunkId, ushort sliceId, ushort numSlices, byte[] data);
 
 /// <summary>
 /// Class that processes and manages chunks by sending slices of those chunks and receiving acknowledgements for those
 /// slices. Uses delegate injection instead of inheritance for flexibility.
 /// </summary>
 internal sealed class ChunkSender {
-    /// <summary>
-    /// The number of milliseconds to wait between sending slices.
-    /// </summary>
-    private const int WaitMillisBetweenSlices = 20;
     /// <summary>
     /// The number of milliseconds to wait before re-sending a slice.
     /// </summary>
@@ -254,6 +250,7 @@ internal sealed class ChunkSender {
             Array.Clear(_sliceStopwatches, 0, _sliceStopwatches.Length);
             Array.Clear(_acked, 0, _acked.Length);
             _numAckedSlices = 0;
+            _currentSliceId = 0;
 
             var packetBytes = packet.ToArray();
 
@@ -292,23 +289,22 @@ internal sealed class ChunkSender {
                     break;
                 }
 
-                long waitMillisNextSlice;
+                long waitMillisNextSlice = 0;
 
                 // Get the stopwatch for this slice, and check whether we have already sent this slice not too long ago
-                // If so, we wait longer before resending the slice. Otherwise, we default to the normal send rate.
+                // If so, we wait longer before resending the slice.
                 sliceStopwatch = _sliceStopwatches[_currentSliceId];
-                if (sliceStopwatch == null) {
-                    waitMillisNextSlice = WaitMillisBetweenSlices;
-                } else {
+                if (sliceStopwatch != null) {
                     waitMillisNextSlice = WaitMillisResendSlice - sliceStopwatch.ElapsedMilliseconds;
-                    if (waitMillisNextSlice < 0) {
-                        waitMillisNextSlice = WaitMillisBetweenSlices;
-                    }
                 }
 
+                if (waitMillisNextSlice <= 0) {
+                    continue;
+                }
+                
                 //Logger.Debug($"Waiting on handle for next slice: {waitMillisNextSlice}");
                 try {
-                    _sliceWaitHandle.Wait((int) waitMillisNextSlice, cancellationToken);
+                    _sliceWaitHandle.Wait((int)waitMillisNextSlice, cancellationToken);
                 } catch (OperationCanceledException) {
                     //Logger.Debug("Wait operation was cancelled, breaking");
                     break;
@@ -342,7 +338,7 @@ internal sealed class ChunkSender {
             Array.Copy(_chunkData, startIndex, sliceBytes, 0, sliceBytes.Length);
         }
 
-        SetSliceData(_chunkId, (byte) _currentSliceId, (byte) _numSlices, sliceBytes);
+        SetSliceData(_chunkId, (ushort) _currentSliceId, (ushort) _numSlices, sliceBytes);
     }
 
     /// <summary>
@@ -375,7 +371,7 @@ internal sealed class ChunkSender {
     /// <param name="sliceId">The ID of the slice.</param>
     /// <param name="numSlices">The number of slices in this chunk.</param>
     /// <param name="data">The byte array containing the data of the slice.</param>
-    private void SetSliceData(byte chunkId, byte sliceId, byte numSlices, byte[] data) {
+    private void SetSliceData(byte chunkId, ushort sliceId, ushort numSlices, byte[] data) {
         _setSliceData(chunkId, sliceId, numSlices, data);
     }
 }

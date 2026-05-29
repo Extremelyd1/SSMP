@@ -90,7 +90,7 @@ internal sealed class ChunkReceiver {
             if (sliceData.ChunkId == (byte) (_chunkId + 1)) {
                 //Logger.Debug($"Received new chunk with ID: {sliceData.ChunkId}");
                 SoftReset();
-                
+
                 _chunkId += 1;
                 _isReceiving = true;
                 _numSlices = sliceData.NumSlices;
@@ -121,20 +121,21 @@ internal sealed class ChunkReceiver {
 
         // Copy over the data from the received slice into the chunk data array at the correct position
         Array.Copy(
-            sliceData.Data, 
-            0, 
-            _chunkData, 
-            sliceData.SliceId * ConnectionManager.MaxSliceSize, 
+            sliceData.Data,
+            0,
+            _chunkData,
+            sliceData.SliceId * ConnectionManager.MaxSliceSize,
             sliceData.Data.Length
         );
-        
-        SendAckData();
 
-        // If this is the last slice in the chunk, we can calculate the chunk size
+        // Whenever the last-ID slice arrives, correct the chunk size to account for its (potentially partial) length.
+        // This must happen before the assembly check below so that out-of-order delivery is handled correctly.
         if (sliceData.SliceId == _numSlices - 1) {
             _chunkSize = (_numSlices - 1) * ConnectionManager.MaxSliceSize + sliceData.Data.Length;
-            //Logger.Debug($"Received last slice in chunk, chunk size: {_chunkSize}");
+            //Logger.Debug($"Corrected chunk size after receiving last-ID slice: {_chunkSize}");
         }
+
+        SendAckData();
 
         if (_numReceivedSlices == _numSlices) {
             var byteArray = new byte[_chunkSize];
@@ -146,7 +147,7 @@ internal sealed class ChunkReceiver {
                 _chunkSize
             );
             var packet = new Packet.Packet(byteArray);
-            
+
             ChunkReceivedEvent?.Invoke(packet);
 
             _isReceiving = false;

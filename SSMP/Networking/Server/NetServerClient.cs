@@ -71,6 +71,7 @@ internal class NetServerClient {
         // Create chunk sender/receiver with delegates to the update manager
         ChunkSender = new ChunkSender(UpdateManager.SetSliceData);
         ChunkReceiver = new ChunkReceiver(UpdateManager.SetSliceAckData);
+        UpdateManager.EnqueueChunkPacketAction = ChunkSender.EnqueuePacket;
         ConnectionManager = new ServerConnectionManager(packetManager, ChunkSender, ChunkReceiver, Id);
     }
 

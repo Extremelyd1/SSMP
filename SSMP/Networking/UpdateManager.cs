@@ -183,6 +183,17 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     public event Action? TimeoutEvent;
 
     /// <summary>
+    /// Action to enqueue a packet for chunked sending.
+    /// </summary>
+    public Action<Packet.Packet>? EnqueueChunkPacketAction { get; set; }
+
+    /// <summary>
+    /// Enqueues a packet to be sent reliably as a chunk to the destination.
+    /// </summary>
+    /// <param name="packet">The packet to send.</param>
+    public void SendChunkPacket(Packet.Packet packet) => EnqueueChunkPacketAction?.Invoke(packet);
+
+    /// <summary>
     /// Construct the update manager with a UDP socket.
     /// </summary>
     protected UpdateManager() {
@@ -218,6 +229,11 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         Logger.Debug("Stopping UDP updates, sending last packet");
         CreateAndSendPacket();
         _cancellationTokenSource?.Cancel();
+
+        lock (Lock) {
+            Monitor.PulseAll(Lock);
+        }
+
         // Wait for thread to finish before disposing shared resources
         _sendThread?.Join();
         _sendThread = null;
@@ -301,6 +317,9 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
             // but keep the original instance for reliability data re-sending
             packetToSend = CurrentUpdatePacket;
             CurrentUpdatePacket = new TOutgoing();
+
+            // Pulse to wake up any threads waiting to set new slice data
+            Monitor.PulseAll(Lock);
         }
 
         // Track send time for RTT measurement (all transports)
@@ -433,6 +452,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         if (cts == null) {
             return;
         }
+
         var token = cts.Token;
 
         // Safety constant: how many ms can we fall behind before giving up?
@@ -542,6 +562,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         IPacketData packetData
     ) {
         lock (Lock) {
+            Packet.Packet.ValidateSize(packetData);
             var addonPacketData = GetOrCreateAddonPacketData(addonId, packetIdSize);
             addonPacketData.PacketData[packetId] = packetData;
         }
@@ -579,6 +600,8 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
             } else {
                 existingDataCollection.DataInstances.Add(packetData);
             }
+
+            Packet.Packet.ValidateSize(existingPacketData);
         }
     }
 
@@ -596,5 +619,36 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         addonPacketData = new AddonPacketData(packetIdSize);
         CurrentUpdatePacket.SetSendingAddonPacketData(addonId, addonPacketData);
         return addonPacketData;
+    }
+
+    /// <summary>
+    /// Sends a slice packet immediately, bypassing the gameplay tick send loop.
+    /// </summary>
+    protected void SendSlicePacket(TOutgoing slicePacket) {
+        var rawPacket = new Packet.Packet();
+        lock (Lock) {
+            if (_requiresSequencing) {
+                slicePacket.Sequence = _localSequence;
+                slicePacket.Ack = _remoteSequence;
+
+                var ackField = slicePacket.AckField;
+                for (ushort i = 0; i < ConnectionManager.AckSize; i++) {
+                    var pastSequence = (ushort) (_remoteSequence - i - 1);
+                    ackField[i] = _receivedSequences!.Contains(pastSequence);
+                }
+            }
+
+            try {
+                slicePacket.CreatePacket(rawPacket);
+            } catch (Exception e) {
+                Logger.Error($"Failed to create slice packet: {e}");
+                return;
+            }
+
+            if (_requiresSequencing) 
+                _localSequence++;
+        }
+
+        SendPacket(rawPacket, slicePacket.ContainsReliableData);
     }
 }

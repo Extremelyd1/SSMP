@@ -46,6 +46,12 @@ internal abstract class BasePacket<TPacketId> where TPacketId : Enum {
     /// Whether this packet contains data that needs to be reliable.
     /// </summary>
     public bool ContainsReliableData { get; protected set; }
+    
+    /// <summary>
+    /// Gets whether this packet contains normal connection data,
+    /// without building the combined packet-data cache.
+    /// </summary>
+    public bool HasNormalData => NormalPacketData.Count > 0;
 
     /// <summary>
     /// Construct the update packet with the given raw packet instance to read from.
@@ -209,11 +215,9 @@ internal abstract class BasePacket<TPacketId> where TPacketId : Enum {
                 continue;
             }
 
-            // Prepend the length of the addon packet data to the addon packet
-            addonPacket.WriteLength();
-
-            // Now we add the addon ID to the addon packet data packet and then the contents of the addon packet
+            // Now we add the addon ID to the addon packet data packet, then the length as an int, and then the contents of the addon packet
             addonPacketDataPacket.Write(addonId);
+            addonPacketDataPacket.Write(addonPacket.Length);
             addonPacketDataPacket.Write(addonPacket.ToArray());
 
             // Potentially update whether this packet contains reliable data now
@@ -357,8 +361,8 @@ internal abstract class BasePacket<TPacketId> where TPacketId : Enum {
                 throw new Exception($"Addon with ID {addonId} has no defined addon packet info");
             }
 
-            // Read the length of the addon packet data for this addon
-            var addonDataLength = packet.ReadUShort();
+            // Read the length of the addon packet data for this addon as an int
+            var addonDataLength = packet.ReadInt();
 
             // Read exactly as many bytes as was indicated by the previously read value
             var addonDataBytes = packet.ReadBytes(addonDataLength);

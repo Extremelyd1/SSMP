@@ -31,9 +31,7 @@ internal class SliceAckData : IPacketData {
     /// <inheritdoc />
     public void WriteData(IPacket packet) {
         packet.Write(ChunkId);
-
-        var encodedNumSlices = (byte) (NumSlices - 1);
-        packet.Write(encodedNumSlices);
+        packet.Write(NumSlices);
 
         // Keep track of current index for writing ack array
         var currentIndex = 0;
@@ -48,9 +46,7 @@ internal class SliceAckData : IPacketData {
     /// <inheritdoc />
     public void ReadData(IPacket packet) {
         ChunkId = packet.ReadByte();
-
-        var encodedNumSlices = packet.ReadByte();
-        NumSlices = (ushort) (encodedNumSlices + 1);
+        NumSlices = packet.ReadUShort();
 
         var acked = new bool[ConnectionManager.MaxSlicesPerChunk];
 

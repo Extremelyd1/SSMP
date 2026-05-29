@@ -285,8 +285,8 @@ internal class NetServer : INetServer {
             client.UpdateManager.OnReceivePacket<ServerUpdatePacket, ServerUpdatePacketId>(serverUpdatePacket);
 
             var packetData = serverUpdatePacket.GetPacketData();
-            if (packetData.Remove(ServerUpdatePacketId.Slice, out var sliceData)) {
-                client.ChunkReceiver.ProcessReceivedData((SliceData) sliceData);
+            if (packetData.Remove(ServerUpdatePacketId.Slice, out var sliceDataRaw)) {
+                client.ChunkReceiver.ProcessReceivedData((SliceData) sliceDataRaw);
             }
 
             if (packetData.Remove(ServerUpdatePacketId.SliceAck, out var sliceAckData)) {
@@ -539,11 +539,13 @@ internal class NetServer : INetServer {
         }
 
         // After we know that this call did not use a different generic, we can update packet info
-        ServerUpdatePacket.AddonPacketInfoDict[addon.Id.Value] = new AddonPacketInfo(
+        var addonPacketInfo = new AddonPacketInfo(
             // Transform the packet instantiator function from a TPacketId as parameter to byte
             networkReceiver?.TransformPacketInstantiator(packetInstantiator)!,
             (byte) Enum.GetValues(typeof(TPacketId)).Length
         );
+        ServerUpdatePacket.AddonPacketInfoDict[addon.Id.Value] = addonPacketInfo;
+        ServerConnectionPacket.AddonPacketInfoDict[addon.Id.Value] = addonPacketInfo;
 
         return (addon.NetworkReceiver as IServerAddonNetworkReceiver<TPacketId>)!;
     }

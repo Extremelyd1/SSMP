@@ -102,7 +102,20 @@ internal class ClientConnectionManager : ConnectionManager {
             return;
         }
 
-        // Let the packet manager handle the connection packet, which will invoke the relevant data handlers
-        PacketManager.HandleClientConnectionPacket(connectionPacket);
+        if (connectionPacket.HasNormalData) {
+            // Let the packet manager handle the connection packet,
+            // which will invoke the relevant data handlers
+            PacketManager.HandleClientConnectionPacket(connectionPacket);
+            return;
+        }
+
+        // No ServerInfo connection data exists,
+        // meaning this is a real-time gameplay addon chunk
+        foreach (var (addonId, value) in connectionPacket.GetAddonPacketData()) {
+            foreach (var (packetId, packetData) in value.PacketData) {
+                // Let the packet manager handle the connection packet, which will invoke the relevant data handlers
+                PacketManager.HandleClientAddonPacketSingle(addonId, packetId, packetData);
+            }
+        }
     }
 }

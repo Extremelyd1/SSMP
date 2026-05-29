@@ -1,6 +1,7 @@
 using System;
 using SSMP.Networking.Client;
 using SSMP.Networking.Packet;
+using SSMP.Networking.Packet.Connection;
 
 namespace SSMP.Api.Client.Networking;
 
@@ -61,7 +62,8 @@ internal class ClientAddonNetworkSender<TPacketId> :
 
         if (!PacketIdLookup.TryGetValue(packetId, out var idValue)) {
             throw new InvalidOperationException(
-                InvalidPacketIdMsg);
+                InvalidPacketIdMsg
+            );
         }
 
         if (!_clientAddon.Id.HasValue) {
@@ -87,7 +89,8 @@ internal class ClientAddonNetworkSender<TPacketId> :
 
         if (!PacketIdLookup.TryGetValue(packetId, out var idValue)) {
             throw new InvalidOperationException(
-                InvalidPacketIdMsg);
+                InvalidPacketIdMsg
+            );
         }
 
         if (!_clientAddon.Id.HasValue) {
@@ -100,5 +103,66 @@ internal class ClientAddonNetworkSender<TPacketId> :
             _packetIdSize,
             packetData
         );
+    }
+
+    /// <inheritdoc/>
+    public void SendChunkData(TPacketId packetId, IPacketData packetData) {
+        var (idValue, addonId) = ValidateCommon(packetId);
+        _netClient.UpdateManager.SendChunkPacket(BuildPacket(idValue, addonId, packetData));
+    }
+
+    /// <summary>
+    /// Validates the common client-side preconditions required before sending chunk data.
+    /// </summary>
+    /// <param name="packetId">The addon packet identifier to validate and resolve.</param>
+    /// <returns>
+    /// The resolved packet ID byte value and the current addon ID.
+    /// </returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown if the client is not connected, the addon has no assigned ID, or the packet ID is invalid.
+    /// </exception>
+    private (byte idValue, byte addonId) ValidateCommon(TPacketId packetId) {
+        if (!_netClient.IsConnected) {
+            throw new InvalidOperationException(NotConnectedMsg);
+        }
+
+        if (!_clientAddon.Id.HasValue) {
+            throw new InvalidOperationException(NoClientAddonId);
+        }
+
+        return !PacketIdLookup.TryGetValue(packetId, out var idValue)
+            ? throw new InvalidOperationException(InvalidPacketIdMsg)
+            : (idValue, _clientAddon.Id.Value);
+    }
+
+    /// <summary>
+    /// Builds a network packet containing addon packet data for the given addon and packet ID.
+    /// </summary>
+    /// <param name="idValue">The resolved packet ID byte value.</param>
+    /// <param name="addonId">The addon ID that owns the packet data.</param>
+    /// <param name="packetData">The packet payload to send.</param>
+    /// <returns>
+    /// A constructed packet ready to be enqueued for chunked sending.
+    /// </returns>
+    private Packet BuildPacket(byte idValue, byte addonId, IPacketData packetData) {
+        var connectionPacket = new ServerConnectionPacket();
+        var addonPacketData = new AddonPacketData(_packetIdSize) {
+            PacketData = { [idValue] = packetData }
+        };
+
+        connectionPacket.SetSendingAddonPacketData(addonId, addonPacketData);
+
+        var packet = new Packet();
+        connectionPacket.CreatePacket(packet);
+
+        if (packet.Length <= ushort.MaxValue) {
+            throw new ArgumentException(
+                $"Addon packet data size ({packet.Length} bytes) is not larger than ushort.MaxValue ({ushort.MaxValue}). " +
+                $"For payloads smaller than or equal to ushort.MaxValue, please use standard updates instead of chunk transport.",
+                nameof(packetData)
+            );
+        }
+
+        return packet;
     }
 }

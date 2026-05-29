@@ -39,7 +39,6 @@ public delegate void GenericServerPacketHandler<in TPacketData>(ushort id, TPack
 /// Manages packets that are received by the given NetClient.
 /// </summary>
 internal class PacketManager {
-    
     #region Standard Packet Registries
 
     private readonly PacketHandlerRegistry<ClientUpdatePacketId, ClientPacketHandler> _clientUpdateRegistry = new(
@@ -54,7 +53,7 @@ internal class PacketManager {
     private readonly PacketHandlerRegistry<ServerConnectionPacketId, ServerPacketHandler> _serverConnectionRegistry = new(
         "server connection", false
     );
-    
+
     #endregion
 
     #region Addon Packet Registries (Nested Dictionaries)
@@ -75,9 +74,9 @@ internal class PacketManager {
 
     private readonly Dictionary<byte, PacketHandlerRegistry<byte, ServerPacketHandler>>
         _serverAddonConnectionRegistries = new();
-    
+
     #endregion
-    
+
 
     #region Packet Unpacking Helper
 
@@ -259,6 +258,21 @@ internal class PacketManager {
         );
     }
 
+    private static void HandleClientAddonPacketSingle(
+        byte addonId,
+        byte packetId,
+        IPacketData packetData,
+        Dictionary<byte, PacketHandlerRegistry<byte, ClientPacketHandler>> registryDict,
+        string registryName
+    ) {
+        if (!registryDict.TryGetValue(addonId, out var registry)) {
+            Logger.Warn($"There is no {registryName} handler registry for addon ID {addonId}");
+            return;
+        }
+
+        registry.Execute(packetId, handler => handler(packetData));
+    }
+
     private void RegisterClientAddonHandler(
         byte addonId,
         byte packetId,
@@ -314,6 +328,22 @@ internal class PacketManager {
         );
     }
 
+    private static void HandleServerAddonPacketSingle(
+        ushort clientId,
+        byte addonId,
+        byte packetId,
+        IPacketData packetData,
+        Dictionary<byte, PacketHandlerRegistry<byte, ServerPacketHandler>> registryDict,
+        string registryName
+    ) {
+        if (!registryDict.TryGetValue(addonId, out var registry)) {
+            Logger.Warn($"There is no {registryName} handler registry for addon ID {addonId}");
+            return;
+        }
+
+        registry.Execute(packetId, handler => handler(clientId, packetData));
+    }
+
     private void RegisterServerAddonHandler(
         byte addonId,
         byte packetId,
@@ -359,6 +389,11 @@ internal class PacketManager {
 
     public void ClearClientAddonUpdatePacketHandlers() => _clientAddonUpdateRegistries.Clear();
 
+    public void HandleClientAddonPacketSingle(byte addonId, byte packetId, IPacketData packetData) =>
+        HandleClientAddonPacketSingle(
+            addonId, packetId, packetData, _clientAddonUpdateRegistries, "client addon update"
+        );
+
 
     public void RegisterClientAddonConnectionPacketHandler(byte addonId, byte packetId, ClientPacketHandler handler) =>
         RegisterClientAddonHandler(addonId, packetId, handler, _clientAddonConnectionRegistries, "connection");
@@ -377,6 +412,11 @@ internal class PacketManager {
 
     public void DeregisterServerAddonUpdatePacketHandler(byte addonId, byte packetId) =>
         DeregisterServerAddonHandler(addonId, packetId, _serverAddonUpdateRegistries);
+
+    public void HandleServerAddonPacketSingle(ushort clientId, byte addonId, byte packetId, IPacketData packetData) =>
+        HandleServerAddonPacketSingle(
+            clientId, addonId, packetId, packetData, _serverAddonUpdateRegistries, "server addon update"
+        );
 
     public void RegisterServerAddonConnectionPacketHandler(byte addonId, byte packetId, ServerPacketHandler handler) =>
         RegisterServerAddonHandler(addonId, packetId, handler, _serverAddonConnectionRegistries, "connection");

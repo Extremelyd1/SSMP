@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using SSMP.Collection;
 using SSMP.Networking.Packet;
+using SSMP.Networking.Packet.Connection;
 using SSMP.Networking.Packet.Update;
 
 namespace SSMP.Api.Client.Networking;
@@ -55,10 +56,12 @@ internal class ClientAddonNetworkReceiver {
         }
 
         // Assign the addon packet info in the dictionary of the client update packet
-        ClientUpdatePacket.AddonPacketInfoDict[ClientAddon.Id.Value] = new AddonPacketInfo(
+        var addonPacketInfo = new AddonPacketInfo(
             PacketInstantiator!,
             PacketIdSize
         );
+        ClientUpdatePacket.AddonPacketInfoDict[ClientAddon.Id.Value] = addonPacketInfo;
+        ClientConnectionPacket.AddonPacketInfoDict[ClientAddon.Id.Value] = addonPacketInfo;
 
         foreach (var idHandlerPair in PacketHandlers) {
             PacketManager.RegisterClientAddonUpdatePacketHandler(

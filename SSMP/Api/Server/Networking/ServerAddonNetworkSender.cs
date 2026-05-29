@@ -1,6 +1,7 @@
 using System;
 using SSMP.Api.Client.Networking;
 using SSMP.Networking.Packet;
+using SSMP.Networking.Packet.Connection;
 using SSMP.Networking.Server;
 
 namespace SSMP.Api.Server.Networking;
@@ -62,7 +63,8 @@ internal class ServerAddonNetworkSender<TPacketId> :
 
         if (!PacketIdLookup.TryGetValue(packetId, out var idValue)) {
             throw new InvalidOperationException(
-                PacketIdInvalidExceptionMsg);
+                PacketIdInvalidExceptionMsg
+            );
         }
 
         var updateManager = _netServer.GetUpdateManagerForClient(playerId);
@@ -97,7 +99,8 @@ internal class ServerAddonNetworkSender<TPacketId> :
 
         if (!PacketIdLookup.TryGetValue(packetId, out var idValue)) {
             throw new InvalidOperationException(
-                PacketIdInvalidExceptionMsg);
+                PacketIdInvalidExceptionMsg
+            );
         }
 
         if (!_serverAddon.Id.HasValue) {
@@ -105,13 +108,14 @@ internal class ServerAddonNetworkSender<TPacketId> :
         }
 
         _netServer.SetDataForAllClients(updateManager => {
-            updateManager?.SetAddonData(
-                _serverAddon.Id.Value,
-                idValue,
-                _packetIdSize,
-                packetData
-            );
-        });
+                updateManager?.SetAddonData(
+                    _serverAddon.Id.Value,
+                    idValue,
+                    _packetIdSize,
+                    packetData
+                );
+            }
+        );
     }
 
     /// <inheritdoc/>
@@ -126,7 +130,8 @@ internal class ServerAddonNetworkSender<TPacketId> :
 
         if (!PacketIdLookup.TryGetValue(packetId, out var idValue)) {
             throw new InvalidOperationException(
-                PacketIdInvalidExceptionMsg);
+                PacketIdInvalidExceptionMsg
+            );
         }
 
         var updateManager = _netServer.GetUpdateManagerForClient(playerId);
@@ -168,7 +173,8 @@ internal class ServerAddonNetworkSender<TPacketId> :
 
         if (!PacketIdLookup.TryGetValue(packetId, out var idValue)) {
             throw new InvalidOperationException(
-                PacketIdInvalidExceptionMsg);
+                PacketIdInvalidExceptionMsg
+            );
         }
 
         if (!_serverAddon.Id.HasValue) {
@@ -176,12 +182,101 @@ internal class ServerAddonNetworkSender<TPacketId> :
         }
 
         _netServer.SetDataForAllClients(updateManager => {
-            updateManager?.SetAddonDataAsCollection(
-                _serverAddon.Id.Value,
-                idValue,
-                _packetIdSize,
-                packetData
+                updateManager?.SetAddonDataAsCollection(
+                    _serverAddon.Id.Value,
+                    idValue,
+                    _packetIdSize,
+                    packetData
+                );
+            }
+        );
+    }
+
+    /// <inheritdoc/>
+    public void SendChunkData(TPacketId packetId, IPacketData packetData, ushort playerId) {
+        var (idValue, addonId) = ValidateCommon(packetId);
+
+        var updateManager = _netServer.GetUpdateManagerForClient(playerId);
+        if (updateManager == null) {
+            throw new InvalidOperationException($"Player with ID '{playerId}' is not connected");
+        }
+
+        updateManager.SendChunkPacket(BuildPacket(idValue, addonId, packetData));
+    }
+
+    /// <inheritdoc/>
+    public void SendChunkData(TPacketId packetId, IPacketData packetData, params ushort[] playerIds) {
+        var (idValue, addonId) = ValidateCommon(packetId);
+        var packet = BuildPacket(idValue, addonId, packetData);
+
+        foreach (var playerId in playerIds) {
+            var updateManager = _netServer.GetUpdateManagerForClient(playerId);
+            if (updateManager == null) {
+                throw new InvalidOperationException($"Player with ID '{playerId}' is not connected");
+            }
+
+            updateManager.SendChunkPacket(packet);
+        }
+    }
+
+    /// <inheritdoc/>
+    public void BroadcastChunkData(TPacketId packetId, IPacketData packetData) {
+        var (idValue, addonId) = ValidateCommon(packetId);
+        var packet = BuildPacket(idValue, addonId, packetData);
+        _netServer.SetDataForAllClients(updateManager => updateManager.SendChunkPacket(packet));
+    }
+
+    /// <summary>
+    /// Validates the common server-side preconditions required before sending chunk data.
+    /// </summary>
+    /// <param name="packetId">The addon packet identifier to validate and resolve.</param>
+    /// <returns>
+    /// The resolved packet ID byte value and the current addon ID.
+    /// </returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown if the server is not started, the addon has no assigned ID, or the packet ID is invalid.
+    /// </exception>
+    private (byte idValue, byte addonId) ValidateCommon(TPacketId packetId) {
+        if (!_netServer.IsStarted) {
+            throw new InvalidOperationException(ServerNotStartedExceptionMsg);
+        }
+
+        if (!_serverAddon.Id.HasValue) {
+            throw new InvalidOperationException(NoAddonIdMsg);
+        }
+
+        return !PacketIdLookup.TryGetValue(packetId, out var idValue)
+            ? throw new InvalidOperationException(PacketIdInvalidExceptionMsg)
+            : (idValue, _serverAddon.Id.Value);
+    }
+
+    /// <summary>
+    /// Builds a network packet containing addon packet data for the given addon and packet ID.
+    /// </summary>
+    /// <param name="idValue">The resolved packet ID byte value.</param>
+    /// <param name="addonId">The addon ID that owns the packet data.</param>
+    /// <param name="packetData">The packet payload to send.</param>
+    /// <returns>
+    /// A constructed packet ready to be enqueued for chunked sending.
+    /// </returns>
+    private Packet BuildPacket(byte idValue, byte addonId, IPacketData packetData) {
+        var connectionPacket = new ClientConnectionPacket();
+        var addonPacketData = new AddonPacketData(_packetIdSize) {
+            PacketData = { [idValue] = packetData }
+        };
+        connectionPacket.SetSendingAddonPacketData(addonId, addonPacketData);
+
+        var packet = new Packet();
+        connectionPacket.CreatePacket(packet);
+
+        if (packet.Length <= ushort.MaxValue) {
+            throw new ArgumentException(
+                $"Addon packet data size ({packet.Length} bytes) is not larger than ushort.MaxValue ({ushort.MaxValue}). " +
+                $"For payloads smaller than or equal to ushort.MaxValue, please use standard updates instead of chunk transport.",
+                nameof(packetData)
             );
-        });
+        }
+
+        return packet;
     }
 }
