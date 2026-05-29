@@ -1460,6 +1460,7 @@ internal class AnimationManager {
     /// </summary>
     private void CreateToolHooks() {
         MagnetiteDice.Hook(OnDiceEnable);
+        MagmaBell.HookRecharge(OnMagmaBellRecharge);
 
         var toolFsm = HeroController.instance.toolsFSM;
         var brewBurst = toolFsm.GetState("Flea Brew Burst");
@@ -1522,7 +1523,19 @@ internal class AnimationManager {
             return;
         }
 
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagmaBell);
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagmaBell, 0, [0]);
+    }
+
+    /// <summary>
+    /// Hook for the magma bell being triggered.
+    /// </summary>
+    private void OnMagmaBellRecharge() {
+        // If we are not connected, there is nothing to send to
+        if (!_netClient.IsConnected) {
+            return;
+        }
+
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagmaBell, 0, [1]);
     }
 
     /// <summary>
