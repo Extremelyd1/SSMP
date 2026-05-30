@@ -98,6 +98,7 @@ internal class BindInterrupt : Bind {
             var damager = bindBell.FindGameObjectInChildren("damager");
             if (damager != null) {
                 AddDamageHeroComponent(damager, ServerSettings.WardingBellDamage);
+                FixDamageEnemies(damager);
             } else {
                 Logger.Warn("Unable to add damager to warding bell burst");
             }

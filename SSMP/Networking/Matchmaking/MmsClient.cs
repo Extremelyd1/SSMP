@@ -22,6 +22,9 @@ internal sealed class MmsClient {
     /// <summary>Last error from most recent operation.</summary>
     public MatchmakingError LastMatchmakingError { get; private set; } = MatchmakingError.None;
 
+    /// <summary>Last machine-readable join failure reason returned by MMS.</summary>
+    public string? LastJoinFailureReason { get; private set; }
+
     public MmsClient(
         string baseUrl,
         int discoveryPort,
@@ -56,10 +59,19 @@ internal sealed class MmsClient {
         int hostPort,
         bool isPublic = true,
         string gameVersion = "unknown",
-        PublicLobbyType lobbyType = PublicLobbyType.Matchmaking
+        PublicLobbyType lobbyType = PublicLobbyType.Matchmaking,
+        string? hostIpOverride = null,
+        string? hostLanIpOverride = null
     ) {
         ClearErrors();
-        var result = await HostSession.CreateLobbyAsync(hostPort, isPublic, gameVersion, lobbyType);
+        var result = await HostSession.CreateLobbyAsync(
+            hostPort,
+            isPublic,
+            gameVersion,
+            lobbyType,
+            hostIpOverride,
+            hostLanIpOverride
+        );
         LastMatchmakingError = result.error;
         return result.result;
     }
@@ -121,6 +133,10 @@ internal sealed class MmsClient {
     public void StartHostDiscoveryRefresh(string hostDiscoveryToken, Action<byte[], IPEndPoint> sendRawAction) =>
         HostSession.StartHostDiscoveryRefresh(hostDiscoveryToken, sendRawAction);
 
+    /// <summary>Starts startup-time host UDP discovery using the current lobby's initial token, if present.</summary>
+    public void StartInitialHostDiscoveryRefresh(Action<byte[], IPEndPoint> sendRawAction) =>
+        HostSession.StartInitialHostDiscoveryRefresh(sendRawAction);
+
     /// <summary>Stops active host discovery refresh loop.</summary>
     public void StopHostDiscoveryRefresh() => HostSession.StopHostDiscoveryRefresh();
 
@@ -128,8 +144,9 @@ internal sealed class MmsClient {
     /// Signals a join failure with a specific reason.
     /// </summary>
     private void SetJoinFailed(string reason) {
-        Logger.Warn($"MmsClient: matchmaking join failed – {reason}");
+        Logger.Warn($"MmsClient: matchmaking join failed - {reason}");
         LastMatchmakingError = MatchmakingError.JoinFailed;
+        LastJoinFailureReason = reason;
     }
 
     /// <summary>
@@ -137,5 +154,6 @@ internal sealed class MmsClient {
     /// </summary>
     private void ClearErrors() {
         LastMatchmakingError = MatchmakingError.None;
+        LastJoinFailureReason = null;
     }
 }

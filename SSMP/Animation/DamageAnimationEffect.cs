@@ -10,6 +10,11 @@ namespace SSMP.Animation;
 /// </summary>
 internal abstract class DamageAnimationEffect : AnimationEffect {
     /// <summary>
+    /// The object layer for attacks.
+    /// </summary>
+    protected const int AttackLayer = (int) GlobalEnums.PhysLayers.HERO_ATTACK;
+
+    /// <summary>
     /// Whether this effect should deal damage.
     /// </summary>
     protected bool ShouldDoDamage;
@@ -30,7 +35,8 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
 
     /// <summary>
     /// Adds a <see cref="DamageHero"/> component to the given game object that deals the given damage when the player
-    /// collides with it.
+    /// collides with it. Also adds a <see cref="EffectOwnerComponent"/> component that indicates the owner of this
+    /// object.
     /// </summary>
     /// <param name="target">The target game object to attach the component to.</param>
     /// <param name="damage">The number of mask of damage it should deal.</param>
@@ -40,6 +46,9 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
         damageHero.damageDealt = damage;
         damageHero.OnDamagedHero = new UnityEvent();
 
+        var identifier = target.AddComponentIfNotPresent<EffectOwnerComponent>();
+        identifier.Owner = target;
+
         return damageHero;
     }
 
@@ -47,7 +56,7 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
     /// Removes a <see cref="DamageHero"/> component from the given game object.
     /// </summary>
     /// <param name="target">The target game object to detach the component from.</param>
-    protected static void RemoveDamageHeroComponent(GameObject target) {
+    private static void RemoveDamageHeroComponent(GameObject target) {
         target.DestroyComponent<DamageHero>();
     }
 
@@ -70,12 +79,31 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
     /// <param name="damage">The number of mask of damage it should deal.</param>
     /// <param name="doDamage">If the damager should be enabled or not</param>
     /// <returns>The <see cref="DamageHero"/> component that was added if PVP was turned on</returns>
-    protected static DamageHero? SetDamageHeroState(GameObject target, bool doDamage, int damage = 1) {
+    public static DamageHero? SetDamageHeroState(GameObject target, bool doDamage, int damage = 1) {
         if (doDamage && damage > 0) {
             return AddDamageHeroComponent(target, damage);
         }
 
         RemoveDamageHeroComponent(target);
         return null;
+    }
+
+    /// <summary>
+    /// Fixes a remote attack's <see cref="DamageEnemies"/> component by disabling various properties that would
+    /// interfere with the local player.
+    /// </summary>
+    /// <param name="target">The object with the <see cref="DamageEnemies"/> component.</param>
+    protected static void FixDamageEnemies(GameObject target) {
+        // Add if we want to disable enemy damage
+        //if (!ServerSettings.AllowDamageEnemies) {
+        //    target.DestroyComponent<DamageEnemies>();
+        //}
+
+        if (target.TryGetComponent<DamageEnemies>(out var damageEnemies)) {
+            damageEnemies.doesNotTink = true;
+            damageEnemies.doesNotTinkThroughWalls = true;
+            damageEnemies.doesNotParry = true;
+            damageEnemies.silkGeneration = HitSilkGeneration.None;
+        }
     }
 }

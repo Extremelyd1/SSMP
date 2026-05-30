@@ -53,6 +53,13 @@ public class JoinSessionService {
     public Task SetDiscoveredPortAsync(string token, int port, CancellationToken cancellationToken = default) =>
         _coordinator.SetDiscoveredPortAsync(token, port, cancellationToken);
 
+    /// <summary>Validates that a client discovery packet arrived from the expected join IP.</summary>
+    public Task<bool> ValidateDiscoveredClientIpAsync(
+        string token,
+        string clientIp,
+        CancellationToken cancellationToken = default
+    ) => _coordinator.ValidateDiscoveredClientIpAsync(token, clientIp, cancellationToken);
+
     /// <summary>Returns the externally observed UDP port for a discovery token, or <see langword="null"/> if not yet recorded.</summary>
     public int? GetDiscoveredPort(string token) =>
         _coordinator.GetDiscoveredPort(token);

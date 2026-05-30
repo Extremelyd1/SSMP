@@ -7,24 +7,29 @@ using UnityEngine;
 
 namespace SSMP.Animation.Effects.Tools;
 
+/// <summary>
+/// Class for the tool effect of Flea Brew (attack buff).
+/// </summary>
 internal class FleaBrew : BaseTool {
+    private const string ParticlesName = "Flea Brew Particles";
+
     /// <summary>
     /// Cached reference to a modified version of the poisoned flea brew trail.
     /// </summary>
     private static GameObject? _modifiedPoisonTrail;
 
     /// <summary>
-    /// Cached values of sprite flashes for flea brews.
+    /// Cached values of sprite flashes for Flea Brews.
     /// </summary>
     private static readonly Dictionary<int, SpriteFlash.FlashHandle> BrewFlashes = [];
 
     /// <summary>
     /// Instance of the effect class.
     /// </summary>
-    public static FleaBrew Instance = new();
+    public static readonly FleaBrew Instance = new();
 
     /// <inheritdoc/>
-    public override byte[]? GetEffectInfo() {
+    public override byte[] GetEffectInfo() {
         return [
             (byte) (HasPoison() ? 1 : 0)
         ];
@@ -39,15 +44,22 @@ internal class FleaBrew : BaseTool {
         var fsm = hc.toolsFSM;
         if (fsm != null) {
             var audio = fsm.GetFirstAction<PlayAudioEvent>("Flea Brew Burst");
-            if (audio != null) AudioUtil.PlayAudio(audio, playerObject);
+            AudioUtil.PlayAudio(audio, playerObject);
         }
 
         // Start particles
         var duration = hc.QUICKENING_DURATION;
         var localPrefab = isPoison ? hc.quickeningPoisonEffectPrefab : hc.quickeningEffectPrefab;
 
-        var particles = EffectUtils.SpawnGlobalPoolObject(localPrefab.gameObject, playerObject.transform, duration, true);
+        var particles = EffectUtils.SpawnGlobalPoolObject(
+            localPrefab.gameObject, 
+            playerObject.transform, 
+            duration,
+            true
+        );
         if (particles == null) return;
+
+        particles.name = ParticlesName;
 
         // Set up poison clouds
         if (isPoison && ShouldDoDamage && ServerSettings.IsPvpEnabled) {
@@ -69,34 +81,72 @@ internal class FleaBrew : BaseTool {
 
         // Start new flash
         var color = isPoison ? Gameplay.PoisonPouchHeroTintColour : new Color(1f, 0.85f, 0.47f, 1f);
-        var flashHandle = flash.Flash(color, 0.7f, 0.2f, 0.01f, 0.22f, 0f, repeating: true, 0, 1, requireExplicitCancel: true);
+        var flashHandle = flash.Flash(
+            color, 
+            0.7f, 
+            0.2f,
+            0.01f,
+            0.22f,
+            0f,
+            repeating: true,
+            0,
+            1,
+            requireExplicitCancel: true
+        );
         BrewFlashes[id] = flashHandle;
 
-        MonoBehaviourUtil.Instance.StartCoroutine(StopBrewFlash(playerObject, flashHandle));
+        MonoBehaviourUtil.Instance.StartCoroutine(StopBrewFlashAfterDelay(playerObject, flashHandle));
 
     }
 
     /// <summary>
-    /// Stops the flew brew sprite flash.
+    /// Stops the Flea Brew flashing and particles.
+    /// </summary>
+    /// <param name="playerObject">The player object with the Flea Brew animation.</param>
+    public static void StopBrew(GameObject playerObject) {
+        var id = playerObject.GetInstanceID();
+        if (!BrewFlashes.TryGetValue(id, out var handle)) {
+            return;
+        }
+
+        StopBrew(playerObject, handle);
+    }
+
+    /// <summary>
+    /// Stops the Flea Brew flashing and particles.
+    /// </summary>
+    /// <param name="playerObject">The player object with the Flea Brew animation.</param>
+    /// <param name="handle">The current sprite flash handle.</param>
+    private static void StopBrew(GameObject playerObject, SpriteFlash.FlashHandle handle) {
+        // Stop sprite flash
+        if (playerObject.TryGetComponent<SpriteFlash>(out var flash)) {
+            flash.CancelRepeatingFlash(handle);
+        }
+
+        // Stop particles
+        var particles = playerObject.FindGameObjectInChildren(ParticlesName);
+        if (particles) {
+            Object.Destroy(particles);
+        }
+    }
+
+    /// <summary>
+    /// Stops the Flea Brew sprite flash after a delay.
     /// </summary>
     /// <param name="playerObject">The player that used the tool.</param>
     /// <param name="handle">The flash's handle.</param>
-    private static IEnumerator StopBrewFlash(GameObject playerObject, SpriteFlash.FlashHandle handle) {
+    private static IEnumerator StopBrewFlashAfterDelay(GameObject playerObject, SpriteFlash.FlashHandle handle) {
         // Wait for effect to end
         yield return new WaitForSeconds(HeroController.instance.QUICKENING_DURATION);
 
         // Cancel flash
-        if (!playerObject.TryGetComponent<SpriteFlash>(out var flash)) {
-            yield break;
-        }
-
-        flash.CancelRepeatingFlash(handle);
+        StopBrew(playerObject, handle);
     }
 
     /// <summary>
     /// Sets up a poison trail that deals damage.
     /// </summary>
-    /// <param name="particles">The poisoned flea brew particle spawner.</param>
+    /// <param name="particles">The poisoned Flea Brew particle spawner.</param>
     private void SetPoisonTrail(GameObject particles) {
         // Find the prefab spawner
         var spawnerObj = particles.FindGameObjectInChildren("Trail Spawner");
@@ -111,14 +161,14 @@ internal class FleaBrew : BaseTool {
             var prefab = spawner.prefab;
             if (!prefab) return;
 
-            _modifiedPoisonTrail = EffectUtils.SpawnGlobalPoolObject(prefab, particles.transform, 0, false);
+            _modifiedPoisonTrail = EffectUtils.SpawnGlobalPoolObject(prefab, particles.transform, 0);
             if (!_modifiedPoisonTrail) return;
 
             _modifiedPoisonTrail.SetActive(false);
             _modifiedPoisonTrail.name = "Hornet Poison Trail Modified";
 
-            // Re-add recycler so that it de-spawns.
-            // Since this is a new object, it won't override the other pool.
+            // Re-add recycler so that it de-spawns
+            // Since this is a new object, it won't override the other pool
             var recycler = _modifiedPoisonTrail.AddComponent<AutoRecycleSelf>();
             recycler.afterEvent = GlobalEnums.AfterEvent.TIME;
             recycler.timeToWait = 1.1f;

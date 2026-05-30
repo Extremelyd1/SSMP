@@ -122,7 +122,7 @@ public sealed class JoinSessionCoordinator {
     /// <param name="port">The external port observed by the server.</param>
     /// <param name="cancellationToken">Propagates notification that the operation should be cancelled.</param>
     public async Task SetDiscoveredPortAsync(string token, int port, CancellationToken cancellationToken = default) {
-        if (!_store.TryGetDiscoveryMetadata(token, out var metadata) || metadata == null)
+        if (!_store.TryGetDiscoveryMetadata(token, out var metadata))
             return;
 
         if (!_store.TrySetDiscoveredPort(token, port))
@@ -133,8 +133,47 @@ public sealed class JoinSessionCoordinator {
             return;
         }
 
-        if (metadata.JoinId != null)
+        if (metadata.JoinId != null) {
             await HandleClientPortDiscoveredAsync(metadata.JoinId, port, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Validates that a client discovery packet arrived from the same IP address that created the join session.
+    /// Host discovery packets are ignored by this check.
+    /// </summary>
+    /// <param name="token">The discovery token included in the UDP packet.</param>
+    /// <param name="clientIp">The IP address observed for the UDP packet.</param>
+    /// <param name="cancellationToken">Propagates notification that the operation should be cancelled.</param>
+    /// <returns>
+    /// <see langword="true"/> when discovery processing may continue; otherwise <see langword="false"/>.
+    /// </returns>
+    public async Task<bool> ValidateDiscoveredClientIpAsync(
+        string token,
+        string clientIp,
+        CancellationToken cancellationToken = default
+    ) {
+        if (!_store.TryGetDiscoveryMetadata(token, out var metadata))
+            return false;
+
+        if (metadata.JoinId == null)
+            return true;
+
+        var session = GetJoinSession(metadata.JoinId);
+        if (session == null)
+            return false;
+
+        if (string.Equals(session.ClientIp, clientIp, StringComparison.Ordinal))
+            return true;
+
+        _logger.LogWarning(
+            "Client path mismatch for join {JoinId}: HTTPS join used {JoinIp}, UDP discovery used {DiscoveryIp}",
+            metadata.JoinId,
+            session.ClientIp,
+            clientIp
+        );
+        await FailJoinSessionAsync(metadata.JoinId, "client_path_mismatch", cancellationToken);
+        return false;
     }
 
     /// <summary>
@@ -262,6 +301,14 @@ public sealed class JoinSessionCoordinator {
         if (lobby == null) return;
 
         lobby.ExternalPort = port;
+
+        foreach (var joinId in _store.GetJoinIdsForLobby(lobbyConnectionData)) {
+            var session = GetJoinSession(joinId);
+            if (session != null) {
+                session.AwaitingHostRefresh = false;
+            }
+        }
+
         await JoinSessionMessenger.SendHostMappingReceivedAsync(lobby, port, cancellationToken);
         await TryStartPendingJoinSessionsAsync(lobbyConnectionData, cancellationToken);
     }
@@ -279,6 +326,7 @@ public sealed class JoinSessionCoordinator {
         if (session == null) return;
 
         session.ClientExternalPort = port;
+        session.AwaitingHostRefresh = true;
         await JoinSessionMessenger.SendClientMappingReceivedAsync(session, port, cancellationToken);
 
         var hostRefreshed = await _messenger.SendHostRefreshRequestAsync(
@@ -318,6 +366,8 @@ public sealed class JoinSessionCoordinator {
         var session = GetJoinSession(joinId);
         if (session?.ClientExternalPort == null) return;
 
+        if (session.AwaitingHostRefresh) return;
+
         var lobby = _lobbyService.GetLobby(session.LobbyConnectionData);
         if (lobby == null) {
             await FailJoinSessionAsync(joinId, "lobby_closed", cancellationToken);
@@ -340,9 +390,8 @@ public sealed class JoinSessionCoordinator {
         // Matchmaking lobbies store ConnectionData as "IP:Port".
         // Steam lobbies are filtered out at session creation.
         var hostIp = lobby.ConnectionData.Split(':')[0];
-        var startTimeMs = DateTimeOffset.UtcNow
-                                        .AddMilliseconds(MatchmakingProtocol.PunchTimingOffsetMs)
-                                        .ToUnixTimeMilliseconds();
+        var serverTimeMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var startTimeMs = serverTimeMs + MatchmakingProtocol.PunchTimingOffsetMs;
 
         try {
             var hostSent = await JoinSessionMessenger.SendStartPunchToHostAsync(
@@ -352,7 +401,8 @@ public sealed class JoinSessionCoordinator {
                 session.ClientExternalPort.Value,
                 lobby.ExternalPort.Value,
                 startTimeMs,
-                cancellationToken
+                cancellationToken,
+                serverTimeMs
             );
             if (!hostSent) {
                 await FailJoinSessionAsync(joinId, "host_unreachable", cancellationToken);
@@ -364,7 +414,8 @@ public sealed class JoinSessionCoordinator {
                 lobby.ExternalPort.Value,
                 hostIp,
                 startTimeMs,
-                cancellationToken
+                cancellationToken,
+                serverTimeMs
             );
             if (!clientSent) {
                 await FailJoinSessionAsync(joinId, "client_disconnected", cancellationToken);

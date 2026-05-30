@@ -9,7 +9,12 @@ internal readonly struct ConnectionInfo {
     public string? FallbackAddress { get; }
     public string FeedbackMessage { get; }
 
-    public ConnectionInfo(string primaryIp, int primaryPort, string? fallbackAddress, string feedbackMessage) {
+    public ConnectionInfo(
+        string primaryIp,
+        int primaryPort,
+        string? fallbackAddress,
+        string feedbackMessage
+    ) {
         PrimaryIp = primaryIp;
         PrimaryPort = primaryPort;
         FallbackAddress = fallbackAddress;

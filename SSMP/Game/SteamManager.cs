@@ -72,6 +72,11 @@ public static class SteamManager {
     private static ELobbyType _pendingLobbyType;
 
     /// <summary>
+    /// The visibility type of the currently active lobby.
+    /// </summary>
+    private static ELobbyType _currentLobbyType = DefaultLobbyType;
+
+    /// <summary>
     /// Callback timer interval in milliseconds (~60Hz).
     /// </summary>
     private const int CallbackIntervalMs = 17;
@@ -86,7 +91,6 @@ public static class SteamManager {
     /// </summary>
     private const string LobbyKeyName = "name";
     private const string LobbyKeyVersion = "version";
-
     /// <summary>
     /// Cached mod version string from assembly metadata.
     /// </summary>
@@ -229,6 +233,7 @@ public static class SteamManager {
         var lobbyToLeave = CurrentLobbyId;
         CurrentLobbyId = NilLobbyId;
         IsHostingLobby = false;
+        _currentLobbyType = DefaultLobbyType;
 
         // Clear Rich Presence so friends no longer see "Join Game" option
         SteamFriends.ClearRichPresence();
@@ -254,6 +259,43 @@ public static class SteamManager {
 
         Logger.Info($"Opening Steam invite dialog for lobby: {CurrentLobbyId}");
         SteamFriends.ActivateGameOverlayInviteDialog(CurrentLobbyId);
+    }
+
+    /// <summary>
+    /// Marks the hosted lobby as ready or not ready for inbound players.
+    /// Steam join links stay disabled until the host is actually listening.
+    /// </summary>
+    /// <param name="isReady">Whether the host has finished startup and can accept joins.</param>
+    public static void SetLobbyReady(bool isReady) {
+        if (!IsInitialized) {
+            Logger.Warn("Cannot update Steam lobby readiness: Steam is not initialized");
+            return;
+        }
+
+        if (CurrentLobbyId == NilLobbyId || !IsHostingLobby) {
+            Logger.Warn("Cannot update Steam lobby readiness: no hosted lobby is active");
+            return;
+        }
+
+        SteamMatchmaking.SetLobbyJoinable(CurrentLobbyId, isReady);
+
+        // Clear first so stale connect keys are not left around while the host is still booting.
+        SteamFriends.ClearRichPresence();
+
+        if (!isReady) {
+            SteamFriends.SetRichPresence("status", "Starting Lobby");
+            Logger.Info($"Steam lobby {CurrentLobbyId} marked not ready");
+            return;
+        }
+
+        if (_currentLobbyType != ELobbyType.k_ELobbyTypePrivate) {
+            SteamFriends.SetRichPresence("connect", CurrentLobbyId.m_SteamID.ToString());
+            SteamFriends.SetRichPresence("status", "In Lobby");
+            Logger.Info($"Steam lobby {CurrentLobbyId} marked ready with connect={CurrentLobbyId.m_SteamID}");
+        } else {
+            SteamFriends.SetRichPresence("status", "In Private Lobby");
+            Logger.Info($"Steam private lobby {CurrentLobbyId} marked ready");
+        }
     }
 
     /// <summary>
@@ -347,6 +389,7 @@ public static class SteamManager {
         var lobbyId = new CSteamID(callback.m_ulSteamIDLobby);
         CurrentLobbyId = lobbyId;
         IsHostingLobby = true;
+        _currentLobbyType = _pendingLobbyType;
 
         Logger.Info($"Steam lobby created successfully: {lobbyId}");
 
@@ -357,19 +400,7 @@ public static class SteamManager {
         var steamName = SteamFriends.GetPersonaName();
         SteamMatchmaking.SetLobbyData(lobbyId, LobbyKeyName, $"{steamName}'s Lobby");
         SteamMatchmaking.SetLobbyData(lobbyId, LobbyKeyVersion, ModVersion);
-
-        // Set Rich Presence based on lobby type
-        // Private lobbies: NO connect key (truly invite-only, no "Join Game" button)
-        // Public/Friends: Set connect key so friends can "Join Game" from Steam
-        if (_pendingLobbyType != ELobbyType.k_ELobbyTypePrivate) {
-            SteamFriends.SetRichPresence("connect", lobbyId.m_SteamID.ToString());
-            SteamFriends.SetRichPresence("status", "In Lobby");
-            Logger.Info($"Rich Presence set with connect={lobbyId.m_SteamID}");
-        } else {
-            // Private lobby: set status only, use /invite command to send invites
-            SteamFriends.SetRichPresence("status", "In Private Lobby");
-            Logger.Info("Private lobby - use /invite to send Steam invites");
-        }
+        SetLobbyReady(false);
 
         // Fire event for listeners
         LobbyCreatedEvent?.Invoke(lobbyId, username ?? "Unknown");

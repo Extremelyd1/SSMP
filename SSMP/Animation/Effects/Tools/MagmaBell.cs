@@ -1,11 +1,14 @@
+using System;
 using System.Collections;
-using GlobalSettings;
 using SSMP.Internals;
 using SSMP.Util;
 using UnityEngine;
 
 namespace SSMP.Animation.Effects.Tools;
 
+/// <summary>
+/// Class for the tool effect of Magma Bell (fire protection).
+/// </summary>
 internal class MagmaBell : BaseTool {
     /// <summary>
     /// Name of the magma bell starting object name.
@@ -17,6 +20,8 @@ internal class MagmaBell : BaseTool {
     /// </summary>
     private const string MagmaBellRechargeName = "Magma Bell Recharge";
 
+    public static readonly MagmaBell Instance = new();
+
     /// <inheritdoc/>
     public override byte[]? GetEffectInfo() {
         return null;
@@ -24,7 +29,12 @@ internal class MagmaBell : BaseTool {
 
     /// <inheritdoc/>
     public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
-        // two parts, when hit and when recovering after some delay
+        // Two parts: 1. when hit and 2. when recovering after some delay
+        if (effectInfo is [1]) {
+            PlayRecharge(playerObject);
+            return;
+        }
+
 
         // Find existing effect
         var effects = GetPlayerEffects(playerObject);
@@ -46,22 +56,13 @@ internal class MagmaBell : BaseTool {
         // Toggle effect
         magmaStart.SetActive(false);
         magmaStart.SetActive(true);
-
-        // Start the recharge effect
-        MonoBehaviourUtil.Instance.StartCoroutine(PlayRecharge(playerObject));
     }
 
     /// <summary>
     /// Plays the recharge animation.
     /// </summary>
     /// <param name="playerObject">The player to use the animation on.</param>
-    private static IEnumerator PlayRecharge(GameObject playerObject) {
-        // Wait for bell to recharge
-        yield return new WaitForSeconds(Gameplay.LavaBellCooldownTime - 1);
-
-        // Player has exited the scene, don't play.
-        if (!playerObject.activeInHierarchy) yield break;
-
+    private static void PlayRecharge(GameObject playerObject) {
         // Find existing effect
         var effects = GetPlayerEffects(playerObject);
         var magmaRecharge = effects.FindGameObjectInChildren(MagmaBellRechargeName);
@@ -71,7 +72,7 @@ internal class MagmaBell : BaseTool {
             var prefab = HeroController.instance.lavaBellRechargeEffectPrefab;
 
             magmaRecharge = EffectUtils.SpawnGlobalPoolObject(prefab, effects.transform, 0, true);
-            if (!magmaRecharge) yield break;
+            if (!magmaRecharge) return;
 
             magmaRecharge.transform.localPosition = Vector3.zero;
             magmaRecharge.name = MagmaBellRechargeName;
@@ -81,5 +82,29 @@ internal class MagmaBell : BaseTool {
         // Toggle effect
         magmaRecharge.SetActive(false);
         magmaRecharge.SetActive(true);
+    }
+
+    /// <summary>
+    /// Adds a hook for when the bell is recharged.
+    /// </summary>
+    /// <param name="onTrigger">The hook to run.</param>
+    public static void HookRecharge(Action onTrigger) {
+        // Create coroutine since we have to wait for the prefab to be set
+        static IEnumerator DoHook(Action onTrigger) {
+            // Wait for prefab to be spawned
+            yield return null;
+
+            var prefab = HeroController.instance.spawnedLavaBellRechargeEffect;
+            if (prefab == null) {
+                yield break;
+            }
+
+            // Add enable hook
+            var hook = prefab.AddComponent<UnityMessageListener>();
+
+            hook.Enabled += onTrigger;
+        }
+
+        MonoBehaviourUtil.Instance.StartCoroutine(DoHook(onTrigger));
     }
 }

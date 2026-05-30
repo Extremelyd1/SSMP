@@ -9,6 +9,7 @@ using SSMP.Networking.Matchmaking.Parsing;
 using SSMP.Networking.Matchmaking.Protocol;
 using SSMP.Networking.Matchmaking.Transport;
 using SSMP.Networking.Matchmaking.Utilities;
+using SSMP.Util;
 
 namespace SSMP.Networking.Matchmaking.Host;
 
@@ -40,6 +41,11 @@ internal sealed class MmsHostSessionService : IDisposable {
     /// </summary>
     private string? _currentLobbyId;
 
+    /// <summary>
+    /// The most recent host discovery token returned by MMS for the active matchmaking lobby.
+    /// </summary>
+    private string? _currentHostDiscoveryToken;
+
     /// <summary>MMS lobby keep-alive timer.</summary>
     private Timer? _heartbeatTimer;
 
@@ -59,7 +65,7 @@ internal sealed class MmsHostSessionService : IDisposable {
     /// <c>null</c> when no refresh is running.
     /// </summary>
     private CancellationTokenSource? _hostDiscoveryRefreshCts;
-    
+
     /// <summary>WebSocket handler that receives real-time MMS server events.</summary>
     public MmsWebSocketHandler WebSocket { get; }
 
@@ -102,7 +108,9 @@ internal sealed class MmsHostSessionService : IDisposable {
             int hostPort,
             bool isPublic,
             string gameVersion,
-            PublicLobbyType lobbyType
+            PublicLobbyType lobbyType,
+            string? hostIpOverride = null,
+            string? hostLanIpOverride = null
         ) {
         if (_disposed) throw new ObjectDisposedException(nameof(MmsHostSessionService));
 
@@ -115,8 +123,41 @@ internal sealed class MmsHostSessionService : IDisposable {
                 if (_hostToken != null) return ((null, null, null), MatchmakingError.NetworkFailure);
             }
 
+            var effectiveHostIpOverride = NetworkingUtil.NormalizeConfiguredIpv4(
+                hostIpOverride,
+                nameof(MmsHostSessionService),
+                nameof(hostIpOverride)
+            );
+            var effectiveHostLanIpOverride = NetworkingUtil.NormalizeConfiguredIpv4(
+                hostLanIpOverride,
+                nameof(MmsHostSessionService),
+                nameof(hostLanIpOverride)
+            );
+
+            if (effectiveHostIpOverride != null) {
+                Logger.Info(
+                    $"MmsHostSessionService: Using HostIpOverride {effectiveHostIpOverride} for lobby creation."
+                );
+                if (isPublic && NetworkingUtil.IsPrivateIpv4(effectiveHostIpOverride)) {
+                    Logger.Warn(
+                        $"MmsHostSessionService: Public lobby is advertising private HostIpOverride {effectiveHostIpOverride}. " +
+                        "This is intended for advanced lab setups and will break ordinary internet matchmaking."
+                    );
+                }
+            }
+
+            if (effectiveHostLanIpOverride != null)
+                Logger.Info(
+                    $"MmsHostSessionService: Using HostLanIpOverride {effectiveHostLanIpOverride} for lobby creation."
+                );
+
             var jsonString = MmsJsonParser.FormatCreateLobbyJson(
-                hostPort, isPublic, gameVersion, lobbyType, MmsUtilities.GetLocalIpAddress()
+                hostPort,
+                isPublic,
+                gameVersion,
+                lobbyType,
+                effectiveHostIpOverride,
+                effectiveHostLanIpOverride ?? MmsUtilities.GetLocalIpAddress()
             );
 
             var response = await MmsHttpClient.PostJsonAsync(
@@ -241,6 +282,26 @@ internal sealed class MmsHostSessionService : IDisposable {
     }
 
     /// <summary>
+    /// Starts host UDP discovery using the token returned at lobby creation time, if one exists.
+    /// This primes MMS with the host's live socket mapping before any join arrives.
+    /// </summary>
+    /// <param name="sendRawAction">Callback that writes raw bytes through the host's live UDP socket.</param>
+    public void StartInitialHostDiscoveryRefresh(Action<byte[], IPEndPoint> sendRawAction) {
+        if (_disposed) throw new ObjectDisposedException(nameof(MmsHostSessionService));
+
+        var token = _currentHostDiscoveryToken;
+        if (string.IsNullOrEmpty(token)) {
+            Logger.Info(
+                "MmsHostSessionService: no initial host discovery token available; skipping startup discovery."
+            );
+            return;
+        }
+
+        Logger.Info("MmsHostSessionService: starting initial host discovery refresh.");
+        StartHostDiscoveryRefresh(token, sendRawAction);
+    }
+
+    /// <summary>
     /// Cancels the active UDP discovery refresh task, if any.
     /// Safe to call when no refresh is running.
     /// </summary>
@@ -265,11 +326,14 @@ internal sealed class MmsHostSessionService : IDisposable {
     /// <param name="gameVersion">Game version string for compatibility filtering.</param>
     /// <returns>A JSON string ready to POST to the MMS lobby endpoint.</returns>
     private static string BuildSteamLobbyJson(string steamLobbyId, bool isPublic, string gameVersion) =>
-        $"{{\"{MmsFields.ConnectionDataRequest}\":\"{JsonConvert.ToString(steamLobbyId)}\"," +
-        $"\"{MmsFields.IsPublicRequest}\":{isPublic.ToString().ToLower()}," +
-        $"\"{MmsFields.GameVersionRequest}\":\"{JsonConvert.ToString(gameVersion)}\"," +
-        $"\"{MmsFields.LobbyTypeRequest}\":\"steam\"}}";
-
+        JsonConvert.SerializeObject(
+            new {
+                ConnectionData = steamLobbyId,
+                IsPublic       = isPublic,
+                GameVersion    = gameVersion,
+                LobbyType      = "steam"
+            }
+        );
 
     /// <summary>
     /// Captures the current session token and lobby ID, then clears both fields.
@@ -286,6 +350,7 @@ internal sealed class MmsHostSessionService : IDisposable {
         var snapshot = (_hostToken!, _currentLobbyId);
         _hostToken = null;
         _currentLobbyId = null;
+        _currentHostDiscoveryToken = null;
         return snapshot;
     }
 
@@ -323,6 +388,7 @@ internal sealed class MmsHostSessionService : IDisposable {
 
             _hostToken = hostToken;
             _currentLobbyId = lobbyId;
+            _currentHostDiscoveryToken = hostDiscoveryToken;
             _heartbeatFailureCount = 0;
             StartHeartbeat();
         }

@@ -336,6 +336,13 @@ internal class ConnectInterface {
     private const string ErrorUnknown = "Failed to connect:\nUnknown reason";
 
     /// <summary>
+    /// Warning shown when matchmaking HTTP traffic and UDP discovery use different network paths.
+    /// </summary>
+    private const string ErrorSplitTunnelDetected =
+        "Failed to connect:\nMatchmaking detected split-tunneling or interfering network software. " +
+        "Ensure MMS and gameplay traffic use the same network path.";
+
+    /// <summary>
     /// Large blocking message shown when the client must update before using matchmaking.
     /// </summary>
     private const string MatchmakingUpdateRequiredText =
@@ -469,6 +476,16 @@ internal class ConnectInterface {
     // ReSharper disable once NotAccessedField.Local
     private IButtonComponent? _joinFriendButton;
 
+    /// <summary>
+    /// Steam lobby ID for a newly created hosted Steam lobby that still needs post-start finalization.
+    /// </summary>
+    private string? _pendingHostedSteamLobbyId;
+
+    /// <summary>
+    /// Whether the pending hosted Steam lobby should be registered with MMS after the host is ready.
+    /// </summary>
+    private bool _pendingHostedSteamLobbyIsPublic;
+
     // Direct IP tab components
     /// <summary>
     /// Input field for the server IP address.
@@ -519,6 +536,16 @@ internal class ConnectInterface {
     /// Tracks the currently selected tab so async UI refreshes preserve the active view.
     /// </summary>
     private Tab _activeTab = Tab.Matchmaking;
+
+    /// <summary>
+    /// If non-null, indicates the Lobby ID we should retry connecting to once if a hole punch times out.
+    /// </summary>
+    private string? _pendingHolePunchRetryLobbyId;
+
+    /// <summary>
+    /// Whether a matchmaking lobby join is already in progress.
+    /// </summary>
+    private bool _isLobbyJoinInProgress;
 
     /// <summary>
     /// Public accessor for the MMS client.
@@ -705,7 +732,6 @@ internal class ConnectInterface {
     /// Subscribes to Steam lobby-related events if Steam is available.
     /// </summary>
     private void SubscribeToSteamEvents() {
-        SteamManager.LobbyCreatedEvent += OnSteamLobbyCreated;
         SteamManager.LobbyListReceivedEvent += OnLobbyListReceived;
         SteamManager.LobbyJoinedEvent += OnLobbyJoined;
     }
@@ -1181,6 +1207,11 @@ internal class ConnectInterface {
             return;
         }
 
+        if (_isLobbyJoinInProgress) {
+            ShowFeedback(Color.yellow, "Already connecting...");
+            return;
+        }
+
         if (!ValidateUsername(out var username)) {
             return;
         }
@@ -1191,6 +1222,10 @@ internal class ConnectInterface {
             return;
         }
 
+        // Arm the one-time retry for a hole-punch failure
+        _pendingHolePunchRetryLobbyId = lobbyId;
+
+        SetLobbyJoinInProgress();
         ShowFeedback(Color.yellow, "Connecting...");
         MonoBehaviourUtil.Instance.StartCoroutine(JoinLobbyCoroutine(lobbyId, username));
     }
@@ -1202,7 +1237,7 @@ internal class ConnectInterface {
         ShowFeedback(Color.yellow, "Joining lobby...");
 
         // Create hole-punch socket for non-Steam lobbies
-        var holePunchSocket = CreateHolePunchSocket();
+        var holePunchSocket = CreateHolePunchSocket(_modSettings.MmsSettings.LocalBindIp);
         var clientPort = GetSocketPort(holePunchSocket);
 
         // Join lobby and get connection info
@@ -1211,6 +1246,7 @@ internal class ConnectInterface {
 
         if (!task.IsCompletedSuccessfully) {
             CleanupHolePunchSocket(holePunchSocket);
+            ResetConnectionButtons();
             Logger.Error(
                 $"ConnectInterface: JoinLobbyAsync failed: {task.Exception?.GetBaseException().Message ?? "cancelled"}"
             );
@@ -1221,6 +1257,7 @@ internal class ConnectInterface {
         var lobbyInfo = task.Result;
         if (lobbyInfo == null) {
             CleanupHolePunchSocket(holePunchSocket);
+            ResetConnectionButtons();
 
             if (MmsClient.LastMatchmakingError == MatchmakingError.UpdateRequired) {
                 ActivateMatchmakingVersionBlock();
@@ -1239,10 +1276,11 @@ internal class ConnectInterface {
         // Handle connection based on lobby type
         if (lobbyType == PublicLobbyType.Steam) {
             CleanupHolePunchSocket(holePunchSocket);
-            ConnectToSteamLobby(connectionData, username);
+            ConnectToSteamLobby(connectionData);
         } else {
             if (string.IsNullOrEmpty(joinId)) {
                 CleanupHolePunchSocket(holePunchSocket);
+                ResetConnectionButtons();
                 ShowFeedback(Color.red, "Lobby not found, offline, or join failed");
                 yield break;
             }
@@ -1256,6 +1294,7 @@ internal class ConnectInterface {
 
             if (!joinTask.IsCompletedSuccessfully) {
                 CleanupHolePunchSocket(holePunchSocket);
+                ResetConnectionButtons();
                 Logger.Error(
                     $"ConnectInterface: CoordinateMatchmakingJoinAsync failed: {joinTask.Exception?.GetBaseException().Message ?? "cancelled"}"
                 );
@@ -1266,9 +1305,15 @@ internal class ConnectInterface {
             var joinStart = joinTask.Result;
             if (joinStart == null) {
                 CleanupHolePunchSocket(holePunchSocket);
+                ResetConnectionButtons();
 
                 if (MmsClient.LastMatchmakingError == MatchmakingError.UpdateRequired) {
                     ActivateMatchmakingVersionBlock();
+                    yield break;
+                }
+
+                if (MmsClient.LastJoinFailureReason == "client_path_mismatch") {
+                    ShowFeedback(Color.red, ErrorSplitTunnelDetected);
                     yield break;
                 }
 
@@ -1277,7 +1322,11 @@ internal class ConnectInterface {
             }
 
             ConnectToMatchmakingLobby(
-                $"{joinStart.HostIp}:{joinStart.HostPort}", lanConnectionData, username, holePunchSocket
+                $"{joinStart.HostIp}:{joinStart.HostPort}",
+                lanConnectionData,
+                _modSettings.MmsSettings.PreferLanFastPath,
+                username,
+                holePunchSocket
             );
         }
     }
@@ -1347,46 +1396,42 @@ internal class ConnectInterface {
         return;
 
         // Subscribe to lobby created event (one-time)
-        void OnLobbyCreatedCallback(CSteamID steamLobbyId, string hostName) {
+        void OnLobbyCreatedCallback(CSteamID steamLobbyId, string _) {
             // Unsubscribe immediately
             SteamManager.LobbyCreatedEvent -= OnLobbyCreatedCallback;
 
-            // Only PUBLIC Steam lobbies register with MMS for browser visibility
-            // Private and Friends-Only lobbies use Steam's native discovery only
-            if (isPublic) {
-                MonoBehaviourUtil.Instance.StartCoroutine(
-                    RegisterSteamLobbyForBrowserCoroutine(steamLobbyId.m_SteamID.ToString(), username)
-                );
-            } else {
-                ShowFeedback(Color.green, "Steam lobby created!");
-                StartHostButtonPressed?.Invoke("0.0.0.0", 0, username, TransportType.Steam, null);
-            }
+            _pendingHostedSteamLobbyId = steamLobbyId.m_SteamID.ToString();
+            _pendingHostedSteamLobbyIsPublic = isPublic;
+
+            ShowFeedback(Color.yellow, "Steam lobby created. Starting host...");
+            StartHostButtonPressed?.Invoke("0.0.0.0", 0, username, TransportType.Steam, null);
         }
     }
 
     /// <summary>
-    /// Registers a public Steam lobby with MMS for browser visibility (no invite code).
+    /// Finalizes a hosted Steam lobby after the local host has fully connected.
+    /// Public lobbies are registered with MMS only after the Steam P2P server is actually live.
     /// </summary>
-    private IEnumerator RegisterSteamLobbyForBrowserCoroutine(
-        string steamLobbyId,
-        string username
-    ) {
-        var task = MmsClient.RegisterSteamLobbyAsync(
-            steamLobbyId,
-            isPublic: true,
-            gameVersion: Application.version
-        );
+    private IEnumerator FinalizeHostedSteamLobbyCoroutine(string steamLobbyId, bool isPublic) {
+        if (isPublic) {
+            var task = MmsClient.RegisterSteamLobbyAsync(
+                steamLobbyId,
+                isPublic: true,
+                gameVersion: Application.version
+            );
 
-        yield return new WaitUntil(() => task.IsCompleted);
+            yield return new WaitUntil(() => task.IsCompleted);
 
-        // Don't show invite code for Steam lobbies - they use Steam's native join flow
-        if (task.Result == null) {
-            ShowFeedback(Color.yellow, "Steam lobby created (browser listing failed)");
+            if (!task.IsCompletedSuccessfully || task.Result == null) {
+                ShowFeedback(Color.yellow, "Steam lobby created (browser listing failed)");
+            } else {
+                ShowFeedback(Color.green, "Steam lobby created!");
+            }
         } else {
             ShowFeedback(Color.green, "Steam lobby created!");
         }
 
-        StartHostButtonPressed?.Invoke("0.0.0.0", 0, username, TransportType.Steam, null);
+        SteamManager.SetLobbyReady(true);
     }
 
 
@@ -1401,14 +1446,16 @@ internal class ConnectInterface {
         var isPublic = visibility == LobbyVisibility.Public;
 
         // Create socket first to get actual port
-        var holePunchSocket = CreateHolePunchSocket();
+        var holePunchSocket = CreateHolePunchSocket(_modSettings.MmsSettings.LocalBindIp);
         var actualPort = GetSocketPort(holePunchSocket);
 
         var task = MmsClient.CreateLobbyAsync(
             hostPort: actualPort,
             isPublic: isPublic,
             gameVersion: Application.version,
-            lobbyType: lobbyType
+            lobbyType: lobbyType,
+            hostIpOverride: _modSettings.MmsSettings.HostIpOverride,
+            hostLanIpOverride: _modSettings.MmsSettings.HostLanIpOverride
         );
 
         yield return new WaitUntil(() => task.IsCompleted);
@@ -1659,26 +1706,14 @@ internal class ConnectInterface {
             return;
         }
 
+        SaveConnectionSettings(null, port, username);
+
         StartHostButtonPressed?.Invoke("", port, username, TransportType.Udp, null);
     }
 
     #endregion
 
     #region Steam Event Callbacks
-
-    /// <summary>
-    /// Called when a Steam lobby is successfully created.
-    /// Displays success message and triggers server hosting.
-    /// </summary>
-    /// <param name="lobbyId">The unique Steam ID of the created lobby.</param>
-    /// <param name="username">The username of the lobby host.</param>
-    private void OnSteamLobbyCreated(CSteamID lobbyId, string username) {
-        Logger.Info($"Lobby created: {lobbyId}");
-        ShowFeedback(Color.green, "Lobby created! Friends can join via Steam overlay.");
-
-        // Start hosting with Steam transport (port 0 as it's not used for Steam P2P)
-        StartHostButtonPressed?.Invoke("", 0, username, TransportType.Steam, null);
-    }
 
     /// <summary>
     /// Called when the list of available Steam lobbies is received.
@@ -1719,14 +1754,20 @@ internal class ConnectInterface {
     /// <summary>
     /// Handles connection to a Steam lobby.
     /// </summary>
-    private void ConnectToSteamLobby(string connectionData, string username) {
+    private void ConnectToSteamLobby(string connectionData) {
         if (!SteamManager.IsInitialized) {
             ShowFeedback(Color.red, "Steam is not initialized");
             return;
         }
 
-        ShowFeedback(Color.green, "Joining Steam lobby...");
-        ConnectButtonPressed?.Invoke(connectionData, 0, username, TransportType.Steam, null);
+        if (!ulong.TryParse(connectionData, out var steamLobbyId)) {
+            ShowFeedback(Color.red, "Invalid Steam lobby ID.");
+            Logger.Warn($"ConnectInterface: MMS returned invalid Steam lobby ID '{connectionData}'");
+            return;
+        }
+
+        ShowFeedback(Color.yellow, "Joining Steam lobby...");
+        SteamManager.JoinLobby(new CSteamID(steamLobbyId));
     }
 
     #endregion
@@ -1738,6 +1779,16 @@ internal class ConnectInterface {
     /// Resets UI state and displays success message.
     /// </summary>
     public void OnSuccessfulConnect() {
+        if (SteamManager.IsHostingLobby && _pendingHostedSteamLobbyId != null) {
+            var steamLobbyId = _pendingHostedSteamLobbyId;
+            var isPublic = _pendingHostedSteamLobbyIsPublic;
+
+            _pendingHostedSteamLobbyId = null;
+            _pendingHostedSteamLobbyIsPublic = false;
+
+            MonoBehaviourUtil.Instance.StartCoroutine(FinalizeHostedSteamLobbyCoroutine(steamLobbyId, isPublic));
+        }
+
         ShowFeedback(Color.green, MsgConnected);
         ResetConnectionButtons();
     }
@@ -1769,9 +1820,27 @@ internal class ConnectInterface {
             return;
         }
 
+        // If this was a timeout and we have a pending retry, consume it and re-run the full connect flow.
+        if (_pendingHolePunchRetryLobbyId != null && result.Reason == ConnectionFailedReason.TimedOut) {
+            var lobbyIdToRetry = _pendingHolePunchRetryLobbyId;
+            _pendingHolePunchRetryLobbyId = null;
+
+            if (ValidateUsername(out var username)) {
+                Logger.Info(
+                    $"ConnectInterface: Connection timed out. Retrying full join flow for lobby {lobbyIdToRetry} once."
+                );
+                SetLobbyJoinInProgress();
+                ShowFeedback(Color.yellow, "Connection timed out. Retrying...");
+                MonoBehaviourUtil.Instance.StartCoroutine(JoinLobbyCoroutine(lobbyIdToRetry, username));
+                return;
+            }
+        }
+
+        ResetConnectionButtons();
+        _pendingHolePunchRetryLobbyId = null;
+
         var message = GetFailureMessage(result);
         ShowFeedback(Color.red, message);
-        ResetConnectionButtons();
     }
 
     #endregion
@@ -1809,10 +1878,13 @@ internal class ConnectInterface {
     }
 
     /// <summary>
-    /// Saves connection settings (address, port, username) to persistent storage.
+    /// Saves connection settings (address if non-null, port, username) to persistent storage.
     /// </summary>
-    private void SaveConnectionSettings(string address, int port, string username) {
-        _modSettings.ConnectAddress = address;
+    private void SaveConnectionSettings(string? address, int port, string username) {
+        if (address != null) {
+            _modSettings.ConnectAddress = address;
+        }
+
         _modSettings.ConnectPort = port;
         _modSettings.Username = username;
         _modSettings.Save();
@@ -1930,7 +2002,17 @@ internal class ConnectInterface {
     /// Resets the connection buttons to their default state after a connection attempt.
     /// </summary>
     private void ResetConnectionButtons() {
+        _isLobbyJoinInProgress = false;
         ConnectInterfaceHelpers.ResetConnectButtons(_directConnectButton, _lobbyConnectButton);
+    }
+
+    /// <summary>
+    /// Marks the matchmaking lobby join path as busy and disables duplicate join presses.
+    /// </summary>
+    private void SetLobbyJoinInProgress() {
+        _isLobbyJoinInProgress = true;
+        _lobbyConnectButton.SetText(ConnectingText);
+        _lobbyConnectButton.SetInteractable(false);
     }
 
     /// <summary>
@@ -1953,17 +2035,19 @@ internal class ConnectInterface {
     /// <summary>
     /// Creates and configures a UDP socket for hole-punching.
     /// </summary>
-    private static Socket CreateHolePunchSocket() {
+    private static Socket CreateHolePunchSocket(string? bindIpAddress) {
         var socket = new Socket(
             AddressFamily.InterNetwork,
             SocketType.Dgram,
             ProtocolType.Udp
         );
 
+        var bindAddress = NetworkingUtil.ResolveBindAddress(bindIpAddress);
+
         try {
-            socket.Bind(new IPEndPoint(IPAddress.Any, 26960));
+            socket.Bind(new IPEndPoint(bindAddress, 26960));
         } catch (SocketException) {
-            socket.Bind(new IPEndPoint(IPAddress.Any, 0));
+            socket.Bind(new IPEndPoint(bindAddress, 0));
         }
 
         return socket;
@@ -1982,10 +2066,11 @@ internal class ConnectInterface {
     private void ConnectToMatchmakingLobby(
         string connectionData,
         string? lanConnectionData,
+        bool preferLanFastPath,
         string username,
         Socket? holePunchSocket
     ) {
-        var connectionInfo = DetermineConnectionInfo(connectionData, lanConnectionData);
+        var connectionInfo = DetermineConnectionInfo(connectionData, lanConnectionData, preferLanFastPath);
 
         if (connectionInfo == null) {
             ShowFeedback(Color.red, "Invalid connection data");
@@ -2010,20 +2095,29 @@ internal class ConnectInterface {
     /// <summary>
     /// Determines the optimal connection strategy (LAN first, then public).
     /// </summary>
-    private static ConnectionInfo? DetermineConnectionInfo(string publicConnectionData, string? lanConnectionData) {
+    private static ConnectionInfo? DetermineConnectionInfo(
+        string publicConnectionData,
+        string? lanConnectionData,
+        bool preferLanFastPath
+    ) {
         // Public connection is required in all cases
         if (!TryParseConnectionData(publicConnectionData, out var publicIp, out var publicPort))
             return null;
 
         // Prefer LAN if available, using public as the fallback relay
-        if (!string.IsNullOrEmpty(lanConnectionData) &&
-            TryParseConnectionData(lanConnectionData, out var lanIp, out var lanPort)) {
-            return new ConnectionInfo(
-                lanIp, lanPort, $"{publicIp}:{publicPort}", $"Connecting to LAN {lanIp}:{lanPort}..."
-            );
+        if (!preferLanFastPath || string.IsNullOrEmpty(lanConnectionData) ||
+            !TryParseConnectionData(lanConnectionData, out var lanIp, out var lanPort)) {
+            return new ConnectionInfo(publicIp, publicPort, null, $"Connecting to {publicIp}:{publicPort}...");
         }
 
-        return new ConnectionInfo(publicIp, publicPort, null, $"Connecting to {publicIp}:{publicPort}...");
+        // If the LAN endpoint resolves to one of this machine's own IPv4 addresses,
+        // the client and host are running on the same device. In that case, prefer
+        // loopback instead of connecting back through the LAN adapter, since some
+        // network setups handle that path inconsistently.
+        // The public endpoint is still kept as the fallback if the local attempt fails.
+        return NetworkingUtil.IsLocalInterfaceIpv4(lanIp)
+            ? new ConnectionInfo("127.0.0.1", lanPort, $"{publicIp}:{publicPort}", $"Connecting locally on 127.0.0.1:{lanPort}...")
+            : new ConnectionInfo(lanIp, lanPort, $"{publicIp}:{publicPort}", $"Connecting to LAN {lanIp}:{lanPort}...");
     }
 
     /// <summary>

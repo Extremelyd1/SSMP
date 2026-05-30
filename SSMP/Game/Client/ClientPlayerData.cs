@@ -1,4 +1,3 @@
-using System;
 using SSMP.Api.Client;
 using SSMP.Internals;
 using UnityEngine;
@@ -8,10 +7,10 @@ namespace SSMP.Game.Client;
 /// <inheritdoc />
 internal class ClientPlayerData : IClientPlayer {
     /// <inheritdoc />
-    public ushort Id { get; }
+    public required ushort Id { get; init; }
 
     /// <inheritdoc />
-    public string Username { get; }
+    public required string Username { get; init; }
 
     /// <inheritdoc />
     public bool IsInLocalScene { get; set; }
@@ -30,12 +29,4 @@ internal class ClientPlayerData : IClientPlayer {
 
     /// <inheritdoc />
     public CrestType CrestType { get; set; }
-
-    public ClientPlayerData(
-        ushort id,
-        string username
-    ) {
-        Id = id;
-        Username = username;
-    }
 }

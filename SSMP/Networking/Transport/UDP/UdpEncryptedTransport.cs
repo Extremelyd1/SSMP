@@ -22,9 +22,6 @@ internal class UdpEncryptedTransport : IEncryptedTransport {
     public event Action<byte[], int>? DataReceivedEvent;
 
     /// <inheritdoc />
-    public bool RequiresCongestionManagement => true;
-
-    /// <inheritdoc />
     public bool RequiresReliability => true;
 
     /// <inheritdoc />

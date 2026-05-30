@@ -1,41 +1,32 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 using HutongGames.PlayMaker.Actions;
 using SSMP.Game.Settings;
-using SSMP.Internals;
 using SSMP.Util;
 using UnityEngine;
 
 namespace SSMP.Animation.Effects.Tools;
 
-internal class SawtoothCirclet : BaseTool {
+/// <summary>
+/// Class for the tool effect of Sawtooth Circlet (damage when double jumping or gliding).
+/// This is a static class because it is only statically called from other effects (Faydown Cloak and Drifter's Cloak).
+/// </summary>
+internal static class SawtoothCirclet {
     /// <summary>
-    /// The name of the sawtooth circlet object.
+    /// The name of the Sawtooth Circlet object.
     /// </summary>
     private const string SpikedCircletName = "Tool_brolly_spike";
 
     /// <summary>
-    /// Cached reference to the local sawtooth circlet object.
+    /// Cached reference to the local Sawtooth Circlet object.
     /// </summary>
     private static GameObject? _localCirclet;
 
-    /// <inheritdoc/>
-    public override byte[]? GetEffectInfo() {
-        return null;
-    }
-
-    /// <inheritdoc/>
-    public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
-        PlayCirclet(playerObject, ShouldDoDamage && ServerSettings.IsPvpEnabled, ServerSettings);
-    }
-
     /// <summary>
-    /// Plays the sawtooth circlet.
+    /// Plays the Sawtooth Circlet animation.
     /// </summary>
     /// <param name="playerObject">The player using the circlet.</param>
     /// <param name="doDamage">If the circlet should do damage.</param>
+    /// <param name="serverSettings">The server settings for retrieving the damage it should deal.</param>
     public static void PlayCirclet(GameObject playerObject, bool doDamage, ServerSettings serverSettings) {
         // Get the circlet
         if (!TryGetCirclet(playerObject, out var circlet)) {
@@ -51,8 +42,8 @@ internal class SawtoothCirclet : BaseTool {
         var damagerLeft = damagerParent?.FindGameObjectInChildren("Damager L");
 
         var damage = serverSettings.SawtoothCircletDamage;
-        if (damagerRight != null) SetDamageHeroState(damagerRight, doDamage, damage);
-        if (damagerLeft != null) SetDamageHeroState(damagerLeft, doDamage, damage);
+        if (damagerRight != null) DamageAnimationEffect.SetDamageHeroState(damagerRight, doDamage, damage);
+        if (damagerLeft != null) DamageAnimationEffect.SetDamageHeroState(damagerLeft, doDamage, damage);
 
         // Refresh the circlet
         circlet.SetActive(false);
@@ -68,11 +59,11 @@ internal class SawtoothCirclet : BaseTool {
     }
 
     /// <summary>
-    /// Attempts to find or create the sawtooth circlet object.
+    /// Attempts to find or create the Sawtooth Circlet object.
     /// </summary>
     /// <param name="playerObject">The player using the circlet.</param>
     /// <param name="circlet">The circlet, if found.</param>
-    /// <returns>true if the circlet was found.</returns>
+    /// <returns>True if the circlet was found, otherwise false.</returns>
     private static bool TryGetCirclet(GameObject playerObject, [MaybeNullWhen(false)] out GameObject circlet) {
         // Find or create effects
         var effects = playerObject.FindGameObjectInChildren("Effects");

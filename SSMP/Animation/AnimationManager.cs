@@ -624,6 +624,8 @@ internal class AnimationManager {
         { "Wound Double Strike", AnimationClip.WoundDoubleStrike },
         { "Wound Zap", AnimationClip.WoundZap },
 
+        { "Bench", AnimationClip.Bench },
+
         { "Witch Tentacles!", AnimationClip.WitchTentacles },
         { "Shaman Cancel", AnimationClip.ShamanCancel },
         { "Bind Fail Burst", AnimationClip.BindInterrupt },
@@ -670,8 +672,8 @@ internal class AnimationManager {
         { AnimationClip.BindBurstAir, BindBurst.Instance },
         { AnimationClip.RageBindBurst, BindBurst.Instance },
         { AnimationClip.Death, new Death() },
-        { AnimationClip.DoubleJump, new DoubleJump() },
-        { AnimationClip.UmbrellaInflate, new UmbrellaInflate() },
+        { AnimationClip.DoubleJump, new FaydownCloak() },
+        { AnimationClip.UmbrellaInflate, new DriftersCloak() },
 
         // Silk Skills
         { AnimationClip.NeedleThrowThrowing, new SilkSpear() },
@@ -689,6 +691,7 @@ internal class AnimationManager {
         { AnimationClip.WitchTentacles, BindBurst.Instance },
         { AnimationClip.ShamanCancel, new Bind { BindState = Bind.State.ShamanCancel } },
         { AnimationClip.BindInterrupt, BindInterrupt.Instance },
+        { AnimationClip.Bench, new Bench() },
 
         // Silk Skills
         { AnimationClip.AirSphereRefresh, new ThreadStorm() },
@@ -865,6 +868,13 @@ internal class AnimationManager {
         EventHooks.UseLavaBell -= OnMagmaBell;
 
         ToolItemManager.BoundAttackToolUsed -= AttackToolUsed;
+
+        // Remove listener for benching
+        var eventRegister = HeroController.SilentInstance?.gameObject.GetComponents<EventRegister>().FirstOrDefault(r => r.SubscribedEvent == "BENCHREST START");
+        if (eventRegister) {
+            eventRegister.ReceivedEvent -= OnBench;
+        }
+        
         // On.HeroAnimationController.Play -= HeroAnimationControllerOnPlay;
         // On.HeroAnimationController.PlayFromFrame -= HeroAnimationControllerOnPlayFromFrame;
 
@@ -1149,6 +1159,13 @@ internal class AnimationManager {
             FsmStateActionInjector.Inject(bindInterrupt, OnBindInterrupt, 2);
         } else {
             Logger.Warn("Unable to find Bind FSM to hook.");
+        }
+    }
+
+        // Add listener for benching
+        var eventRegister = hc.gameObject.GetComponents<EventRegister>().FirstOrDefault(r => r.SubscribedEvent == "BENCHREST START");
+        if (eventRegister) {
+            eventRegister.ReceivedEvent += OnBench;
         }
     }
 
@@ -1454,6 +1471,7 @@ internal class AnimationManager {
     /// </summary>
     private void CreateToolHooks() {
         MagnetiteDice.Hook(OnDiceEnable);
+        MagmaBell.HookRecharge(OnMagmaBellRecharge);
 
         var toolFsm = HeroController.instance.toolsFSM;
         var brewBurst = toolFsm.GetState("Flea Brew Burst");
@@ -1499,7 +1517,7 @@ internal class AnimationManager {
             return;
         }
 
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagnetiteDice, 0);
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagnetiteDice);
     }
 
     /// <summary>
@@ -1524,7 +1542,7 @@ internal class AnimationManager {
             return;
         }
 
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.FracturedMask, 0);
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.FracturedMask);
     }
 
     /// <summary>
@@ -1536,7 +1554,31 @@ internal class AnimationManager {
             return;
         }
 
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagmaBell, 0);
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagmaBell, 0, [0]);
+    }
+
+    /// <summary>
+    /// Hook for the magma bell being triggered.
+    /// </summary>
+    private void OnMagmaBellRecharge() {
+        // If we are not connected, there is nothing to send to
+        if (!_netClient.IsConnected) {
+            return;
+        }
+
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagmaBell, 0, [1]);
+    }
+
+    /// <summary>
+    /// Hook for resting on a bench.
+    /// </summary>
+    private void OnBench() {
+        // If we are not connected, there is nothing to send to
+        if (!_netClient.IsConnected) {
+            return;
+        }
+
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.Bench);
     }
 
     // /// <summary>

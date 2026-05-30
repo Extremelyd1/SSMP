@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-using SSMP.Game;
+using System.Collections.Generic;
 using SSMP.Math;
 
 namespace SSMP.Networking.Packet.Data;
@@ -9,11 +8,6 @@ namespace SSMP.Networking.Packet.Data;
 /// </summary>
 internal class ClientPlayerEnterScene : GenericClientData {
     /// <summary>
-    /// The username of the player.
-    /// </summary>
-    public string Username { get; set; } = null!;
-
-    /// <summary>
     /// The position of the player.
     /// </summary>
     public Vector2 Position { get; set; } = null!;
@@ -22,16 +16,6 @@ internal class ClientPlayerEnterScene : GenericClientData {
     /// The scale of the player.
     /// </summary>
     public bool Scale { get; set; }
-
-    /// <summary>
-    /// The team of the player.
-    /// </summary>
-    public Team Team { get; set; }
-
-    /// <summary>
-    /// The ID of the skin of the player.
-    /// </summary>
-    public byte SkinId { get; set; }
 
     /// <summary>
     /// The ID of the animation clip of the player.
@@ -49,12 +33,9 @@ internal class ClientPlayerEnterScene : GenericClientData {
     /// <inheritdoc />
     public override void WriteData(IPacket packet) {
         packet.Write(Id);
-        packet.Write(Username);
 
         packet.Write(Position);
         packet.Write(Scale);
-        packet.Write((byte) Team);
-        packet.Write(SkinId);
 
         packet.Write(AnimationClipId);
     }
@@ -62,12 +43,10 @@ internal class ClientPlayerEnterScene : GenericClientData {
     /// <inheritdoc />
     public override void ReadData(IPacket packet) {
         Id = packet.ReadUShort();
-        Username = packet.ReadString();
 
         Position = packet.ReadVector2();
         Scale = packet.ReadBool();
-        Team = (Team) packet.ReadByte();
-        SkinId = packet.ReadByte();
+
         AnimationClipId = packet.ReadUShort();
     }
 }
@@ -111,10 +90,10 @@ internal class ClientPlayerAlreadyInScene : IPacketData {
     /// Construct the client player already in scene data.
     /// </summary>
     public ClientPlayerAlreadyInScene() {
-        PlayerEnterSceneList = new List<ClientPlayerEnterScene>();
-        EntitySpawnList = new List<EntitySpawn>();
-        EntityUpdateList = new List<EntityUpdate>();
-        ReliableEntityUpdateList = new List<ReliableEntityUpdate>();
+        PlayerEnterSceneList = [];
+        EntitySpawnList = [];
+        EntityUpdateList = [];
+        ReliableEntityUpdateList = [];
     }
 
     /// <inheritdoc />

@@ -44,7 +44,7 @@ internal sealed class MmsWebSocketHandler : IDisposable, IAsyncDisposable {
 
     /// <summary>
     /// Raised when MMS signals both sides to start simultaneous hole-punch.
-    /// Arguments: joinId, clientIp, clientPort, hostPort, startTimeMs.
+    /// Arguments: joinId, clientIp, clientPort, hostPort, serverTimeMs, startTimeMs.
     /// <para>
     /// Handlers are always invoked on the <see cref="SynchronizationContext"/> that was
     /// active when this handler was constructed (typically the Unity main thread).
@@ -59,7 +59,7 @@ internal sealed class MmsWebSocketHandler : IDisposable, IAsyncDisposable {
     /// order, but may execute across different frames.
     /// </para>
     /// </summary>
-    public event Action<string, string, int, int, long>? StartPunchRequested;
+    public event Action<string, string, int, int, long, long>? StartPunchRequested;
 
     /// <summary>Raised on mapping confirmation. Marshaled to construction thread.</summary>
     public event Action? HostMappingReceived;
@@ -351,17 +351,19 @@ internal sealed class MmsWebSocketHandler : IDisposable, IAsyncDisposable {
         var clientIp = MmsJsonParser.ExtractValue(message, MmsFields.ClientIp);
         var clientPortStr = MmsJsonParser.ExtractValue(message, MmsFields.ClientPort);
         var hostPortStr = MmsJsonParser.ExtractValue(message, MmsFields.HostPort);
+        var serverTimeStr = MmsJsonParser.ExtractValue(message, MmsFields.ServerTimeMs);
         var startTimeStr = MmsJsonParser.ExtractValue(message, MmsFields.StartTimeMs);
 
         if (joinId == null ||
             clientIp == null ||
             !int.TryParse(clientPortStr, out var clientPort) ||
             !int.TryParse(hostPortStr, out var hostPort) ||
+            !long.TryParse(serverTimeStr, out var serverTimeMs) ||
             !long.TryParse(startTimeStr, out var startTimeMs))
             return;
 
         Logger.Info($"MmsWebSocketHandler: {MmsActions.StartPunch} for join {joinId} -> {clientIp}:{clientPort}");
-        eq.Enqueue(() => StartPunchRequested?.Invoke(joinId, clientIp, clientPort, hostPort, startTimeMs));
+        eq.Enqueue(() => StartPunchRequested?.Invoke(joinId, clientIp, clientPort, hostPort, serverTimeMs, startTimeMs));
     }
 
     /// <summary>

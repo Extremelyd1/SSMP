@@ -88,10 +88,15 @@ internal static class FileUtil {
     }
 
     /// <summary>
-    /// Get the path of the SSMP config directory within Silksong's config directory.
+    /// Get the path of the SSMP config directory within Silksong's config directory. If we are on desktop, this uses
+    /// the save directory from the 'platform', which includes an intermediate directory for the "UserId".
     /// </summary>
     /// <returns>The path as a string.</returns>
     public static string GetConfigPath() {
+        if (Platform.Current is DesktopPlatform desktopPlatform) {
+            return Path.Combine(desktopPlatform.saveDirPath, "ssmp");
+        }
+
         return Path.Combine(Application.persistentDataPath, "ssmp");
     }
 

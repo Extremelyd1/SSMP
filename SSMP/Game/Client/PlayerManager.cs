@@ -111,12 +111,18 @@ internal class PlayerManager : IPlayerManager {
 
     /// <summary>
     /// Updates interpolation for all active players.
+    /// Also feeds the current network RTT (round-trip time) into each player's
+    /// interpolation so it can adapt smoothing/prediction to the actual ping.
     /// </summary>
     /// <param name="dt">The delta time for this frame.</param>
-    public void UpdateInterpolations(float dt) {
+    /// <param name="currentRttMs">The current average round-trip time in milliseconds.</param>
+    public void UpdateInterpolations(float dt, float currentRttMs) {
         foreach (var container in _activePlayers.Values) {
             // Cache component reference if accessed frequently
             if (container.TryGetComponent<PredictiveInterpolation>(out var interpolation)) {
+                // Tell the interpolator what the current ping is, so it can pick
+                // a smoothing tier (LAN / Excellent / Good / Fair / Poor).
+                interpolation.AdaptToRTT(currentRttMs);
                 interpolation.ManualUpdate(dt);
             }
         }
@@ -169,9 +175,7 @@ internal class PlayerManager : IPlayerManager {
             typeof(tk2dSpriteAnimator),
             typeof(Rigidbody2D),
             typeof(CoroutineCancelComponent)
-        ) {
-            layer = 9
-        };
+        );
 
         playerPrefab.transform.SetParent(_playerContainerPrefab.transform);
 
@@ -434,18 +438,12 @@ internal class PlayerManager : IPlayerManager {
     /// Spawn a new player object with the given data.
     /// </summary>
     /// <param name="playerData">The client player data for the player.</param>
-    /// <param name="name">The username of the player.</param>
     /// <param name="position">The Vector2 denoting the position of the player.</param>
     /// <param name="scale">The boolean representing the scale of the player.</param>
-    /// <param name="team">The team the player is on.</param>
-    /// <param name="skinId">The ID of the skin the player is using.</param>
     public void SpawnPlayer(
         ClientPlayerData playerData,
-        string name,
         Math_Vector2 position,
-        bool scale,
-        Team team,
-        byte skinId
+        bool scale
     ) {
         // First recycle the player by player data if they have an active container
         RecyclePlayerByData(playerData);
@@ -477,16 +475,14 @@ internal class PlayerManager : IPlayerManager {
         playerContainer.SetActive(true);
         playerContainer.SetActiveChildren(true);
 
-        AddNameToPlayer(playerContainer, name, team);
+        AddNameToPlayer(playerContainer, playerData.Username, playerData.Team);
 
         // Let the SkinManager update the skin
-        _skinManager.UpdatePlayerSkin(playerObject, skinId);
+        _skinManager.UpdatePlayerSkin(playerObject, playerData.SkinId);
 
         // Store the player data
         playerData.PlayerContainer = playerContainer;
         playerData.PlayerObject = playerObject;
-        playerData.Team = team;
-        playerData.SkinId = skinId;
     }
 
     /// <summary>

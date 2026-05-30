@@ -152,10 +152,8 @@ internal class NetClient : INetClient {
                     UpdateManager.StartUpdates();
                     _chunkSender.Start();
 
-                    // Only UDP/HolePunch need timeout management (Steam has built-in connection tracking)
-                    if (_transport.RequiresCongestionManagement) {
-                        UpdateManager.TimeoutEvent += OnConnectTimedOut;
-                    }
+                    // Subscribes all connection methods to timeout events
+                    UpdateManager.TimeoutEvent += OnConnectTimedOut;
 
                     _connectionManager.StartConnection(username, authKey, addonData);
                 } catch (TlsTimeoutException) {

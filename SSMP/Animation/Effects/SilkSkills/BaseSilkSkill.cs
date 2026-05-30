@@ -158,6 +158,9 @@ internal abstract class BaseSilkSkill : DamageAnimationEffect {
             damage += (float) ServerSettings.ShamanDamage / 2;
         }
 
+        damager.layer = AttackLayer;
+        FixDamageEnemies(damager);
+
         return SetDamageHeroState(damager, (int) damage);
     }
 }
