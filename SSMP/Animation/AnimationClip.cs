@@ -772,6 +772,6 @@ internal enum AnimationClip {
     FleaBrew,
     FracturedMask,
     MagmaBell,
-    AttackTool
+    AttackTool,
     Bench
 }

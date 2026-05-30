@@ -1160,7 +1160,6 @@ internal class AnimationManager {
         } else {
             Logger.Warn("Unable to find Bind FSM to hook.");
         }
-    }
 
         // Add listener for benching
         var eventRegister = hc.gameObject.GetComponents<EventRegister>().FirstOrDefault(r => r.SubscribedEvent == "BENCHREST START");

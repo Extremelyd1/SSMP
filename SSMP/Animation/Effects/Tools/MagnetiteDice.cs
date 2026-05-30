@@ -20,6 +20,7 @@ internal class MagnetiteDice : BaseTool {
     public override byte[]? GetEffectInfo() {
         return null;
     }
+
     /// <inheritdoc/>
     public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
         // Get existing effect

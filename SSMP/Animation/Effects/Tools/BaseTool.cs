@@ -73,8 +73,9 @@ internal class BaseTool : DamageAnimationEffect {
     }
 
     /// <summary>
-    /// Determines if the player has the Pollip Pouch equipped
+    /// Determines whether the players tools have the Pollip Pouch poison effect.
     /// </summary>
+    /// <returns>True if the player has the Pollip Pouch equipped, otherwise false.</returns>
     protected static bool HasPoison() {
         return Gameplay.PoisonPouchTool.IsEquipped;
     }
