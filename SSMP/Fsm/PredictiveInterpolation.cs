@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 namespace SSMP.Fsm;
 
@@ -101,28 +101,40 @@ internal class PredictiveInterpolation : MonoBehaviour {
     #endregion
 
     private void Awake() {
+        // One-time: runs once when this object is first created for the pool
+        EnsureTransformCached();
+    }
+
+    private void OnDisable() {
+        // Container recycled to pool — discard old player's init state so
+        // OnEnable takes the fresh-spawn path instead of snapping to stale data
+        _isInitialized = false;
+        _hasNewServerData = false;
+        // Reset sequence tracking so a recycled container doesn't discard the
+        // new player's initial packets just because their sequence IDs happen
+        // to be lower than the previous player's last seen value.
+        _lastServerSequenceId = 0;
+    }
+
+    private void OnEnable() {
+        // Fresh spawn from pool — seed all state to match the position SpawnPlayer
+        // set on the transform before activating, with clean defaults for prediction
         EnsureTransformCached();
         _lastServerPosition = _cachedTransform.position;
         _logicalPosition = _cachedTransform.position;
         _lastUpdateTime = Time.time;
+        _timeSinceLastPacket = 0f;
+        _velocity = Vector3.zero;
+        _visualOffset = Vector3.zero;
+        _visualOffsetVelocity = Vector3.zero;
 
-        // Initialize adaptive values to defaults (Good tier ~75ms)
-        _adaptedCorrectionTime = visualCorrectionTime;
-        _adaptedPredictionCapMultiplier = 1.5f;
-        _adaptedDecayMultiplier = 15f;
-        _currentRtt = 75f;
-    }
-
-    private void OnEnable() {
-        // If we are initialized and have valid server data, snap to it.
-        // If we don't have data, we wait for the first packet rather than snapping to an arbitrary pool position.
-        if (_isInitialized && _hasNewServerData) {
-            ForceSnap(_lastServerPosition);
-        } else {
-            // Reset smoothing to prevent jump-scares on spawn
-            _visualOffsetVelocity = Vector3.zero;
-            // _visualRotationVel = 0f;
-        }
+        // Initialize adaptive values from the "Good" tier so the first few frames
+        // after spawn match the tier system instead of arbitrary magic numbers.
+        // AdaptToRTT will smoothly converge from here once real RTT data flows in.
+        _adaptedCorrectionTime = CorrectionTimes[2];
+        _adaptedPredictionCapMultiplier = PredictionCaps[2];
+        _adaptedDecayMultiplier = DecayMultipliers[2];
+        _currentRtt = RttThresholds[1];
     }
 
     /// <summary>
@@ -131,6 +143,11 @@ internal class PredictiveInterpolation : MonoBehaviour {
     /// <param name="dt">The delta time for this frame.</param>
     public void ManualUpdate(float dt) {
         if (_predictionDisabled) return;
+
+        // Skip integration until the first authoritative packet arrives. Without
+        // this guard, a freshly-recycled container would run decay/extrapolation
+        // against its seed position before the server has confirmed anything.
+        if (!_hasNewServerData) return;
 
         _timeSinceLastPacket += dt;
 
