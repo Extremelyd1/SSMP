@@ -90,7 +90,8 @@ public sealed class JoinSessionMessenger(LobbyService lobbyService) {
         int hostPort,
         string hostIp,
         long startTimeMs,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        long serverTimeMs
     ) {
         if (session.ClientWebSocket is not { State: WebSocketState.Open } ws)
             return false;
@@ -102,7 +103,8 @@ public sealed class JoinSessionMessenger(LobbyService lobbyService) {
                 joinId = session.JoinId,
                 hostIp,
                 hostPort,
-                startTimeMs
+                startTimeMs,
+                serverTimeMs
             },
             cancellationToken
         );
@@ -121,7 +123,8 @@ public sealed class JoinSessionMessenger(LobbyService lobbyService) {
         int clientPort,
         int hostPort,
         long startTimeMs,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        long serverTimeMs
     ) {
         if (lobby.HostWebSocket is not { State: WebSocketState.Open } hostWs)
             return false;
@@ -134,7 +137,8 @@ public sealed class JoinSessionMessenger(LobbyService lobbyService) {
                 clientIp,
                 clientPort,
                 hostPort,
-                startTimeMs
+                startTimeMs,
+                serverTimeMs
             },
             cancellationToken
         );
