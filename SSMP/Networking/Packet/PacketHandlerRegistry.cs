@@ -99,6 +99,9 @@ internal class PacketHandlerRegistry<TPacketId, THandler>
 /// Interface for packet handler dispatchers.
 /// </summary>
 internal interface IPacketHandlerRegistryDispatcher {
+    /// <summary>
+    /// Dispatch this handler with the given action.
+    /// </summary>
     void Dispatch(Action action);
 }
 
@@ -106,6 +109,18 @@ internal interface IPacketHandlerRegistryDispatcher {
 /// Implementation of packet handler dispatcher to immediately invoke the handler directly for the server-side.
 /// </summary>
 internal class ServerPacketHandlerRegistryDispatcher : IPacketHandlerRegistryDispatcher {
+    /// <summary>
+    /// Publicly accessible static instance, since instances can not vary.
+    /// </summary>
+    public static readonly ServerPacketHandlerRegistryDispatcher Instance = new();
+
+    /// <summary>
+    /// Private constructor to prevent access outside of static instance.
+    /// </summary>
+    private ServerPacketHandlerRegistryDispatcher() {
+    }
+
+    /// <inheritdoc/>
     public void Dispatch(Action action) {
         action.Invoke();
     }
@@ -115,6 +130,18 @@ internal class ServerPacketHandlerRegistryDispatcher : IPacketHandlerRegistryDis
 /// Implementation of packet handler dispatcher to invoke the handler on Unity's main thread.
 /// </summary>
 internal class ClientPacketHandlerRegistryDispatcher : IPacketHandlerRegistryDispatcher {
+    /// <summary>
+    /// Publicly accessible static instance, since instances can not vary.
+    /// </summary>
+    public static readonly ClientPacketHandlerRegistryDispatcher Instance = new();
+
+    /// <summary>
+    /// Private constructor to prevent access outside of static instance.
+    /// </summary>
+    private ClientPacketHandlerRegistryDispatcher() {
+    }
+    
+    /// <inheritdoc/>
     public void Dispatch(Action action) {
         ThreadUtil.RunActionOnMainThread(action);
     }
