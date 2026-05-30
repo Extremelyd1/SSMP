@@ -36,6 +36,8 @@ internal class AnimationManager {
     /// </summary>
     public const float EffectDistanceThreshold = 25f;
 
+    #region Clip Tables
+
     /// <summary>
     /// Animations that are allowed to loop, because they need to transmit the effect.
     /// </summary>
@@ -706,6 +708,8 @@ internal class AnimationManager {
         { AnimationClip.AttackTool, BaseTool.Instance }
     };
 
+    #endregion
+
     /// <summary>
     /// The net client for sending animation updates.
     /// </summary>
@@ -812,6 +816,8 @@ internal class AnimationManager {
             effect.SetServerSettings(serverSettings);
         }
     }
+
+    #region Core Animation Hooks
 
     /// <summary>
     /// Register the game hooks for the animation manager.
@@ -1168,6 +1174,10 @@ internal class AnimationManager {
         }
     }
 
+    #endregion
+
+    #region Bind Hooks
+
     /// <summary>
     /// Animation subanimation hook for the Witch Tentacles FSM state.
     /// </summary>
@@ -1201,6 +1211,10 @@ internal class AnimationManager {
         };
         OnAnimationEvent(dummyClip);
     }
+
+    #endregion
+
+    #region Silk Skill Hooks
 
     /// <summary>
     /// Creates hooks for silk skills.
@@ -1465,6 +1479,10 @@ internal class AnimationManager {
         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.SilkBossNeedleFire, 0, effectInfo);
     }
 
+    #endregion
+
+    #region Tool Hooks
+
     /// <summary>
     /// Creates hooks for tools.
     /// </summary>
@@ -1579,6 +1597,8 @@ internal class AnimationManager {
 
         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.Bench);
     }
+
+    #endregion
 
     // /// <summary>
     // /// Callback method on the HeroAnimationController#Play method.
