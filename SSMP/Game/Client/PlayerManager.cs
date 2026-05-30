@@ -206,6 +206,12 @@ internal class PlayerManager : IPlayerManager {
         rigidbody.gravityScale = 0;
         rigidbody.bodyType = RigidbodyType2D.Kinematic;
 
+        // Set up sprite flash. Must be deactivated beforehand to fill properties in awake
+        playerPrefab.SetActive(false);
+        var flash = playerPrefab.AddComponent<SpriteFlash>();
+        flash.parents = [];
+        flash.children = [];
+
         // Add some extra gameObjects related to animation effects
         new GameObject("Attacks").transform.SetParent(playerPrefab.transform);
         new GameObject("Bind Effects").transform.SetParent(playerPrefab.transform);

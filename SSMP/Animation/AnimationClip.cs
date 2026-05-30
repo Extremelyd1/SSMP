@@ -768,4 +768,9 @@ internal enum AnimationClip {
     WitchTentacles,
     ShamanCancel,
     BindInterrupt,
+    MagnetiteDice,
+    FleaBrew,
+    FracturedMask,
+    MagmaBell,
+    Bench
 }
