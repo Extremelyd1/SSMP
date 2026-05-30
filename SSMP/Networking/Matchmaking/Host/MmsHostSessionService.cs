@@ -332,8 +332,9 @@ internal sealed class MmsHostSessionService : IDisposable {
                 IsPublic       = isPublic,
                 GameVersion    = gameVersion,
                 LobbyType      = "steam"
-            });
-    
+            }
+        );
+
     /// <summary>
     /// Captures the current session token and lobby ID, then clears both fields.
     /// Called during <see cref="CloseLobby"/> to ensure the delete request uses
