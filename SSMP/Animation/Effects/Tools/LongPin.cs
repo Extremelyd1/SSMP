@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace SSMP.Animation.Effects.Tools;
 
-internal class LongPin : BaseTool {
+internal class LongPin : BaseAttackTool {
     /// <summary>
     /// Cached prefab for one attacking pin.
     /// </summary>

@@ -10,7 +10,7 @@ namespace SSMP.Animation.Effects.Tools;
 /// <summary>
 /// Class for the tool effect of Flea Brew (attack buff).
 /// </summary>
-internal class FleaBrew : BaseTool {
+internal class FleaBrew : BaseAttackTool {
     private const string ParticlesName = "Flea Brew Particles";
 
     /// <summary>

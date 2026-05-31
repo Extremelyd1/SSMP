@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace SSMP.Animation.Effects.Tools;
 
-internal class ThreefoldPin : BaseTool {
+internal class ThreefoldPin : BaseAttackTool {
     /// <summary>
     /// Cached prefab for one attacking pin.
     /// </summary>

@@ -631,11 +631,14 @@ internal class AnimationManager {
         { "Witch Tentacles!", AnimationClip.WitchTentacles },
         { "Shaman Cancel", AnimationClip.ShamanCancel },
         { "Bind Fail Burst", AnimationClip.BindInterrupt },
-        { "Magnetite Dice", AnimationClip.MagnetiteDice },
-        { "Flea Brew", AnimationClip.FleaBrew },
-        { "Fractured Mask", AnimationClip.FracturedMask },
-        { "Magma Bell", AnimationClip.MagmaBell },
-        { "Attack Tool", AnimationClip.AttackTool }
+        { "Tool Magnetite Dice", AnimationClip.ToolMagnetiteDice },
+        { "Tool Flea Brew", AnimationClip.ToolFleaBrew },
+        { "Tool Fractured Mask", AnimationClip.ToolFracturedMask },
+        { "Tool Magma Bell", AnimationClip.ToolMagmaBell },
+        { "Tool Straight Pin ", AnimationClip.ToolStraightPin  },
+        { "Tool Threefold Pin", AnimationClip.ToolThreefoldPin },
+        { "Tool Long Pin", AnimationClip.ToolLongPin },
+        { "Tool Tacks", AnimationClip.ToolTacks }
     };
 
     /// <summary>
@@ -701,11 +704,14 @@ internal class AnimationManager {
         { AnimationClip.SilkBossNeedleFire, new PaleNails() },
 
         // Tools
-        { AnimationClip.MagnetiteDice, new MagnetiteDice() },
-        { AnimationClip.FleaBrew, FleaBrew.Instance },
-        { AnimationClip.FracturedMask, new FracturedMask() },
-        { AnimationClip.MagmaBell, new MagmaBell() },
-        { AnimationClip.AttackTool, BaseTool.Instance }
+        { AnimationClip.ToolMagnetiteDice, new MagnetiteDice() },
+        { AnimationClip.ToolFleaBrew, FleaBrew.Instance },
+        { AnimationClip.ToolFracturedMask, new FracturedMask() },
+        { AnimationClip.ToolMagmaBell, new MagmaBell() },
+        { AnimationClip.ToolStraightPin, new StraightPin() },
+        { AnimationClip.ToolThreefoldPin, new ThreefoldPin() },
+        { AnimationClip.ToolLongPin, new LongPin() },
+        { AnimationClip.ToolTacks, new Tacks() }
     };
 
     #endregion
@@ -1518,8 +1524,13 @@ internal class AnimationManager {
             return;
         }
 
-        var effectInfo = BaseTool.GetToolInfo(tool.name);
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.AttackTool, 0, effectInfo);
+        // Get proper clip from tool name
+        if (!BaseAttackTool.ToolNameMap.TryGetValue(tool.name, out var toolClip)) {
+            return;
+        }
+
+        var effectInfo = BaseAttackTool.GetToolInfo();
+        _netClient.UpdateManager.UpdatePlayerAnimation(toolClip, 0, effectInfo);
     }
 
     /// <summary>
@@ -1531,7 +1542,7 @@ internal class AnimationManager {
             return;
         }
 
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagnetiteDice);
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.ToolMagnetiteDice);
     }
 
     /// <summary>
@@ -1544,7 +1555,7 @@ internal class AnimationManager {
         }
 
         var effectInfo = FleaBrew.Instance.GetEffectInfo();
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.FleaBrew, 0, effectInfo);
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.ToolFleaBrew, 0, effectInfo);
     }
 
     /// <summary>
@@ -1556,7 +1567,7 @@ internal class AnimationManager {
             return;
         }
 
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.FracturedMask);
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.ToolFracturedMask);
     }
 
     /// <summary>
@@ -1568,7 +1579,7 @@ internal class AnimationManager {
             return;
         }
 
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagmaBell, 0, [0]);
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.ToolMagmaBell, 0, [0]);
     }
 
     /// <summary>
@@ -1580,7 +1591,7 @@ internal class AnimationManager {
             return;
         }
 
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagmaBell, 0, [1]);
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.ToolMagmaBell, 0, [1]);
     }
 
     /// <summary>

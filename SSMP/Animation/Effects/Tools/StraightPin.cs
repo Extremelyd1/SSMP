@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace SSMP.Animation.Effects.Tools;
 
-internal class StraightPin : BaseTool {
+internal class StraightPin : BaseAttackTool {
     /// <summary>
     /// Cached prefab for the attacking straight pin.
     /// </summary>

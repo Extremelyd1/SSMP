@@ -9,7 +9,7 @@ namespace SSMP.Animation.Effects.Tools;
 /// <summary>
 /// Class for the tool effect of Magma Bell (fire protection).
 /// </summary>
-internal class MagmaBell : BaseTool {
+internal class MagmaBell : AnimationEffect {
     /// <summary>
     /// Name of the magma bell starting object name.
     /// </summary>

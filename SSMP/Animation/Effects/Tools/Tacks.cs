@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace SSMP.Animation.Effects.Tools;
 
-internal class Tacks : BaseTool {
+internal class Tacks : BaseAttackTool {
     private static GameObject? _modifiedPrefab;
 
     private static readonly Dictionary<int, List<GameObject>> TackGroups = [];
