@@ -21,6 +21,11 @@ internal class NetServerClient : IDisposable {
     private readonly object _disposeLock = new();
 
     /// <summary>
+    /// Flag indicating whether this client has been disposed.
+    /// </summary>
+    private bool _isDisposed;
+
+    /// <summary>
     /// Concurrent dictionary for the set of IDs that are used. We use a dictionary because there is no
     /// standard implementation for a concurrent set.
     /// </summary>
@@ -100,11 +105,6 @@ internal class NetServerClient : IDisposable {
         ChunkReceiver.Reset();
         ConnectionManager.StopAcceptingConnection();
     }
-
-    /// <summary>
-    /// Flag indicating whether this client has been disposed.
-    /// </summary>
-    private bool _isDisposed;
 
     /// <summary>
     /// Dispose of the client and its owned disposable resources.

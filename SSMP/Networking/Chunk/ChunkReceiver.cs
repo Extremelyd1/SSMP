@@ -104,9 +104,9 @@ internal sealed class ChunkReceiver {
     /// </summary>
     /// <param name="sliceData">The received slice data.</param>
     public void ProcessReceivedData(SliceData sliceData) {
-        bool shouldSendAck = false;
-        bool shouldTriggerEvent = false;
-        bool isStaleDuplicate = false;
+        var shouldSendAck = false;
+        var shouldTriggerEvent = false;
+        var isStaleDuplicate = false;
         Packet.Packet? packetToTrigger = null;
 
         lock (_stateLock) {
@@ -149,13 +149,11 @@ internal sealed class ChunkReceiver {
                 return;
             }
 
-            // Ignore slices from newer chunks while the current chunk is still incomplete.
-            if (_isReceiving && _chunkId.HasValue && sliceData.ChunkId != _chunkId.Value) {
-                return;
-            }
-
-            if (!_isReceiving) {
-                if (!_chunkId.HasValue || sliceData.ChunkId != _chunkId.Value) {
+            switch (_isReceiving) {
+                // Ignore slices from newer chunks while the current chunk is still incomplete.
+                case true when _chunkId.HasValue && sliceData.ChunkId != _chunkId.Value:
+                    return;
+                case false when !_chunkId.HasValue || sliceData.ChunkId != _chunkId.Value:
                     //Logger.Debug($"Received new chunk with ID: {sliceData.ChunkId}");
                     SoftReset();
 
@@ -165,17 +163,27 @@ internal sealed class ChunkReceiver {
                     _received = new bool[_numSlices];
                     _sliceSegments = new byte[_numSlices][];
                     _lastReceiveTimestamp = Stopwatch.GetTimestamp();
-                } else if (sliceData.ChunkId == _chunkId.Value) {
-                    //Logger.Debug("Already received all slices, resending ack packet");
-                    shouldSendAck = true;
-                    isStaleDuplicate = true;
+                    break;
+                case false: {
+                    if (sliceData.ChunkId == _chunkId.Value) {
+                        //Logger.Debug("Already received all slices, resending ack packet");
+                        shouldSendAck = true;
+                        isStaleDuplicate = true;
+                    }
+
+                    break;
                 }
-            } else {
-                // If the received number of slices does not match the number slices we are keeping track of, we discard
-                // the slice altogether as it is likely not correct
-                if (_numSlices != sliceData.NumSlices) {
-                    //Logger.Debug("Number of slices in slice packet does not correspond with local number of slices");
-                    return;
+                default: {
+                    // If the received number of slices does not match the number slices we are keeping track of, we
+                    // discard
+                    // the slice altogether as it is likely not correct
+                    if (_numSlices != sliceData.NumSlices) {
+                        //Logger.Debug("Number of slices in slice packet does not correspond with local number of
+                        // slices");
+                        return;
+                    }
+
+                    break;
                 }
             }
 
@@ -257,7 +265,7 @@ internal sealed class ChunkReceiver {
     /// Send acknowledgement data containing the boolean array of all slices that have been acknowledged thus far.
     /// </summary>
     private void SendAckData() {
-        bool shouldSendAck = false;
+        var shouldSendAck = false;
         byte ackChunkId = 0;
         ushort ackNumSlices = 0;
         bool[]? ackedSlices = null;

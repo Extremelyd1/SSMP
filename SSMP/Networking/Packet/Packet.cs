@@ -90,10 +90,11 @@ internal class Packet : IPacket {
     /// </summary>
     public void WriteLength() {
         if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
-        if (_buffer.Count > ushort.MaxValue)
+        if (_buffer.Count > ushort.MaxValue) {
             throw new InvalidOperationException(
                 $"Packet size ({_buffer.Count} bytes) exceeds the {ushort.MaxValue} bytes limit for normal updates, causing truncation. Please use the SendChunkData API instead."
             );
+        }
 
         var length = (ushort) _buffer.Count;
         _buffer.Insert(0, (byte) length);
@@ -122,10 +123,11 @@ internal class Packet : IPacket {
         var counter = LengthCountingPacket.Value!;
         counter.Reset();
         packetData.WriteData(counter);
-        if (counter.Length > ushort.MaxValue)
+        if (counter.Length > ushort.MaxValue) {
             throw new InvalidOperationException(
                 $"Addon packet data size ({counter.Length} bytes) exceeds the {ushort.MaxValue} bytes limit for normal updates. Please use the SendChunkData API instead."
             );
+        }
     }
 
     /// <summary>

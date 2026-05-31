@@ -69,8 +69,10 @@ internal class SliceData : IPacketData {
         ushort length;
         if (SliceId == NumSlices - 1) {
             length = packet.ReadUShort();
-            if (length < 1 || length > ConnectionManager.MaxSliceSize) {
-                throw new Exception($"Invalid slice data length: {length} must be between 1 and {ConnectionManager.MaxSliceSize}");
+            if (length is < 1 or > ConnectionManager.MaxSliceSize) {
+                throw new Exception(
+                    $"Invalid slice data length: {length} must be between 1 and {ConnectionManager.MaxSliceSize}"
+                );
             }
         } else {
             length = ConnectionManager.MaxSliceSize;
