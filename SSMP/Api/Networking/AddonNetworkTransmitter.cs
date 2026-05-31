@@ -1,7 +1,7 @@
 using System;
 using SSMP.Collection;
 
-namespace SSMP.Api.Client.Networking;
+namespace SSMP.Api.Networking;
 
 /// <summary>
 /// Static class for addon network transmitters.
@@ -37,9 +37,19 @@ internal abstract class AddonNetworkTransmitter<TPacketId> where TPacketId : Enu
     /// <summary>
     /// A lookup for packet IDs and corresponding raw byte values.
     /// </summary>
-    protected readonly BiLookup<TPacketId, byte> PacketIdLookup;
+    protected readonly BiLookup<TPacketId, byte> PacketIdLookup =
+        AddonNetworkTransmitter.ConstructPacketIdLookup<TPacketId>();
 
-    protected AddonNetworkTransmitter() {
-        PacketIdLookup = AddonNetworkTransmitter.ConstructPacketIdLookup<TPacketId>();
+    /// <summary>
+    /// Resolve the given addon packet ID to its wire-format byte value.
+    /// </summary>
+    /// <param name="packetId">The enum packet ID to resolve.</param>
+    /// <param name="invalidPacketIdMessage">Exception message used when the packet ID is unknown.</param>
+    /// <returns>The byte value for the packet ID.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the packet ID is not part of the lookup.</exception>
+    protected byte ResolvePacketId(TPacketId packetId, string invalidPacketIdMessage) {
+        return !PacketIdLookup.TryGetValue(packetId, out var idValue)
+            ? throw new InvalidOperationException(invalidPacketIdMessage)
+            : idValue;
     }
 }

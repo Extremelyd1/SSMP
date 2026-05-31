@@ -58,23 +58,21 @@ internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpd
     }
 
     /// <summary>
-    /// Set slice data in the current packet.
+    /// Send a slice packet immediately, bypassing the gameplay tick loop.
     /// </summary>
     /// <param name="chunkId">The ID of the chunk the slice belongs to.</param>
     /// <param name="sliceId">The ID of the slice within the chunk.</param>
     /// <param name="numSlices">The number of slices in the chunk.</param>
     /// <param name="data">The raw data in the slice as a byte array.</param>
-    public void SetSliceData(byte chunkId, byte sliceId, byte numSlices, byte[] data) {
-        var sliceData = new SliceData {
+    public void SetSliceData(byte chunkId, ushort sliceId, ushort numSlices, byte[] data) {
+        var slicePacket = new ServerUpdatePacket();
+        slicePacket.SetSendingPacketData(ServerUpdatePacketId.Slice, new SliceData {
             ChunkId = chunkId,
             SliceId = sliceId,
             NumSlices = numSlices,
             Data = data
-        };
-
-        lock (Lock) {
-            CurrentUpdatePacket.SetSendingPacketData(ServerUpdatePacketId.Slice, sliceData);
-        }
+        });
+        SendSlicePacket(slicePacket);
     }
 
     /// <summary>

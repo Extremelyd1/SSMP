@@ -1,5 +1,5 @@
 using System;
-using SSMP.Api.Client.Networking;
+using SSMP.Api.Networking;
 using SSMP.Networking.Packet;
 
 namespace SSMP.Api.Server.Networking;
@@ -42,10 +42,7 @@ internal class ServerAddonNetworkReceiver<TPacketId> :
 
     /// <inheritdoc/>
     public void RegisterPacketHandler(TPacketId packetId, Action<ushort> handler) {
-        if (!PacketIdLookup.TryGetValue(packetId, out var idValue)) {
-            throw new InvalidOperationException(
-                InvalidPacketIdMsg);
-        }
+        var idValue = ResolvePacketId(packetId, InvalidPacketIdMsg);
 
         if (!_serverAddon.Id.HasValue) {
             throw new InvalidOperationException(NoAddonIdMsg);
@@ -61,10 +58,7 @@ internal class ServerAddonNetworkReceiver<TPacketId> :
     /// <inheritdoc/>
     public void RegisterPacketHandler<TPacketData>(TPacketId packetId,
         GenericServerPacketHandler<TPacketData> handler) where TPacketData : IPacketData {
-        if (!PacketIdLookup.TryGetValue(packetId, out var idValue)) {
-            throw new InvalidOperationException(
-                InvalidPacketIdMsg);
-        }
+        var idValue = ResolvePacketId(packetId, InvalidPacketIdMsg);
 
         if (!_serverAddon.Id.HasValue) {
             throw new InvalidOperationException(NoAddonIdMsg);
@@ -79,10 +73,10 @@ internal class ServerAddonNetworkReceiver<TPacketId> :
 
     /// <inheritdoc/>
     public void DeregisterPacketHandler(TPacketId packetId) {
-        if (!PacketIdLookup.TryGetValue(packetId, out var idValue)) {
-            throw new InvalidOperationException(
-                "Given packet ID was not part of enum when creating this network receiver");
-        }
+        var idValue = ResolvePacketId(
+            packetId,
+            "Given packet ID was not part of enum when creating this network receiver"
+        );
 
         if (!_serverAddon.Id.HasValue) {
             throw new InvalidOperationException(NoAddonIdMsg);

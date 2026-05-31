@@ -46,6 +46,12 @@ internal abstract class BasePacket<TPacketId> where TPacketId : Enum {
     /// Whether this packet contains data that needs to be reliable.
     /// </summary>
     public bool ContainsReliableData { get; protected set; }
+    
+    /// <summary>
+    /// Gets whether this packet contains normal connection data,
+    /// without building the combined packet-data cache.
+    /// </summary>
+    public bool HasNormalData => NormalPacketData.Count > 0;
 
     /// <summary>
     /// Construct the update packet with the given raw packet instance to read from.

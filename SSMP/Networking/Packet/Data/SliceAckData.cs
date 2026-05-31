@@ -1,3 +1,5 @@
+using System;
+
 namespace SSMP.Networking.Packet.Data;
 
 /// <summary>
@@ -9,15 +11,14 @@ internal class SliceAckData : IPacketData {
 
     /// <inheritdoc />
     public bool DropReliableDataIfNewerExists => false;
-    
+
     /// <summary>
     /// The ID of the chunk that is being networked.
     /// </summary>
     public byte ChunkId { get; set; }
 
     /// <summary>
-    /// The total number of slices in this chunk. Encoded as a byte where all values are shifted by -1 to ensure we
-    /// can encode 256 as a value, since we don't use 0.
+    /// The total number of slices in this chunk.
     /// </summary>
     public ushort NumSlices { get; set; }
 
@@ -31,38 +32,39 @@ internal class SliceAckData : IPacketData {
     /// <inheritdoc />
     public void WriteData(IPacket packet) {
         packet.Write(ChunkId);
-
-        var encodedNumSlices = (byte) (NumSlices - 1);
-        packet.Write(encodedNumSlices);
+        packet.Write(NumSlices);
 
         // Keep track of current index for writing ack array
         var currentIndex = 0;
-        // Do while loop, since we will always be writing at least a single byte bit flag
-        do {
+        while (currentIndex < NumSlices) {
             packet.Write(CreateAckFlag(currentIndex, currentIndex + 8, Acked));
-            // Continue while loop if we need to write another flag, namely when the new starting index is smaller
-            // than the number of slices
-        } while ((currentIndex += 8) <= NumSlices);
+            currentIndex += 8;
+        }
     }
 
     /// <inheritdoc />
     public void ReadData(IPacket packet) {
         ChunkId = packet.ReadByte();
+        NumSlices = packet.ReadUShort();
 
-        var encodedNumSlices = packet.ReadByte();
-        NumSlices = (ushort) (encodedNumSlices + 1);
+        switch (NumSlices) {
+            case < 1:
+                throw new Exception("Invalid slice count: NumSlices must be at least 1");
+            case > ConnectionManager.MaxSlicesPerChunk:
+                throw new Exception(
+                    $"Invalid slice count: {NumSlices} exceeds maximum of {ConnectionManager.MaxSlicesPerChunk}"
+                );
+        }
 
-        var acked = new bool[ConnectionManager.MaxSlicesPerChunk];
+        var acked = new bool[NumSlices];
 
         // Keep track of current index for writing to ack array
         var currentIndex = 0;
-        // Do while loop, since we will always be reading at least one byte for the bit flag
-        do {
+        while (currentIndex < NumSlices) {
             var flag = packet.ReadByte();
             ReadAckFlag(flag, currentIndex, currentIndex + 8, ref acked);
-            // Continue while loop if we need to read another flag, namely when the new starting index is smaller
-            // than the number of slices
-        } while ((currentIndex += 8) <= NumSlices);
+            currentIndex += 8;
+        }
 
         Acked = acked;
     }
@@ -82,7 +84,7 @@ internal class SliceAckData : IPacketData {
             if (acked.Length <= i) {
                 break;
             }
-            
+
             if (acked[i]) {
                 flag |= currentValue;
             }
@@ -104,6 +106,10 @@ internal class SliceAckData : IPacketData {
         byte currentValue = 1;
 
         for (var i = startIndex; i < endIndex; i++) {
+            if (i >= acked.Length) {
+                break;
+            }
+
             if ((flag & currentValue) != 0) {
                 acked[i] = true;
             }

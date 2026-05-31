@@ -8,4 +8,9 @@ internal enum ClientConnectionPacketId {
     /// Information about the server meant for the client detailing whether the connection was accepted.
     /// </summary>
     ServerInfo = 0,
+
+    /// <summary>
+    /// Chunk-only large addon payload sent over the connection chunk path.
+    /// </summary>
+    ChunkAddonData = 1,
 }

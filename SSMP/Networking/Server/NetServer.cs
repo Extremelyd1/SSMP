@@ -246,7 +246,7 @@ internal class NetServer : INetServer {
             ClientTimeoutEvent?.Invoke(id);
         }
 
-        client.Disconnect();
+        client.Dispose();
         _transportServer?.DisconnectClient(client.TransportClient);
         _clientsById.TryRemove(id, out _);
 
@@ -285,8 +285,8 @@ internal class NetServer : INetServer {
             client.UpdateManager.OnReceivePacket<ServerUpdatePacket, ServerUpdatePacketId>(serverUpdatePacket);
 
             var packetData = serverUpdatePacket.GetPacketData();
-            if (packetData.Remove(ServerUpdatePacketId.Slice, out var sliceData)) {
-                client.ChunkReceiver.ProcessReceivedData((SliceData) sliceData);
+            if (packetData.Remove(ServerUpdatePacketId.Slice, out var sliceDataRaw)) {
+                client.ChunkReceiver.ProcessReceivedData((SliceData) sliceDataRaw);
             }
 
             if (packetData.Remove(ServerUpdatePacketId.SliceAck, out var sliceAckData)) {
@@ -327,6 +327,8 @@ internal class NetServer : INetServer {
                     Logger.Debug("Connection has finished sending data, registering client");
 
                     client.IsRegistered = true;
+                    client.ChunkReceiver.MaxAllowedChunkSize = ConnectionManager.MaxChunkSize;
+                    client.ConnectionManager.AllowAddonChunks = true;
                     client.ConnectionManager.StopAcceptingConnection();
                 }
             );
@@ -387,6 +389,8 @@ internal class NetServer : INetServer {
         // Wait for processing thread to exit gracefully (with timeout)
         if (_processingThread is { IsAlive: true }) {
             if (!_processingThread.Join(1000)) {
+                // TODO: Stop currently falls back to best-effort teardown after the join timeout.
+                // TODO: Revisit shutdown sequencing so processing cannot observe partially torn-down state.
                 Logger.Warn("Processing thread did not exit within timeout");
             }
 
@@ -405,7 +409,7 @@ internal class NetServer : INetServer {
 
         // Clean up existing clients
         foreach (var client in _clientsById.Values) {
-            client.Disconnect();
+            client.Dispose();
         }
 
         _clientsById.Clear();
@@ -440,7 +444,7 @@ internal class NetServer : INetServer {
             return;
         }
 
-        client.Disconnect();
+        client.Dispose();
         _transportServer?.DisconnectClient(client.TransportClient);
         _clientsById.TryRemove(id, out _);
 
@@ -539,11 +543,13 @@ internal class NetServer : INetServer {
         }
 
         // After we know that this call did not use a different generic, we can update packet info
-        ServerUpdatePacket.AddonPacketInfoDict[addon.Id.Value] = new AddonPacketInfo(
+        var addonPacketInfo = new AddonPacketInfo(
             // Transform the packet instantiator function from a TPacketId as parameter to byte
             networkReceiver?.TransformPacketInstantiator(packetInstantiator)!,
             (byte) Enum.GetValues(typeof(TPacketId)).Length
         );
+        ServerUpdatePacket.AddonPacketInfoDict[addon.Id.Value] = addonPacketInfo;
+        ServerConnectionPacket.AddonPacketInfoDict[addon.Id.Value] = addonPacketInfo;
 
         return (addon.NetworkReceiver as IServerAddonNetworkReceiver<TPacketId>)!;
     }

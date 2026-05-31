@@ -28,6 +28,11 @@ internal class ClientConnectionManager : ConnectionManager {
     public event Action<ServerInfo>? ServerInfoReceivedEvent;
 
     /// <summary>
+    /// Whether chunked addon payloads are allowed to be dispatched yet.
+    /// </summary>
+    public bool AllowAddonChunks { get; set; }
+
+    /// <summary>
     ///     Construct the connection manager with the given packet manager and chunk sender, and receiver instances.
     ///     Will register handlers in the packet manager that relate to the connection.
     /// </summary>
@@ -102,7 +107,32 @@ internal class ClientConnectionManager : ConnectionManager {
             return;
         }
 
-        // Let the packet manager handle the connection packet, which will invoke the relevant data handlers
-        PacketManager.HandleClientConnectionPacket(connectionPacket);
+        var packetData = connectionPacket.GetPacketData();
+        if (packetData.ContainsKey(ClientConnectionPacketId.ServerInfo)) {
+            PacketManager.HandleClientConnectionPacket(connectionPacket);
+            return;
+        }
+
+        if (!packetData.TryGetValue(ClientConnectionPacketId.ChunkAddonData, out var chunkAddonDataRaw)) {
+            Logger.Debug("Received unexpected connection chunk packet with no supported payload");
+            return;
+        }
+
+        if (!AllowAddonChunks) {
+            Logger.Warn("Discarded chunked addon payload before the client completed connection setup");
+            return;
+        }
+
+        var chunkAddonData = (ChunkAddonData) chunkAddonDataRaw;
+        if (!ClientConnectionPacket.AddonPacketInfoDict.TryGetValue(chunkAddonData.AddonId, out var addonPacketInfo)) {
+            Logger.Warn($"Received chunked addon payload for unknown addon ID {chunkAddonData.AddonId}");
+            return;
+        }
+
+        var packetDataInstance = addonPacketInfo.PacketDataInstantiator.Invoke(chunkAddonData.PacketId);
+        packetDataInstance.ReadData(new Packet.Packet(chunkAddonData.Payload));
+        PacketManager.HandleClientAddonPacketSingle(
+            chunkAddonData.AddonId, chunkAddonData.PacketId, packetDataInstance
+        );
     }
 }

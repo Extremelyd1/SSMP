@@ -29,4 +29,12 @@ public interface IClientAddonNetworkSender<in TPacketId> where TPacketId : Enum 
         TPacketId packetId,
         TPacketData packetData
     ) where TPacketData : IPacketData, new();
+
+    /// <summary>
+    /// Send a single instance of IPacketData over the network through the chunk system with the given packet ID.
+    /// This should be used for large packets (exceeding 64 KiB).
+    /// </summary>
+    /// <param name="packetId">The packet ID.</param>
+    /// <param name="packetData">An instance of IPacketData to send.</param>
+    void SendChunkData(TPacketId packetId, IPacketData packetData);
 }

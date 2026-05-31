@@ -6,7 +6,7 @@ namespace SSMP.Api.Client.Networking;
 /// <summary>
 /// The net client for all network-related interaction.
 /// </summary>
-public interface INetClient {
+public interface INetClient : IDisposable {
     /// <summary>
     /// Whether the client is currently connected to a server.
     /// </summary>
