@@ -1,8 +1,6 @@
-using System.Collections;
 using System.Collections.Generic;
 using GlobalSettings;
 using SSMP.Internals;
-using SSMP.Util;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
 
@@ -123,43 +121,6 @@ internal class BaseTool : DamageAnimationEffect {
         } else {
             Logger.Info($"No tool in map for tool {toolType}");
         }
-    }
-
-    /// <summary>
-    /// Sets the poison status of a pin-based tool.
-    /// </summary>
-    /// <param name="controller">The pin controller.</param>
-    /// <param name="isPoison">True if the pin should be poisoned, false if not.</param>
-    protected static void SetPinPoison(ToolPin controller, bool isPoison) {
-
-        // Run at the end of the frame to ensure it's off
-        static IEnumerator DoPoisonSet(ToolPin controller, bool isPoison) {
-            yield return null;
-
-            var main = controller.ptShatter.main;
-            controller.isPoison = isPoison;
-
-            // Toggle poison effect
-            if (isPoison) {
-                if ((bool) controller.getTintFrom) {
-                    controller.sprite.EnableKeyword("CAN_HUESHIFT");
-                    controller.sprite.SetFloat(PoisonTintBase.HueShiftPropId, controller.getTintFrom.PoisonHueShift);
-                } else {
-                    controller.sprite.EnableKeyword("RECOLOUR");
-                    controller.sprite.color = controller.poisonTint;
-                }
-                main.startColor = controller.poisonTint;
-                controller.ptPoisonIdle.Play();
-            } else {
-                controller.sprite.DisableKeyword("CAN_HUESHIFT");
-                controller.sprite.DisableKeyword("RECOLOUR");
-                controller.sprite.color = Color.white;
-                main.startColor = controller.ptShatterDefaultColour;
-                controller.ptPoisonIdle.Stop();
-            }
-        }
-
-        MonoBehaviourUtil.Instance.StartCoroutine(DoPoisonSet(controller, isPoison));
     }
 }
 

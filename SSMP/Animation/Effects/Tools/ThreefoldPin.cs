@@ -102,7 +102,7 @@ internal class ThreefoldPin : BaseTool {
 
         // Set poison settings and deflection
         if (pin.TryGetComponent<ToolPin>(out var controller)) {
-            SetPinPoison(controller, poisoned);
+            StraightPin.SetPinPoison(controller, poisoned);
 
             // Allows deflecting pins, but causes some side effects that make it look a bit worse (disappears immediately after hitting walls)
             controller.tinked = ServerSettings.IsPvpEnabled && ShouldDoDamage;
