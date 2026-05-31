@@ -138,7 +138,6 @@ internal class NetClient : INetClient {
                     disconnectExisting = true;
                     break;
                 case ClientConnectionStatus.NotConnected:
-                    break;
                 default:
                     ConnectionStatus = ClientConnectionStatus.Connecting;
                     break;
