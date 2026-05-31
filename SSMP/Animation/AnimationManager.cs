@@ -1510,11 +1510,8 @@ internal class AnimationManager {
     private void AttackToolUsed(AttackToolBinding binding) {
         var tool = ToolItemManager.GetBoundAttackTool(binding, ToolEquippedReadSource.Active);
         if (tool == null) {
-            Logger.Info($"No tool on {binding}");
             return;
         }
-
-        Logger.Info(tool.name);
 
         // If we are not connected, there is nothing to send to
         if (!_netClient.IsConnected) {

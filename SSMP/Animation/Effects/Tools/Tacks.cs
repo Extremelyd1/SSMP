@@ -6,7 +6,6 @@ using HutongGames.PlayMaker.Actions;
 using SSMP.Internals;
 using SSMP.Util;
 using UnityEngine;
-using Logger = SSMP.Logging.Logger;
 
 namespace SSMP.Animation.Effects.Tools;
 
@@ -57,7 +56,7 @@ internal class Tacks : BaseTool {
         groups.Add(group);
 
         // Spawn in tacks
-        var prefab = GetPrefab(playerObject);
+        var prefab = GetTackPrefab(playerObject);
 
         for (var i = 0; i < 4; i++) {
             var tack = prefab.Spawn(group.transform);
@@ -119,11 +118,11 @@ internal class Tacks : BaseTool {
     /// Destroys sets of tacks that exceed the tools limit.
     /// </summary>
     /// <param name="tackGroups">The tack groups that belong to a player.</param>
-    /// <returns>The filtered tack groups</returns>
+    /// <returns>The filtered tack groups.</returns>
     private static List<GameObject> DestroyOldTacks(List<GameObject> tackGroups) {
         List<GameObject> newTackGroups = [];
 
-        // Iterate in reverse order to keep the newest sets
+        // Iterate in reverse order to remove the oldest sets
         var validCount = 0;
         foreach (var tackGroup in tackGroups.Reverse<GameObject>()) {
             if (tackGroup == null) continue;
@@ -184,7 +183,7 @@ internal class Tacks : BaseTool {
     /// </summary>
     /// <param name="playerObject">The player using the tool.</param>
     /// <returns>The modified prefab, if found.</returns>
-    private GameObject? GetPrefab(GameObject playerObject) {
+    private GameObject? GetTackPrefab(GameObject playerObject) {
         // Create prefab if needed
         if (_modifiedPrefab == null) {
             // Create a copy of the original prefab

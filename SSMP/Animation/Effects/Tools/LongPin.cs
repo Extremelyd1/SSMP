@@ -9,10 +9,13 @@ namespace SSMP.Animation.Effects.Tools;
 
 internal class LongPin : BaseTool {
     /// <summary>
-    /// Cached prefab for one attacking pin
+    /// Cached prefab for one attacking pin.
     /// </summary>
     private static GameObject? _modifiedPrefab;
 
+    /// <summary>
+    /// Map of player object IDs to their last pin throw time.
+    /// </summary>
     private static readonly Dictionary<int, long> PlayerLastFireTime = [];
 
     /// <inheritdoc/>
@@ -63,7 +66,6 @@ internal class LongPin : BaseTool {
             var fsm = HeroController.instance.toolsFSM;
 
             var prefab = fsm.GetFirstAction<SpawnProjectileV2>("Fisherpin");
-            if (prefab == null) return null;
 
             // Create a new version to modify
             _modifiedPrefab = EffectUtils.SpawnGlobalPoolObject(prefab.Prefab.Value, playerObject.transform, 0, false);
@@ -71,7 +73,6 @@ internal class LongPin : BaseTool {
 
             _modifiedPrefab.SetActive(false);
             _modifiedPrefab.name = "LONGPIN";
-
 
             // Set up rebound effect
             var longPinTool = _modifiedPrefab.GetComponent<ToolPin>();
@@ -86,8 +87,9 @@ internal class LongPin : BaseTool {
 
             // Set up rebound box
             var reboundBoxObject = new GameObject("Rebound Box");
-            var reboundBox = reboundBoxObject.AddComponent<Rigidbody2D>();
             reboundBoxObject.SetActive(false);
+
+            var reboundBox = reboundBoxObject.AddComponent<Rigidbody2D>();
             reboundBox.bodyType = RigidbodyType2D.Kinematic;
 
             longPinTool.reboundBox = reboundBoxObject;

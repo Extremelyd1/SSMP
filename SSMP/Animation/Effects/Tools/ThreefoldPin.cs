@@ -7,7 +7,7 @@ namespace SSMP.Animation.Effects.Tools;
 
 internal class ThreefoldPin : BaseTool {
     /// <summary>
-    /// Cached prefab for one attacking pin
+    /// Cached prefab for one attacking pin.
     /// </summary>
     private static GameObject? _modifiedPrefab;
 
@@ -42,13 +42,13 @@ internal class ThreefoldPin : BaseTool {
     }
 
     /// <summary>
-    /// Spawns a pin at a given player object
+    /// Spawns a pin at a given player object.
     /// </summary>
-    /// <param name="playerObject">The player using the pin</param>
-    /// <param name="minAngle">The minimum angle for the pni</param>
-    /// <param name="rotation">The pin's rotation</param>
-    /// <param name="onWall">If the player is on a wall</param>
-    /// <param name="poisoned">If the pin is poisoned</param>
+    /// <param name="playerObject">The player using the pin.</param>
+    /// <param name="minAngle">The minimum angle for the pin.</param>
+    /// <param name="rotation">The pin's rotation.</param>
+    /// <param name="onWall">If the player is on a wall or not.</param>
+    /// <param name="poisoned">If the pin is poisoned or not.</param>
     private void SpawnPin(GameObject playerObject, float minAngle, float rotation, bool onWall, bool poisoned) {
         // Determine spawn position
         var spawnPosition = playerObject.transform.position;

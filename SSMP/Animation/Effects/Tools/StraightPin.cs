@@ -1,12 +1,11 @@
 using SSMP.Internals;
 using UnityEngine;
-using Logger = SSMP.Logging.Logger;
 
 namespace SSMP.Animation.Effects.Tools;
 
 internal class StraightPin : BaseTool {
     /// <summary>
-    /// Cached prefab for the attacking straight pin
+    /// Cached prefab for the attacking straight pin.
     /// </summary>
     private GameObject? _modifiedPrefab;
 
@@ -20,8 +19,6 @@ internal class StraightPin : BaseTool {
 
         // Set up modified prefab
         if (!_modifiedPrefab) {
-            Logger.Info("Setting up straight pin prefab");
-
             var prefab = tool.usageOptions.ThrowPrefab;
             _modifiedPrefab = EffectUtils.SpawnGlobalPoolObject(prefab, playerObject.transform, 0, false);
             if (!_modifiedPrefab) return;
@@ -33,7 +30,6 @@ internal class StraightPin : BaseTool {
         }
 
         // Spawn in prefab
-        Logger.Info("Spawning straight pin");
         _modifiedPrefab.transform.rotation = Quaternion.identity;
         var pin = _modifiedPrefab.Spawn(playerObject.transform.position);
 
