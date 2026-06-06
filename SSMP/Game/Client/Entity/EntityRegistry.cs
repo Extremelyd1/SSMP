@@ -66,6 +66,9 @@ internal static class EntityRegistry {
                 continue;
             }
 
+            // Known limitation: entries that share the same base object name and FSM names are ambiguous here.
+            // Example: Coral Conch Driller Giant Solo may need to distinguish GreatConchflies vs RagingConchfly
+            // if players report incorrect mapping, because type is not part of the selection criteria.
             // If the entry defines FSM names and the object does not have any matching FSM, continue.
             if (entry.FsmNames is { Count: > 0 } && !gameObject.GetComponents<PlayMakerFSM>().Any(
                     childFsm => entry.FsmNames.Contains(childFsm.Fsm.Name)

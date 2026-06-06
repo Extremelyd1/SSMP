@@ -2015,7 +2015,7 @@
   },
   {
     "base_object_name": "Swamp Shaman",
-    "type": "GroalT   heGreat",
+    "type": "GroalTheGreat",
     "parent_name": null,
     "components": [],
     "internal_name": "Swamp Shaman",
@@ -2621,7 +2621,7 @@
   },
   {
     "base_object_name": "Dancer A",
-    "type": "CloverDancers",
+    "type": "CogworkDancers",
     "parent_name": null,
     "components": [],
     "internal_name": "Clover Dancer",
@@ -2633,7 +2633,7 @@
   },
   {
     "base_object_name": "Dancer B",
-    "type": "CloverDancers",
+    "type": "CogworkDancers",
     "parent_name": null,
     "components": [],
     "internal_name": "Clover Dancer",
