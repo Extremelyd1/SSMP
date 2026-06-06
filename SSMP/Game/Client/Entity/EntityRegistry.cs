@@ -66,10 +66,9 @@ internal static class EntityRegistry {
                 continue;
             }
 
-            // If the entry has an FSM name defined and the child object does not have any FSM components
-            // that match this name, we continue
-            if (entry.FsmName != null && !gameObject.GetComponents<PlayMakerFSM>().Any(
-                    childFsm => childFsm.Fsm.Name.Equals(entry.FsmName)
+            // If the entry defines FSM names and the object does not have any matching FSM, continue.
+            if (entry.FsmNames is { Count: > 0 } && !gameObject.GetComponents<PlayMakerFSM>().Any(
+                    childFsm => entry.FsmNames.Contains(childFsm.Fsm.Name)
             )) {
                 continue;
             }
@@ -122,10 +121,10 @@ internal class EntityRegistryEntry {
     public EntityType Type { get; set; }
     
     /// <summary>
-    /// The name of the FSM that this entity has. Can be empty if the entity does not have a FSM.
+    /// The names of FSMs that can identify this entity. Can be empty if the entity does not have a FSM.
     /// </summary>
-    [JsonProperty("fsm_name")]
-    public string FsmName { get; set; }
+    [JsonProperty("fsm_names")]
+    public List<string> FsmNames { get; set; }
     
     /// <summary>
     /// The name of the parent of this object. Can be empty if there is no parent or it is not relevant.
