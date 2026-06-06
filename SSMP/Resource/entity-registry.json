@@ -477,7 +477,7 @@
   },
   {
     "base_object_name": "Bone Hunter Trapper",
-    "type": "GurrtheOutcast",
+    "type": "GurrTheOutcast",
     "parent_name": null,
     "components": [],
     "internal_name": "Bone Hunter Trapper",
@@ -1176,7 +1176,7 @@
   },
   {
     "base_object_name": "Wisp Pyre Effigy",
-    "type": "FatheroftheFlame",
+    "type": "FatherOfTheFlame",
     "parent_name": null,
     "components": [],
     "internal_name": "Wisp Pyre Effigy",
@@ -1405,7 +1405,7 @@
   },
   {
     "base_object_name": "Garmond Fighter",
-    "type": "GarmondandZaza",
+    "type": "GarmondAndZaza",
     "parent_name": null,
     "components": [],
     "internal_name": "Garmond_Zaza",
@@ -1892,7 +1892,7 @@
   },
   {
     "base_object_name": "Grass Goomba",
-    "type": "GrassGoomba",
+    "type": "LeafRoller",
     "parent_name": null,
     "components": [],
     "internal_name": "Grass Goomba",
@@ -2015,7 +2015,7 @@
   },
   {
     "base_object_name": "Swamp Shaman",
-    "type": "GroaltheGreat",
+    "type": "GroalT   heGreat",
     "parent_name": null,
     "components": [],
     "internal_name": "Swamp Shaman",
@@ -2177,7 +2177,7 @@
   },
   {
     "base_object_name": "Lilypad Fly",
-    "type": "LilypadFly",
+    "type": "LeafGlider",
     "parent_name": null,
     "components": [],
     "internal_name": "Lilypad Fly",

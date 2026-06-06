@@ -225,7 +225,6 @@ internal enum EntityType {
     Gloomsac,
     GargantGloom,
     VoidTendrils,
-    VoidMass,
     SummonedSaviour,
     Wingmould,
     Garpid,
