@@ -504,24 +504,25 @@ internal class Entity {
                 return;
         }
 
-      // Logger.Debug(
-      //     $"Entity ({Id}, {Type}) has corpse that is also enemy, deleting death effects and corpse from client entity"
-      // );
+        // Logger.Debug(
+        //     $"Entity ({Id}, {Type}) has corpse that is also enemy, deleting death effects and corpse from client
+        // entity"
+        // );
 
-      // var enemyDeathEffects = Object.Client.GetComponent<EnemyDeathEffects>();
-      // if (enemyDeathEffects == null) {
-      //     Logger.Debug("  EnemyDeathEffects is null, cannot remove");
-      // }
+        // var enemyDeathEffects = Object.Client.GetComponent<EnemyDeathEffects>();
+        // if (enemyDeathEffects == null) {
+        //     Logger.Debug("  EnemyDeathEffects is null, cannot remove");
+        // }
 
-      // UnityEngine.Object.Destroy(enemyDeathEffects);
+        // UnityEngine.Object.Destroy(enemyDeathEffects);
 
-      // var corpse = Object.Client.FindGameObjectInChildren(corpseName);
-      // if (corpse != null) {
-      //     Logger.Debug($"  Destroying corpse of client object: {corpse.name}");
-      //     UnityEngine.Object.Destroy(corpse);
-      // } else {
-      //     Logger.Debug("  Could not find corpse of client object");
-      // }
+        // var corpse = Object.Client.FindGameObjectInChildren(corpseName);
+        // if (corpse != null) {
+        //     Logger.Debug($"  Destroying corpse of client object: {corpse.name}");
+        //     UnityEngine.Object.Destroy(corpse);
+        // } else {
+        //     Logger.Debug("  Could not find corpse of client object");
+        // }
     }
 
     /// <summary>
@@ -565,22 +566,24 @@ internal class Entity {
     [SuppressMessage("ReSharper", "CompareOfFloatsByEqualityOperator")]
     private void OnUpdate() {
         if (Object.Host == null) {
-            if (_lastIsActive) {
-                // If the host object was active, but now it null (or destroyed in Unity), we can send
-                // to the server that the entity can be regarded as inactive
-                if (Object.Client == null) {
-                    Logger.Info($"Entity ({Id}, {Type}) host and client object is null (or destroyed) and was active");
-                } else {
-                    Logger.Info($"Entity '{Object.Client.name}' host object is null (or destroyed) and was active");
-                }
-
-                _lastIsActive = false;
-
-                _netClient.UpdateManager.UpdateEntityIsActive(
-                    Id,
-                    false
-                );
+            if (!_lastIsActive) {
+                return;
             }
+
+            // If the host object was active, but now it null (or destroyed in Unity), we can send
+            // to the server that the entity can be regarded as inactive
+            Logger.Info(
+                Object.Client == null
+                    ? $"Entity ({Id}, {Type}) host and client object is null (or destroyed) and was active"
+                    : $"Entity '{Object.Client.name}' host object is null (or destroyed) and was active"
+            );
+
+            _lastIsActive = false;
+
+            _netClient.UpdateManager.UpdateEntityIsActive(
+                Id,
+                false
+            );
 
             return;
         }

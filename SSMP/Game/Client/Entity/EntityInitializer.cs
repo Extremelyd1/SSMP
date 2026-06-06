@@ -18,7 +18,7 @@ internal static class EntityInitializer {
     /// <summary>
     /// Array of state names that indicates that it is a initializing state.
     /// </summary>
-    private static readonly string[] InitStateNames = {
+    private static readonly string[] InitStateNames = [
         "init",
         "initiate",
         "initialise",
@@ -28,32 +28,32 @@ internal static class EntityInitializer {
         "init pause",
         "deparents",
         "opened" // For battle gates
-    };
+    ];
 
     /// <summary>
     /// Array of types that should be removed from client-side enemies so it doesn't interfere with remote behaviour.
     /// </summary>
-    private static readonly Type[] ToRemoveTypes = {
+    private static readonly Type[] ToRemoveTypes = [
         typeof(Walker),
         typeof(Rigidbody2D),
         typeof(BigCentipede)
-    };
+    ];
 
     /// <summary>
     /// Array of component types that should be removed from client-side entity children as well as the root object.
     /// </summary>
-    private static readonly Type[] ToRemoveTypesInChildren = {
+    private static readonly Type[] ToRemoveTypesInChildren = [
         typeof(ActiveCorpse)
-    };
+    ];
 
     /// <summary>
     /// Array of types of actions that should be skipped during initialization. 
     /// </summary>
-    private static readonly Type[] ToSkipTypes = {
+    private static readonly Type[] ToSkipTypes = [
         typeof(Tk2dPlayAnimation),
         typeof(ActivateAllChildren),
         typeof(SetCollider) // TODO: test whether this has effects on other entities during host transfer (this was added for battle gates)
-    };
+    ];
 
     /// <summary>
     /// Initialize the FSM of a client entity by finding initialize states and executing the actions in those states.
