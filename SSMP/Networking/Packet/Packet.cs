@@ -114,25 +114,13 @@ internal class Packet : IPacket {
         // In write-mode, the default constructor initializes _readableBuffer to an empty array.
         // If _readableBuffer is non-empty, this packet was created from existing data and should not be cleared.
         if (_readableBuffer.Length != 0)
-            throw new InvalidOperationException(
-                "Clear() can only be used on write-mode packets created with the default constructor."
-            );
-
+            throw new InvalidOperationException("Clear() can only be used on write-mode packets created with the default constructor.");
+            
         _buffer.Clear();
         // Readable buffer assumes it mirrors _buffer in write mode, but usually _readableBuffer is a copy or view.
         // In Write Mode (constructor Packet()), _readableBuffer is initialized to empty array.
         // For writing, we operate on _buffer.
         Length = 0;
-        _readPos = 0;
-    }
-
-    /// <summary>
-    /// Resets the read position to the start of the buffer, allowing a write-mode packet that was
-    /// populated via <see cref="Write"/> calls to be re-read from the beginning.
-    /// Only valid for write-mode packets (created with the default constructor).
-    /// </summary>
-    public void ResetReadPosition() {
-        if (_buffer == null) throw new InvalidOperationException("Cannot reset read position on a Read-Only Packet");
         _readPos = 0;
     }
 
@@ -176,35 +164,18 @@ internal class Packet : IPacket {
     /// <exception cref="Exception">Thrown if there are not enough bytes of content left to read.</exception>
     public byte[] ReadBytes(int length) {
         // Check whether there is enough bytes left to read
-        if ((_buffer?.Count ?? Length) < _readPos + length) {
-            throw new Exception($"Could not read {length} bytes");
-        }
+        if ((_buffer?.Count ?? Length) >= _readPos + length) {
+            var bytes = new byte[length];
 
-        var bytes = new byte[length];
-
-        if (_readableBuffer.Length > 0) {
             Array.Copy(_readableBuffer, _offset + _readPos, bytes, 0, length);
-        } else {
-            for (var i = 0; i < length; i++) {
-                bytes[i] = _buffer![_readPos + i];
-            }
+
+            // Increase the reading position in the buffer
+            _readPos += length;
+
+            return bytes;
         }
 
-        // Increase the reading position in the buffer
-        _readPos += length;
-
-        return bytes;
-    }
-
-    /// <summary>
-    /// Reads a single byte from the appropriate source buffer without advancing the read position.
-    /// Falls back to <c>_buffer</c> (write-mode backing store) when <c>_readableBuffer</c> is the
-    /// empty placeholder set by the default constructor.
-    /// </summary>
-    private byte GetByteAt(int index) {
-        return _readableBuffer.Length > 0
-            ? _readableBuffer[_offset + index]
-            : _buffer![index]; // _offset is always 0 in write-mode (default constructor)
+        throw new Exception($"Could not read {length} bytes");
     }
 
     #region IPacket interface implementations
@@ -392,7 +363,7 @@ internal class Packet : IPacket {
     public byte ReadByte() {
         // Check whether there is at least 1 byte left to read
         if (_buffer != null ? _buffer.Count > _readPos : Length > _readPos) {
-            var value = GetByteAt(_readPos);
+            var value = _readableBuffer[_offset + _readPos];
 
             // Increase reading position in the buffer
             _readPos += 1;
@@ -407,7 +378,7 @@ internal class Packet : IPacket {
     public ushort ReadUShort() {
         // Check whether there are at least 2 bytes left to read
         if (_buffer != null ? _buffer.Count > _readPos + 1 : Length > _readPos + 1) {
-            var value = (ushort) (GetByteAt(_readPos) | (GetByteAt(_readPos + 1) << 8));
+            var value = BitConverter.ToUInt16(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
             _readPos += 2;
@@ -422,12 +393,7 @@ internal class Packet : IPacket {
     public uint ReadUInt() {
         // Check whether there are at least 4 bytes left to read
         if (_buffer != null ? _buffer.Count > _readPos + 3 : Length > _readPos + 3) {
-            var value = (uint) (
-                GetByteAt(_readPos) |
-                (GetByteAt(_readPos + 1) << 8) |
-                (GetByteAt(_readPos + 2) << 16) |
-                (GetByteAt(_readPos + 3) << 24)
-            );
+            var value = BitConverter.ToUInt32(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
             _readPos += 4;
@@ -442,15 +408,7 @@ internal class Packet : IPacket {
     public ulong ReadULong() {
         // Check whether there are at least 8 bytes left to read
         if (_buffer != null ? _buffer.Count > _readPos + 7 : Length > _readPos + 7) {
-            var value =
-                (ulong) GetByteAt(_readPos) |
-                ((ulong) GetByteAt(_readPos + 1) << 8) |
-                ((ulong) GetByteAt(_readPos + 2) << 16) |
-                ((ulong) GetByteAt(_readPos + 3) << 24) |
-                ((ulong) GetByteAt(_readPos + 4) << 32) |
-                ((ulong) GetByteAt(_readPos + 5) << 40) |
-                ((ulong) GetByteAt(_readPos + 6) << 48) |
-                ((ulong) GetByteAt(_readPos + 7) << 56);
+            var value = BitConverter.ToUInt64(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
             _readPos += 8;
@@ -465,7 +423,7 @@ internal class Packet : IPacket {
     public sbyte ReadSByte() {
         // Check whether there are at least 1 byte left to read
         if (_buffer != null ? _buffer.Count > _readPos : Length > _readPos) {
-            var value = (sbyte) GetByteAt(_readPos);
+            var value = (sbyte) _readableBuffer[_offset + _readPos];
 
             // Increase the reading position in the buffer
             _readPos += 1;
@@ -480,7 +438,7 @@ internal class Packet : IPacket {
     public short ReadShort() {
         // Check whether there are at least 2 bytes left to read
         if (_buffer != null ? _buffer.Count > _readPos + 1 : Length > _readPos + 1) {
-            var value = (short) (GetByteAt(_readPos) | (GetByteAt(_readPos + 1) << 8));
+            var value = BitConverter.ToInt16(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
             _readPos += 2;
@@ -495,11 +453,7 @@ internal class Packet : IPacket {
     public int ReadInt() {
         // Check whether there are at least 4 bytes left to read
         if (_buffer != null ? _buffer.Count > _readPos + 3 : Length > _readPos + 3) {
-            var value =
-                GetByteAt(_readPos) |
-                (GetByteAt(_readPos + 1) << 8) |
-                (GetByteAt(_readPos + 2) << 16) |
-                (GetByteAt(_readPos + 3) << 24);
+            var value = BitConverter.ToInt32(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
             _readPos += 4;
@@ -514,15 +468,7 @@ internal class Packet : IPacket {
     public long ReadLong() {
         // Check whether there are at least 8 bytes left to read
         if (_buffer != null ? _buffer.Count > _readPos + 7 : Length > _readPos + 7) {
-            var value =
-                (long) GetByteAt(_readPos) |
-                ((long) GetByteAt(_readPos + 1) << 8) |
-                ((long) GetByteAt(_readPos + 2) << 16) |
-                ((long) GetByteAt(_readPos + 3) << 24) |
-                ((long) GetByteAt(_readPos + 4) << 32) |
-                ((long) GetByteAt(_readPos + 5) << 40) |
-                ((long) GetByteAt(_readPos + 6) << 48) |
-                ((long) GetByteAt(_readPos + 7) << 56);
+            var value = BitConverter.ToInt64(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
             _readPos += 8;
@@ -541,17 +487,12 @@ internal class Packet : IPacket {
     public float ReadFloat() {
         // Check whether there are at least 4 bytes left to read
         if (_buffer != null ? _buffer.Count > _readPos + 3 : Length > _readPos + 3) {
-            // Reconstruct the int bits then reinterpret as float (matches the Write(float) unsafe path)
-            var intBits =
-                GetByteAt(_readPos) |
-                (GetByteAt(_readPos + 1) << 8) |
-                (GetByteAt(_readPos + 2) << 16) |
-                (GetByteAt(_readPos + 3) << 24);
+            var value = BitConverter.ToSingle(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
             _readPos += 4;
 
-            return BitConverter.Int32BitsToSingle(intBits);
+            return value;
         }
 
         throw new Exception("Could not read value of type 'float'!");
@@ -561,21 +502,12 @@ internal class Packet : IPacket {
     public double ReadDouble() {
         // Check whether there are at least 8 bytes left to read
         if (_buffer != null ? _buffer.Count > _readPos + 7 : Length > _readPos + 7) {
-            // Reconstruct the long bits then reinterpret as double (matches the Write(double) unsafe path)
-            var longBits =
-                (long) GetByteAt(_readPos) |
-                ((long) GetByteAt(_readPos + 1) << 8) |
-                ((long) GetByteAt(_readPos + 2) << 16) |
-                ((long) GetByteAt(_readPos + 3) << 24) |
-                ((long) GetByteAt(_readPos + 4) << 32) |
-                ((long) GetByteAt(_readPos + 5) << 40) |
-                ((long) GetByteAt(_readPos + 6) << 48) |
-                ((long) GetByteAt(_readPos + 7) << 56);
+            var value = BitConverter.ToDouble(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
             _readPos += 8;
 
-            return BitConverter.Int64BitsToDouble(longBits);
+            return value;
         }
 
         throw new Exception("Could not read value of type 'double'!");
@@ -589,7 +521,7 @@ internal class Packet : IPacket {
     public bool ReadBool() {
         // Check whether there is at least 1 byte left to read
         if (_buffer != null ? _buffer.Count > _readPos : Length > _readPos) {
-            var value = GetByteAt(_readPos) != 0;
+            var value = BitConverter.ToBoolean(_readableBuffer, _offset + _readPos);
 
             // Increase the reading position in the buffer
             _readPos += 1;
@@ -616,18 +548,8 @@ internal class Packet : IPacket {
             throw new Exception("Could not read value of type 'string'!");
         }
 
-        string value;
-        if (_readableBuffer.Length > 0) {
-            value = Encoding.UTF8.GetString(_readableBuffer, _offset + _readPos, length);
-        } else {
-            // Write-mode packet: extract the relevant bytes from _buffer for UTF-8 decoding.
-            var strBytes = new byte[length];
-            for (var i = 0; i < length; i++) {
-                strBytes[i] = _buffer![_readPos + i];
-            }
-
-            value = Encoding.UTF8.GetString(strBytes);
-        }
+        // Now we read and decode the string
+        var value = Encoding.UTF8.GetString(_readableBuffer, _offset + _readPos, length);
 
         // Increase the reading position in the buffer
         _readPos += length;
