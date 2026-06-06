@@ -84,6 +84,11 @@ public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
             ChangeEvent?.Invoke(nameof(AllowSkins));
         }
     } = true;
+
+    // /// <inheritdoc />
+    // [SettingAlias("parries")]
+    // [ModMenuSetting("Parries", "Whether parrying certain player attacks is possible")]
+    // public bool AllowParries { get; set; } = true;
     
     /// <inheritdoc />
     [SettingAlias("needledmg")]
@@ -238,6 +243,30 @@ public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
             if (field == value) return;
             field = value;
             ChangeEvent?.Invoke(nameof(ClawMirrorUpgradedDamage));
+        }
+    } = 1;
+
+    /// <inheritdoc />
+    [SettingAlias("sawtoothcircletdmg", "circletdmg", "umbrelladmg")]
+    [ModMenuSetting("Sawtooth Circlet Damage", "The number of masks of damage that Sawtooth Circlet deals")]
+    public byte SawtoothCircletDamage {
+        get;
+        init {
+            if (field == value) return;
+            field = value;
+            ChangeEvent?.Invoke(nameof(SawtoothCircletDamage));
+        }
+    } = 1;
+
+    /// <inheritdoc />
+    [SettingAlias("poisonbrewdmg", "brewdmg", "fleabrewdmg")]
+    [ModMenuSetting("Poisoned Flea Brew Damage", "The number of masks of damage that a cloud from the poisoned Flea Brew deals")]
+    public byte PoisonBrewDamage {
+        get;
+        init {
+            if (field == value) return;
+            field = value;
+            ChangeEvent?.Invoke(nameof(PoisonBrewDamage));
         }
     } = 1;
 

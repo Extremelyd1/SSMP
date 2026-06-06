@@ -71,6 +71,9 @@ internal sealed class MatchmakingJoinStartResult {
     /// <summary>The resolved public port of the host.</summary>
     public required int HostPort { get; init; }
 
+    /// <summary>The MMS server time when the start-punch message was emitted.</summary>
+    public required long ServerTimeMs { get; init; }
+
     /// <summary>The Unix timestamp (ms) when both sides should start punching.</summary>
     public required long StartTimeMs { get; init; }
 }

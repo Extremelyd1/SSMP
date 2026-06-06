@@ -122,7 +122,7 @@ public sealed class JoinSessionCoordinator {
     /// <param name="port">The external port observed by the server.</param>
     /// <param name="cancellationToken">Propagates notification that the operation should be cancelled.</param>
     public async Task SetDiscoveredPortAsync(string token, int port, CancellationToken cancellationToken = default) {
-        if (!_store.TryGetDiscoveryMetadata(token, out var metadata) || metadata == null)
+        if (!_store.TryGetDiscoveryMetadata(token, out var metadata))
             return;
 
         if (!_store.TrySetDiscoveredPort(token, port))
@@ -390,9 +390,8 @@ public sealed class JoinSessionCoordinator {
         // Matchmaking lobbies store ConnectionData as "IP:Port".
         // Steam lobbies are filtered out at session creation.
         var hostIp = lobby.ConnectionData.Split(':')[0];
-        var startTimeMs = DateTimeOffset.UtcNow
-                                        .AddMilliseconds(MatchmakingProtocol.PunchTimingOffsetMs)
-                                        .ToUnixTimeMilliseconds();
+        var serverTimeMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var startTimeMs = serverTimeMs + MatchmakingProtocol.PunchTimingOffsetMs;
 
         try {
             var hostSent = await JoinSessionMessenger.SendStartPunchToHostAsync(
@@ -402,7 +401,8 @@ public sealed class JoinSessionCoordinator {
                 session.ClientExternalPort.Value,
                 lobby.ExternalPort.Value,
                 startTimeMs,
-                cancellationToken
+                cancellationToken,
+                serverTimeMs
             );
             if (!hostSent) {
                 await FailJoinSessionAsync(joinId, "host_unreachable", cancellationToken);
@@ -414,7 +414,8 @@ public sealed class JoinSessionCoordinator {
                 lobby.ExternalPort.Value,
                 hostIp,
                 startTimeMs,
-                cancellationToken
+                cancellationToken,
+                serverTimeMs
             );
             if (!clientSent) {
                 await FailJoinSessionAsync(joinId, "client_disconnected", cancellationToken);

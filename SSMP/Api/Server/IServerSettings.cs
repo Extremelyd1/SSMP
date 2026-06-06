@@ -105,4 +105,14 @@ public interface IServerSettings {
     /// The number of masks of damage that the upgraded Claw Mirror deals.
     /// </summary>
     byte ClawMirrorUpgradedDamage { get; }
+
+    /// <summary>
+    /// The number of masks of damage that Sawtooth Circlet deals.
+    /// </summary>
+    byte SawtoothCircletDamage { get; }
+
+    /// <summary>
+    /// The number of masks of damage that a cloud from the poisoned Flea Brew deals.
+    /// </summary>
+    byte PoisonBrewDamage { get; }
 }

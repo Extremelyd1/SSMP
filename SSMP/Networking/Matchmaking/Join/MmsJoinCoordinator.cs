@@ -115,6 +115,8 @@ internal sealed class MmsJoinCoordinator {
         DiscoverySession discovery,
         Action<string> onJoinFailed
     ) {
+        discovery.ObserveServerTime(message);
+
         var action = MmsJsonParser.ExtractValue(message, MmsFields.Action);
         if (action == null) {
             Logger.Debug("MmsWebSocketHandler: invalid message, no defined action");
@@ -173,7 +175,9 @@ internal sealed class MmsJoinCoordinator {
             return null;
         }
 
-        await DelayUntilAsync(joinStart.StartTimeMs, timeoutCts.Token);
+        var localNowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var estimatedServerOffsetMs = discovery.MinObservedServerOffsetMs ?? (localNowMs - joinStart.ServerTimeMs);
+        await DelayUntilAsync(joinStart.StartTimeMs, estimatedServerOffsetMs, timeoutCts.Token);
         return joinStart;
     }
 
@@ -209,9 +213,12 @@ internal sealed class MmsJoinCoordinator {
     /// is far in the future, the delay will simply block until <paramref name="ct"/> fires.
     /// </summary>
     /// <param name="targetUnixMs">Target time expressed as milliseconds since the Unix epoch (UTC).</param>
+    /// <param name="estimatedServerOffsetMs">Best estimate of local-minus-MMS clock offset in milliseconds.</param>
     /// <param name="ct">Cancellation token that can abort the wait early.</param>
-    private static async Task DelayUntilAsync(long targetUnixMs, CancellationToken ct) {
-        var delayMs = targetUnixMs - DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+    private static async Task DelayUntilAsync(long targetUnixMs, long estimatedServerOffsetMs, CancellationToken ct) {
+        var localNowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var targetLocalTimeMs = targetUnixMs + estimatedServerOffsetMs;
+        var delayMs = targetLocalTimeMs - localNowMs;
         if (delayMs > 0) await Task.Delay(TimeSpan.FromMilliseconds(delayMs), ct);
     }
 
@@ -236,6 +243,27 @@ internal sealed class MmsJoinCoordinator {
         /// if no discovery is active.
         /// </summary>
         public CancellationTokenSource? Cts;
+
+        /// <summary>
+        /// Best observed mapping from MMS server time to local UTC clock.
+        /// Uses the minimum observed local-minus-server delta to reduce network-latency bias.
+        /// </summary>
+        public long? MinObservedServerOffsetMs { get; private set; }
+
+        /// <summary>
+        /// Updates the best-known server-to-local clock offset from a message that includes server time.
+        /// </summary>
+        public void ObserveServerTime(string message) {
+            var serverTimeStr = MmsJsonParser.ExtractValue(message, MmsFields.ServerTimeMs);
+            if (!long.TryParse(serverTimeStr, out var serverTimeMs)) {
+                return;
+            }
+
+            var offsetMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - serverTimeMs;
+            MinObservedServerOffsetMs = MinObservedServerOffsetMs.HasValue
+                ? System.Math.Min(MinObservedServerOffsetMs.Value, offsetMs)
+                : offsetMs;
+        }
 
         /// <summary>Cancels <see cref="Cts"/> without disposing it.</summary>
         public void Cancel() {

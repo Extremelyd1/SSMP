@@ -81,9 +81,6 @@ internal static class MmsFields {
     /// <summary>The LAN IP address of the host (Request field).</summary>
     public const string HostLanIpRequest = "HostLanIp";
 
-    /// <summary>Opaque connection data (Request field).</summary>
-    public const string ConnectionDataRequest = "ConnectionData";
-
     /// <summary>The IP address of the client (Request field).</summary>
     public const string ClientIpRequest = "ClientIp";
 

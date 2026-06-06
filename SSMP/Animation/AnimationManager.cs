@@ -2,7 +2,9 @@ using System.Collections.Generic;
 using System.Linq;
 using HutongGames.PlayMaker.Actions;
 using SSMP.Animation.Effects;
+using SSMP.Animation.Effects.Movement;
 using SSMP.Animation.Effects.SilkSkills;
+using SSMP.Animation.Effects.Tools;
 using SSMP.Collection;
 using SSMP.Fsm;
 using SSMP.Game;
@@ -621,9 +623,15 @@ internal class AnimationManager {
         { "Wound Double Strike", AnimationClip.WoundDoubleStrike },
         { "Wound Zap", AnimationClip.WoundZap },
 
+        { "Bench", AnimationClip.Bench },
+
         { "Witch Tentacles!", AnimationClip.WitchTentacles },
         { "Shaman Cancel", AnimationClip.ShamanCancel },
-        { "Bind Fail Burst", AnimationClip.BindInterrupt }
+        { "Bind Fail Burst", AnimationClip.BindInterrupt },
+        { "Magnetite Dice", AnimationClip.MagnetiteDice },
+        { "Flea Brew", AnimationClip.FleaBrew },
+        { "Fractured Mask", AnimationClip.FracturedMask },
+        { "Magma Bell", AnimationClip.MagmaBell }
     };
 
     /// <summary>
@@ -662,6 +670,8 @@ internal class AnimationManager {
         { AnimationClip.BindBurstAir, BindBurst.Instance },
         { AnimationClip.RageBindBurst, BindBurst.Instance },
         { AnimationClip.Death, new Death() },
+        { AnimationClip.DoubleJump, new FaydownCloak() },
+        { AnimationClip.UmbrellaInflate, new DriftersCloak() },
 
         // Silk Skills
         { AnimationClip.NeedleThrowThrowing, new SilkSpear() },
@@ -679,9 +689,18 @@ internal class AnimationManager {
         { AnimationClip.WitchTentacles, BindBurst.Instance },
         { AnimationClip.ShamanCancel, new Bind { BindState = Bind.State.ShamanCancel } },
         { AnimationClip.BindInterrupt, BindInterrupt.Instance },
+        { AnimationClip.Bench, new Bench() },
+
+        // Silk Skills
         { AnimationClip.AirSphereRefresh, new ThreadStorm() },
         { AnimationClip.SilkBombLocations, new RuneRage() },
-        { AnimationClip.SilkBossNeedleFire, new PaleNails() }
+        { AnimationClip.SilkBossNeedleFire, new PaleNails() },
+
+        // Tools
+        { AnimationClip.MagnetiteDice, new MagnetiteDice() },
+        { AnimationClip.FleaBrew, FleaBrew.Instance },
+        { AnimationClip.FracturedMask, new FracturedMask() },
+        { AnimationClip.MagmaBell, new MagmaBell() }
     };
 
     /// <summary>
@@ -814,6 +833,7 @@ internal class AnimationManager {
             CreateHeroHooks(HeroController.instance);
         }
 
+        EventHooks.UseLavaBell += OnMagmaBell;
 
         // Register a callback so we know when the dash has finished
         // On.HeroController.CancelDash += HeroControllerOnCancelDash;
@@ -838,6 +858,17 @@ internal class AnimationManager {
 
         HeroController.OnHeroInstanceSet -= CreateHeroHooks;
         FsmStateActionInjector.UninjectAll();
+
+        MagnetiteDice.Unhook();
+
+        EventHooks.HeroControllerDie -= OnDeath;
+        EventHooks.UseLavaBell -= OnMagmaBell;
+
+        // Remove listener for benching
+        var eventRegister = HeroController.SilentInstance?.gameObject.GetComponents<EventRegister>().FirstOrDefault(r => r.SubscribedEvent == "BENCHREST START");
+        if (eventRegister) {
+            eventRegister.ReceivedEvent -= OnBench;
+        }
         // On.HeroAnimationController.Play -= HeroAnimationControllerOnPlay;
         // On.HeroAnimationController.PlayFromFrame -= HeroAnimationControllerOnPlayFromFrame;
 
@@ -1099,6 +1130,9 @@ internal class AnimationManager {
             bellFsm.Init();
         }
 
+        CreateSkillHooks();
+        CreateToolHooks();
+
         // Find bind FSM
         var heroFsms = hc.GetComponents<PlayMakerFSM>();
 
@@ -1117,8 +1151,53 @@ internal class AnimationManager {
             Logger.Warn("Unable to find Bind FSM to hook.");
         }
 
+        // Add listener for benching
+        var eventRegister = hc.gameObject.GetComponents<EventRegister>().FirstOrDefault(r => r.SubscribedEvent == "BENCHREST START");
+        if (eventRegister) {
+            eventRegister.ReceivedEvent += OnBench;
+        }
+    }
+
+    /// <summary>
+    /// Animation subanimation hook for the Witch Tentacles FSM state.
+    /// </summary>
+    private void OnWitchTentacles(PlayMakerFSM fsm) {
+        var dummyClip = new tk2dSpriteAnimationClip {
+            name = "Witch Tentacles!",
+            wrapMode = tk2dSpriteAnimationClip.WrapMode.Once
+        };
+        OnAnimationEvent(dummyClip);
+    }
+
+    /// <summary>
+    /// Animation subanimation hook for the Shaman Air Cancel FSM state.
+    /// </summary>
+    
+    private void OnShamanCancel(PlayMakerFSM fsm) {
+        var dummyClip = new tk2dSpriteAnimationClip {
+            name = "Shaman Cancel",
+            wrapMode = tk2dSpriteAnimationClip.WrapMode.Once
+        };
+        OnAnimationEvent(dummyClip);
+    }
+    
+    /// <summary>
+    /// Animation subanimation hook for interrupted binds.
+    /// </summary>
+    private void OnBindInterrupt(PlayMakerFSM fsm) {
+        var dummyClip = new tk2dSpriteAnimationClip {
+            name = "Bind Fail Burst",
+            wrapMode = tk2dSpriteAnimationClip.WrapMode.Once
+        };
+        OnAnimationEvent(dummyClip);
+    }
+
+    /// <summary>
+    /// Creates hooks for silk skills.
+    /// </summary>
+    private void CreateSkillHooks() {
         // Silk skill injections
-        var silkSkillFsm = hc.silkSpecialFSM;
+        var silkSkillFsm = HeroController.instance.silkSpecialFSM;
         if (silkSkillFsm == null) {
             Logger.Warn("Unable to find Silk Skill FSM to hook.");
             return;
@@ -1189,39 +1268,6 @@ internal class AnimationManager {
 
             injector.SetInjections(injections);
         }
-    }
-
-    /// <summary>
-    /// Animation subanimation hook for the Witch Tentacles FSM state.
-    /// </summary>
-    private void OnWitchTentacles(PlayMakerFSM fsm) {
-        var dummyClip = new tk2dSpriteAnimationClip {
-            name = "Witch Tentacles!",
-            wrapMode = tk2dSpriteAnimationClip.WrapMode.Once
-        };
-        OnAnimationEvent(dummyClip);
-    }
-
-    /// <summary>
-    /// Animation subanimation hook for the Shaman Air Cancel FSM state.
-    /// </summary>
-    private void OnShamanCancel(PlayMakerFSM fsm) {
-        var dummyClip = new tk2dSpriteAnimationClip {
-            name = "Shaman Cancel",
-            wrapMode = tk2dSpriteAnimationClip.WrapMode.Once
-        };
-        OnAnimationEvent(dummyClip);
-    }
-
-    /// <summary>
-    /// Animation subanimation hook for interrupted binds.
-    /// </summary>
-    private void OnBindInterrupt(PlayMakerFSM fsm) {
-        var dummyClip = new tk2dSpriteAnimationClip {
-            name = "Bind Fail Burst",
-            wrapMode = tk2dSpriteAnimationClip.WrapMode.Once
-        };
-        OnAnimationEvent(dummyClip);
     }
 
     /// <summary>
@@ -1407,6 +1453,101 @@ internal class AnimationManager {
         // Send nail target info
         var effectInfo = PaleNails.EncodeTargetInfo(target);
         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.SilkBossNeedleFire, 0, effectInfo);
+    }
+
+    /// <summary>
+    /// Creates hooks for tools.
+    /// </summary>
+    private void CreateToolHooks() {
+        MagnetiteDice.Hook(OnDiceEnable);
+        MagmaBell.HookRecharge(OnMagmaBellRecharge);
+
+        var toolFsm = HeroController.instance.toolsFSM;
+        var brewBurst = toolFsm.GetState("Flea Brew Burst");
+        FsmStateActionInjector.Inject(brewBurst, OnFleaBrew, 0, "Flea Brew");
+
+        var maskFsm = HeroController.instance.gameObject
+            .FindGameObjectInChildren("Charm Effects")?
+            .FindGameObjectInChildren("Fractured Mask Break")?
+            .LocateMyFSM("Spawn Effect");
+
+        if (maskFsm) {
+            var maskEffect = maskFsm.GetState("Instantiate Effect");
+            FsmStateActionInjector.Inject(maskEffect, OnFracturedMaskBreak, 0, "Fractured Mask Break");
+        }
+    }
+
+    /// <summary>
+    /// Hook for the magnetite dice being triggered.
+    /// </summary>
+    private void OnDiceEnable() {
+        // If we are not connected, there is nothing to send to
+        if (!_netClient.IsConnected) {
+            return;
+        }
+
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagnetiteDice);
+    }
+
+    /// <summary>
+    /// Hook for the flea brew being triggered.
+    /// </summary>
+    private void OnFleaBrew(PlayMakerFSM fsm) {
+        // If we are not connected, there is nothing to send to
+        if (!_netClient.IsConnected) {
+            return;
+        }
+
+        var effectInfo = FleaBrew.Instance.GetEffectInfo();
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.FleaBrew, 0, effectInfo);
+    }
+
+    /// <summary>
+    /// Hook for the fractured mask being triggered.
+    /// </summary>
+    private void OnFracturedMaskBreak(PlayMakerFSM fsm) {
+        // If we are not connected, there is nothing to send to
+        if (!_netClient.IsConnected) {
+            return;
+        }
+
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.FracturedMask);
+    }
+
+    /// <summary>
+    /// Hook for the magma bell being triggered.
+    /// </summary>
+    private void OnMagmaBell() {
+        // If we are not connected, there is nothing to send to
+        if (!_netClient.IsConnected) {
+            return;
+        }
+
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagmaBell, 0, [0]);
+    }
+
+    /// <summary>
+    /// Hook for the magma bell being triggered.
+    /// </summary>
+    private void OnMagmaBellRecharge() {
+        // If we are not connected, there is nothing to send to
+        if (!_netClient.IsConnected) {
+            return;
+        }
+
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagmaBell, 0, [1]);
+    }
+
+    /// <summary>
+    /// Hook for resting on a bench.
+    /// </summary>
+    private void OnBench() {
+        // If we are not connected, there is nothing to send to
+        if (!_netClient.IsConnected) {
+            return;
+        }
+
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.Bench);
     }
 
     // /// <summary>

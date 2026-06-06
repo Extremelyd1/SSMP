@@ -35,7 +35,8 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
 
     /// <summary>
     /// Adds a <see cref="DamageHero"/> component to the given game object that deals the given damage when the player
-    /// collides with it.
+    /// collides with it. Also adds a <see cref="EffectOwnerComponent"/> component that indicates the owner of this
+    /// object.
     /// </summary>
     /// <param name="target">The target game object to attach the component to.</param>
     /// <param name="damage">The number of mask of damage it should deal.</param>
@@ -45,6 +46,9 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
         damageHero.damageDealt = damage;
         damageHero.OnDamagedHero = new UnityEvent();
 
+        var identifier = target.AddComponentIfNotPresent<EffectOwnerComponent>();
+        identifier.Owner = target;
+
         return damageHero;
     }
 
@@ -52,7 +56,7 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
     /// Removes a <see cref="DamageHero"/> component from the given game object.
     /// </summary>
     /// <param name="target">The target game object to detach the component from.</param>
-    protected static void RemoveDamageHeroComponent(GameObject target) {
+    private static void RemoveDamageHeroComponent(GameObject target) {
         target.DestroyComponent<DamageHero>();
     }
 
@@ -64,7 +68,19 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
     /// <param name="damage">The number of mask of damage it should deal.</param>
     /// <returns>The <see cref="DamageHero"/> component that was added if PVP was turned on</returns>
     protected DamageHero? SetDamageHeroState(GameObject target, int damage = 1) {
-        if (ServerSettings.IsPvpEnabled && ShouldDoDamage) {
+        return SetDamageHeroState(target, ServerSettings.IsPvpEnabled && ShouldDoDamage, damage);
+    }
+
+    /// <summary>
+    /// Adds or removes a <see cref="DamageHero"/> component from the given game object,
+    /// depending on the PVP and team settings.
+    /// </summary>
+    /// <param name="target">The target game object to attach or remove the component from.</param>
+    /// <param name="damage">The number of mask of damage it should deal.</param>
+    /// <param name="doDamage">If the damager should be enabled or not</param>
+    /// <returns>The <see cref="DamageHero"/> component that was added if PVP was turned on</returns>
+    public static DamageHero? SetDamageHeroState(GameObject target, bool doDamage, int damage = 1) {
+        if (doDamage && damage > 0) {
             return AddDamageHeroComponent(target, damage);
         }
 

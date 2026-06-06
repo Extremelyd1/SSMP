@@ -86,6 +86,11 @@ public static class EventHooks {
     private static Hook? _heroControllerDieHook;
 
     /// <summary>
+    /// Hook for HeroControllerUseLavaBell
+    /// </summary>
+    private static Hook? _heroControllerUseLavaBellHook;
+
+    /// <summary>
     /// Hook for GameMap.PositionCompassAndCorpse.
     /// </summary>
     private static Hook? _gameMapPositionCompassAndCorpseHook;
@@ -180,6 +185,11 @@ public static class EventHooks {
     /// The first parameter is nonLethal, the second is frostDeath.
     /// </summary>
     public static event Action<bool, bool>? HeroControllerDie;
+
+    /// <summary>
+    /// Event that is called when HeroController.UseLavaBell is called.
+    /// </summary>
+    public static event Action? UseLavaBell;
 
     /// <summary>
     /// Event that is called when GameMap.PositionCompassAndCorpse is called.
@@ -313,6 +323,11 @@ public static class EventHooks {
         _heroControllerDieHook = new Hook(
             typeof(HeroController).GetMethod(nameof(HeroController.Die), BindingFlags),
             OnHeroControllerDie
+        );
+
+        _heroControllerUseLavaBellHook = new Hook(
+            typeof(HeroController).GetMethod(nameof(HeroController.UseLavaBell), BindingFlags),
+            OnUseLavaBell
         );
 
         _gameMapPositionCompassAndCorpseHook = new Hook(
@@ -491,6 +506,12 @@ public static class EventHooks {
         HeroControllerDie?.Invoke(nonLethal, frostDeath);
 
         return orig(self, nonLethal, frostDeath);
+    }
+
+    private static void OnUseLavaBell(Action<HeroController> orig, HeroController self) {
+        orig(self);
+
+        UseLavaBell?.Invoke();
     }
 
     private static void OnGameMapPositionCompassAndCorpse(Action<GameMap> orig, GameMap self) {
