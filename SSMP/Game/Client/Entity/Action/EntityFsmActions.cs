@@ -6,6 +6,7 @@ using HutongGames.PlayMaker;
 using HutongGames.PlayMaker.Actions;
 using Mono.Cecil.Cil;
 using MonoMod.Cil;
+using SSMP.Game.Client;
 using SSMP.Networking.Packet.Data;
 using SSMP.Util;
 using UnityEngine;
@@ -1289,8 +1290,8 @@ internal static class EntityFsmActions {
     }
     
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, GetHero action) {
-        var heroController = HeroController.instance;
-        action.storeResult.Value = heroController == null ? null : heroController.gameObject;
+        var requester = action.Fsm == null ? null : action.Fsm.GameObject;
+        action.storeResult.Value = PlayerTargetRegistry.GetNearestPlayer(requester);
     }
     
     #endregion

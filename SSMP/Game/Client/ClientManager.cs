@@ -237,7 +237,7 @@ internal class ClientManager : IClientManager {
         _saveManager = new SaveManager(netClient, _entityManager);
 
         _pauseManager = new PauseManager(netClient);
-        _gamePatcher = new GamePatcher(netClient);
+        _gamePatcher = new GamePatcher();
         _fsmPatcher = new FsmPatcher();
 
         _commandManager = new ClientCommandManager();

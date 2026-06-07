@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using SSMP.Game.Client.Entity.Component;
 using SSMP.Logging;
 using SSMP.Math;
+
 // ReSharper disable InconsistentNaming
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider
+// adding the 'required' modifier or declaring as nullable.
 
 namespace SSMP.Networking.Packet.Data;
 
@@ -17,7 +19,7 @@ internal abstract class BaseEntityUpdate : IPacketData {
 
     /// <inheritdoc />
     public abstract bool DropReliableDataIfNewerExists { get; }
-    
+
     /// <summary>
     /// The ID of the entity.
     /// </summary>
@@ -55,11 +57,12 @@ internal class EntityUpdate : BaseEntityUpdate, IPoolable {
     /// The scale data of the entity.
     /// </summary>
     public ScaleData Scale { get; set; }
-        
+
     /// <summary>
     /// The ID of the animation of the entity.
     /// </summary>
     public byte AnimationId { get; set; }
+
     /// <summary>
     /// The wrap mode of the animation.
     /// </summary>
@@ -143,7 +146,7 @@ internal class EntityUpdate : BaseEntityUpdate, IPoolable {
         if (UpdateTypes.Contains(EntityUpdateType.Position)) {
             Position = packet.ReadVector2();
         }
-            
+
         if (UpdateTypes.Contains(EntityUpdateType.Scale)) {
             Scale.ReadData(packet);
         }
@@ -162,15 +165,17 @@ internal class EntityUpdate : BaseEntityUpdate, IPoolable {
         /// Whether this instance originates from a client. This influences how to write certain data.
         /// </summary>
         public bool origin { get; set; }
-        
+
         /// <summary>
         /// Whether the x of the scale is defined.
         /// </summary>
         public bool x { get; set; }
+
         /// <summary>
         /// Whether the y of the scale is defined.
         /// </summary>
         public bool y { get; set; }
+
         /// <summary>
         /// Whether the z of the scale is defined.
         /// </summary>
@@ -180,10 +185,12 @@ internal class EntityUpdate : BaseEntityUpdate, IPoolable {
         /// Whether the x of the scale is only flipped from positive to negative or vice versa.
         /// </summary>
         public bool xFlipped { get; set; }
+
         /// <summary>
         /// Whether the y of the scale is only flipped from positive to negative or vice versa.
         /// </summary>
         public bool yFlipped { get; set; }
+
         /// <summary>
         /// Whether the z of the scale is only flipped from positive to negative or vice versa.
         /// </summary>
@@ -193,10 +200,12 @@ internal class EntityUpdate : BaseEntityUpdate, IPoolable {
         /// The float value for the x of the scale.
         /// </summary>
         public float xScale { get; set; }
+
         /// <summary>
         /// The float value for the y of the scale.
         /// </summary>
         public float yScale { get; set; }
+
         /// <summary>
         /// The float value for the z of the scale.
         /// </summary>
@@ -206,10 +215,12 @@ internal class EntityUpdate : BaseEntityUpdate, IPoolable {
         /// Whether the x of the scale is positive if it was only flipped.
         /// </summary>
         public bool xPos { get; private set; }
+
         /// <summary>
         /// Whether the y of the scale is positive if it was only flipped.
         /// </summary>
         public bool yPos { get; private set; }
+
         /// <summary>
         /// Whether the z of the scale is positive if it was only flipped.
         /// </summary>
@@ -222,8 +233,9 @@ internal class EntityUpdate : BaseEntityUpdate, IPoolable {
 
         /// <inheritdoc cref="IPacketData.WriteData" />
         public void WriteData(IPacket packet) {
-            // Logger.Debug($"ScaleData.WriteData x: {x}, y: {y}, z: {z}, xFlipped: {xFlipped}, yFlipped: {yFlipped}, zFlipped: {zFlipped}, xScale: {xScale}, yScale: {yScale}, zScale: {zScale}");
-            
+            // Logger.Debug($"ScaleData.WriteData x: {x}, y: {y}, z: {z}, xFlipped: {xFlipped}, yFlipped: {yFlipped},
+            // zFlipped: {zFlipped}, xScale: {xScale}, yScale: {yScale}, zScale: {zScale}");
+
             // 0 0 0 0 0 0 0 0
             byte flagByte = 0;
 
@@ -250,7 +262,7 @@ internal class EntityUpdate : BaseEntityUpdate, IPoolable {
                     flagByte |= 8;
                 }
             }
-            
+
             if (yFlipped) {
                 // 1 x x x ( 1 ) 0 0 0
                 flagByte |= 16;
@@ -260,7 +272,7 @@ internal class EntityUpdate : BaseEntityUpdate, IPoolable {
                     flagByte |= 32;
                 }
             }
-            
+
             if (zFlipped) {
                 // 1 x x x x x ( 1 ) 0
                 flagByte |= 64;
@@ -270,7 +282,7 @@ internal class EntityUpdate : BaseEntityUpdate, IPoolable {
                     flagByte |= 128;
                 }
             }
-            
+
             // Logger.Debug($"  Flag: {flagByte}");
             packet.Write(flagByte);
 
@@ -348,8 +360,9 @@ internal class EntityUpdate : BaseEntityUpdate, IPoolable {
                 zScale = packet.ReadFloat();
                 // Logger.Debug($"  zScale: {zScale}");
             }
-            
-            // Logger.Debug($"  x: {x}, y: {y}, z: {z}, xFlipped: {xFlipped}, yFlipped: {yFlipped}, zFlipped: {zFlipped}, xPos: {xPos}, yPos: {yPos}, zPos: {zPos}");
+
+            // Logger.Debug($"  x: {x}, y: {y}, z: {z}, xFlipped: {xFlipped}, yFlipped: {yFlipped}, zFlipped:
+            // {zFlipped}, xPos: {xPos}, yPos: {yPos}, zPos: {zPos}");
         }
 
         /// <summary>
@@ -370,7 +383,7 @@ internal class EntityUpdate : BaseEntityUpdate, IPoolable {
                     xScale = data.xScale;
                 }
             }
-            
+
             if (data.y) {
                 yFlipped = data.yFlipped;
 
@@ -380,7 +393,7 @@ internal class EntityUpdate : BaseEntityUpdate, IPoolable {
                     yScale = data.yScale;
                 }
             }
-            
+
             if (data.z) {
                 zFlipped = data.zFlipped;
 
@@ -429,22 +442,22 @@ internal class ReliableEntityUpdate : BaseEntityUpdate, IPoolable {
 
     /// <inheritdoc />
     public override bool DropReliableDataIfNewerExists => false;
-    
+
     /// <summary>
     /// A set containing the types of updates contained in this packet.
     /// </summary>
     public HashSet<EntityUpdateType> UpdateTypes { get; }
-    
+
     /// <summary>
     /// Whether the entity is active or not.
     /// </summary>
     public bool IsActive { get; set; }
-    
+
     /// <summary>
     /// List of generic entity network data for entity components and FSM updates.
     /// </summary>
     public List<EntityNetworkData> GenericData { get; }
-    
+
     /// <summary>
     /// Dictionary of data for a host entity's FSMs.
     /// </summary>
@@ -464,16 +477,18 @@ internal class ReliableEntityUpdate : BaseEntityUpdate, IPoolable {
         Id = 0;
         UpdateTypes.Clear();
         IsActive = false;
-        
+
         // Return pooled objects before clearing
         foreach (var data in GenericData) {
             ObjectPool<EntityNetworkData>.Return(data);
         }
+
         GenericData.Clear();
-        
+
         foreach (var kvp in HostFsmData) {
             ObjectPool<EntityHostFsmData>.Return(kvp.Value);
         }
+
         HostFsmData.Clear();
     }
 
@@ -498,7 +513,7 @@ internal class ReliableEntityUpdate : BaseEntityUpdate, IPoolable {
 
         // Write the update type flag
         packet.Write(updateTypeFlag);
-        
+
         if (UpdateTypes.Contains(EntityUpdateType.Active)) {
             packet.Write(IsActive);
         }
@@ -507,8 +522,8 @@ internal class ReliableEntityUpdate : BaseEntityUpdate, IPoolable {
             if (GenericData.Count > byte.MaxValue) {
                 Logger.Error("Length of entity network data instances exceeded max value of byte");
             }
-                
-            var length = (byte)System.Math.Min(GenericData.Count, byte.MaxValue);
+
+            var length = (byte) System.Math.Min(GenericData.Count, byte.MaxValue);
 
             packet.Write(length);
             for (var i = 0; i < length; i++) {
@@ -546,7 +561,7 @@ internal class ReliableEntityUpdate : BaseEntityUpdate, IPoolable {
             // Increase the value of current bit
             currentTypeValue *= 2;
         }
-        
+
         if (UpdateTypes.Contains(EntityUpdateType.Active)) {
             IsActive = packet.ReadBool();
         }
@@ -557,7 +572,7 @@ internal class ReliableEntityUpdate : BaseEntityUpdate, IPoolable {
             for (var i = 0; i < length; i++) {
                 var entityNetworkData = ObjectPool<EntityNetworkData>.Get();
                 entityNetworkData.ReadData(packet);
-                    
+
                 GenericData.Add(entityNetworkData);
             }
         }
@@ -570,7 +585,7 @@ internal class ReliableEntityUpdate : BaseEntityUpdate, IPoolable {
 
                 var data = ObjectPool<EntityHostFsmData>.Get();
                 data.ReadData(packet);
-                
+
                 HostFsmData.Add(key, data);
             }
         }
@@ -586,16 +601,26 @@ internal class EntityNetworkData : IPoolable {
     /// The type of the data.
     /// </summary>
     public EntityComponentType Type { get; set; }
+
     /// <summary>
     /// Packet instance containing the data for easy reading and writing of data.
     /// </summary>
     public Packet Packet { get; set; } = new();
 
+    /// <summary>
+    /// Creates an independent copy of this network data and its packet payload.
+    /// </summary>
+    public EntityNetworkData Clone() {
+        return new EntityNetworkData {
+            Type = Type,
+            Packet = new Packet(Packet.ToArray())
+        };
+    }
+
     /// <inheritdoc />
     public void Reset() {
         Type = default;
-        // Reuse the existing Packet instance to preserve pooling benefits.
-        Packet.Clear();
+        Packet = new Packet();
     }
 
     /// <inheritdoc cref="IPacketData.WriteData" />
@@ -603,11 +628,11 @@ internal class EntityNetworkData : IPoolable {
         packet.Write((ushort) Type);
 
         var data = Packet.ToArray();
-        
+
         if (data.Length > ushort.MaxValue) {
             Logger.Error("Length of entity network data exceeded max value of ushort");
         }
-            
+
         var length = (ushort) System.Math.Min(data.Length, ushort.MaxValue);
 
         packet.Write(length);
@@ -621,12 +646,12 @@ internal class EntityNetworkData : IPoolable {
         Type = (EntityComponentType) packet.ReadUShort();
 
         var length = packet.ReadUShort();
-        
-        // Clear and reuse existing Packet instance to avoid allocations
-        Packet.Clear();
+        var data = new byte[length];
         for (var i = 0; i < length; i++) {
-            Packet.Write(packet.ReadByte());
+            data[i] = packet.ReadByte();
         }
+
+        Packet = new Packet(data, 0, data.Length);
     }
 }
 
@@ -645,7 +670,7 @@ internal class EntityHostFsmData : IPoolable {
     /// The index of the current (or last) state of the FSM.
     /// </summary>
     public byte CurrentState { get; set; }
-    
+
     /// <summary>
     /// Dictionary containing indices of float variables to their respective values.
     /// </summary>
@@ -706,42 +731,42 @@ internal class EntityHostFsmData : IPoolable {
                 Floats[pair.Key] = pair.Value;
             }
         }
-        
+
         if (otherData.Types.Contains(Type.Ints)) {
             Types.Add(Type.Ints);
-            
+
             foreach (var pair in otherData.Ints) {
                 Ints[pair.Key] = pair.Value;
             }
         }
-        
+
         if (otherData.Types.Contains(Type.Bools)) {
             Types.Add(Type.Bools);
-            
+
             foreach (var pair in otherData.Bools) {
                 Bools[pair.Key] = pair.Value;
             }
         }
-        
+
         if (otherData.Types.Contains(Type.Strings)) {
             Types.Add(Type.Strings);
-            
+
             foreach (var pair in otherData.Strings) {
                 Strings[pair.Key] = pair.Value;
             }
         }
-        
+
         if (otherData.Types.Contains(Type.Vector2s)) {
             Types.Add(Type.Vector2s);
-            
+
             foreach (var pair in otherData.Vec2s) {
                 Vec2s[pair.Key] = pair.Value;
             }
         }
-        
+
         if (otherData.Types.Contains(Type.Vector3s)) {
             Types.Add(Type.Vector3s);
-            
+
             foreach (var pair in otherData.Vec3s) {
                 Vec3s[pair.Key] = pair.Value;
             }
@@ -823,7 +848,7 @@ internal class EntityHostFsmData : IPoolable {
                 }
             }
         }
-        
+
         ReadVarDict(Type.Floats, Floats, packet.ReadFloat);
         ReadVarDict(Type.Ints, Ints, packet.ReadInt);
         ReadVarDict(Type.Bools, Bools, packet.ReadBool);

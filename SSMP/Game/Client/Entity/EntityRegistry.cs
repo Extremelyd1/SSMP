@@ -1,149 +1,220 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
+using System.Runtime.Serialization;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
 using SSMP.Game.Client.Entity.Component;
 using SSMP.Util;
 using UnityEngine;
-// ReSharper disable ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
-#pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
+using Logger = SSMP.Logging.Logger;
 
-namespace SSMP.Game.Client.Entity; 
+namespace SSMP.Game.Client.Entity;
 
 /// <summary>
-/// Static class that manages loading and storing of entity data. Such as names of game objects, names of FSMs and
-/// corresponding types.
+/// Loads and provides read-only access to entity registry data at startup.
+/// Matches game objects to their registered <see cref="EntityRegistryEntry"/> by name, FSM, and parent.
+/// Thread-safe for concurrent reads after initialization.
 /// </summary>
 internal static class EntityRegistry {
-    /// <summary>
-    /// The file path of the embedded resource file for the entity registry.
-    /// </summary>
     private const string EntityRegistryFilePath = "SSMP.Resource.entity-registry.json";
-    
-    /// <summary>
-    /// List of all entity registry entries that are loaded from the embedded file.
-    /// </summary>
-    private static List<EntityRegistryEntry> Entries { get; }
+
+    // Read-only after static constructor completes. Concurrent reads are safe.
+    private static readonly List<EntityRegistryEntry> Entries;
 
     static EntityRegistry() {
-        var loadedEntries = FileUtil.LoadObjectFromEmbeddedJson<List<EntityRegistryEntry>>(EntityRegistryFilePath);
+        var loadedEntries = FileUtil.LoadObjectFromEmbeddedJson<List<EntityRegistryEntry>>(EntityRegistryFilePath)
+                            ?? throw new InvalidDataException("Could not deserialize entries from embedded JSON.");
 
-        Entries = loadedEntries ?? throw new InvalidDataException("Could not deserialize entries from embedded JSON");
+        Entries = GetValidEntries(loadedEntries);
     }
 
     /// <summary>
-    /// Try to get the corresponding entry from the given enumerable of entries and the given game object.
+    /// Filters out entries whose <see cref="EntityRegistryEntry.TypeName"/> has no mapping in
+    /// <see cref="EntityType"/>, and recursively validates children.
     /// </summary>
-    /// <param name="gameObject">The game object to find the entry for.</param>
-    /// <param name="foundEntry">The entry if it was found; otherwise null.</param>
-    /// <returns>true if the entry was found; otherwise false.</returns>
-    public static bool TryGetEntry(
-        GameObject gameObject,
-        out EntityRegistryEntry foundEntry
-    ) {
+    private static List<EntityRegistryEntry> GetValidEntries(IEnumerable<EntityRegistryEntry> entries) {
+        var validEntries = new List<EntityRegistryEntry>();
+
+        foreach (var entry in entries) {
+            if (!entry.HasValidType) {
+                Logger.Warn(
+                    $"Ignoring entity registry entry '{entry.BaseObjectName}' with unmapped type '{entry.TypeName}'"
+                );
+                continue;
+            }
+
+            if (entry.Children != null) {
+                entry.Children = GetValidEntries(entry.Children);
+            }
+
+            validEntries.Add(entry);
+        }
+
+        return validEntries;
+    }
+
+    /// <summary>
+    /// Finds the best-matching entry for <paramref name="gameObject"/> within the top-level registry.
+    /// Matching prefers the entry with the longest <see cref="EntityRegistryEntry.BaseObjectName"/>
+    /// that is a substring of the object's name, optionally filtered by FSM and parent name.
+    /// </summary>
+    /// <param name="gameObject">The game object to find an entry for.</param>
+    /// <param name="foundEntry">The matched entry, or <c>null</c> if none matched.</param>
+    /// <returns><c>true</c> if a matching entry was found.</returns>
+    public static bool TryGetEntry(GameObject gameObject, out EntityRegistryEntry? foundEntry) {
         return TryGetEntry(Entries, gameObject, out foundEntry);
     }
 
     /// <summary>
-    /// Try to get the corresponding entry from the given enumerable of entries and the given game object.
+    /// Finds the best-matching entry for <paramref name="gameObject"/> within
+    /// <paramref name="entries"/>. Useful for searching within a parent entry's children.
     /// </summary>
-    /// <param name="entries">The enumerable of entries to check for.</param>
-    /// <param name="gameObject">The game object to find the entry for.</param>
-    /// <param name="foundEntry">The entry if it was found; otherwise null.</param>
-    /// <returns>true if the entry was found; otherwise false.</returns>
+    /// <remarks>
+    /// Known limitation: entries that share the same <see cref="EntityRegistryEntry.BaseObjectName"/>
+    /// and FSM names are ambiguous. The type field is not part of the selection criteria.
+    /// Example: GreatConchfly vs RagingConchfly under Coral Conch Driller Giant Solo.
+    /// </remarks>
+    /// <param name="entries">The set of entries to search.</param>
+    /// <param name="gameObject">The game object to find an entry for.</param>
+    /// <param name="foundEntry">The matched entry, or <c>null</c> if none matched.</param>
+    /// <returns><c>true</c> if a matching entry was found.</returns>
     public static bool TryGetEntry(
-        IEnumerable<EntityRegistryEntry> entries, 
-        GameObject gameObject, 
-        out EntityRegistryEntry foundEntry
+        IEnumerable<EntityRegistryEntry> entries,
+        GameObject gameObject,
+        out EntityRegistryEntry? foundEntry
     ) {
-        var longestBaseName = 0;
         foundEntry = null;
+        var longestBaseName = 0;
+
+        // GetComponents<T>() allocates a new array each call. We defer it until we encounter
+        // an entry that actually requires FSM filtering, and then reuse the result for the rest
+        // of the loop. This avoids the allocation entirely when no entry uses FSM names.
+        PlayMakerFSM[]? fsms = null;
 
         foreach (var entry in entries) {
             if (!gameObject.name.Contains(entry.BaseObjectName)) {
                 continue;
             }
 
-            // Known limitation: entries that share the same base object name and FSM names are ambiguous here.
-            // Example: Coral Conch Driller Giant Solo may need to distinguish GreatConchflies vs RagingConchfly
-            // if players report incorrect mapping, because type is not part of the selection criteria.
-            // If the entry defines FSM names and the object does not have any matching FSM, continue.
-            if (entry.FsmNames is { Count: > 0 } && !gameObject.GetComponents<PlayMakerFSM>().Any(
-                    childFsm => entry.FsmNames.Contains(childFsm.Fsm.Name)
-            )) {
+            if (entry.HasFsmFilter) {
+                fsms ??= gameObject.GetComponents<PlayMakerFSM>();
+                if (!HasMatchingFsm(fsms, entry)) continue;
+            }
+
+            if (entry.ParentName != null) {
+                var parent = gameObject.transform.parent;
+                // No parent means it trivially cannot match the required parent name.
+                if (!parent || !parent.gameObject.name.Contains(entry.ParentName)) {
+                    continue;
+                }
+            }
+
+            var nameLength = entry.BaseObjectName.Length;
+            if (nameLength <= longestBaseName) {
                 continue;
             }
 
-            // If the entry has a parent name defined, we need to check if the parent of the game object matches it
-            if (entry.ParentName != null) {
-                var parent = gameObject.transform.parent;
-                // No parent at all, so it trivially doesn't match the name
-                if (!parent) {
-                    continue;
-                }
-
-                if (!parent.gameObject.name.Contains(entry.ParentName)) {
-                    continue;
-                }
-            }
-
-            var baseNameLength = entry.BaseObjectName.Length;
-            if (baseNameLength > longestBaseName) {
-                longestBaseName = baseNameLength;
-                foundEntry = entry;
-            }
+            longestBaseName = nameLength;
+            foundEntry = entry;
         }
 
-        if (longestBaseName == 0) {
-            foundEntry = null;
-            return false;
+        // Do not use (longestBaseName == 0) as the "not found" check: an entry with an empty
+        // BaseObjectName would always match Contains("") but would never win the length comparison,
+        // causing a false negative. foundEntry != null is strictly correct.
+        return foundEntry != null;
+    }
+
+    /// <summary>
+    /// Returns true if any FSM in <paramref name="fsms"/> matches the entry's FSM name filter.
+    /// Avoids LINQ and closure allocations; uses the entry's pre-built hash set for O(1) lookup.
+    /// </summary>
+    private static bool HasMatchingFsm(PlayMakerFSM[] fsms, EntityRegistryEntry entry) {
+        foreach (var fsm in fsms) {
+            if (entry.ContainsFsmName(fsm.Fsm.Name)) return true;
         }
 
-        return true;
+        return false;
     }
 }
 
 /// <summary>
-/// Class representing a single entry in the entity registry that contains the relevant data for an entity type.
+/// A single entry in the entity registry, describing how to identify and construct an entity.
+/// Instances are created by JSON deserialization and treated as read-only after initialization.
 /// </summary>
 internal class EntityRegistryEntry {
     /// <summary>
-    /// The base of the game object name of the entity.
-    /// For example: "Zombie Leaper", which in-game can be represented as "Zombie Leaper (Clone) (1)"
+    /// The base of the game object name for this entity type.
+    /// For example: "Zombie Leaper", which in-game may appear as "Zombie Leaper (Clone) (1)".
+    /// Matching uses <see cref="string.Contains(string)"/> against the live object's name.
     /// </summary>
     [JsonProperty("base_object_name")]
-    public string BaseObjectName { get; set; }
-    
-    /// <summary>
-    /// The type of the entity.
-    /// </summary>
-    [JsonConverter(typeof(StringEnumConverter))]
+    public string BaseObjectName { get; set; } = null!;
+
+    /// <summary>The resolved entity type. Valid only when <see cref="HasValidType"/> is true.</summary>
+    [JsonIgnore]
+    public EntityType Type { get; private set; }
+
+    /// <summary>The raw type string from the registry file, used for diagnostics and logging.</summary>
     [JsonProperty("type")]
-    public EntityType Type { get; set; }
-    
+    public string TypeName { get; private set; } = null!;
+
     /// <summary>
-    /// The names of FSMs that can identify this entity. Can be empty if the entity does not have a FSM.
+    /// Whether <see cref="TypeName"/> successfully mapped to a known <see cref="EntityType"/>.
+    /// Entries where this is false are discarded during loading.
+    /// </summary>
+    [JsonIgnore]
+    public bool HasValidType { get; private set; }
+
+    /// <summary>
+    /// FSM names used to disambiguate this entry from others sharing the same
+    /// <see cref="BaseObjectName"/>. Null or empty means FSM matching is not required.
     /// </summary>
     [JsonProperty("fsm_names")]
-    public List<string> FsmNames { get; set; }
-    
+    public List<string>? FsmNames { get; set; }
+
     /// <summary>
-    /// The name of the parent of this object. Can be empty if there is no parent or it is not relevant.
+    /// Required parent name substring, or null if the parent is not part of the match criteria.
     /// </summary>
     [JsonProperty("parent_name")]
-    public string ParentName { get; set; }
+    public string? ParentName { get; set; }
 
     /// <summary>
-    /// Array of additional entity component that should be initialized for the entity.
+    /// Additional component types to initialize when this entity is created.
     /// </summary>
     [JsonProperty("components")]
-    public EntityComponentType[] ComponentTypes { get; set; }
+    public EntityComponentType[]? ComponentTypes { get; set; }
 
     /// <summary>
-    /// List of entries that are children of this entry.
+    /// Child entries nested under this entry. Populated from the registry file and validated
+    /// during startup. Null if no children are defined.
     /// </summary>
     [JsonProperty("children")]
-    public List<EntityRegistryEntry> Children { get; set; }
+    public List<EntityRegistryEntry>? Children { get; set; }
+
+    /// <summary>
+    /// True if this entry requires FSM-based filtering during lookup.
+    /// Set during deserialization; safe to read concurrently.
+    /// </summary>
+    [JsonIgnore]
+    internal bool HasFsmFilter { get; private set; }
+
+    // Built from FsmNames in OnDeserialized. Null when FsmNames is null or empty.
+    // HashSet gives O(1) lookup vs O(n) for List<string>.Contains.
+    private HashSet<string>? _fsmNameSet;
+
+    [OnDeserialized]
+    private void OnDeserialized(StreamingContext _) {
+        HasValidType = Enum.TryParse(TypeName, ignoreCase: false, out EntityType type);
+        Type = type;
+
+        if (FsmNames is not { Count: > 0 }) return;
+        _fsmNameSet = new HashSet<string>(FsmNames, StringComparer.Ordinal);
+        HasFsmFilter = true;
+    }
+
+    /// <summary>
+    /// Returns true if <paramref name="fsmName"/> is in this entry's FSM name filter.
+    /// Always false when <see cref="HasFsmFilter"/> is false.
+    /// </summary>
+    internal bool ContainsFsmName(string fsmName) => _fsmNameSet?.Contains(fsmName) ?? false;
 }

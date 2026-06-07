@@ -604,13 +604,13 @@ internal class Entity {
                 Object.Host.SetActive(false);
             }
 
-            if (
-                Object.Client != null &&
-                Object.Client.TryGetComponent<PredictiveInterpolation>(out var interpolation)
-            ) {
-                interpolation.AdaptToRTT(_netClient.UpdateManager.AverageRtt);
-                interpolation.ManualUpdate(Time.deltaTime);
+            if (Object.Client == null ||
+                !Object.Client.TryGetComponent<PredictiveInterpolation>(out var interpolation)) {
+                return;
             }
+
+            interpolation.AdaptToRTT(_netClient.UpdateManager.AverageRtt);
+            interpolation.ManualUpdate(Time.deltaTime);
 
             return;
         }
@@ -687,12 +687,19 @@ internal class Entity {
 
             var lastStateName = snapshot.CurrentState;
             if (fsm.ActiveStateName != lastStateName) {
-                snapshot.CurrentState = fsm.ActiveStateName;
+                var activeStateIndex = Array.IndexOf(fsm.FsmStates, fsm.Fsm.ActiveState);
+                if (activeStateIndex is < 0 or > byte.MaxValue) {
+                    Logger.Warn(
+                        $"Entity ({Id}, {Type}) host changed to unknown FSM state: {lastStateName}, {fsm.ActiveStateName}"
+                    );
+                } else {
+                    snapshot.CurrentState = fsm.ActiveStateName;
 
-                data.Types.Add(EntityHostFsmData.Type.State);
-                data.CurrentState = (byte) Array.IndexOf(fsm.FsmStates, fsm.Fsm.ActiveState);
+                    data.Types.Add(EntityHostFsmData.Type.State);
+                    data.CurrentState = (byte) activeStateIndex;
 
-                Logger.Debug($"Entity ({Id}, {Type}) host changed states: {lastStateName}, {fsm.ActiveStateName}");
+                    Logger.Debug($"Entity ({Id}, {Type}) host changed states: {lastStateName}, {fsm.ActiveStateName}");
+                }
             }
 
             // Define a method that allows generalization of checking for changes in all FSM variables
@@ -713,22 +720,22 @@ internal class Entity {
                     }
 
                     var value = fsmVarValue.Invoke(fsmVar);
-                    if (!value.Equals(snapshotVar)) {
-                        // Update the value in the snapshot since it changed
-                        snapshotArray[i] = value;
+                    if (value.Equals(snapshotVar)) {
+                        continue;
+                    }
 
-                        data.Types.Add(type);
+                    // Update the value in the snapshot since it changed
+                    snapshotArray[i] = value;
+
+                    data.Types.Add(type);
+                    dataDict[i] = value switch {
                         // Some funky casting here to make sure we can use this method with Vector2 and Vector3
                         // Since there is a mismatch between our SSMP.Math.Vector2 and Unity's Vector2
                         // But our types have explicit converters, so casting is possible
-                        if (value is Vector2 vec2) {
-                            dataDict[i] = (TData) (object) (Math_Vector2) vec2;
-                        } else if (value is Vector3 vec3) {
-                            dataDict[i] = (TData) (object) (Math.Vector3) vec3;
-                        } else {
-                            dataDict[i] = (TData) (object) value;
-                        }
-                    }
+                        Vector2 vec2 => (TData) (object) (Math_Vector2) vec2,
+                        Vector3 vec3 => (TData) (object) (Math.Vector3) vec3,
+                        _ => (TData) (object) value
+                    };
                 }
             }
 
@@ -915,157 +922,146 @@ internal class Entity {
     public void MakeHost() {
         Logger.Info($"Making entity ({Id}, {Type}) a host entity");
 
-        // If the client object is null, we don't have to care about doing anything for the host object anymore
         if (Object.Client == null) {
-            if (Object.Host != null) {
-                Object.Host.SetActive(false);
-            }
-
+            Object.Host.SetActive(false);
             _isControlled = false;
-
-            foreach (var component in _components.Values) {
+            foreach (var component in _components.Values)
                 component.IsControlled = false;
-            }
-
-            Logger.Debug("  Client object null, enabling host object and returning");
+            Logger.Debug("  Client object null, disabling host object and returning");
             return;
         }
 
         if (_hasParent) {
             Logger.Debug("  Entity has parent, only setting local transform");
-
             Object.Host.transform.localPosition = _lastPosition = Object.Client.transform.localPosition;
             Object.Host.transform.localScale = _lastScale = Object.Client.transform.localScale;
         } else {
             Logger.Debug("  Entity has no parent, calculating transform");
 
             var clientPos = Object.Client.transform.localPosition;
-            var parentPos = Vector3.zero;
-            if (Object.Host.transform.parent != null) {
-                parentPos = Object.Host.transform.parent.position;
-            }
+            var parentPos = Object.Host.transform.parent != null
+                ? Object.Host.transform.parent.position
+                : Vector3.zero;
 
-            var newPosX = clientPos.x - parentPos.x;
-            var newPosY = clientPos.y - parentPos.y;
-            var newPosZ = clientPos.z - parentPos.z;
+            Object.Host.transform.localPosition = _lastPosition = new Vector3(
+                clientPos.x - parentPos.x,
+                clientPos.y - parentPos.y,
+                clientPos.z - parentPos.z
+            );
 
-            Object.Host.transform.localPosition = _lastPosition = new Vector3(newPosX, newPosY, newPosZ);
-
-            // Since the scale of the client object is the entire scale we have and the host object scale can be in a
-            // hierarchy, we need to calculate what the new local scale of the host will be to match the client scale
             var clientScale = Object.Client.transform.localScale;
             var hostLocalScale = Object.Host.transform.localScale;
             var hostLossyScale = Object.Host.transform.lossyScale;
 
-            var newScaleX = hostLocalScale.x == 0 || hostLossyScale.x == 0
-                ? 0f
-                : clientScale.x / (hostLossyScale.x / hostLocalScale.x);
-            var newScaleY = hostLocalScale.y == 0 || hostLossyScale.y == 0
-                ? 0f
-                : clientScale.y / (hostLossyScale.y / hostLocalScale.y);
-            var newScaleZ = hostLocalScale.z == 0 || hostLossyScale.z == 0
-                ? 0f
-                : clientScale.z / (hostLossyScale.z / hostLocalScale.z);
-
-            Object.Host.transform.localScale = _lastScale = new Vector3(newScaleX, newScaleY, newScaleZ);
+            Object.Host.transform.localScale = _lastScale = new Vector3(
+                hostLocalScale.x == 0 || hostLossyScale.x == 0
+                    ? 0f
+                    : clientScale.x / (hostLossyScale.x / hostLocalScale.x),
+                hostLocalScale.y == 0 || hostLossyScale.y == 0
+                    ? 0f
+                    : clientScale.y / (hostLossyScale.y / hostLocalScale.y),
+                hostLocalScale.z == 0 || hostLossyScale.z == 0
+                    ? 0f
+                    : clientScale.z / (hostLossyScale.z / hostLocalScale.z)
+            );
         }
 
-        // Make sure that the sprite animator doesn't play the default clip after enabling the object
-        if (_animator.Host != null) {
+        // Prevent the sprite animator from auto-playing its default clip on enable
+        if (_animator.Host != null)
             _animator.Host.playAutomatically = false;
-        }
 
         var clientActive = Object.Client.activeSelf;
         Object.Client.SetActive(false);
         Object.Host.SetActive(clientActive);
-
         Logger.Debug($"  Set Active of host object to: {clientActive}, disabling client object");
 
-        // We need to set the isKinematic property of rigid bodies to ensure physics work again after enabling
-        // the host object. In Hornet 1 this is necessary because another state sets this property normally in the
-        // fight. See the "Wake" or "Refight Ready" state of the "Control" FSM on Hornet 1.
-        // For the Mantis Lord and City Elevator entity, this should never be disabled, since they are always kinematic.
-        var rigidBody = Object.Host.GetComponent<Rigidbody2D>();
-        // TODO:
-        //if (rigidBody != null && Type != EntityType.MantisLord && Type != EntityType.CityElevator) {
-        //    Logger.Debug("  Resetting isKinematic of Rigidbody to ensure physics work for host object");
-        //    rigidBody.isKinematic = false;
-        //}
+        // TODO: Uncomment when the kinematic reset is validated for Hornet 1 without regressing Mantis Lord /
+        // CityElevator.
+        // var rigidBody = Object.Host.GetComponent<Rigidbody2D>();
+        // if (rigidBody != null && Type != EntityType.MantisLord && Type != EntityType.CityElevator)
+        //     rigidBody.isKinematic = false;
 
         _lastIsActive = _hasParent ? Object.Host.activeSelf : Object.Host.activeInHierarchy;
 
         _isControlled = false;
-
-        foreach (var component in _components.Values) {
+        foreach (var component in _components.Values)
             component.IsControlled = false;
-        }
 
+        // Sync animation from the client animator to the host
         if (_animator.Client != null) {
             var currentClip = _animator.Client.CurrentClip;
             if (currentClip != null) {
-                var clientAnimation = currentClip.name;
-                var wrapMode = currentClip.wrapMode;
-
-                Logger.Debug($"  Animator and current clip present, updating animation: {clientAnimation}, {wrapMode}");
-
-                LateUpdateAnimation(_animator.Host, clientAnimation, wrapMode);
+                Logger.Debug(
+                    $"  Animator and current clip present, updating animation: {currentClip.name}, {currentClip.wrapMode}"
+                );
+                LateUpdateAnimation(_animator.Host, currentClip.name, currentClip.wrapMode);
             }
         }
 
+        // Restore FSM variable state and active state from snapshots.
         Logger.Debug("  Restoring FSMs from snapshots");
 
-        for (var fsmIndex = 0; fsmIndex < _fsms.Host.Count; fsmIndex++) {
+        // _fsms.Host and _fsmSnapshots are parallel lists built during initialization.
+        // If they diverge (should never happen, but guard it), log and process as many as we safely can.
+        var fsmCount = System.Math.Min(_fsms.Host.Count, _fsmSnapshots.Count);
+        if (_fsms.Host.Count != _fsmSnapshots.Count) {
+            Logger.Warn(
+                $"  FSM/snapshot list size mismatch: {_fsms.Host.Count} FSMs vs {_fsmSnapshots.Count} snapshots — processing {fsmCount}"
+            );
+        }
+
+        for (var fsmIndex = 0; fsmIndex < fsmCount; fsmIndex++) {
             var fsm = _fsms.Host[fsmIndex];
+            var snapshot = _fsmSnapshots[fsmIndex];
 
             Logger.Debug($"    Restoring FSM: {fsm.Fsm.Name}");
 
-            // Force initialize the host FSM, since it might have been disabled before initializing
+            // Force-initialize the host FSM: it may have been disabled before running its Init state.
             EntityInitializer.InitializeFsm(fsm);
 
-            var snapshot = _fsmSnapshots[fsmIndex];
+            // Restore variables. Math.Min guards against snapshot/FSM version skew where variable
+            // counts differ — restore what we can rather than throwing on a mismatch.
+            var floatCount = System.Math.Min(snapshot.Floats.Length, fsm.FsmVariables.FloatVariables.Length);
+            var intCount = System.Math.Min(snapshot.Ints.Length, fsm.FsmVariables.IntVariables.Length);
+            var boolCount = System.Math.Min(snapshot.Bools.Length, fsm.FsmVariables.BoolVariables.Length);
+            var stringCount = System.Math.Min(snapshot.Strings.Length, fsm.FsmVariables.StringVariables.Length);
+            var vec2Count = System.Math.Min(snapshot.Vector2s.Length, fsm.FsmVariables.Vector2Variables.Length);
+            var vec3Count = System.Math.Min(snapshot.Vector3s.Length, fsm.FsmVariables.Vector3Variables.Length);
 
-            for (var i = 0; i < snapshot.Floats.Length; i++) {
-                fsm.FsmVariables.FloatVariables[i].Value = snapshot.Floats[i];
+            for (var i = 0; i < floatCount; i++) fsm.FsmVariables.FloatVariables[i].Value = snapshot.Floats[i];
+            for (var i = 0; i < intCount; i++) fsm.FsmVariables.IntVariables[i].Value = snapshot.Ints[i];
+            for (var i = 0; i < boolCount; i++) fsm.FsmVariables.BoolVariables[i].Value = snapshot.Bools[i];
+            for (var i = 0; i < stringCount; i++) fsm.FsmVariables.StringVariables[i].Value = snapshot.Strings[i];
+            for (var i = 0; i < vec2Count; i++) fsm.FsmVariables.Vector2Variables[i].Value = snapshot.Vector2s[i];
+            for (var i = 0; i < vec3Count; i++) fsm.FsmVariables.Vector3Variables[i].Value = snapshot.Vector3s[i];
+
+            // Skip state restoration if no state was recorded in the snapshot.
+            // This is normal: the FSM may not have entered any state yet when the snapshot was taken.
+            if (string.IsNullOrEmpty(snapshot.CurrentState)) {
+                Logger.Debug("  Not setting FSM state, because current state is empty");
+                continue;
             }
 
-            for (var i = 0; i < snapshot.Ints.Length; i++) {
-                fsm.FsmVariables.IntVariables[i].Value = snapshot.Ints[i];
-            }
-
-            for (var i = 0; i < snapshot.Bools.Length; i++) {
-                fsm.FsmVariables.BoolVariables[i].Value = snapshot.Bools[i];
-            }
-
-            for (var i = 0; i < snapshot.Strings.Length; i++) {
-                fsm.FsmVariables.StringVariables[i].Value = snapshot.Strings[i];
-            }
-
-            for (var i = 0; i < snapshot.Vector2s.Length; i++) {
-                fsm.FsmVariables.Vector2Variables[i].Value = snapshot.Vector2s[i];
-            }
-
-            for (var i = 0; i < snapshot.Vector3s.Length; i++) {
-                fsm.FsmVariables.Vector3Variables[i].Value = snapshot.Vector3s[i];
-            }
-
-            // Before setting the state, we replace the actions of the to-be state to only include the ones that
-            // should be executed again (including actions with "everyFrame" on true or that continuously check
-            // collisions for example).
+            // GetState returns null (never throws) — safe to call without a prior existence check.
             var state = fsm.GetState(snapshot.CurrentState);
             if (state == null) {
-                Logger.Debug("  Not setting FSM state, because current state is empty");
+                Logger.Debug($"  Not setting FSM state, because state '{snapshot.CurrentState}' does not exist");
                 continue;
             }
 
             Logger.Debug($"  Setting FSM state: {snapshot.CurrentState}");
 
+            // Replace actions temporarily: only keep continuous ones (everyFrame, collision listeners, etc.)
+            // so that one-shot entry actions don't fire again on restore.
             var oldActions = state.Actions;
-            var newActions = oldActions.Where(ActionRegistry.IsActionContinuous).ToArray();
+            var continuousActions = Array.FindAll(oldActions, ActionRegistry.IsActionContinuous);
 
-            Logger.Debug($"  Only using actions: {string.Join(", ", newActions.Select(a => a.GetType().ToString()))}");
+            // Use .Name (short name) rather than .ToString() (fully qualified): cheaper and readable.
+            Logger.Debug(
+                $"  Only using actions: {string.Join(", ", Array.ConvertAll(continuousActions, a => a.GetType().Name))}"
+            );
 
-            // Replace the actions, set the state and reset the actions again
-            state.Actions = newActions;
+            state.Actions = continuousActions;
             fsm.SetState(snapshot.CurrentState);
             state.Actions = oldActions;
         }
@@ -1218,17 +1214,18 @@ internal class Entity {
             return;
         }
 
-        if (wrapMode == tk2dSpriteAnimationClip.WrapMode.Once ||
-            wrapMode == tk2dSpriteAnimationClip.WrapMode.Single) {
-            // Since the clip was played once, it stops on the last frame,
-            // so we emulate that by only "playing" the last frame of the clip
-            var clipLength = clip.frames.Length;
-            animator.PlayFromFrame(clipName, clipLength - 1);
-
-            // Logger.Info(
-            // $"  Played animation: {clipName}, {clipLength - 1} on {_animator.Client.name},
-            // {_animator.Client.GetHashCode()}");
+        if (wrapMode != tk2dSpriteAnimationClip.WrapMode.Once && wrapMode != tk2dSpriteAnimationClip.WrapMode.Single) {
+            return;
         }
+
+        // Since the clip was played once, it stops on the last frame,
+        // so we emulate that by only "playing" the last frame of the clip
+        var clipLength = clip.frames.Length;
+        animator.PlayFromFrame(clipName, clipLength - 1);
+
+        // Logger.Info(
+        // $"  Played animation: {clipName}, {clipLength - 1} on {_animator.Client.name},
+        // {_animator.Client.GetHashCode()}");
     }
 
     /// <summary>
@@ -1253,8 +1250,6 @@ internal class Entity {
         foreach (var data in entityNetworkData) {
             if (data.Type == EntityComponentType.Fsm) {
                 PlayMakerFSM fsm;
-                byte stateIndex;
-                byte actionIndex;
 
                 if (_fsms.Client.Count > 1) {
                     // Do a check on the length of the data
@@ -1264,9 +1259,6 @@ internal class Entity {
 
                     var fsmIndex = data.Packet.ReadByte();
                     fsm = _fsms.Client[fsmIndex];
-
-                    stateIndex = data.Packet.ReadByte();
-                    actionIndex = data.Packet.ReadByte();
                 } else {
                     // Do a check on the length of the data
                     if (data.Packet.Length < 2) {
@@ -1274,10 +1266,10 @@ internal class Entity {
                     }
 
                     fsm = _fsms.Client[0];
-
-                    stateIndex = data.Packet.ReadByte();
-                    actionIndex = data.Packet.ReadByte();
                 }
+
+                var stateIndex = data.Packet.ReadByte();
+                var actionIndex = data.Packet.ReadByte();
 
                 var state = fsm.FsmStates[stateIndex];
                 var action = state.Actions[actionIndex];
@@ -1302,10 +1294,7 @@ internal class Entity {
     /// </summary>
     /// <param name="hostFsmData">Dictionary mapping FSM index to data.</param>
     public void UpdateHostFsmData(Dictionary<byte, EntityHostFsmData> hostFsmData) {
-        foreach (var fsmPair in hostFsmData) {
-            var fsmIndex = fsmPair.Key;
-            var data = fsmPair.Value;
-
+        foreach (var (fsmIndex, data) in hostFsmData) {
             if (_fsms.Host.Count <= fsmIndex) {
                 Logger.Warn($"Tried to update host FSM data for unknown FSM index: {fsmIndex}");
                 continue;
@@ -1330,25 +1319,6 @@ internal class Entity {
             }
 
             var fsms = new[] { hostFsm, _fsms.Client[fsmIndex] };
-
-            void CondUpdateVars<TFsm, TBase>(
-                EntityHostFsmData.Type type,
-                Dictionary<byte, TBase> dataDict,
-                TFsm[] fsmVarArray,
-                Action<byte, TFsm, TBase> setValueAction
-            ) {
-                if (data.Types.Contains(type)) {
-                    foreach (var pair in dataDict) {
-                        if (fsmVarArray.Length <= pair.Key) {
-                            Logger.Warn(
-                                $"Tried to update host FSM var ({typeof(TBase)}) for unknown index: {pair.Key}"
-                            );
-                        } else {
-                            setValueAction.Invoke(pair.Key, fsmVarArray[pair.Key], pair.Value);
-                        }
-                    }
-                }
-            }
 
             foreach (var fsm in fsms) {
                 CondUpdateVars(
@@ -1405,6 +1375,29 @@ internal class Entity {
                         snapshot.Vector3s[index] = (Vector3) value;
                     }
                 );
+            }
+
+            continue;
+
+            void CondUpdateVars<TFsm, TBase>(
+                EntityHostFsmData.Type type,
+                Dictionary<byte, TBase> dataDict,
+                TFsm[] fsmVarArray,
+                Action<byte, TFsm, TBase> setValueAction
+            ) {
+                if (!data.Types.Contains(type)) {
+                    return;
+                }
+
+                foreach (var pair in dataDict) {
+                    if (fsmVarArray.Length <= pair.Key) {
+                        Logger.Warn(
+                            $"Tried to update host FSM var ({typeof(TBase)}) for unknown index: {pair.Key}"
+                        );
+                    } else {
+                        setValueAction.Invoke(pair.Key, fsmVarArray[pair.Key], pair.Value);
+                    }
+                }
             }
         }
     }

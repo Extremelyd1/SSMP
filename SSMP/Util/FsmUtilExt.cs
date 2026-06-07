@@ -6,170 +6,139 @@ using HutongGames.PlayMaker;
 namespace SSMP.Util;
 
 /// <summary>
-/// Class for FSM extensions.
+/// Extension methods for PlayMakerFSM manipulation.
 /// </summary>
 public static class FsmUtilExt {
-    /// <summary>
-    /// Get a FSM action by state name and index.
-    /// </summary>
-    /// <param name="fsm">The FSM instance.</param>
-    /// <param name="stateName">The name of the state.</param>
-    /// <param name="index">The index of the action within that state.</param>
-    /// <returns>The FsmStateAction from the FSM or null if the action could not be found.</returns>
-    public static FsmStateAction? GetAction(this PlayMakerFSM fsm, string stateName, int index) {
-        foreach (var t in fsm.FsmStates) {
-            if (t.Name != stateName) {
-                continue;
+    extension(PlayMakerFSM fsm) {
+        /// <summary>
+        /// Get an FSM action by state name and index.
+        /// Returns null if the state does not exist or the index is out of range.
+        /// </summary>
+        private FsmStateAction? GetAction(string stateName, int index) {
+            foreach (var state in fsm.FsmStates) {
+                if (state.Name != stateName) continue;
+                var actions = state.Actions;
+                // Explicit bounds check: no allocation, no silent index extension.
+                return index >= 0 && index < actions.Length ? actions[index] : null;
             }
 
-            var actions = t.Actions;
-
-            Array.Resize(ref actions, actions.Length + 1);
-
-            return actions[index];
+            return null;
         }
 
-        return null;
-    }
-
-    /// <summary>
-    /// Get a FSM action by state name and index.
-    /// </summary>
-    /// <param name="fsm">The FSM instance.</param>
-    /// <param name="stateName">The name of the state.</param>
-    /// <param name="index">The index of the action within that state.</param>
-    /// <typeparam name="T">The type of the action that extends FsmStateAction.</typeparam>
-    /// <returns>The action from the FSM or null if the action could not be found.</returns>
-    public static T? GetAction<T>(this PlayMakerFSM fsm, string stateName, int index) where T : FsmStateAction {
-        return GetAction(fsm, stateName, index) as T;
-    }
-
-    /// <summary>
-    /// Get the first FSM action by state name and type.
-    /// </summary>
-    /// <param name="fsm">The FSM instance.</param>
-    /// <param name="stateName">The name of the state.</param>
-    /// <typeparam name="T">The type of the action that extends FsmStateAction.</typeparam>
-    /// <returns>The action from the FSM or null if the action could not be found.</returns>
-    public static T GetFirstAction<T>(this PlayMakerFSM fsm, string stateName) where T : FsmStateAction {
-        return fsm.GetState(stateName).Actions.OfType<T>().FirstOrDefault() ??
-               throw new ArgumentException($"FSM state \"{stateName}\" does not have action of type \"{typeof(T)}\"", nameof(stateName));
-    }
-
-    /// <summary>
-    /// Get an FSM state by its name.
-    /// </summary>
-    /// <param name="fsm">The FSM instance.</param>
-    /// <param name="stateName">The name of the state.</param>
-    /// <returns>The state from the FSM or null, if no such state exists.</returns>
-    public static FsmState GetState(this PlayMakerFSM fsm, string stateName) {
-        return fsm.FsmStates.Where(t => t.Name == stateName)
-            .Select(t => new { t, actions = t.Actions })
-            .Select(t1 => t1.t)
-            .FirstOrDefault() ?? throw new ArgumentException($"FSM does not have state with name \"{stateName}\"", nameof(stateName));
-    }
-
-    /// <summary>
-    /// Insert a FSM action in a state at a specific index.
-    /// </summary>
-    /// <param name="fsm">The FSM instance.</param>
-    /// <param name="stateName">The name of the state.</param>
-    /// <param name="action">The FSM action to insert.</param>
-    /// <param name="index">The index at which to insert the action.</param>
-    public static void InsertAction(this PlayMakerFSM fsm, string stateName, FsmStateAction action, int index) {
-        foreach (FsmState t in fsm.FsmStates) {
-            if (t.Name != stateName) continue;
-            List<FsmStateAction> actions = t.Actions.ToList();
-
-            actions.Insert(index, action);
-
-            t.Actions = actions.ToArray();
-            action.Init(t);
-        }
-    }
-
-    /// <summary>
-    /// Insert a method in a state at a specific index.
-    /// </summary>
-    /// <param name="fsm">The FSM instance.</param>
-    /// <param name="stateName">The name of the state.</param>
-    /// <param name="index">The index at which to insert the method.</param>
-    /// <param name="method">The method to insert.</param>
-    public static void InsertMethod(this PlayMakerFSM fsm, string stateName, int index, Action method) {
-        InsertAction(fsm, stateName, new InvokeMethod(method), index);
-    }
-
-    /// <summary>
-    /// Removes an action from a specific state in a FSM.
-    /// </summary>
-    /// <param name="fsm">The FSM.</param>
-    /// <param name="stateName">The name of the state with the action to remove.</param>
-    /// <param name="index">The index of the action within the state.</param>
-    public static void RemoveAction(this PlayMakerFSM fsm, string stateName, int index) {
-        var state = fsm.GetState(stateName);
-        if (state == null) {
-            throw new ArgumentException("FSM does not have a state with the given name", nameof(stateName));
+        /// <summary>
+        /// Get an FSM action by state name, index, and type.
+        /// Returns null if the state, index, or cast does not match.
+        /// </summary>
+        public T? GetAction<T>(string stateName, int index) where T : FsmStateAction {
+            return fsm.GetAction(stateName, index) as T;
         }
 
-        var origActions = state.Actions;
-        var actions = new FsmStateAction[origActions.Length - 1];
-        for (var i = 0; i < index; i++) {
-            actions[i] = origActions[i];
+        /// <summary>
+        /// Get the first FSM action of the given type in the given state.
+        /// Throws ArgumentException if the state does not exist or the action type is not found.
+        /// </summary>
+        public T GetFirstAction<T>(string stateName) where T : FsmStateAction {
+            var state = fsm.GetState(stateName)
+                        ?? throw new ArgumentException($"FSM does not have state \"{stateName}\"", nameof(stateName));
+
+            return state.Actions.OfType<T>().FirstOrDefault()
+                   ?? throw new ArgumentException(
+                       $"FSM state \"{stateName}\" does not have action of type \"{typeof(T)}\"",
+                       nameof(stateName)
+                   );
         }
 
-        for (var i = index; i < actions.Length; i++) {
-            actions[i] = origActions[i + 1];
-        }
-
-        state.Actions = actions;
-    }
-
-    /// <summary>
-    /// Removes the first action in the given state of the given type from the FSM.
-    /// </summary>
-    /// <param name="fsm">The FSM.</param>
-    /// <param name="stateName">The name of the state with the action to remove.</param>
-    /// <typeparam name="T">The type of the action to remove.</typeparam>
-    public static void RemoveFirstAction<T>(this PlayMakerFSM fsm, string stateName) {
-        var state = fsm.GetState(stateName);
-        if (state == null) {
-            throw new ArgumentException("FSM does not have a state with the given name", nameof(stateName));
-        }
-
-        var skipped = false;
-        state.Actions = state.Actions.Where(a => {
-            if (skipped) {
-                return true;
+        /// <summary>
+        /// Get an FSM state by its name.
+        /// Returns null if no such state exists — never throws.
+        /// </summary>
+        public FsmState? GetState(string stateName) {
+            // Simple loop: no intermediate allocations, consistent null-on-miss contract
+            // so every caller can handle absence explicitly without catching exceptions.
+            foreach (var state in fsm.FsmStates) {
+                if (state.Name == stateName)
+                    return state;
             }
 
-            if (a.GetType() == typeof(T)) {
-                skipped = true;
-                return false;
-            }
+            return null;
+        }
 
-            return true;
-        }).ToArray();
+        /// <summary>
+        /// Insert an FSM action into a state at the given index.
+        /// Silently does nothing if the state does not exist.
+        /// </summary>
+        public void InsertAction(string stateName, FsmStateAction action, int index) {
+            foreach (var state in fsm.FsmStates) {
+                if (state.Name != stateName) continue;
+
+                var actions = state.Actions.ToList();
+                actions.Insert(index, action);
+                state.Actions = actions.ToArray();
+                action.Init(state);
+                break; // State names are unique within a PlayMaker FSM; no need to continue scanning.
+            }
+        }
+
+        /// <summary>
+        /// Insert a method as an FSM action into a state at the given index.
+        /// </summary>
+        public void InsertMethod(string stateName, int index, Action method) {
+            fsm.InsertAction(stateName, new InvokeMethod(method), index);
+        }
+
+        /// <summary>
+        /// Remove the action at the given index from the given state.
+        /// Throws ArgumentException if the state does not exist.
+        /// Throws ArgumentOutOfRangeException if the index is out of bounds.
+        /// </summary>
+        public void RemoveAction(string stateName, int index) {
+            var state = fsm.GetState(stateName)
+                        ?? throw new ArgumentException(
+                            "FSM does not have a state with the given name", nameof(stateName)
+                        );
+
+            var orig = state.Actions;
+            if (index < 0 || index >= orig.Length)
+                throw new ArgumentOutOfRangeException(nameof(index), index, "Action index is out of range");
+
+            var result = new FsmStateAction[orig.Length - 1];
+            Array.Copy(orig, 0, result, 0, index);
+            Array.Copy(orig, index + 1, result, index, orig.Length - index - 1);
+            state.Actions = result;
+        }
+
+        /// <summary>
+        /// Remove the first action of the given type from the given state.
+        /// Throws ArgumentException if the state does not exist.
+        /// Silently does nothing if the action type is not present.
+        /// </summary>
+        public void RemoveFirstAction<T>(string stateName) {
+            var state = fsm.GetState(stateName)
+                        ?? throw new ArgumentException(
+                            "FSM does not have a state with the given name", nameof(stateName)
+                        );
+
+            var skipped = false;
+            state.Actions = state.Actions.Where(a => {
+                    if (skipped || a.GetType() != typeof(T)) return true;
+                    skipped = true;
+                    return false;
+                }
+            ).ToArray();
+        }
     }
 }
 
 /// <summary>
-/// FSM action that simply invokes a method.
+/// FSM action that invokes a delegate and immediately finishes.
 /// </summary>
 internal class InvokeMethod : FsmStateAction {
-    /// <summary>
-    /// The action to execute.
-    /// </summary>
     private readonly Action _action;
 
-    /// <summary>
-    /// Construct the FSM action with the given action.
-    /// </summary>
-    /// <param name="a"></param>
     public InvokeMethod(Action a) {
         _action = a;
     }
 
-    /// <inheritdoc />
     public override void OnEnter() {
         _action.Invoke();
         Finish();

@@ -1,11 +1,15 @@
 using System;
-using GlobalEnums;
+using System.Collections.Generic;
+using System.Reflection;
+using HutongGames.PlayMaker.Actions;
 using Mono.Cecil.Cil;
 using MonoMod.Cil;
+using MonoMod.RuntimeDetour;
 using SSMP.Hooks;
-using SSMP.Networking.Client;
+using SSMP.Util;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
+
 // ReSharper disable UnusedMember.Local
 
 namespace SSMP.Game.Client;
@@ -15,73 +19,482 @@ namespace SSMP.Game.Client;
 /// correctly.
 /// </summary>
 internal class GamePatcher {
-    // /// <summary>
-    // /// The binding flags for obtaining certain types for hooking.
-    // /// </summary>
-    // private const BindingFlags BindingFlags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+    private const BindingFlags InstanceNonPublicFlags = BindingFlags.NonPublic | BindingFlags.Instance;
+    private const BindingFlags InstancePublicFlags = BindingFlags.Public | BindingFlags.Instance;
+    private const int AlertRangeLineOfSightSelf = 1;
+    private const int AlertRangeLineOfSightParent = 2;
+    private const int TerrainLayerMask = 256;
+
+    private static readonly FieldInfo? AlertRangeLineOfSightField =
+        typeof(AlertRange).GetField("lineOfSight", InstanceNonPublicFlags);
+
+    private static readonly FieldInfo? AlertRangeInitialParentField =
+        typeof(AlertRange).GetField("initialParent", InstanceNonPublicFlags);
+
+    private static readonly FieldInfo? LineOfSightDetectorAlertRangesField =
+        typeof(LineOfSightDetector).GetField("alertRanges", InstanceNonPublicFlags);
+
+    private static readonly FieldInfo? LineOfSightDetectorCanSeeHeroField =
+        typeof(LineOfSightDetector).GetField("canSeeHero", InstanceNonPublicFlags);
+
+    private static readonly FieldInfo? WalkerMainCameraField =
+        typeof(Walker).GetField("mainCamera", InstanceNonPublicFlags);
+
+    private static readonly FieldInfo? WalkerDidFulfilCameraDistanceConditionField =
+        typeof(Walker).GetField("didFulfilCameraDistanceCondition", InstanceNonPublicFlags);
+
+    private static readonly FieldInfo? WalkerDidFulfilHeroXConditionField =
+        typeof(Walker).GetField("didFulfilHeroXCondition", InstanceNonPublicFlags);
+
+    private static readonly FieldInfo? WalkerWaitHeroXField =
+        typeof(Walker).GetField("waitHeroX", InstanceNonPublicFlags);
+
+    private static readonly FieldInfo? WalkerWaitForHeroXField =
+        typeof(Walker).GetField("waitForHeroX", InstanceNonPublicFlags);
+
+    private static readonly FieldInfo? WalkerStartInactiveField =
+        typeof(Walker).GetField("startInactive", InstanceNonPublicFlags | BindingFlags.Public);
+
+    private static readonly FieldInfo? WalkerAmbushField =
+        typeof(Walker).GetField("ambush", InstanceNonPublicFlags);
+
+    private static readonly FieldInfo? WalkerTurnCooldownRemainingField =
+        typeof(Walker).GetField("turnCooldownRemaining", InstanceNonPublicFlags);
+
+    private static readonly FieldInfo? WalkerAggroEdgeTurnCooldownRemainingField =
+        typeof(Walker).GetField("aggroEdgeTurnCooldownRemaining", InstanceNonPublicFlags);
+
+    private static readonly FieldInfo? WalkerCurrentFacingField =
+        typeof(Walker).GetField("currentFacing", InstanceNonPublicFlags);
+
+    private static readonly FieldInfo? WalkerBodyColliderField =
+        typeof(Walker).GetField("bodyCollider", InstanceNonPublicFlags);
+
+    private static readonly FieldInfo? WalkerPreventTurningToFaceHeroField =
+        typeof(Walker).GetField("preventTurningToFaceHero", InstanceNonPublicFlags);
+
+    private static readonly FieldInfo? WalkerLineOfSightDetectorField =
+        typeof(Walker).GetField("lineOfSightDetector", InstanceNonPublicFlags);
+
+    private static readonly FieldInfo? WalkerAlertRangeField =
+        typeof(Walker).GetField("alertRange", InstanceNonPublicFlags);
+
+    private static readonly FieldInfo? WalkerIgnoreHolesField =
+        typeof(Walker).GetField("ignoreHoles", InstanceNonPublicFlags | BindingFlags.Public);
+
+    private static readonly FieldInfo? WalkerEdgeXAdjusterField =
+        typeof(Walker).GetField("edgeXAdjuster", InstanceNonPublicFlags);
+
+    private static readonly FieldInfo? WalkerWalkTimeRemainingField =
+        typeof(Walker).GetField("walkTimeRemaining", InstanceNonPublicFlags);
+
+    private static readonly FieldInfo? WalkerPausesField =
+        typeof(Walker).GetField("pauses", InstanceNonPublicFlags);
+
+    private static readonly FieldInfo? WalkerBodyField =
+        typeof(Walker).GetField("body", InstanceNonPublicFlags);
+
+    private static readonly FieldInfo? WalkerWalkSpeedRField =
+        typeof(Walker).GetField("walkSpeedR", InstanceNonPublicFlags | BindingFlags.Public);
+
+    private static readonly FieldInfo? WalkerWalkSpeedLField =
+        typeof(Walker).GetField("walkSpeedL", InstanceNonPublicFlags | BindingFlags.Public);
+
+    private static readonly MethodInfo? WalkerBeginTurningMethod =
+        typeof(Walker).GetMethod("BeginTurning", InstanceNonPublicFlags);
+
+    private static readonly MethodInfo? WalkerBeginStoppedMethod =
+        typeof(Walker).GetMethod("BeginStopped", InstanceNonPublicFlags);
+
+    private static readonly FieldInfo? WalkerV2HeroField =
+        typeof(WalkerV2).GetField("hero", InstanceNonPublicFlags);
+
+    private static readonly FieldInfo? ScuttlerControlHeroField =
+        typeof(ScuttlerControl).GetField("hero", InstanceNonPublicFlags);
+
+    private Hook? _chaseObjectDoBuzzHook;
+    private Hook? _getHeroOnEnterHook;
+    private Hook? _alertRangeIsHeroInRangeHook;
+    private Hook? _lineOfSightDetectorUpdateHook;
+    private Hook? _walkerUpdateWalkingHook;
+    private Hook? _walkerUpdateWaitingForConditionsHook;
 
     /// <summary>
-    /// The NetClient instance to check if we are connected to a server.
+    /// Initializes the patch manager.
     /// </summary>
-    private readonly NetClient _netClient;
-
-    public GamePatcher(NetClient netClient) {
-        _netClient = netClient;
+    public GamePatcher() {
     }
 
     /// <summary>
     /// Register the hooks.
     /// </summary>
     public void RegisterHooks() {
-        // Register IL hook for changing the behaviour of tink effects
-        // IL.TinkEffect.OnTriggerEnter2D += TinkEffectOnTriggerEnter2D;
-        
-        // IL.HealthManager.Invincible += HealthManagerOnInvincible;
-        
-        // IL.HealthManager.TakeDamage += HealthManagerOnTakeDamage;
-
-        // On.BridgeLever.OnTriggerEnter2D += BridgeLeverOnTriggerEnter2D;
-        
-        // On.HutongGames.PlayMaker.Actions.CallMethodProper.DoMethodCall += CallMethodProperOnDoMethodCall;
-        
-        // IL.CameraLockArea.IsInApplicableGameState += CameraLockAreaOnIsInApplicableGameState;
-
-        // On.IgnoreHeroCollision.Ignore += IgnoreHeroCollisionOnIgnore;
-        
-        // On.SceneAdditiveLoadConditional.OnEnable += SceneAdditiveLoadConditionalOnEnable;
-        
         EventHooks.InteractableBaseAddInsideIL += ILInteractableBaseAddInside;
         EventHooks.InteractableBaseLocalAddInsideIL += ILInteractableBaseAddInside;
-        
+
         EventHooks.TransitionPointOnTriggerEnter2DIL += ILTransitionPointOnTrigger2D;
         EventHooks.TransitionPointOnTriggerStay2DIL += ILTransitionPointOnTrigger2D;
-        
+
         EventHooks.CameraLockAreaAwake += OnCameraLockAreaAwake;
+
+        _chaseObjectDoBuzzHook = new Hook(
+            typeof(ChaseObject).GetMethod("DoBuzz", InstanceNonPublicFlags),
+            OnChaseObjectDoBuzz
+        );
+
+        _getHeroOnEnterHook = new Hook(
+            typeof(GetHero).GetMethod("OnEnter", InstancePublicFlags),
+            OnGetHeroOnEnter
+        );
+
+        _alertRangeIsHeroInRangeHook = new Hook(
+            typeof(AlertRange).GetMethod("IsHeroInRange", InstancePublicFlags),
+            OnAlertRangeIsHeroInRange
+        );
+
+        _lineOfSightDetectorUpdateHook = new Hook(
+            typeof(LineOfSightDetector).GetMethod("Update", InstanceNonPublicFlags),
+            OnLineOfSightDetectorUpdate
+        );
+
+        _walkerUpdateWalkingHook = new Hook(
+            typeof(Walker).GetMethod("UpdateWalking", InstanceNonPublicFlags),
+            OnWalkerUpdateWalking
+        );
+
+        _walkerUpdateWaitingForConditionsHook = new Hook(
+            typeof(Walker).GetMethod("UpdateWaitingForConditions", InstanceNonPublicFlags),
+            OnWalkerUpdateWaitingForConditions
+        );
+
+        MonoBehaviourUtil.Instance.OnUpdateEvent += OnUpdateRetargetEnemyTransforms;
     }
 
     /// <summary>
     /// De-register the hooks.
     /// </summary>
     public void DeregisterHooks() {
-        // IL.TinkEffect.OnTriggerEnter2D -= TinkEffectOnTriggerEnter2D;
-        
-        // IL.HealthManager.Invincible -= HealthManagerOnInvincible;
-        
-        // IL.HealthManager.TakeDamage -= HealthManagerOnTakeDamage;
-        
-        // On.BridgeLever.OnTriggerEnter2D -= BridgeLeverOnTriggerEnter2D;
-        
-        // On.HutongGames.PlayMaker.Actions.CallMethodProper.DoMethodCall -= CallMethodProperOnDoMethodCall;
-        
-        // IL.CameraLockArea.IsInApplicableGameState -= CameraLockAreaOnIsInApplicableGameState;
-        
-        // On.IgnoreHeroCollision.Ignore -= IgnoreHeroCollisionOnIgnore;
-
         EventHooks.InteractableBaseAddInsideIL -= ILInteractableBaseAddInside;
         EventHooks.InteractableBaseLocalAddInsideIL -= ILInteractableBaseAddInside;
-        
+
         EventHooks.TransitionPointOnTriggerEnter2DIL -= ILTransitionPointOnTrigger2D;
         EventHooks.TransitionPointOnTriggerStay2DIL -= ILTransitionPointOnTrigger2D;
+
+        _chaseObjectDoBuzzHook?.Dispose();
+        _chaseObjectDoBuzzHook = null;
+
+        _getHeroOnEnterHook?.Dispose();
+        _getHeroOnEnterHook = null;
+
+        _alertRangeIsHeroInRangeHook?.Dispose();
+        _alertRangeIsHeroInRangeHook = null;
+
+        _lineOfSightDetectorUpdateHook?.Dispose();
+        _lineOfSightDetectorUpdateHook = null;
+
+        _walkerUpdateWalkingHook?.Dispose();
+        _walkerUpdateWalkingHook = null;
+
+        _walkerUpdateWaitingForConditionsHook?.Dispose();
+        _walkerUpdateWaitingForConditionsHook = null;
+
+        if (MonoBehaviourUtil.Instance != null) {
+            MonoBehaviourUtil.Instance.OnUpdateEvent -= OnUpdateRetargetEnemyTransforms;
+        }
+    }
+
+    /// <summary>
+    /// Guards <see cref="ChaseObject"/> against null target values before the original method runs.
+    /// </summary>
+    /// <param name="orig">The original method.</param>
+    /// <param name="self">The action instance being executed.</param>
+    private static void OnChaseObjectDoBuzz(Action<ChaseObject> orig, ChaseObject self) {
+        if (self.target?.Value == null) {
+            return;
+        }
+
+        orig(self);
+    }
+
+    /// <summary>
+    /// Overrides the PlayMaker <see cref="GetHero"/> action to resolve the nearest tracked player.
+    /// </summary>
+    /// <param name="orig">The original method.</param>
+    /// <param name="self">The action instance being executed.</param>
+    private static void OnGetHeroOnEnter(Action<GetHero> orig, GetHero self) {
+        if (self.storeResult == null) {
+            orig(self);
+            return;
+        }
+
+        var requester = self.Fsm?.GameObject;
+        self.storeResult.Value = PlayerTargetRegistry.GetNearestPlayer(requester);
+        self.Finish();
+    }
+
+    /// <summary>
+    /// Replaces the hero-only alert-range check with nearest tracked-player evaluation.
+    /// </summary>
+    /// <param name="orig">The original method.</param>
+    /// <param name="self">The alert range being queried.</param>
+    /// <returns>True when a tracked player is in range and visible; otherwise false.</returns>
+    private static bool OnAlertRangeIsHeroInRange(Func<AlertRange, bool> orig, AlertRange self) {
+        var target = PlayerTargetRegistry.GetNearestPlayer(self.transform.position, self.InsideGameObjects);
+        if (target == null) {
+            return false;
+        }
+
+        if (!self.ChecksLineOfSight) {
+            return true;
+        }
+
+        var origin = GetAlertRangeLineOfSightOrigin(self);
+        if (origin == null) {
+            return false;
+        }
+
+        return !Helper.LineCast2DHit(origin.position, target.transform.position, TerrainLayerMask, out _);
+    }
+
+    /// <summary>
+    /// Recomputes line-of-sight against the nearest tracked player instead of the local hero singleton.
+    /// </summary>
+    /// <param name="orig">The original method.</param>
+    /// <param name="self">The detector being updated.</param>
+    private static void OnLineOfSightDetectorUpdate(Action<LineOfSightDetector> orig, LineOfSightDetector self) {
+        var target = GetNearestVisiblePlayer(self);
+        var canSeeHero = false;
+
+        if (target != null) {
+            var origin = (Vector2) self.transform.position;
+            var targetPosition = (Vector2) target.transform.position;
+            var direction = targetPosition - origin;
+
+            canSeeHero = !(bool) Helper.Raycast2D(origin, direction.normalized, direction.magnitude, TerrainLayerMask);
+            Debug.DrawLine(origin, targetPosition, canSeeHero ? Color.green : Color.yellow);
+        }
+
+        LineOfSightDetectorCanSeeHeroField?.SetValue(self, canSeeHero);
+    }
+
+    /// <summary>
+    /// Resolves the transform used as the line-of-sight origin for an alert range.
+    /// </summary>
+    /// <param name="alertRange">The alert range to inspect.</param>
+    /// <returns>The transform to use for line-of-sight checks, or null if none applies.</returns>
+    private static Transform? GetAlertRangeLineOfSightOrigin(AlertRange alertRange) {
+        var lineOfSight = (int?) AlertRangeLineOfSightField?.GetValue(alertRange) ?? 0;
+        return lineOfSight switch {
+            AlertRangeLineOfSightSelf => alertRange.transform,
+            AlertRangeLineOfSightParent => alertRange.transform.parent
+                ? alertRange.transform.parent
+                : AlertRangeInitialParentField?.GetValue(alertRange) as Transform,
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Finds the nearest visible tracked player for a line-of-sight detector.
+    /// </summary>
+    /// <param name="detector">The detector requesting a target.</param>
+    /// <returns>The nearest visible tracked player if found; otherwise null.</returns>
+    private static GameObject? GetNearestVisiblePlayer(LineOfSightDetector detector) {
+        var alertRanges = LineOfSightDetectorAlertRangesField?.GetValue(detector) as AlertRange[];
+        if (alertRanges == null || alertRanges.Length == 0) {
+            return PlayerTargetRegistry.GetNearestPlayer(detector.gameObject);
+        }
+
+        var candidates = new List<GameObject>();
+        foreach (var alertRange in alertRanges) {
+            if (alertRange == null || !OnAlertRangeIsHeroInRange(static _ => false, alertRange)) {
+                continue;
+            }
+
+            candidates.AddRange(alertRange.InsideGameObjects);
+        }
+
+        return PlayerTargetRegistry.GetNearestPlayer(detector.transform.position, candidates);
+    }
+
+    /// <summary>
+    /// Replaces <see cref="Walker"/>'s hero-position startup gate with nearest tracked-player evaluation.
+    /// </summary>
+    /// <param name="orig">The original method.</param>
+    /// <param name="self">The walker being updated.</param>
+    private static void OnWalkerUpdateWaitingForConditions(Action<Walker> orig, Walker self) {
+        var target = GetNearestPlayerTransform(self.transform.position);
+        if (target == null) {
+            orig(self);
+            return;
+        }
+
+        var mainCamera = WalkerMainCameraField?.GetValue(self) as Camera;
+        var didFulfilCameraDistanceCondition =
+            (bool?) WalkerDidFulfilCameraDistanceConditionField?.GetValue(self) ?? false;
+        var didFulfilHeroXCondition =
+            (bool?) WalkerDidFulfilHeroXConditionField?.GetValue(self) ?? false;
+
+        if (!didFulfilCameraDistanceCondition &&
+            mainCamera != null &&
+            (mainCamera.transform.position - self.transform.position).sqrMagnitude < 3600f) {
+            didFulfilCameraDistanceCondition = true;
+            WalkerDidFulfilCameraDistanceConditionField?.SetValue(self, true);
+        }
+
+        var waitHeroX = (float?) WalkerWaitHeroXField?.GetValue(self) ?? 0f;
+        if (didFulfilCameraDistanceCondition &&
+            !didFulfilHeroXCondition &&
+            Mathf.Abs(target.position.x - waitHeroX) < 1f) {
+            didFulfilHeroXCondition = true;
+            WalkerDidFulfilHeroXConditionField?.SetValue(self, true);
+        }
+
+        var waitForHeroX = (bool?) WalkerWaitForHeroXField?.GetValue(self) ?? false;
+        var startInactive = (bool?) WalkerStartInactiveField?.GetValue(self) ?? false;
+        var ambush = (bool?) WalkerAmbushField?.GetValue(self) ?? false;
+
+        if (didFulfilCameraDistanceCondition &&
+            (!waitForHeroX || didFulfilHeroXCondition) &&
+            !startInactive &&
+            !ambush) {
+            WalkerBeginStoppedMethod?.Invoke(self, [Walker.StopReasons.Bored]);
+            self.StartMoving();
+        }
+    }
+
+    /// <summary>
+    /// Replaces <see cref="Walker"/>'s hero-facing chase logic with nearest tracked-player evaluation.
+    /// </summary>
+    /// <param name="orig">The original method.</param>
+    /// <param name="self">The walker being updated.</param>
+    private static void OnWalkerUpdateWalking(Action<Walker> orig, Walker self) {
+        var target = GetNearestPlayerTransform(self.transform.position);
+        if (target == null) {
+            orig(self);
+            return;
+        }
+
+        var turnCooldownRemaining = (float?) WalkerTurnCooldownRemainingField?.GetValue(self) ?? 0f;
+        var aggroEdgeTurnCooldownRemaining =
+            (float?) WalkerAggroEdgeTurnCooldownRemainingField?.GetValue(self) ?? 0f;
+        var currentFacing = (int?) WalkerCurrentFacingField?.GetValue(self) ?? 0;
+        var bodyCollider = WalkerBodyColliderField?.GetValue(self) as Collider2D;
+        var lineOfSightDetector = WalkerLineOfSightDetectorField?.GetValue(self) as LineOfSightDetector;
+        var alertRange = WalkerAlertRangeField?.GetValue(self) as AlertRange;
+        var body = WalkerBodyField?.GetValue(self) as Rigidbody2D;
+
+        if (bodyCollider == null || body == null || currentFacing == 0) {
+            orig(self);
+            return;
+        }
+
+        var canCheckTurn = turnCooldownRemaining <= 0f;
+        var canAggroTurn = aggroEdgeTurnCooldownRemaining <= 0f;
+
+        if (canCheckTurn) {
+            if (new Sweep(bodyCollider, 1 - currentFacing, 3).Check(
+                    bodyCollider.bounds.extents.x + 0.5f,
+                    33024,
+                    useTriggers: false
+                )) {
+                WalkerBeginTurningMethod?.Invoke(self, [-currentFacing]);
+                return;
+            }
+
+            var preventTurningToFaceHero =
+                (bool?) WalkerPreventTurningToFaceHeroField?.GetValue(self) ?? false;
+            var seesTarget = lineOfSightDetector == null || lineOfSightDetector.CanSeeHero;
+            var targetInRange = alertRange != null && alertRange.IsHeroInRange();
+            var targetIsInFront = target.position.x > self.transform.position.x != currentFacing > 0;
+
+            if (!preventTurningToFaceHero && canAggroTurn && targetIsInFront && seesTarget && targetInRange) {
+                WalkerBeginTurningMethod?.Invoke(self, [-currentFacing]);
+                return;
+            }
+
+            var ignoreHoles = (bool?) WalkerIgnoreHolesField?.GetValue(self) ?? false;
+            var edgeXAdjuster = (float?) WalkerEdgeXAdjusterField?.GetValue(self) ?? 0f;
+            if (!ignoreHoles &&
+                !new Sweep(bodyCollider, 3, 3).Check(
+                    0.25f,
+                    33024,
+                    out _,
+                    useTriggers: false,
+                    new Vector2((bodyCollider.bounds.extents.x + 0.5f + edgeXAdjuster) * currentFacing, 0f)
+                )) {
+                WalkerBeginTurningMethod?.Invoke(self, [-currentFacing]);
+                return;
+            }
+        }
+
+        if (!canAggroTurn) {
+            WalkerWalkTimeRemainingField?.SetValue(self, 0f);
+        } else {
+            var pauses = (bool?) WalkerPausesField?.GetValue(self) ?? false;
+            var lostTarget = (lineOfSightDetector != null && !lineOfSightDetector.CanSeeHero) ||
+                             alertRange == null ||
+                             !alertRange.IsHeroInRange();
+
+            if (pauses && lostTarget) {
+                var walkTimeRemaining = (float?) WalkerWalkTimeRemainingField?.GetValue(self) ?? 0f;
+                walkTimeRemaining -= Time.deltaTime;
+
+                if (walkTimeRemaining <= 0f) {
+                    WalkerBeginStoppedMethod?.Invoke(self, [Walker.StopReasons.Bored]);
+                    return;
+                }
+
+                WalkerWalkTimeRemainingField?.SetValue(self, walkTimeRemaining);
+            }
+        }
+
+        var walkSpeedR = (float?) WalkerWalkSpeedRField?.GetValue(self) ?? 0f;
+        var walkSpeedL = (float?) WalkerWalkSpeedLField?.GetValue(self) ?? 0f;
+        body.linearVelocity = new Vector2(currentFacing > 0 ? walkSpeedR : walkSpeedL, body.linearVelocity.y);
+    }
+
+    /// <summary>
+    /// Gets the nearest tracked player transform for the given world position.
+    /// </summary>
+    /// <param name="requesterPosition">The position to measure from.</param>
+    /// <returns>The nearest tracked player transform if one exists; otherwise null.</returns>
+    private static Transform? GetNearestPlayerTransform(Vector3 requesterPosition) {
+        var target = PlayerTargetRegistry.GetNearestPlayer(requesterPosition);
+        return target == null ? null : target.transform;
+    }
+
+    /// <summary>
+    /// Refreshes cached enemy target transforms that are stored directly on vanilla behaviour components.
+    /// </summary>
+    private void OnUpdateRetargetEnemyTransforms() {
+        UpdateCachedTargetField<WalkerV2>(WalkerV2HeroField);
+        UpdateCachedTargetField<ScuttlerControl>(ScuttlerControlHeroField);
+    }
+
+    /// <summary>
+    /// Updates a cached transform field on all active behaviour instances of the given type.
+    /// </summary>
+    /// <typeparam name="TComponent">The behaviour type containing the cached transform field.</typeparam>
+    /// <param name="field">The field that stores the cached target transform.</param>
+    private static void UpdateCachedTargetField<TComponent>(FieldInfo? field)
+        where TComponent : Behaviour {
+        if (field == null) {
+            return;
+        }
+
+        foreach (var component in UnityEngine.Object.FindObjectsByType<TComponent>(
+                     FindObjectsInactive.Exclude,
+                     FindObjectsSortMode.None
+                 )) {
+            if (component == null || !component.isActiveAndEnabled) {
+                continue;
+            }
+
+            var target = GetNearestPlayerTransform(component.transform.position);
+            if (target != null) {
+                field.SetValue(component, target);
+            }
+        }
     }
 
     /// <summary>
@@ -92,7 +505,7 @@ internal class GamePatcher {
         try {
             // Create a cursor for this context
             var c = new ILCursor(il);
-            
+
             var beforeFirstReturnLabel = c.DefineLabel();
 
             c.GotoNext(
@@ -103,12 +516,12 @@ internal class GamePatcher {
                 i => i.MatchLdcI4(9),
                 i => i.MatchBeq(out _)
             );
-            
+
             c.Emit(OpCodes.Ldarg_1);
             // Emit a delegate that pops the collider argument off the stack and pushes a boolean onto the stack
             // that indicates whether the collider's game object has the tag "Player"
             c.EmitDelegate<Func<Collider2D, bool>>(col => col.gameObject.tag == "Player");
-            
+
             // Branch if the tag is not "Player" to the pre-defined label, which is before the return
             // In other words, we return if it is not the local player
             c.Emit(OpCodes.Brfalse, beforeFirstReturnLabel);
@@ -124,7 +537,7 @@ internal class GamePatcher {
             Logger.Error($"Could not change InteractableBase#AddInside IL:\n{e}");
         }
     }
-    
+
     /// <summary>
     /// IL hook to change the behaviour of the <see cref="TransitionPoint"/> to add a check for whether it is dealing
     /// with the local player.
@@ -135,7 +548,7 @@ internal class GamePatcher {
             var c = new ILCursor(il);
 
             ILLabel? returnLabel = null;
-            
+
             c.GotoNext(
                 MoveType.After,
                 i => i.MatchLdarg(1),
@@ -149,12 +562,12 @@ internal class GamePatcher {
                 Logger.Error($"Could not change TransitionPoint#OnTrigger{{Enter,Stay}}2D IL:\nCould not find label");
                 return;
             }
-            
+
             c.Emit(OpCodes.Ldarg_1);
             // Emit a delegate that pops the collider argument off the stack and pushes a boolean onto the stack
             // that indicates whether the collider's game object has the tag "Player"
             c.EmitDelegate<Func<Collider2D, bool>>(movingObj => movingObj.gameObject.tag == "Player");
-            
+
             // Branch if the tag is not "Player" to the pre-defined label, which is before the return
             // In other words, we return if it is not the local player
             c.Emit(OpCodes.Brfalse, returnLabel);
@@ -162,387 +575,7 @@ internal class GamePatcher {
             Logger.Error($"Could not change TransitionPoint#OnTrigger{{Enter,Stay}}2D IL:\n{e}");
         }
     }
-    
-    /// <summary>
-    /// IL hook to change the TinkEffect OnTriggerEnter2D to not trigger certain effects of it on remote players.
-    /// This method will insert IL to check whether the player responsible for the attack is the local player and
-    /// based on this, omit certain effects.
-    /// </summary>
-    private void TinkEffectOnTriggerEnter2D(ILContext il) {
-        try {
-            // Create a cursor for this context
-            var c = new ILCursor(il);
 
-            // Load the 'collision' argument onto the stack
-            c.Emit(OpCodes.Ldarg_1);
-
-            // Keep track of a whether the local player is responsible for the hit
-            var isLocalPlayer = true;
-            
-            // Emit a delegate that pops the collision argument from the stack, checks whether the parent
-            // of the collider is the knight and changes the above bool based on this
-            c.EmitDelegate<Action<Collider2D>>(collider => {
-                var parent = collider.transform.parent;
-                if (parent == null) {
-                    isLocalPlayer = true;
-                    return;
-                }
-
-                parent = parent.parent;
-                if (parent == null) {
-                    isLocalPlayer = true;
-                    return;
-                }
-
-                isLocalPlayer = parent.gameObject.name == "Knight";
-            });
-
-            // Define a label to branch to after the camera shake call
-            var afterCameraShakeLabel = c.DefineLabel();
-
-            // Goto before the camera shake call, which is after the 'if' instructions
-            c.GotoNext(
-                MoveType.After,
-                i => i.MatchLdfld(typeof(TinkEffect), "gameCam"),
-                i => i.MatchCall(typeof(UnityEngine.Object), "op_Implicit"),
-                i => i.MatchBrfalse(out _)
-            );
-
-            // Emit the 'isLocalPlayer' bool to the stack
-            c.EmitDelegate(() => isLocalPlayer);
-
-            // Emit an instruction that branches to after the camera shake based on the bool
-            c.Emit(OpCodes.Brfalse, afterCameraShakeLabel);
-
-            // Goto after the camera shake call
-            c.GotoNext(
-                MoveType.After,
-                i => i.MatchLdfld(typeof(GameCameras), "cameraShakeFSM"),
-                i => i.MatchLdstr("EnemyKillShake"),
-                i => i.MatchCallvirt(typeof(PlayMakerFSM), "SendEvent")
-            );
-
-            // Mark the label for branching here
-            c.MarkLabel(afterCameraShakeLabel);
-            
-            // Goto after setting the 'position2' local variable
-            c.GotoNext(
-                MoveType.After,
-                i => i.MatchCallvirt(typeof(Component), "get_transform"),
-                i => i.MatchCallvirt(typeof(Transform), "get_position"),
-                i => i.MatchStloc(3)
-            );
-
-            // Define a label for branching
-            var afterRemotePositionLabel = c.DefineLabel();
-
-            // Emit the 'isLocalPlayer' bool to the stack
-            c.EmitDelegate(() => isLocalPlayer);
-
-            // Emit the instruction for branching to behind the setting of the remote player position (below)
-            c.Emit(OpCodes.Brtrue, afterRemotePositionLabel);
-
-            // Load the 'collision' argument onto the stack
-            c.Emit(OpCodes.Ldarg_1);
-            // Emit a delegate that pops the 'collision' argument from the stack and pushes the position of the
-            // remote player to the stack
-            c.EmitDelegate<Func<Collider2D, Vector3>>(collider => collider.transform.parent.parent.position);
-
-            // Emit the instruction for pushing the stack value into the 'position2' local variable
-            c.Emit(OpCodes.Stloc, 3);
-
-            // Mark the label for branching after setting the remote position, that we skip when the local player
-            // is responsible for the hit
-            c.MarkLabel(afterRemotePositionLabel);
-
-            // Loop 3 times for the 3 'Recoil' method calls to HeroController
-            for (var i = 0; i < 3; i++) {
-                // Goto before the 'Recoil' method call
-                c.GotoNext(
-                    MoveType.Before, 
-                    inst => inst.MatchCall(typeof(HeroController), "get_instance")
-                );
-
-                // Define a label for branching
-                var afterRecoilLabel = c.DefineLabel();
-
-                // Emit the 'isLocalPlayer' bool to the stack
-                c.EmitDelegate(() => isLocalPlayer);
-                // Emit the instruction for branching after the 'Recoil' call
-                c.Emit(OpCodes.Brfalse, afterRecoilLabel);
-
-                // Goto after the FSM 'SendEvent' call
-                c.GotoNext(
-                    MoveType.After,
-                    inst => inst.MatchCallvirt(typeof(PlayMakerFSM), "SendEvent")
-                );
-
-                // Mark the label for branching here
-                c.MarkLabel(afterRecoilLabel);
-            }
-
-            // Goto after the last if statement that checks for the 'sendFSMEvent' variable
-            c.GotoNext(
-                MoveType.After,
-                i => i.MatchLdarg(0),
-                i => i.MatchLdfld(typeof(TinkEffect), "sendFSMEvent"),
-                i => i.MatchBrfalse(out _)
-            );
-
-            // Define a label to branch to
-            var afterSendEventLabel = c.DefineLabel();
-            
-            // Emit the 'isLocalPlayer' bool to the stack
-            c.EmitDelegate(() => isLocalPlayer);
-            // Emit the instruction for branching after the 'SendEvent' call in case of a remote player hit
-            c.Emit(OpCodes.Brfalse, afterSendEventLabel);
-            
-            // Goto after the 'SendEvent' call to mark the label
-            c.GotoNext(
-                MoveType.After,
-                i => i.MatchLdarg(0),
-                i => i.MatchLdfld(typeof(TinkEffect), "FSMEvent"),
-                i => i.MatchCallvirt(typeof(PlayMakerFSM), "SendEvent")
-            );
-
-            // Mark the label to branch to here
-            c.MarkLabel(afterSendEventLabel);
-        } catch (Exception e) {
-            Logger.Error($"Could not change TinkEffect#OnTriggerEnter2D IL:\n{e}");
-        }
-    }
-    
-    private void HealthManagerOnInvincible(ILContext il) {
-        try {
-            // Create a cursor for this context
-            var c = new ILCursor(il);
-
-            // Load the 'hitInstance' argument onto the stack
-            c.Emit(OpCodes.Ldarg_1);
-
-            // Keep track of a whether the local player is responsible for the hit
-            var isLocalPlayer = true;
-            
-            // Emit a delegate that pops the collision argument from the stack, checks whether the parent
-            // of the collider is the knight and changes the above bool based on this
-            c.EmitDelegate<Action<HitInstance>>(hitInstance => {
-                if (hitInstance.Source == null) {
-                    isLocalPlayer = true;
-                    return;
-                }
-                
-                var parent = hitInstance.Source.transform.parent;
-                if (parent == null) {
-                    isLocalPlayer = true;
-                    return;
-                }
-
-                parent = parent.parent;
-                if (parent == null) {
-                    isLocalPlayer = true;
-                    return;
-                }
-
-                isLocalPlayer = parent.gameObject.name == "Knight";
-            });
-            
-            c.GotoNext(
-                MoveType.Before,
-                i => i.MatchLdarg(1),
-                i => i.MatchLdfld(typeof(HitInstance), "AttackType"),
-                i => i.MatchBrtrue(out _)
-            );
-            
-            var afterRecoilFreezeShakeLabel = c.DefineLabel();
-
-            c.EmitDelegate(() => isLocalPlayer);
-            c.Emit(OpCodes.Brfalse, afterRecoilFreezeShakeLabel);
-
-            c.GotoNext(
-                MoveType.After,
-                i => i.MatchLdfld(typeof(GameCameras), "cameraShakeFSM"),
-                i => i.MatchLdstr("EnemyKillShake"),
-                i => i.MatchCallvirt(typeof(PlayMakerFSM), "SendEvent")
-            );
-
-            c.MarkLabel(afterRecoilFreezeShakeLabel);
-        } catch (Exception e) {
-            Logger.Error($"Could not change HealthManager#OnInvincible IL:\n{e}");
-        }
-    }
-    
-    /// <summary>
-    /// IL Hook to modify the behaviour of the TakeDamage method in HealthManager. This modification adds a
-    /// conditional branch in case the nail swing from the HitInstance was from a remote player to ensure that
-    /// soul is not gained for remote hits.
-    /// </summary>
-    private void HealthManagerOnTakeDamage(ILContext il) {
-        try {
-            // Create a cursor for this context
-            var c = new ILCursor(il);
-            
-            // Goto the next virtual call to HeroController.SoulGain()
-            c.GotoNext(i => i.MatchCallvirt(typeof(HeroController), "SoulGain"));
-
-            // Move the cursor to before the call and call virtual instructions
-            c.Index -= 1;
-
-            // Emit the instruction to load the first parameter (hitInstance) onto the stack
-            c.Emit(OpCodes.Ldarg_1);
-
-            // Emit a delegate that takes the hitInstance parameter from the stack and pushes a boolean on the stack
-            // that indicates whether the hitInstance was from a remote player's nail swing
-            c.EmitDelegate<Func<HitInstance, bool>>(hitInstance => {
-                if (hitInstance.Source == null || hitInstance.Source.transform == null) {
-                    return false;
-                }
-
-                // Find the top-level parent of the hit instance
-                var transform = hitInstance.Source.transform;
-                while (transform.parent != null) {
-                    transform = transform.parent;
-                }
-
-                var go = transform.gameObject;
-
-                return go.tag != "Player";
-            });
-
-            // Define a label for the branch instruction
-            var afterLabel = c.DefineLabel();
-
-            // Emit the branch (on true) instruction with the label
-            c.Emit(OpCodes.Brtrue, afterLabel);
-
-            // Move the cursor after the SoulGain method call
-            c.Index += 2;
-
-            // Mark the label here, so we branch after the SoulGain method call on true
-            c.MarkLabel(afterLabel);
-        } catch (Exception e) {
-            Logger.Error($"Could not change HealthManager#TakeDamage IL:\n{e}");
-        }
-    }
-    
-    // /// <summary>
-    // /// Hook for the 'DoMethodCall' method in the 'CallMethodProper' FSM action. This is used for the Crystal Shot
-    // /// game object to ensure that knockback is not applied to the local player if a remote player hits the crystal.
-    // /// </summary>
-    // private void CallMethodProperOnDoMethodCall(
-    //     On.HutongGames.PlayMaker.Actions.CallMethodProper.orig_DoMethodCall orig, 
-    //     HutongGames.PlayMaker.Actions.CallMethodProper self
-    // ) {
-    //     // If the 'behaviour' and 'methodName' strings do not match, we execute the original method and return
-    //     if (self.behaviour.Value != "HeroController" ||
-    //         self.methodName.Value != "RecoilLeft" &&
-    //         self.methodName.Value != "RecoilRight" &&
-    //         self.methodName.Value != "RecoilDown" &&
-    //         self.methodName.Value != "Bounce"
-    //     ) {
-    //         orig(self);
-    //         return;
-    //     }
-    //
-    //     // If the state does not match, we return as well
-    //     if (!self.State.Name.StartsWith("No Box ") && !self.State.Name.StartsWith("Blocked ")) {
-    //         orig(self);
-    //         return;
-    //     }
-    //
-    //     Transform attacks;
-    //
-    //     // Find either the 'Damager' or the 'Collider' game object from the FSM variables, and check up the hierarchy.
-    //     // If it matches the local player's object, then we know it was the local player's slash and not a remote
-    //     // player's slash
-    //     var damager = self.Fsm.Variables.FindFsmGameObject("Damager");
-    //     var collider = self.Fsm.Variables.FindFsmGameObject("Collider");
-    //     if (damager != null && damager.Value != null) {
-    //         attacks = damager.Value.transform.parent;
-    //     } else if (collider != null && collider.Value != null && collider.Value.transform.parent != null) {
-    //         attacks = collider.Value.transform.parent.parent;
-    //     } else {
-    //         orig(self);
-    //         return;
-    //     }
-    //
-    //     if (attacks == null) {
-    //         orig(self);
-    //         return;
-    //     }
-    //
-    //     var knight = attacks.parent;
-    //     if (knight == null) {
-    //         orig(self);
-    //         return;
-    //     }
-    //
-    //     if (knight.name.Equals("Knight")) {
-    //         orig(self);
-    //     }
-    // }
-    
-    /// <summary>
-    /// IL Hook for the 'IsInApplicableGameState' method in 'CameraLockArea'. This is used to add a check
-    /// for being in the pause menu and connected to a server. Otherwise, the camera will sometimes not lock while
-    /// in the pause menu during host transfers.
-    /// </summary>
-    private void CameraLockAreaOnIsInApplicableGameState(ILContext il) {
-        try {
-            // Create a cursor for this context
-            var c = new ILCursor(il);
-
-            // Goto after the first 'gameState' check in the method
-            // IL_0011: ldloc.0      // unsafeInstance
-            // IL_0012: ldfld        valuetype GlobalEnums.GameState GameManager::gameState
-            // IL_0017: ldc.i4.4
-            // IL_0018: beq.s        IL_0024
-            c.GotoNext(
-                MoveType.After,
-                i => i.MatchLdloc(0),
-                i => i.MatchLdfld(typeof(global::GameManager), "gameState"),
-                i => i.MatchLdcI4(4),
-                i => i.MatchBeq(out _)
-            );
-
-            // Define a label for branching to if the conditions fail
-            var afterChecksLabel = c.DefineLabel();
-
-            // Load GameManager 'unsafeInstance' onto evaluation stack
-            c.Emit(OpCodes.Ldloc, 0);
-            // Check if the game state is paused and push a boolean onto the stack based on the result
-            c.EmitDelegate<Func<global::GameManager, bool>>(gm => gm.GameState == GameState.PAUSED);
-            // If the game state is not paused, we branch to the last check in the method
-            c.Emit(OpCodes.Brfalse, afterChecksLabel);
-
-            // Check if the NetClient is connected and push a boolean onto the stack based on the result
-            c.EmitDelegate(() => _netClient.IsConnected);
-            // If we are not connected, we branch to the last check in the method
-            c.Emit(OpCodes.Brfalse, afterChecksLabel);
-
-            var returnTrueLabel = c.DefineLabel();
-
-            // If the previous two checks succeeded, we branch to the return true label
-            c.Emit(OpCodes.Br, returnTrueLabel);
-
-            // Mark the label after our new checks but before the last check of the method
-            c.MarkLabel(afterChecksLabel);
-            
-            // Goto before the 'return true' IL so we can branch here if our checks succeed 
-            // IL_0024: ldc.i4.1
-            // IL_0025: ret
-            c.GotoNext(
-                MoveType.Before,
-                i => i.MatchLdcI4(1),
-                i => i.MatchRet()
-            );
-
-            // Mark the label for return true here
-            c.MarkLabel(returnTrueLabel);
-        } catch (Exception e) {
-            Logger.Error($"Could not change CameraLockArea#IsInApplicableGameState IL: \n{e}");
-        }
-    }
-    
     /// <summary>
     /// Hook to add a tag include to the <see cref="TrackTriggerObjects"/> of <see cref="CameraLockArea"/> to ensure
     /// that it only triggers on the local player.

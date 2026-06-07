@@ -35,6 +35,7 @@ internal static class EntityInitializer {
     /// </summary>
     private static readonly Type[] ToRemoveTypes = [
         typeof(Walker),
+        typeof(Crawler),
         typeof(Rigidbody2D),
         typeof(BigCentipede)
     ];

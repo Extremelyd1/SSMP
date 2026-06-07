@@ -129,8 +129,15 @@ internal class EntityManager {
 
         IsSceneHost = true;
 
+        // Each entity is isolated: one MakeHost() failure must not abort the rest.
+        // A partial host transfer causes a silent desync that is extremely hard to diagnose.
+        // Log the failure and continue so that all entities get a chance to transition.
         foreach (var entity in _entities.Values) {
-            entity.MakeHost();
+            try {
+                entity.MakeHost();
+            } catch (Exception e) {
+                Logger.Error($"Exception while making entity ({entity.Id}, {entity.Type}) a host entity: {e}");
+            }
         }
     }
 
@@ -151,8 +158,7 @@ internal class EntityManager {
 
         // Find an entity that has the same type as the spawning type. Doesn't matter if it is the correct instance,
         // because the FSMs and components will be identical
-        var spawningEntity = _entities.Values.FirstOrDefault(e => e.Type == spawningType
-        );
+        var spawningEntity = _entities.Values.FirstOrDefault(e => e.Type == spawningType);
 
         if (spawningEntity == null) {
             Logger.Warn("Could not find entity with same type for spawning");
@@ -238,8 +244,8 @@ internal class EntityManager {
             return false;
         }
 
-        // Check if we are not the scene host for processing this data, active state and host FSM data should only
-        // be applied if we not the scene host, while data type below should always be applied
+        // Active state and host FSM data should only be applied if we are not the scene host.
+        // Generic data updates are always applied.
         if (!IsSceneHost) {
             if (entityUpdate.UpdateTypes.Contains(EntityUpdateType.Active)) {
                 entity.UpdateIsActive(entityUpdate.IsActive);
@@ -318,29 +324,36 @@ internal class EntityManager {
     }
 
     /// <summary>
-    /// Check to see if there are received un-applied entity updates.
+    /// Attempt to apply all pending entity updates that could not be applied when received.
     /// </summary>
     private void CheckReceivedUpdates() {
-        while (_receivedUpdates.Count != 0) {
-            var update = _receivedUpdates.Peek();
+        // Snapshot the count before iterating: updates re-enqueued in this pass are not re-visited
+        // until the next CheckReceivedUpdates call.
+        var count = _receivedUpdates.Count;
 
-            if (!_entities.TryGetValue(update.Id, out _)) {
-                continue;
+        for (var i = 0; i < count; i++) {
+            var update = _receivedUpdates.Dequeue();
+
+            bool applied;
+            switch (update) {
+                case EntityUpdate entityUpdate:
+                    applied = HandleEntityUpdate(entityUpdate);
+                    break;
+                case ReliableEntityUpdate reliableUpdate:
+                    applied = HandleReliableEntityUpdate(reliableUpdate);
+                    break;
+                default:
+                    Logger.Warn($"Unknown update type in pending queue, discarding: {update.GetType()}");
+                    continue; // Discard: re-queueing an unknown type would loop forever.
             }
 
-            Logger.Debug("Found un-applied entity update, applying now");
-
-            bool handled;
-            if (update is EntityUpdate entityUpdate) {
-                handled = HandleEntityUpdate(entityUpdate);
-            } else if (update is ReliableEntityUpdate reliableEntityUpdate) {
-                handled = HandleReliableEntityUpdate(reliableEntityUpdate);
-            } else {
-                continue;
-            }
-
-            if (handled) {
-                _receivedUpdates.Dequeue();
+            // HandleEntity* already re-enqueues when it returns false (entity not found / host not
+            // determined). The explicit re-enqueue below handles the case where HandleEntity* returns
+            // false without having enqueued the item itself; currently it always does, but guard it
+            // anyway to be safe.
+            if (!applied && _receivedUpdates.Count == count - i - 1) {
+                // Handler didn't re-enqueue; do it ourselves.
+                _receivedUpdates.Enqueue(update);
             }
         }
     }
@@ -417,17 +430,15 @@ internal class EntityManager {
                                    // Filter out EnemyDeathEffects components not in the current scene
                                    .Where(e => e.gameObject.scene == scene)
                                    // Project each death effect to their GameObject and the corpse of the
-                                   // pre-instantiated EnemyDeathEffects
-                                   // component
+                                   // pre-instantiated EnemyDeathEffects component
                                    .SelectMany(enemyDeathEffects => {
                                            try {
                                                enemyDeathEffects.PreInstantiate();
                                            } catch (Exception) {
                                                // If we get an exception it might not be possible to pre-instantiate the
-                                               // enemy death effects
-                                               // This can happen when the object uses a PersonalObjectPool, which can't
-                                               // be pre-instantiated
-                                               // this early, so we return only the original gameobject
+                                               // enemy death effects. This can happen when the object uses a
+                                               // PersonalObjectPool, which can't be pre-instantiated this early, so we
+                                               // return only the original gameobject.
                                                return [enemyDeathEffects.gameObject];
                                            }
 
@@ -438,9 +449,8 @@ internal class EntityManager {
                                        }
                                    )
                                    // Concatenate all GameObjects for PlayMakerFSM components in the current scene, and
-                                   // check whether it is the
-                                   // FSM for a Colosseum Cage, in which case we pre-instantiate the enemy inside and
-                                   // concatenate it as well
+                                   // check whether it is the FSM for a Colosseum Cage, in which case we
+                                   // pre-instantiate the enemy inside and concatenate it as well
                                    .Concat(
                                        Object.FindObjectsOfType<PlayMakerFSM>(true)
                                              .Where(fsm => fsm.gameObject.scene == scene)
@@ -451,9 +461,7 @@ internal class EntityManager {
                                                          !fsm.Fsm.Name.Equals("Spawn") &&
                                                          !fsm.Fsm.Name.Equals("Control")
                                                         ) {
-                                                         return [
-                                                             fsm.gameObject
-                                                         ];
+                                                         return [fsm.gameObject];
                                                      }
 
                                                      var createAction = fsm.GetFirstAction<CreateObject>("Init");

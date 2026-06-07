@@ -403,7 +403,9 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
             var entityUpdate =
                 FindOrCreateEntityUpdate<ReliableEntityUpdate>(entityId, ClientUpdatePacketId.ReliableEntityUpdate);
             entityUpdate!.UpdateTypes.Add(EntityUpdateType.Data);
-            entityUpdate.GenericData.AddRange(data);
+            foreach (var networkData in data) {
+                entityUpdate.GenericData.Add(networkData.Clone());
+            }
         }
     }
 
