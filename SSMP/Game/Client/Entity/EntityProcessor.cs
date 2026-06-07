@@ -4,23 +4,26 @@ using SSMP.Networking.Client;
 using SSMP.Util;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
+
 // ReSharper disable ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
 // ReSharper disable NullCoalescingConditionIsAlwaysNotNullAccordingToAPIContract
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider
+// adding the 'required' modifier or declaring as nullable.
 #pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
 
-namespace SSMP.Game.Client.Entity; 
+namespace SSMP.Game.Client.Entity;
 
 /// <summary>
-/// Data processing class that receives a set of parameters and processing a given game object into an entity if
-/// applicable. Will recursively process children of the game object as well and report success and the list of
-/// entities created.
+/// Processes a single GameObject and its children into registered entities.
+/// Constructed with <c>init</c> properties describing the processing context; call <see cref="Process()"/> to run.
+/// Inspect <see cref="Success"/> and <see cref="Entities"/> for results.
 /// </summary>
 internal class EntityProcessor {
     /// <summary>
     /// Reference to the dictionary of entities from the entity manager.
     /// </summary>
     private static Dictionary<ushort, Entity> _entities;
+
     /// <summary>
     /// The net client used to pass onto constructed entities.
     /// </summary>
@@ -30,24 +33,30 @@ internal class EntityProcessor {
     /// The last used entity ID.
     /// </summary>
     private static ushort _lastId;
-    
+
+    private static bool _isSceneHookRegistered;
+
     /// <summary>
     /// The game object to process.
     /// </summary>
     public GameObject GameObject { get; init; }
+
     /// <summary>
     /// Whether the local client is the scene host.
     /// </summary>
     public bool IsSceneHost { get; init; }
+
     /// <summary>
     /// Whether the scene host is determined for this scene locally.
     /// </summary>
     public bool IsSceneHostDetermined { get; init; }
+
     /// <summary>
     /// Whether the processing of this entity should happen under the assumption that was a late load of the
     /// game object.
     /// </summary>
     public bool LateLoad { get; init; }
+
     /// <summary>
     /// Whether the game object was spawned and should have the designated ID.
     /// </summary>
@@ -56,7 +65,8 @@ internal class EntityProcessor {
     /// <summary>
     /// The list of entities that were created during the processing.
     /// </summary>
-    public List<Entity> Entities { get; } = new();
+    public List<Entity> Entities { get; } = [];
+
     /// <summary>
     /// Whether the processing of the entity was a success.
     /// </summary>
@@ -65,15 +75,18 @@ internal class EntityProcessor {
     /// <summary>
     /// Initialize the entity processor with a reference to the entity dict and the net client.
     /// </summary>
-    /// <param name="entities">A reference to the dictionary of entities from the entity manager.</param>
-    /// <param name="netClient">The net client instance to pass onto constructed entities.</param>
+    /// <param name="entities">Shared entity registry from EntityManager.</param>
+    /// <param name="netClient">Net client passed into each constructed entity.</param>
     public static void Initialize(Dictionary<ushort, Entity> entities, NetClient netClient) {
         _entities = entities;
         _netClient = netClient;
 
-        UnityEngine.SceneManagement.SceneManager.activeSceneChanged += (_, _) => {
-            _lastId = 0;
-        };
+        if (_isSceneHookRegistered) {
+            return;
+        }
+
+        UnityEngine.SceneManagement.SceneManager.activeSceneChanged += (_, _) => _lastId = 0;
+        _isSceneHookRegistered = true;
     }
 
     /// <summary>
@@ -95,87 +108,59 @@ internal class EntityProcessor {
     /// <param name="parentClientObject">The client object of the parent entity for this entity or null if no such
     /// parent exists.</param>
     private void Process(
-        GameObject gameObject, 
+        GameObject gameObject,
         IEnumerable<EntityRegistryEntry> entries = null,
         GameObject parentClientObject = null
     ) {
-        EntityRegistryEntry foundEntry;
-
-        // If the given entries are null, query the entity registry for all top-level entries
-        // Otherwise only use the given entries (used for child entities)
-        if (entries == null) {
-            if (!EntityRegistry.TryGetEntry(gameObject, out foundEntry)) {
-                return;
-            }
+        EntityRegistryEntry? foundEntry;
+        if (entries is null) {
+            if (!EntityRegistry.TryGetEntry(gameObject, out foundEntry) || foundEntry == null) return;
         } else {
-            if (!EntityRegistry.TryGetEntry(entries, gameObject, out foundEntry)) {
-                return;
-            }
+            if (!EntityRegistry.TryGetEntry(entries, gameObject, out foundEntry) || foundEntry == null) return;
         }
 
-        ushort id;
-        
-        // If a spawned ID is defined we check whether an entity with the given ID already exists
-        // Otherwise we find a new ID that isn't used yet
-        if (SpawnedId.HasValue) {
-            id = SpawnedId.Value;
-            
-            if (_entities.ContainsKey(id)) {
-                Logger.Warn($"Tried registering entity with forced ID ({id}), but an entity with the ID already exists");
-                return;
-            }
-        } else {
-            if (_entities.Count >= ushort.MaxValue) {
-                Logger.Error("Could not register entity because ID space is full!");
-                return;
-            }
+        var id = ResolveId();
+        if (!id.HasValue) return;
 
-            // First find a usable ID that is not registered to an entity already
-            while (_entities.ContainsKey(_lastId)) {
-                _lastId++;
-            }
-
-            id = _lastId;
-            _lastId++;
-        }
-
-        // Get the array of component types for the entity or create an empty one if it is null
         var componentTypes = foundEntry.ComponentTypes ?? [];
-        
-        // Depending on whether a parent object was given we create the entity with this parent object
         Entity entity;
-        if (parentClientObject == null) {
-            Logger.Info($"Registering entity ({foundEntry.Type}) '{gameObject.name}' with ID '{id}'");
+
+        if (parentClientObject is null) {
+            Logger.Info($"Registering entity ({foundEntry.Type}) '{gameObject.name}' with ID '{id.Value}'");
 
             entity = new Entity(
                 _netClient,
-                id,
+                id.Value,
                 foundEntry.Type,
                 gameObject,
                 types: componentTypes
             );
         } else {
-            Logger.Info($"Registering entity ({foundEntry.Type}) '{gameObject.name}' with ID '{id}' with parent: {parentClientObject.name}");
-            
-            // Find the correct child of the client object of the parent entity
-            var clientObject = parentClientObject.GetChildren()
-                .FirstOrDefault(c => {
-                    if (Entities.Any(processedEntity => processedEntity.Object.Client == c)) {
-                        return false;
-                    }
+            Logger.Info(
+                $"Registering entity ({foundEntry.Type}) '{gameObject.name}' with ID '{id.Value}'" +
+                $" with parent: {parentClientObject.name}"
+            );
 
-                    return c.name.Contains(foundEntry.BaseObjectName);
-                });
-            if (clientObject == null) {
+            // Find a matching child of the parent's client object that hasn't already been claimed
+            // by an earlier entity in this processing pass.
+            var clientObject = parentClientObject.GetChildren()
+                                                 .FirstOrDefault(c =>
+                                                     c.name.Contains(foundEntry.BaseObjectName) &&
+                                                     Entities.All(e => e.Object.Client != c)
+                                                 );
+
+            if (clientObject is null) {
                 Logger.Warn("Could not find child of client object of parent entity");
                 return;
             }
-            
-            Logger.Debug($"Found child of client object of parent entity: {clientObject.name}, {clientObject.GetInstanceID()}");
+
+            Logger.Debug(
+                $"Found child of client object of parent entity: {clientObject.name}, {clientObject.GetInstanceID()}"
+            );
 
             entity = new Entity(
                 _netClient,
-                id,
+                id.Value,
                 foundEntry.Type,
                 gameObject,
                 clientObject,
@@ -183,25 +168,53 @@ internal class EntityProcessor {
             );
         }
 
-        _entities[id] = entity;
-
+        _entities[id.Value] = entity;
         Entities.Add(entity);
 
-        // If this entry has child entries, we recursively check the children of the object as well
         if (foundEntry.Children != null) {
-            foreach (var childObj in gameObject.GetChildren()) {
-                Process(childObj, foundEntry.Children, entity.Object.Client);
+            foreach (var child in gameObject.GetChildren()) {
+                Process(child, foundEntry.Children, entity.Object.Client);
             }
         }
-        
+
+        // Late-loaded entities miss the initial role assignment pass; apply it now.
+        // Note: client-side late loads sync only active state - InitializeClient() is NOT called.
+        // This appears intentional: the full client init is only done for entities present at scene load.
         if (LateLoad && IsSceneHostDetermined) {
             if (IsSceneHost) {
-                // Since this is a late load it needs to be initialized as host if we are the scene host
                 entity.InitializeHost();
             } else {
-                // Since this is a late load we need to update the 'active' state of the entity
                 entity.UpdateIsActive(true);
             }
         }
+    }
+
+    /// <summary>
+    /// Resolves the entity ID for the current processing context.
+    /// Returns null and logs if the ID cannot be assigned.
+    /// </summary>
+    private ushort? ResolveId() {
+        if (SpawnedId.HasValue) {
+            if (_entities.ContainsKey(SpawnedId.Value)) {
+                Logger.Warn(
+                    $"Tried registering entity with forced ID ({SpawnedId.Value}), but an entity with that ID already exists"
+                );
+                return null;
+            }
+
+            return SpawnedId.Value;
+        }
+
+        // ushort spans 0–65535 (65536 distinct values); the space is only full when count exceeds MaxValue.
+        if (_entities.Count > ushort.MaxValue) {
+            Logger.Error("Could not register entity because ID space is full!");
+            return null;
+        }
+
+        while (_entities.ContainsKey(_lastId)) {
+            _lastId++;
+        }
+
+        return _lastId++;
     }
 }
