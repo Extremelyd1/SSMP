@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Runtime.Serialization;
 using Newtonsoft.Json;
@@ -61,7 +62,7 @@ internal static class EntityRegistry {
     /// <param name="gameObject">The game object to find an entry for.</param>
     /// <param name="foundEntry">The matched entry, or <c>null</c> if none matched.</param>
     /// <returns><c>true</c> if a matching entry was found.</returns>
-    public static bool TryGetEntry(GameObject gameObject, out EntityRegistryEntry? foundEntry) {
+    public static bool TryGetEntry(GameObject gameObject, [NotNullWhen(true)] out EntityRegistryEntry? foundEntry) {
         return TryGetEntry(Entries, gameObject, out foundEntry);
     }
 
@@ -81,7 +82,7 @@ internal static class EntityRegistry {
     public static bool TryGetEntry(
         IEnumerable<EntityRegistryEntry> entries,
         GameObject gameObject,
-        out EntityRegistryEntry? foundEntry
+        [NotNullWhen(true)] out EntityRegistryEntry? foundEntry
     ) {
         foundEntry = null;
         var longestBaseName = 0;

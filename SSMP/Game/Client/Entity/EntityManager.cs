@@ -1,18 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using SSMP.Util;
 using SSMP.Game.Client.Entity.Action;
 using SSMP.Game.Client.Entity.Component;
 using SSMP.Networking.Client;
 using SSMP.Networking.Packet.Data;
 using UnityEngine.SceneManagement;
 using Logger = SSMP.Logging.Logger;
-using Object = UnityEngine.Object;
 
 #pragma warning disable CS8604 // Possible null reference argument.
 #pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
-#pragma warning disable CS0618 // Type or member is obsolete
 
 namespace SSMP.Game.Client.Entity;
 
@@ -30,8 +27,21 @@ internal class EntityManager {
     /// </summary>
     private readonly Dictionary<ushort, Entity> _entities;
 
-    // Updates buffered when the target entity or the scene host role aren't ready yet.
-    private readonly Queue<BaseEntityUpdate> _deferredUpdates;
+    /// <summary>
+    /// Updates buffered when the target entity or the scene host role aren't ready yet.
+    /// </summary>
+    private readonly DeferredEntityUpdateQueue _deferredUpdates;
+
+    /// <summary>
+    /// Allocates IDs for newly registered entities.
+    /// </summary>
+    private readonly EntityIdAllocator _entityIds;
+
+    /// <summary>
+    /// Finds scene objects that may be registered as entities.
+    /// </summary>
+    private readonly EntitySceneDiscovery _sceneDiscovery;
+
 
     // True once InitializeSceneHost or InitializeSceneClient has completed for the current scene.
     private bool _isSceneHostDetermined;
@@ -41,17 +51,16 @@ internal class EntityManager {
     /// </summary>
     public bool IsSceneHost { get; private set; }
 
+    /// <summary>
+    /// Create a new entity manager for the given network client.
+    /// </summary>
+    /// <param name="netClient">The client used for entity networking.</param>
     public EntityManager(NetClient netClient) {
         _netClient = netClient;
         _entities = new Dictionary<ushort, Entity>();
-        _deferredUpdates = new Queue<BaseEntityUpdate>();
-    }
-
-    /// <summary>
-    /// Initialize the entity manager by initializing the processor and action hooks.
-    /// </summary>
-    public void Initialize() {
-        EntityProcessor.Initialize(_entities, _netClient);
+        _entityIds = new EntityIdAllocator(_entities);
+        _sceneDiscovery = new EntitySceneDiscovery();
+        _deferredUpdates = new DeferredEntityUpdateQueue();
     }
 
     /// <summary>
@@ -89,6 +98,10 @@ internal class EntityManager {
     /// </summary>
     public void InitializeSceneClient() => InitializeSceneRole(isHost: false);
 
+    /// <summary>
+    /// Apply the resolved scene role to every registered entity and then retry any deferred updates.
+    /// </summary>
+    /// <param name="isHost">Whether the local player is the authoritative host for the current scene.</param>
     private void InitializeSceneRole(bool isHost) {
         Logger.Info(
             isHost
@@ -128,7 +141,7 @@ internal class EntityManager {
 
     /// <summary>
     /// Spawns an entity received from the network, using an existing entity of the same spawning type as a template.
-    /// The specific instance doesn't matter — FSMs and components are identical across instances of the same type.
+    /// The specific instance doesn't matter; FSMs and components are identical across instances of the same type.
     /// </summary>
     /// <param name="id">The ID of the entity.</param>
     /// <param name="spawningType">The type of the entity that spawned the new entity.</param>
@@ -154,13 +167,7 @@ internal class EntityManager {
             spawningEntity.GetClientFsms()
         );
 
-        var processor = new EntityProcessor {
-            GameObject = spawnedObject,
-            IsSceneHost = IsSceneHost,
-            IsSceneHostDetermined = _isSceneHostDetermined,
-            LateLoad = true,
-            SpawnedId = id
-        }.Process();
+        var processor = CreateProcessor(spawnedObject, lateLoad: true, spawnedId: id).Process();
 
         if (!processor.Success) {
             Logger.Warn($"Could not process game object of spawned entity: {spawnedObject.name}");
@@ -168,18 +175,54 @@ internal class EntityManager {
     }
 
     /// <summary>
+    /// Create a processor configured for the current scene-role state.
+    /// </summary>
+    /// <param name="gameObject">The root object to process.</param>
+    /// <param name="lateLoad">Whether the object appeared after the initial scene scan.</param>
+    /// <param name="spawnedId">An optional network-assigned ID for spawned entities.</param>
+    /// <returns>A configured entity processor instance.</returns>
+    private EntityProcessor CreateProcessor(
+        UnityEngine.GameObject gameObject,
+        bool lateLoad,
+        ushort? spawnedId = null
+    ) {
+        return new EntityProcessor(_entities, _netClient, _entityIds) {
+            GameObject = gameObject,
+            IsSceneHost = IsSceneHost,
+            IsSceneHostDetermined = _isSceneHostDetermined,
+            LateLoad = lateLoad,
+            SpawnedId = spawnedId
+        };
+    }
+
+    /// <summary>
     /// Method for handling received entity updates.
     /// </summary>
     /// <param name="entityUpdate">The entity update to handle.</param>
     /// <param name="alreadyInSceneUpdate">Whether this is the update from the already in scene packet.</param>
+    /// <returns><c>true</c> when the update was applied immediately; otherwise it was deferred.</returns>
     public bool HandleEntityUpdate(EntityUpdate entityUpdate, bool alreadyInSceneUpdate = false) {
         if (IsSceneHost) {
             return true;
         }
 
-        if (!_entities.TryGetValue(entityUpdate.Id, out var entity) || !_isSceneHostDetermined) {
+        if (!TryApplyEntityUpdate(entityUpdate, alreadyInSceneUpdate)) {
             LogDeferred(entityUpdate.Id);
             _deferredUpdates.Enqueue(entityUpdate);
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Attempt to apply an unreliable entity update immediately.
+    /// </summary>
+    /// <param name="entityUpdate">The update to apply.</param>
+    /// <param name="alreadyInSceneUpdate">Whether the update came from the already-in-scene sync payload.</param>
+    /// <returns><c>true</c> when the target entity was ready and the update was applied.</returns>
+    private bool TryApplyEntityUpdate(EntityUpdate entityUpdate, bool alreadyInSceneUpdate = false) {
+        if (!_entities.TryGetValue(entityUpdate.Id, out var entity) || !_isSceneHostDetermined) {
             return false;
         }
 
@@ -207,14 +250,28 @@ internal class EntityManager {
     /// </summary>
     /// <param name="entityUpdate">The reliable entity update to handle.</param>
     /// <param name="alreadyInSceneUpdate">Whether this is the update from the already in scene packet.</param>
-    public bool HandleReliableEntityUpdate(ReliableEntityUpdate entityUpdate, bool alreadyInSceneUpdate = false) {
-        if (!_entities.TryGetValue(entityUpdate.Id, out var entity) || !_isSceneHostDetermined) {
+    public void HandleReliableEntityUpdate(ReliableEntityUpdate entityUpdate, bool alreadyInSceneUpdate = false) {
+        if (!TryApplyReliableEntityUpdate(entityUpdate, alreadyInSceneUpdate)) {
             LogDeferred(entityUpdate.Id);
             _deferredUpdates.Enqueue(entityUpdate);
+        }
+    }
+
+    /// <summary>
+    /// Attempt to apply a reliable entity update immediately.
+    /// </summary>
+    /// <param name="entityUpdate">The update to apply.</param>
+    /// <param name="alreadyInSceneUpdate">Whether the update came from the already-in-scene sync payload.</param>
+    /// <returns><c>true</c> when the target entity was ready and the update was applied.</returns>
+    private bool TryApplyReliableEntityUpdate(
+        ReliableEntityUpdate entityUpdate,
+        bool alreadyInSceneUpdate = false
+    ) {
+        if (!_entities.TryGetValue(entityUpdate.Id, out var entity) || !_isSceneHostDetermined) {
             return false;
         }
 
-        // Active state and host FSM data are owned by the host — clients apply them, the host ignores them.
+        // Active state and host FSM data are owned by the host - clients apply them, the host ignores them.
         // Generic data updates apply unconditionally.
         if (!IsSceneHost) {
             if (entityUpdate.UpdateTypes.Contains(EntityUpdateType.Active)) {
@@ -233,6 +290,10 @@ internal class EntityManager {
         return true;
     }
 
+    /// <summary>
+    /// Log why an incoming update is being deferred instead of applied immediately.
+    /// </summary>
+    /// <param name="entityId">The target entity ID from the incoming update.</param>
     private void LogDeferred(ushort entityId) {
         Logger.Debug(
             _isSceneHostDetermined
@@ -252,12 +313,7 @@ internal class EntityManager {
             return true;
         }
 
-        var processor = new EntityProcessor {
-            GameObject = details.GameObject,
-            IsSceneHost = IsSceneHost,
-            IsSceneHostDetermined = _isSceneHostDetermined,
-            LateLoad = true
-        }.Process();
+        var processor = CreateProcessor(details.GameObject, lateLoad: true).Process();
 
         if (!processor.Success) {
             return false;
@@ -280,7 +336,7 @@ internal class EntityManager {
 
         var topLevelEntity = processor.Entities[0];
         Logger.Info(
-            $"Notifying server of entity ({details.Action.Fsm.GameObject.name}, {entry!.Type}) spawning entity " +
+            $"Notifying server of entity ({details.Action.Fsm.GameObject.name}, {entry.Type}) spawning entity " +
             $"({details.GameObject.name}, {topLevelEntity.Type}) with ID {topLevelEntity.Id}"
         );
 
@@ -290,35 +346,26 @@ internal class EntityManager {
     }
 
     /// <summary>
-    /// Attempts to apply all deferred updates. Snapshots the count before iterating so that updates
-    /// re-queued during this pass are not visited again until the next call.
-    /// <para>
-    /// The handlers (HandleEntityUpdate, HandleReliableEntityUpdate) already re-enqueue on failure.
-    /// The guard at the end of the loop is a safety net for any future handler that might not.
-    /// </para>
+    /// Attempt to apply all pending entity updates that could not be applied when received.
     /// </summary>
     private void CheckDeferredUpdates() {
-        var count = _deferredUpdates.Count;
+        _deferredUpdates.Retry(TryApplyDeferredUpdate);
+    }
 
-        for (var i = 0; i < count; i++) {
-            var update = _deferredUpdates.Dequeue();
-
-            bool applied;
-            switch (update) {
-                case EntityUpdate entityUpdate:
-                    applied = HandleEntityUpdate(entityUpdate);
-                    break;
-                case ReliableEntityUpdate reliableUpdate:
-                    applied = HandleReliableEntityUpdate(reliableUpdate);
-                    break;
-                default:
-                    Logger.Warn($"Unknown update type in deferred queue, discarding: {update.GetType()}");
-                    continue; // Re-queuing an unrecognized type would loop forever.
-            }
-
-            if (!applied && _deferredUpdates.Count == count - i - 1) {
-                _deferredUpdates.Enqueue(update);
-            }
+    /// <summary>
+    /// Retry a buffered update using the appropriate entity-update handler.
+    /// </summary>
+    /// <param name="update">The buffered update to retry.</param>
+    /// <returns><c>true</c> when the update should be removed from the queue.</returns>
+    private bool TryApplyDeferredUpdate(BaseEntityUpdate update) {
+        switch (update) {
+            case EntityUpdate entityUpdate:
+                return TryApplyEntityUpdate(entityUpdate);
+            case ReliableEntityUpdate reliableUpdate:
+                return TryApplyReliableEntityUpdate(reliableUpdate);
+            default:
+                DeferredEntityUpdateQueue.DiscardUnknown(update);
+                return true;
         }
     }
 
@@ -353,6 +400,7 @@ internal class EntityManager {
 
         _entities.Clear();
         _deferredUpdates.Clear();
+        _entityIds.Reset();
         MusicComponent.ClearInstance();
     }
 
@@ -362,7 +410,7 @@ internal class EntityManager {
     /// <param name="scene">The scene that is loaded.</param>
     /// <param name="mode">The load scene mode.</param>
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode) {
-        // Only process scenes that are a named sub-scene of the current active scene — for example,
+        // Only process scenes that are a named sub-scene of the current active scene, for example,
         // a boss room loaded additively on top of its parent scene. The active scene itself and
         // unrelated scenes are both ignored.
         var activeSceneName = SceneManager.GetActiveScene().name;
@@ -384,59 +432,15 @@ internal class EntityManager {
     /// <param name="scene">The scene to find entities in.</param>
     /// <param name="lateLoad">Whether this scene was loaded late.</param>
     private void FindEntitiesInScene(Scene scene, bool lateLoad) {
-        // --- Enemy objects (EnemyDeathEffects) ---
-        // Include both the enemy's own GameObject and its pre-instantiated corpse prefab, so both
-        // can be tracked before they become active.
-        var enemyObjects = Object.FindObjectsOfType<EnemyDeathEffects>()
-                                 .Where(e => e.gameObject.scene == scene)
-                                 .SelectMany(effects => {
-                                         try {
-                                             effects.PreInstantiate();
-                                         } catch (Exception) {
-                                             // PersonalObjectPool-based enemies cannot be pre-instantiated this early;
-                                             // fall back to tracking only the base GameObject.
-                                             return new[] { effects.gameObject };
-                                         }
-
-                                         // TODO: CorpsePrefab is a prefab reference and may not be compatible with the
-                                         // original code path.
-                                         return [effects.gameObject, effects.CorpsePrefab];
-                                     }
-                                 );
-
-        // --- FSM objects (PlayMakerFSM) ---
-        var fsmObjects = Object.FindObjectsOfType<PlayMakerFSM>(true)
-                               .Where(fsm => fsm.gameObject.scene == scene)
-                               .Select(fsm => fsm.gameObject);
-
-        // Expand each collected object to include all of its children so nested entities are found.
-        var expandedObjects = enemyObjects
-                              .Concat(fsmObjects)
-                              .SelectMany(obj => obj == null ? [] : obj.GetChildren().Prepend(obj));
-
-        // --- Component-based objects that bypass the FSM / EnemyDeathEffects paths ---
-        var componentObjects =
-            Object.FindObjectsOfType<Climber>(true).Select(c => c.gameObject)
-                  .Concat(Object.FindObjectsOfType<Walker>(true).Select(w => w.gameObject));
-
-        var candidateObjects = expandedObjects
-                               .Concat(componentObjects)
-                               .Where(obj => obj.scene == scene)
-                               .Distinct()
-                               .ToList();
-
+        var candidateObjects = _sceneDiscovery.FindCandidates(scene);
         var entityCountBefore = _entities.Count;
+
         Logger.Info(
             $"Checking {candidateObjects.Count} candidate object(s) for entities in scene '{scene.name}' (lateLoad: {lateLoad})"
         );
 
         foreach (var obj in candidateObjects) {
-            new EntityProcessor {
-                GameObject = obj,
-                IsSceneHost = IsSceneHost,
-                IsSceneHostDetermined = _isSceneHostDetermined,
-                LateLoad = lateLoad
-            }.Process();
+            CreateProcessor(obj, lateLoad).Process();
         }
 
         Logger.Info($"Registered {_entities.Count - entityCountBefore} entity/entities in scene '{scene.name}'");

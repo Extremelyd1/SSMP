@@ -126,7 +126,7 @@ internal class ClientManager : IClientManager {
     /// This is used to determine whether to apply save data from the server to the client and warp them to a bench.
     /// </summary>
     private bool _autoConnect;
-    
+
     /// <summary>
     /// Stores the fallback address (IP:Port) of the last connection attempt for automatic retries.
     /// </summary>
@@ -177,7 +177,7 @@ internal class ClientManager : IClientManager {
 
     /// <inheritdoc />
     public IMapManager MapManager => _mapManager;
-    
+
     /// <inheritdoc />
     public IServerSettings ServerSettings => _serverSettings;
 
@@ -185,7 +185,9 @@ internal class ClientManager : IClientManager {
     public IModSettings ModSettings => _modSettings;
 
     /// <inheritdoc />
-    public string Username => !_netClient.IsConnected ? throw new Exception("Client is not connected, username is undefined") : _username!;
+    public string Username => !_netClient.IsConnected
+        ? throw new Exception("Client is not connected, username is undefined")
+        : _username!;
 
     /// <inheritdoc />
     public IReadOnlyCollection<IClientPlayer> Players => _playerData.Values;
@@ -260,7 +262,6 @@ internal class ClientManager : IClientManager {
         _animationManager.Initialize(_serverSettings);
         _mapManager.Initialize();
 
-        _entityManager.Initialize();
         // _saveManager.Initialize();
 
         RegisterCommands();
@@ -294,9 +295,7 @@ internal class ClientManager : IClientManager {
         _netClient.ConnectEvent += OnClientConnect;
         _netClient.TimeoutEvent += OnTimeout;
 
-        EventHooks.GameManagerQuitGame += () => {
-            _modSettings.Save();
-        };
+        EventHooks.GameManagerQuitGame += () => { _modSettings.Save(); };
     }
 
     /// <summary>
@@ -310,10 +309,10 @@ internal class ClientManager : IClientManager {
         _pauseManager.RegisterHooks();
         _gamePatcher.RegisterHooks();
         _fsmPatcher.RegisterHooks();
-        
+
         if (_fullSynchronisation) {
             _entityManager.RegisterHooks();
-             //_saveManager.RegisterHooks();
+            //_saveManager.RegisterHooks();
         }
 
         // Register handlers for various things
@@ -339,10 +338,10 @@ internal class ClientManager : IClientManager {
         _gamePatcher.DeregisterHooks();
         _fsmPatcher.DeregisterHooks();
 
-         if (_fullSynchronisation) {
-             _entityManager.DeregisterHooks();
-             //_saveManager.DeregisterHooks();
-         }
+        if (_fullSynchronisation) {
+            _entityManager.DeregisterHooks();
+            //_saveManager.DeregisterHooks();
+        }
 
         // Deregister handlers for various things
         SceneManager.activeSceneChanged -= OnSceneChange;
@@ -694,7 +693,7 @@ internal class ClientManager : IClientManager {
         // Fill the player data dictionary with the info from the packet
         foreach (var playerInfo in serverInfo.PlayerInfos) {
             _playerData[playerInfo.Id] = new ClientPlayerData {
-                Id = playerInfo.Id, 
+                Id = playerInfo.Id,
                 Username = playerInfo.Username,
                 Team = playerInfo.Team,
                 SkinId = playerInfo.SkinId,
