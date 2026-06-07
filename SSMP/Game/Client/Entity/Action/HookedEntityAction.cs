@@ -15,15 +15,15 @@ internal class HookedEntityAction {
     /// <summary>
     /// The index of the FSM in which the action was hooked.
     /// </summary>
-    public int FsmIndex { get; set; }
+    public int FsmIndex { get; init; }
     
     /// <summary>
     /// The index of the state in which the action was hooked.
     /// </summary>
-    public int StateIndex { get; set; }
+    public int StateIndex { get; init; }
 
     /// <summary>
     /// The index of the hooked action.
     /// </summary>
-    public int ActionIndex { get; set; }
+    public int ActionIndex { get; init; }
 }
