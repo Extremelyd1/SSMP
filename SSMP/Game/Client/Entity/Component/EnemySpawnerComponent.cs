@@ -51,7 +51,7 @@ internal class EnemySpawnerComponent : EntityComponent {
     /// Hook for when the enemy object is spawned from the spawner so we can call the spawn event.
     /// </summary>
     /// <param name="obj">The spawned game object.</param>
-    private void OnEnemySpawned(GameObject obj) {
+    private static void OnEnemySpawned(GameObject obj) {
         EntityFsmActions.CallEntitySpawnEvent(new EntitySpawnDetails {
             Type = EntitySpawnType.EnemySpawnerComponent,
             GameObject = obj

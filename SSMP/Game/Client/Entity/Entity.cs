@@ -281,21 +281,6 @@ internal class Entity {
             Object.Client.SetActive(false);
         }
 
-        // // Debug code that logs each action's OnEnter method call
-        // foreach (var fsm in _fsms.Host) {
-        //     foreach (var state in fsm.FsmStates) {
-        //         foreach (var action in state.Actions) {
-        //             FsmActionHooks.RegisterFsmStateActionType(action.GetType(), stateAction => {
-        //                 if (stateAction != action) {
-        //                     return;
-        //                 }
-        //                 
-        //                 Logger.Debug($"Entity ({Id}, {Type}) has host FSM enter action: {state.Name},
-        // {action.GetType()}, {state.Actions.ToList().IndexOf(action)}");
-        //             });
-        //         }
-        //     }
-        // }
     }
 
     /// <summary>
@@ -537,30 +522,6 @@ internal class Entity {
     /// Handle specifics for a set of enemies that rely on EnemyDeathEffects for additional enemies.
     /// </summary>
     private void HandleEnemyDeathEffects() {
-        switch (Type) {
-            default:
-                return;
-        }
-
-        // Logger.Debug(
-        //     $"Entity ({Id}, {Type}) has corpse that is also enemy, deleting death effects and corpse from client
-        // entity"
-        // );
-
-        // var enemyDeathEffects = Object.Client.GetComponent<EnemyDeathEffects>();
-        // if (enemyDeathEffects == null) {
-        //     Logger.Debug("  EnemyDeathEffects is null, cannot remove");
-        // }
-
-        // UnityEngine.Object.Destroy(enemyDeathEffects);
-
-        // var corpse = Object.Client.FindGameObjectInChildren(corpseName);
-        // if (corpse != null) {
-        //     Logger.Debug($"  Destroying corpse of client object: {corpse.name}");
-        //     UnityEngine.Object.Destroy(corpse);
-        // } else {
-        //     Logger.Debug("  Could not find corpse of client object");
-        // }
     }
 
     /// <summary>

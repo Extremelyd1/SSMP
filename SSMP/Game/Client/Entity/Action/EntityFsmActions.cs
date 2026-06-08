@@ -4,8 +4,6 @@ using System.Collections.Generic;
 using System.Reflection;
 using HutongGames.PlayMaker;
 using HutongGames.PlayMaker.Actions;
-using Mono.Cecil.Cil;
-using MonoMod.Cil;
 using SSMP.Networking.Packet.Data;
 using SSMP.Util;
 using UnityEngine;
@@ -50,7 +48,7 @@ internal static class EntityFsmActions {
     /// <summary>
     /// Set containing types of actions that are supported for transformation by a method in this class.
     /// </summary>
-    public static readonly HashSet<Type> SupportedActionTypes = new();
+    public static readonly HashSet<Type> SupportedActionTypes = [];
 
     /// <summary>
     /// Event that is called when an entity is spawned from an object.
@@ -117,22 +115,6 @@ internal static class EntityFsmActions {
                 throw new Exception("Method was defined that does not adhere to the method naming");
             }
         }
-
-        // Register the IL hooks for modifying FSM action methods
-        // IL.HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPool.OnEnter += FlingObjectsFromGlobalPoolOnEnter;
-        // IL.HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPoolVel.OnEnter +=
-        // FlingObjectsFromGlobalPoolVelOnEnter;
-        // IL.HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPoolTime.OnUpdate +=
-        // FlingObjectsFromGlobalPoolTimeOnUpdate;
-        // IL.HutongGames.PlayMaker.Actions.GetRandomChild.DoGetRandomChild += GetRandomChildOnDoGetRandomChild;
-
-        // Register IL hooks for the OnEnter method of certain classes. These OnEnter methods do not
-        // have a method body and thus no IL instructions (apart from ret). Hooking this in the FsmActionHooks class
-        // will not work, so we emit a NOP instruction to the body to make it hookable
-        // void EmitNop(ILContext il) => new ILCursor(il).Emit(OpCodes.Nop);
-
-        // IL.HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPoolTime.OnEnter += EmitNop;
-        // IL.SpawnBloodTime.OnEnter += EmitNop;
     }
 
     /// <summary>
@@ -210,199 +192,11 @@ internal static class EntityFsmActions {
     }
 
     /// <summary>
-    /// Method to call the spawn event externally. TODO: refactor this into something more appropriate
+    /// Raises the entity spawn event.
     /// </summary>
-    /// <param name="details">The spawn details for the event.</param>
-    /// <returns>Whether an entity was registered from this spawn.</returns>
-    public static bool CallEntitySpawnEvent(EntitySpawnDetails details) {
-        return EntitySpawnEvent != null && EntitySpawnEvent.Invoke(details);
-    }
-
-    /// <summary>
-    /// Emit intercept instruction on the next Unity Random Range() call for the given IL cursor.
-    /// </summary>
-    /// <param name="c">The cursor for the IL context of the method.</param>
-    /// <typeparam name="TValue">The return type of the random call.</typeparam>
-    /// <typeparam name="TObject">The type of the FSM state action in which the random call occurs.</typeparam>
-    private static void EmitRandomInterceptInstructions<TValue, TObject>(ILCursor c) where TObject : FsmStateAction {
-        // // Goto the next call instruction for Random.Range()
-        // c.GotoNext(i => i.MatchCall(typeof(Random), "Range"));
-        //
-        // // Move the cursor after the call instruction
-        // c.Index++;
-        //
-        // // Push the current instance of the class onto the stack
-        // c.Emit(OpCodes.Ldarg_0);
-        //
-        // // Emit a delegate that pops the current random value off the stack and puts it back after some processing 
-        // c.EmitDelegate<Func<TValue, TObject, TValue>>((value, instance) => {
-        //     // We need to check whether the game object that is being spawned with this action is not an object
-        //     // managed by the system. Because if so, we do not store the random values because the action for it
-        //     // is not being networked. Only the game object spawn is networked with an EntitySpawn packet directly.
-        //     var fsmGameObject = ReflectionHelper.GetField<TObject, FsmGameObject>(instance, "gameObject");
-        //     if (fsmGameObject != null && fsmGameObject.Value != null && IsObjectInRegistry(fsmGameObject.Value)) {
-        //         return value;
-        //     }
-        //     
-        //     if (!RandomActionValues.TryGetValue(instance, out var queue)) {
-        //         queue = new Queue<object>();
-        //         RandomActionValues[instance] = queue;
-        //     }
-        //
-        //     queue.Enqueue(value);
-        //
-        //     return value;
-        // });
-    }
-
-    /// <summary>
-    /// IL edit method for modifying the <see cref="FlingObjectsFromGlobalPool"/>
-    /// <see cref="FlingObjectsFromGlobalPool.OnEnter"/> method to store the results of the random calls.
-    /// </summary>
-    private static void FlingObjectsFromGlobalPoolOnEnter(ILContext il) {
-        try {
-            // Create a cursor for this context
-            var c = new ILCursor(il);
-
-            // Emit instructions for Random.Range calls for 1 int and 4 floats 
-            EmitRandomInterceptInstructions<int, FlingObjectsFromGlobalPool>(c);
-            EmitRandomInterceptInstructions<float, FlingObjectsFromGlobalPool>(c);
-            EmitRandomInterceptInstructions<float, FlingObjectsFromGlobalPool>(c);
-            EmitRandomInterceptInstructions<float, FlingObjectsFromGlobalPool>(c);
-            EmitRandomInterceptInstructions<float, FlingObjectsFromGlobalPool>(c);
-
-            // Reset cursor
-            c = new ILCursor(il);
-
-            // Goto the next call instruction for ObjectPoolExtensions.Spawn
-            c.GotoNext(i => i.MatchCall(typeof(ObjectPoolExtensions), "Spawn"));
-
-            // Move the cursor after the call instruction
-            c.Index++;
-
-            // Push the current instance of the class onto the stack
-            c.Emit(OpCodes.Ldarg_0);
-
-            // Emit a delegate that pops the spawned game object off the stack and uses it, then puts it back again
-            c.EmitDelegate<Func<GameObject, FlingObjectsFromGlobalPool, GameObject>>((go, action) => {
-                    //Logger.Debug($"Delegate of FlingObjectsFromGlobalPool: {go.name}");
-                    if (EntitySpawnEvent != null && EntitySpawnEvent.Invoke(
-                            new EntitySpawnDetails {
-                                Type = EntitySpawnType.FsmAction,
-                                Action = action,
-                                GameObject = go
-                            }
-                        )) {
-                        Logger.Debug("FlingObjectsFromGlobalPool IL spawned object is entity");
-                    }
-
-                    return go;
-                }
-            );
-        } catch (Exception e) {
-            Logger.Error($"Could not change FlingObjectsFromGlobalPool#OnEnter IL:\n{e}");
-        }
-    }
-
-    /// <summary>
-    /// IL edit method for modifying the <see cref="FlingObjectsFromGlobalPoolVel"/>
-    /// <see cref="FlingObjectsFromGlobalPoolVel.OnEnter"/> method to store the results of the random calls.
-    /// </summary>
-    private static void FlingObjectsFromGlobalPoolVelOnEnter(ILContext il) {
-        try {
-            // Create a cursor for this context
-            var c = new ILCursor(il);
-
-            // Emit instructions for Random.Range calls for 1 int and 4 floats 
-            EmitRandomInterceptInstructions<int, FlingObjectsFromGlobalPoolVel>(c);
-            EmitRandomInterceptInstructions<float, FlingObjectsFromGlobalPoolVel>(c);
-            EmitRandomInterceptInstructions<float, FlingObjectsFromGlobalPoolVel>(c);
-            EmitRandomInterceptInstructions<float, FlingObjectsFromGlobalPoolVel>(c);
-            EmitRandomInterceptInstructions<float, FlingObjectsFromGlobalPoolVel>(c);
-
-            // Reset cursor
-            c = new ILCursor(il);
-
-            // Goto the next call instruction for ObjectPoolExtensions.Spawn
-            c.GotoNext(i => i.MatchCall(typeof(ObjectPoolExtensions), "Spawn"));
-
-            // Move the cursor after the call instruction
-            c.Index++;
-
-            // Push the current instance of the class onto the stack
-            c.Emit(OpCodes.Ldarg_0);
-
-            // Emit a delegate that pops the spawned game object off the stack and uses it, then puts it back again
-            c.EmitDelegate<Func<GameObject, FlingObjectsFromGlobalPoolVel, GameObject>>((go, action) => {
-                    //Logger.Debug($"Delegate of FlingObjectsFromGlobalPoolVel: {go.name}");
-                    if (EntitySpawnEvent != null && EntitySpawnEvent.Invoke(
-                            new EntitySpawnDetails {
-                                Type = EntitySpawnType.FsmAction,
-                                Action = action,
-                                GameObject = go
-                            }
-                        )) {
-                        Logger.Debug("FlingObjectsFromGlobalPoolVel IL spawned object is entity");
-                    }
-
-                    return go;
-                }
-            );
-        } catch (Exception e) {
-            Logger.Error($"Could not change FlingObjectsFromGlobalPoolVel#OnEnter IL:\n{e}");
-        }
-    }
-
-    /// <summary>
-    /// IL edit method for modifying the <see cref="FlingObjectsFromGlobalPoolTime"/>
-    /// <see cref="FlingObjectsFromGlobalPoolTime.OnUpdate"/> method to network the repeated spawning of objects.
-    /// </summary>
-    private static void FlingObjectsFromGlobalPoolTimeOnUpdate(ILContext il) {
-        try {
-            // Create a cursor for this context
-            var c = new ILCursor(il);
-
-            // Goto the next call instruction for Random.Range()
-            c.GotoNext(i => i.MatchCall(typeof(ObjectPoolExtensions), "Spawn"));
-
-            // Move the cursor after the call instruction
-            c.Index++;
-
-            // Push the current instance of the class onto the stack
-            c.Emit(OpCodes.Ldarg_0);
-
-            // Emit a delegate that pops the spawned object off the stack and pushes it onto it again
-            c.EmitDelegate<Func<GameObject, FlingObjectsFromGlobalPoolTime, GameObject>>((gameObject, action) => {
-                    EntitySpawnEvent?.Invoke(
-                        new EntitySpawnDetails {
-                            Type = EntitySpawnType.FsmAction,
-                            Action = action,
-                            GameObject = gameObject
-                        }
-                    );
-
-                    return gameObject;
-                }
-            );
-        } catch (Exception e) {
-            Logger.Error($"Could not change FlingObjectsFromGlobalPoolTime#OnUpdate IL:\n{e}");
-        }
-    }
-
-    /// <summary>
-    /// IL edit method for modifying the <see cref="GetRandomChild"/> DoGetRandomChild
-    /// method to store the results of the random calls.
-    /// </summary>
-    private static void GetRandomChildOnDoGetRandomChild(ILContext il) {
-        try {
-            // Create a cursor for this context
-            var c = new ILCursor(il);
-
-            // Emit instructions for Random.Range calls for 1 int and 4 floats 
-            EmitRandomInterceptInstructions<int, GetRandomChild>(c);
-        } catch (Exception e) {
-            Logger.Error($"Could not change GetRandomChild#DoGetRandomChild IL:\n{e}");
-        }
+    /// <param name="details">Details describing the spawned entity.</param>
+    public static void CallEntitySpawnEvent(EntitySpawnDetails details) {
+        EntitySpawnEvent?.Invoke(details);
     }
 
     /// <summary>
