@@ -9,6 +9,7 @@ using SSMP.Collection;
 using SSMP.Fsm;
 using SSMP.Game.Client.Entity.Action;
 using SSMP.Game.Client.Entity.Component;
+using SSMP.Game.Client.Entity.Encounters;
 using SSMP.Networking.Client;
 using SSMP.Networking.Packet.Data;
 using SSMP.Util;
@@ -46,6 +47,11 @@ internal class Entity {
     /// Whether the entity has a parent entity.
     /// </summary>
     private readonly bool _hasParent;
+
+    /// <summary>
+    /// Whether the client side is bound to the same native scene object as the host side.
+    /// </summary>
+    private readonly bool _usesExistingClientObject;
 
     /// <summary>
     /// The ID of the entity.
@@ -143,6 +149,7 @@ internal class Entity {
         EntityType type,
         GameObject hostObject,
         GameObject clientObject = null,
+        bool useExistingClientObject = false,
         params EntityComponentType[] types
     ) {
         _netClient = netClient;
@@ -151,8 +158,19 @@ internal class Entity {
         Type = type;
 
         _isControlled = true;
+        _usesExistingClientObject =
+            (useExistingClientObject && clientObject == null) ||
+            ReferenceEquals(hostObject, clientObject);
 
-        if (clientObject == null) {
+        if (_usesExistingClientObject) {
+            Object = new HostClientPair<GameObject> {
+                Host = hostObject,
+                Client = hostObject
+            };
+
+            _hasParent = clientObject != null;
+            Logger.Info($"Entity ({Id}, {Type}) is bound to existing scene object '{hostObject.name}'");
+        } else if (clientObject == null) {
             Object = new HostClientPair<GameObject> {
                 Host = hostObject,
                 Client = UnityEngine.Object.Instantiate(
@@ -187,8 +205,9 @@ internal class Entity {
             $"Entity '{Object.Host.name}' was original active: {_originalIsActive}, last active: {_lastIsActive}"
         );
 
-        // Add a position interpolation component to the enemy so we can smooth out position updates
-        Object.Client.AddComponent<PredictiveInterpolation>();
+        // Add a position interpolation component to the enemy so we can smooth out position updates.
+        // Child entities replicate local positions, so their interpolation must also operate in local space.
+        Object.Client.AddComponent<PredictiveInterpolation>().UseLocalSpace = _hasParent;
 
         // Register an update event to send position updates and check for certain value changes
         MonoBehaviourUtil.Instance.OnUpdateEvent += OnUpdate;
@@ -246,14 +265,8 @@ internal class Entity {
             ProcessHostFsm(fsm);
         }
 
-        // Remove all components that (re-)activate FSMs
-        foreach (var fsmActivator in Object.Client.GetComponents<FSMActivator>()) {
-            fsmActivator.StopAllCoroutines();
-            UnityEngine.Object.Destroy(fsmActivator);
-        }
-
-        foreach (var fsm in _fsms.Client) {
-            ProcessClientFsm(fsm);
+        if (!_usesExistingClientObject) {
+            SuppressClientAi(destroyFsmActivators: true);
         }
 
         _components = new Dictionary<EntityComponentType, EntityComponent>();
@@ -261,8 +274,12 @@ internal class Entity {
 
         HandleEnemyDeathEffects();
 
-        Object.Host.SetActive(false);
-        Object.Client.SetActive(false);
+        if (_usesExistingClientObject) {
+            Object.Host.SetActive(false);
+        } else {
+            Object.Host.SetActive(false);
+            Object.Client.SetActive(false);
+        }
 
         // // Debug code that logs each action's OnEnter method call
         // foreach (var fsm in _fsms.Host) {
@@ -364,6 +381,25 @@ internal class Entity {
         Logger.Info($"Processing client FSM: {fsm.Fsm.Name}");
         EntityInitializer.InitializeFsm(fsm);
         fsm.enabled = false;
+    }
+
+    /// <summary>
+    /// Suppress client-side AI/state machines after the local role is known to be non-authoritative.
+    /// </summary>
+    /// <param name="destroyFsmActivators">Whether FSM activators should be destroyed instead of only disabled.</param>
+    private void SuppressClientAi(bool destroyFsmActivators) {
+        foreach (var fsmActivator in Object.Client.GetComponents<FSMActivator>()) {
+            fsmActivator.StopAllCoroutines();
+            if (destroyFsmActivators) {
+                UnityEngine.Object.Destroy(fsmActivator);
+            } else {
+                fsmActivator.enabled = false;
+            }
+        }
+
+        foreach (var fsm in _fsms.Client) {
+            ProcessClientFsm(fsm);
+        }
     }
 
     /// <summary>
@@ -478,7 +514,9 @@ internal class Entity {
             addedComponentsString += " MeshRenderer";
         }
 
-        EntityInitializer.RemoveClientTypes(Object.Client);
+        if (!_usesExistingClientObject) {
+            EntityInitializer.RemoveClientTypes(Object.Client);
+        }
 
         // Instantiate all types defined in the entity registry, which are passed to the constructor
         foreach (var type in types) {
@@ -591,7 +629,7 @@ internal class Entity {
         var hostObjectActive = Object.Host.activeSelf;
 
         if (_isControlled) {
-            if (hostObjectActive) {
+            if (!_usesExistingClientObject && hostObjectActive) {
                 if (!_isSceneHostDetermined) {
                     Logger.Info(
                         $"Entity '{Object.Host.name}' host object became active, but scene host is not determined yet, re-disabling for now"
@@ -687,6 +725,11 @@ internal class Entity {
 
             var lastStateName = snapshot.CurrentState;
             if (fsm.ActiveStateName != lastStateName) {
+                // ActiveStateName is transiently null/empty while the FSM is mid-transition — skip silently.
+                if (string.IsNullOrEmpty(fsm.ActiveStateName)) {
+                    continue;
+                }
+
                 var activeStateIndex = Array.IndexOf(fsm.FsmStates, fsm.Fsm.ActiveState);
                 if (activeStateIndex is < 0 or > byte.MaxValue) {
                     Logger.Warn(
@@ -699,6 +742,7 @@ internal class Entity {
                     data.CurrentState = (byte) activeStateIndex;
 
                     Logger.Debug($"Entity ({Id}, {Type}) host changed states: {lastStateName}, {fsm.ActiveStateName}");
+                    EncounterManager.OnEntityFsmStateChanged(this, fsm, fsm.ActiveStateName);
                 }
             }
 
@@ -803,9 +847,10 @@ internal class Entity {
         float clipStartTime,
         float overrideFps
     ) {
-        if (self == _animator.Client) {
+        var sameObjectBinding = ReferenceEquals(_animator.Host, _animator.Client);
+        if (self == _animator.Client && (!sameObjectBinding || _isControlled)) {
             if (!_allowClientAnimation) {
-                Logger.Info($"Entity '{Object.Client.name}' client animator tried playing animation");
+                // Logger.Info($"Entity '{Object.Client.name}' client animator tried playing animation");
             } else {
                 // Logger.Info($"Entity '{_object.Client.name}' client animator was allowed to play animation");
 
@@ -832,7 +877,7 @@ internal class Entity {
             return;
         }
 
-        Logger.Info($"Entity '{Object.Host.name}' sends animation: {clip.name}, {animationId}, {clip.wrapMode}");
+        // Logger.Info($"Entity '{Object.Host.name}' sends animation: {clip.name}, {animationId}, {clip.wrapMode}");
         _netClient.UpdateManager.UpdateEntityAnimation(
             Id,
             animationId,
@@ -845,7 +890,7 @@ internal class Entity {
     /// shouldn't happen because they are instantiated manually instead of from a pool.
     /// </summary>
     private void ObjectPoolOnRecycleGameObject(Action<GameObject> orig, GameObject obj) {
-        if (obj == Object.Client) {
+        if (obj == Object.Client && (!_usesExistingClientObject || _isControlled)) {
             Logger.Debug($"Client object of entity: {Id}, {Type} tried to be recycled");
             return;
         }
@@ -913,6 +958,10 @@ internal class Entity {
     /// host has been determined.
     /// </summary>
     public void InitializeClient() {
+        if (_usesExistingClientObject) {
+            SuppressClientAi(destroyFsmActivators: false);
+        }
+
         _isSceneHostDetermined = true;
     }
 
@@ -921,6 +970,25 @@ internal class Entity {
     /// </summary>
     public void MakeHost() {
         Logger.Info($"Making entity ({Id}, {Type}) a host entity");
+
+        if (_usesExistingClientObject) {
+            Object.Host.SetActive(Object.Client.activeSelf);
+
+            foreach (var fsm in _fsms.Host) {
+                fsm.enabled = true;
+            }
+
+            _isControlled = false;
+            _isSceneHostDetermined = true;
+
+            foreach (var component in _components.Values) {
+                component.IsControlled = false;
+                component.InitializeHost();
+            }
+
+            Logger.Debug("  Entity is native-bound, re-enabled authoritative scene object");
+            return;
+        }
 
         if (Object.Client == null) {
             Object.Host.SetActive(false);
@@ -991,9 +1059,10 @@ internal class Entity {
         if (_animator.Client != null) {
             var currentClip = _animator.Client.CurrentClip;
             if (currentClip != null) {
-                Logger.Debug(
-                    $"  Animator and current clip present, updating animation: {currentClip.name}, {currentClip.wrapMode}"
-                );
+                // Logger.Debug(
+                //     $"  Animator and current clip present, updating animation: {currentClip.name},
+                // {currentClip.wrapMode}"
+                // );
                 LateUpdateAnimation(_animator.Host, currentClip.name, currentClip.wrapMode);
             }
         }
@@ -1072,15 +1141,19 @@ internal class Entity {
     /// </summary>
     /// <param name="position">The new position.</param>
     public void UpdatePosition(Math_Vector2 position) {
-        if (Object.Client == null || Object.Host == null) {
-            Logger.Warn($"Cannot update position for entity ({Id}, {Type}), client or host object is null");
+        if (Object.Client == null) {
+            Logger.Warn($"Cannot update position for entity ({Id}, {Type}), client object is null");
             return;
         }
 
         var unityPos = new Vector3(
             position.X,
             position.Y,
-            _hasParent ? Object.Host.transform.localPosition.z : Object.Host.transform.position.z
+            Object.Host == null
+                ? (_hasParent ? Object.Client.transform.localPosition.z : Object.Client.transform.position.z)
+                : _hasParent
+                    ? Object.Host.transform.localPosition.z
+                    : Object.Host.transform.position.z
         );
 
         var positionInterpolation = Object.Client.GetComponent<PredictiveInterpolation>();
@@ -1170,7 +1243,7 @@ internal class Entity {
             return;
         }
 
-        Logger.Info($"Entity '{Object.Client.name}' received animation: {animationId}, {clipName}, {wrapMode}");
+        // Logger.Info($"Entity '{Object.Client.name}' received animation: {animationId}, {clipName}, {wrapMode}");
 
         // All paths lead to calling the Play method of the sprite animator that is hooked, so we allow the call
         // through the hook
@@ -1205,7 +1278,7 @@ internal class Entity {
 
         var clip = animator.GetClipByName(clipName);
 
-        Logger.Debug($"Entity ({Id}, {Type}) LateUpdateAnimation: {clip.name}, {wrapMode}");
+        // Logger.Debug($"Entity ({Id}, {Type}) LateUpdateAnimation: {clip.name}, {wrapMode}");
 
         if (wrapMode == tk2dSpriteAnimationClip.WrapMode.LoopSection) {
             // The clip loops in a specific section in the frames, so we start playing
@@ -1271,14 +1344,32 @@ internal class Entity {
                 var stateIndex = data.Packet.ReadByte();
                 var actionIndex = data.Packet.ReadByte();
 
+                if (stateIndex >= fsm.FsmStates.Length) {
+                    Logger.Warn(
+                        $"Entity ({Id}, {Type}) received action data for out-of-range state index {stateIndex} (FSM '{fsm.Fsm.Name}' has {fsm.FsmStates.Length} states). Skipping."
+                    );
+                    continue;
+                }
+
                 var state = fsm.FsmStates[stateIndex];
+
+                if (actionIndex >= state.Actions.Length) {
+                    Logger.Warn(
+                        $"Entity ({Id}, {Type}) received action data for out-of-range action index {actionIndex} in state '{state.Name}' (has {state.Actions.Length} actions). Skipping."
+                    );
+                    continue;
+                }
+
                 var action = state.Actions[actionIndex];
 
                 Logger.Info(
                     $"Received entity network data for FSM: {fsm.Fsm.Name}, {state.Name}, {actionIndex} ({action.GetType()})"
                 );
 
-                EntityFsmActions.ApplyNetworkDataFromAction(data, action);
+                var suppressDefaultApply = EncounterManager.OnEntityFsmAction(this, fsm, state.Name, action);
+                if (!suppressDefaultApply) {
+                    EntityFsmActions.ApplyNetworkDataFromAction(data, action);
+                }
 
                 continue;
             }
@@ -1315,6 +1406,7 @@ internal class Entity {
                     // Also propagate this state change to the EntityFsmActions class with the client FSM for the
                     // same index
                     EntityFsmActions.RegisterStateChange(_fsms.Client[fsmIndex].Fsm, stateName);
+                    EncounterManager.OnEntityFsmStateChanged(this, _fsms.Client[fsmIndex], stateName);
                 }
             }
 

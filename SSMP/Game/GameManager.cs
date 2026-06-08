@@ -1,4 +1,5 @@
-﻿using SSMP.Game.Client;
+using SSMP.Game.Client;
+using SSMP.Game.Client.Entity.Encounters;
 using SSMP.Game.Server;
 using SSMP.Game.Settings;
 using SSMP.Networking.Client;
@@ -28,7 +29,7 @@ internal class GameManager {
     /// The server manager instance for the mod.
     /// </summary>
     private readonly ModServerManager _serverManager;
-    
+
     /// <summary>
     /// Constructs this GameManager instance by instantiating all other necessary classes.
     /// </summary>
@@ -44,6 +45,7 @@ internal class GameManager {
         if (modSettings.ServerSettings == null) {
             modSettings.ServerSettings = new ServerSettings();
         }
+
         var serverServerSettings = modSettings.ServerSettings;
 
         _uiManager = new UiManager(
@@ -74,6 +76,9 @@ internal class GameManager {
     public void Initialize() {
         ThreadUtil.Instantiate();
 
+        // Initialize encounter manager to start tracking scene and entity event hooks
+        EncounterManager.Initialize();
+
         TextureManager.LoadTextures();
 
         // Initialize Steam if available
@@ -103,7 +108,7 @@ internal class GameManager {
 
         // Stop server if hosting
         _serverManager.Stop();
-        
+
         // Clean up Steam if initialized
         if (SteamManager.IsInitialized) {
             SteamManager.Shutdown();

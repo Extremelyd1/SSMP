@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using SSMP.Game.Client.Entity.Action;
 using SSMP.Game.Client.Entity.Component;
+using SSMP.Game.Client.Entity.Encounters;
 using SSMP.Networking.Client;
 using SSMP.Networking.Packet.Data;
+using UnityEngine;
 using UnityEngine.SceneManagement;
 using Logger = SSMP.Logging.Logger;
 
@@ -17,6 +19,11 @@ namespace SSMP.Game.Client.Entity;
 /// Manager class that handles entity creation, updating, networking and destruction.
 /// </summary>
 internal class EntityManager {
+    /// <summary>
+    /// Static reference to the active entity manager.
+    /// </summary>
+    public static EntityManager? Instance { get; private set; }
+
     /// <summary>
     /// The net client for networking.
     /// </summary>
@@ -52,10 +59,16 @@ internal class EntityManager {
     public bool IsSceneHost { get; private set; }
 
     /// <summary>
+    /// Gets the currently registered entities.
+    /// </summary>
+    public IEnumerable<Entity> Entities => _entities.Values;
+
+    /// <summary>
     /// Create a new entity manager for the given network client.
     /// </summary>
     /// <param name="netClient">The client used for entity networking.</param>
     public EntityManager(NetClient netClient) {
+        Instance = this;
         _netClient = netClient;
         _entities = new Dictionary<ushort, Entity>();
         _entityIds = new EntityIdAllocator(_entities);
@@ -110,6 +123,7 @@ internal class EntityManager {
         );
 
         IsSceneHost = isHost;
+        EncounterManager.OnSceneLoaded(SceneManager.GetActiveScene(), isHost);
 
         foreach (var entity in _entities.Values) {
             if (isHost) entity.InitializeHost();
@@ -154,24 +168,71 @@ internal class EntityManager {
             return;
         }
 
-        var spawningEntity = _entities.Values.FirstOrDefault(e => e.Type == spawningType);
-        if (spawningEntity == null) {
-            Logger.Warn("Could not find entity with same type for spawning");
+        if (TryBindExistingSpawnedEntity(id, spawnedType)) {
             return;
         }
 
-        var spawnedObject = EntitySpawner.SpawnEntityGameObject(
-            spawningType,
-            spawnedType,
-            spawningEntity.Object.Client,
-            spawningEntity.GetClientFsms()
+        Logger.Warn(
+            $"Cannot spawn entity {spawnedType} from {spawningType}: no matching scene object exists and prefab spawning is not implemented."
         );
+    }
 
-        var processor = CreateProcessor(spawnedObject, lateLoad: true, spawnedId: id).Process();
+    /// <summary>
+    /// Bind a network-spawned entity to an already-present scene object of the requested type.
+    /// This keeps SSMP as identity/state sync for native mobs and only leaves prefab instantiation as fallback.
+    /// </summary>
+    /// <param name="id">The network entity ID to assign.</param>
+    /// <param name="spawnedType">The entity type requested by the host.</param>
+    /// <returns><c>true</c> when an existing scene object was claimed.</returns>
+    private bool TryBindExistingSpawnedEntity(ushort id, EntityType spawnedType) {
+        var scene = SceneManager.GetActiveScene();
+        var candidates = _sceneDiscovery.FindCandidates(scene);
 
-        if (!processor.Success) {
-            Logger.Warn($"Could not process game object of spawned entity: {spawnedObject.name}");
+        foreach (var candidate in candidates) {
+            if (IsEntityAlreadyBound(candidate)) {
+                continue;
+            }
+
+            if (!TryGetEntityEntry(candidate, out var entry)) {
+                continue;
+            }
+
+            if (entry.Type != spawnedType) {
+                continue;
+            }
+
+            Logger.Info(
+                $"Binding spawned entity ({spawnedType}) with ID {id} to existing scene object '{candidate.name}'"
+            );
+
+            var processor = CreateProcessor(candidate, lateLoad: true, spawnedId: id).Process();
+
+            if (processor.Success) {
+                return true;
+            }
+
+            Logger.Warn(
+                $"Existing scene object '{candidate.name}' matched {spawnedType} but could not be processed"
+            );
         }
+
+        return false;
+    }
+
+    private bool IsEntityAlreadyBound(GameObject candidate) {
+        return _entities.Values.Any(entity =>
+            entity.Object.Host == candidate ||
+            entity.Object.Client == candidate
+        );
+    }
+
+    private static bool TryGetEntityEntry(
+        GameObject candidate,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)]
+        out EntityRegistryEntry? entry
+    ) {
+        return EncounterManager.TryGetEntityEntry(candidate, out entry) ||
+               EntityRegistry.TryGetEntry(candidate, out entry);
     }
 
     /// <summary>
@@ -182,7 +243,7 @@ internal class EntityManager {
     /// <param name="spawnedId">An optional network-assigned ID for spawned entities.</param>
     /// <returns>A configured entity processor instance.</returns>
     private EntityProcessor CreateProcessor(
-        UnityEngine.GameObject gameObject,
+        GameObject gameObject,
         bool lateLoad,
         ushort? spawnedId = null
     ) {
@@ -201,18 +262,17 @@ internal class EntityManager {
     /// <param name="entityUpdate">The entity update to handle.</param>
     /// <param name="alreadyInSceneUpdate">Whether this is the update from the already in scene packet.</param>
     /// <returns><c>true</c> when the update was applied immediately; otherwise it was deferred.</returns>
-    public bool HandleEntityUpdate(EntityUpdate entityUpdate, bool alreadyInSceneUpdate = false) {
+    public void HandleEntityUpdate(EntityUpdate entityUpdate, bool alreadyInSceneUpdate = false) {
         if (IsSceneHost) {
-            return true;
+            return;
         }
 
-        if (!TryApplyEntityUpdate(entityUpdate, alreadyInSceneUpdate)) {
-            LogDeferred(entityUpdate.Id);
-            _deferredUpdates.Enqueue(entityUpdate);
-            return false;
+        if (TryApplyEntityUpdate(entityUpdate, alreadyInSceneUpdate)) {
+            return;
         }
 
-        return true;
+        LogDeferred(entityUpdate.Id);
+        _deferredUpdates.Enqueue(entityUpdate);
     }
 
     /// <summary>

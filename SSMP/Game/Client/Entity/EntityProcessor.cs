@@ -1,5 +1,7 @@
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using SSMP.Game.Client.Entity.Encounters;
 using SSMP.Networking.Client;
 using SSMP.Util;
 using UnityEngine;
@@ -71,6 +73,11 @@ internal class EntityProcessor {
     public ushort? SpawnedId { get; init; }
 
     /// <summary>
+    /// Whether top-level entities should bind their client side to the existing scene object instead of cloning it.
+    /// </summary>
+    public bool BindExistingObject { get; init; } = true;
+
+    /// <summary>
     /// The list of entities that were created during the processing.
     /// </summary>
     public List<Entity> Entities { get; } = [];
@@ -105,7 +112,9 @@ internal class EntityProcessor {
     ) {
         EntityRegistryEntry? foundEntry;
         if (entries is null) {
-            if (!EntityRegistry.TryGetEntry(gameObject, out foundEntry)) return;
+            if (!TryGetTopLevelEntry(gameObject, out foundEntry)) {
+                return;
+            }
         } else {
             if (!EntityRegistry.TryGetEntry(entries, gameObject, out foundEntry)) return;
         }
@@ -124,6 +133,7 @@ internal class EntityProcessor {
                 id.Value,
                 foundEntry.Type,
                 gameObject,
+                useExistingClientObject: BindExistingObject,
                 types: componentTypes
             );
         } else {
@@ -155,12 +165,13 @@ internal class EntityProcessor {
                 foundEntry.Type,
                 gameObject,
                 clientObject,
-                componentTypes
+                types: componentTypes
             );
         }
 
         _entities[id.Value] = entity;
         Entities.Add(entity);
+        EncounterManager.OnEntityRegistered(entity);
 
         if (foundEntry.Children != null) {
             foreach (var child in gameObject.GetChildren()) {
@@ -178,5 +189,13 @@ internal class EntityProcessor {
                 entity.UpdateIsActive(true);
             }
         }
+    }
+
+    private static bool TryGetTopLevelEntry(
+        GameObject gameObject,
+        [NotNullWhen(true)] out EntityRegistryEntry? foundEntry
+    ) {
+        return EncounterManager.TryGetEntityEntry(gameObject, out foundEntry) ||
+               EntityRegistry.TryGetEntry(gameObject, out foundEntry);
     }
 }

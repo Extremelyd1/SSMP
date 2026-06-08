@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
+using System.Linq;
 using System.Runtime.Serialization;
 using Newtonsoft.Json;
 using SSMP.Game.Client.Entity.Component;
@@ -218,4 +219,36 @@ internal class EntityRegistryEntry {
     /// Always false when <see cref="HasFsmFilter"/> is false.
     /// </summary>
     internal bool ContainsFsmName(string fsmName) => _fsmNameSet?.Contains(fsmName) ?? false;
+
+    /// <summary>
+    /// Creates an in-memory registry entry for encounter-local entity matching.
+    /// </summary>
+    internal static EntityRegistryEntry Create(
+        string baseObjectName,
+        EntityType type,
+        string? parentName = null,
+        EntityComponentType[]? componentTypes = null,
+        IEnumerable<string>? fsmNames = null,
+        List<EntityRegistryEntry>? children = null
+    ) {
+        var entry = new EntityRegistryEntry {
+            BaseObjectName = baseObjectName,
+            Type = type,
+            TypeName = type.ToString(),
+            HasValidType = true,
+            ParentName = parentName,
+            ComponentTypes = componentTypes,
+            Children = children
+        };
+
+        if (fsmNames != null) {
+            entry.FsmNames = fsmNames.ToList();
+            if (entry.FsmNames.Count > 0) {
+                entry._fsmNameSet = new HashSet<string>(entry.FsmNames, StringComparer.Ordinal);
+                entry.HasFsmFilter = true;
+            }
+        }
+
+        return entry;
+    }
 }

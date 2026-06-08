@@ -95,7 +95,8 @@ internal class HealthManagerComponent : EntityComponent {
             return;
         }
 
-        if (self == _healthManager.Client) {
+        var sameObjectBinding = ReferenceEquals(_healthManager.Host, _healthManager.Client);
+        if (self == _healthManager.Client && (!sameObjectBinding || IsControlled)) {
             if (!_allowDeath) {
                 Logger.Info("HealthManager Die was called on client entity");
             } else {

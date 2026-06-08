@@ -40,6 +40,7 @@ internal class EntitySceneDiscovery {
                .Concat(componentObjects)
                .Where(obj => obj.scene == scene)
                .Distinct()
+               .OrderBy(GetHierarchySortKey, StringComparer.Ordinal)
                .ToList();
     }
 
@@ -59,5 +60,21 @@ internal class EntitySceneDiscovery {
 
         // TODO: CorpsePrefab is a prefab reference and may not be compatible with the original code path.
         return [effects.gameObject, effects.CorpsePrefab];
+    }
+
+    /// <summary>
+    /// Build a deterministic hierarchy key so existing-scene entity registration order matches across peers.
+    /// Names alone are insufficient because sibling duplicates are common in encounters like Tut_03 stalactites.
+    /// </summary>
+    private static string GetHierarchySortKey(GameObject gameObject) {
+        var transform = gameObject.transform;
+        var segments = new Stack<string>();
+
+        while (transform != null) {
+            segments.Push($"{transform.GetSiblingIndex():D4}:{transform.name}");
+            transform = transform.parent;
+        }
+
+        return string.Join("/", segments);
     }
 }

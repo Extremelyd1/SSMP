@@ -7,6 +7,11 @@ namespace SSMP.Fsm;
 /// explicit extrapolation with RTT-adaptive error correction.
 /// </summary>
 internal class PredictiveInterpolation : MonoBehaviour {
+    /// <summary>
+    /// Whether authoritative positions should be interpreted in local space instead of world space.
+    /// </summary>
+    public bool UseLocalSpace { get; set; }
+
     #region Settings
 
     /// <summary>
@@ -120,8 +125,9 @@ internal class PredictiveInterpolation : MonoBehaviour {
         // Fresh spawn from pool — seed all state to match the position SpawnPlayer
         // set on the transform before activating, with clean defaults for prediction
         EnsureTransformCached();
-        _lastServerPosition = _cachedTransform.position;
-        _logicalPosition = _cachedTransform.position;
+        var currentPosition = GetCurrentPosition();
+        _lastServerPosition = currentPosition;
+        _logicalPosition = currentPosition;
         _lastUpdateTime = Time.time;
         _timeSinceLastPacket = 0f;
         _velocity = Vector3.zero;
@@ -205,10 +211,12 @@ internal class PredictiveInterpolation : MonoBehaviour {
         }
 
         // 4. Apply Final State - direct position set
-        _cachedTransform.position = new Vector3(
-            px + _visualOffset.x,
-            py + _visualOffset.y,
-            pz + _visualOffset.z
+        SetCurrentPosition(
+            new Vector3(
+                px + _visualOffset.x,
+                py + _visualOffset.y,
+                pz + _visualOffset.z
+            )
         );
     }
 
@@ -281,7 +289,7 @@ internal class PredictiveInterpolation : MonoBehaviour {
         // Maintain visual continuity: VisualPos = LogicalPos + Offset. 
         // NewOffset = OldVisualPos - NewLogicalPos (which will be newPos)
         // This ensures the object doesn't visually jump when logical position updates.
-        _visualOffset = _cachedTransform.position - newPos;
+        _visualOffset = GetCurrentPosition() - newPos;
 
         // FIX: Dampen velocity slightly on new packet to reduce oscillation from SmoothDamp
         _visualOffsetVelocity *= 0.9f;
@@ -332,7 +340,7 @@ internal class PredictiveInterpolation : MonoBehaviour {
         _timeSinceLastPacket = 0f;
         _lastUpdateTime = Time.time;
 
-        _cachedTransform.position = position;
+        SetCurrentPosition(position);
     }
 
     /// <summary>
@@ -343,7 +351,7 @@ internal class PredictiveInterpolation : MonoBehaviour {
         EnsureTransformCached();
         _predictionDisabled = !shouldEnable;
         if (_predictionDisabled) {
-            ForceSnap(_cachedTransform.position);
+            ForceSnap(GetCurrentPosition());
         }
     }
 
@@ -352,6 +360,24 @@ internal class PredictiveInterpolation : MonoBehaviour {
     /// </summary>
     private void EnsureTransformCached() {
         if (_cachedTransform == null) _cachedTransform = transform;
+    }
+
+    /// <summary>
+    /// Read the current transform position in the configured space.
+    /// </summary>
+    private Vector3 GetCurrentPosition() {
+        return UseLocalSpace ? _cachedTransform.localPosition : _cachedTransform.position;
+    }
+
+    /// <summary>
+    /// Write the current transform position in the configured space.
+    /// </summary>
+    private void SetCurrentPosition(Vector3 position) {
+        if (UseLocalSpace) {
+            _cachedTransform.localPosition = position;
+        } else {
+            _cachedTransform.position = position;
+        }
     }
 
     /// <summary>
