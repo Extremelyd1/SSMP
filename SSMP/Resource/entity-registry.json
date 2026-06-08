@@ -124,17 +124,6 @@
     ]
   },
   {
-    "base_object_name": "Slab Alarm Prisoner Fly",
-    "type": "SlabAlarmPrisonerFly",
-    "parent_name": null,
-    "components": [],
-    "internal_name": "Slab Alarm Prisoner Fly",
-    "fsm_names": [
-      "Control",
-      "Chain In Place"
-    ]
-  },
-  {
     "base_object_name": "Ward Corpse Projectile",
     "type": "DregHusk",
     "parent_name": null,
@@ -156,7 +145,7 @@
   },
   {
     "base_object_name": "Shellwood Goomba Flyer",
-    "type": "ShellwoodGoombaFlyer",
+    "type": "ShellwoodGnat",
     "parent_name": null,
     "components": [],
     "internal_name": "Shellwood Goomba Flyer",
@@ -603,17 +592,6 @@
     "fsm_names": [
       "Control",
       "flyer_go_up_response"
-    ]
-  },
-  {
-    "base_object_name": "Slab Alarm Prisoner",
-    "type": "SlabAlarmPrisoner",
-    "parent_name": null,
-    "components": [],
-    "internal_name": "Slab Alarm Prisoner",
-    "fsm_names": [
-      "Control",
-      "Chain In Place"
     ]
   },
   {
@@ -1186,7 +1164,7 @@
   },
   {
     "base_object_name": "Shellwood Goomba",
-    "type": "ShellwoodGoomba",
+    "type": "ShellwoodGnat",
     "parent_name": null,
     "components": [],
     "internal_name": "Shellwood Goomba",
@@ -1779,7 +1757,7 @@
   },
   {
     "base_object_name": "Tar Slug Huge",
-    "type": "TarSlugHuge",
+    "type": "Lavalarga",
     "parent_name": null,
     "components": [],
     "internal_name": "Tar Slug Huge",
@@ -2656,7 +2634,7 @@
   },
   {
     "base_object_name": "Tar Slug",
-    "type": "TarSlug",
+    "type": "Lavalug",
     "parent_name": null,
     "components": [],
     "internal_name": "Tar Slug",
