@@ -20,17 +20,23 @@ namespace SSMP.Game.Client.Entity.Encounters;
 /// </para>
 /// </summary>
 internal class MossMotherEncounterHandler : IEncounterHandler {
+    /// <summary>Local EntityType constant for the stalactite selector ("PI Slam") entity.</summary>
+    private const EntityType MossMotherStalactiteSelector = (EntityType) 9999;
+
+    /// <summary>Local EntityType constant for individual stalactite ("Mossbone Stalactite") entities.</summary>
+    private const EntityType MossMotherStalactite = (EntityType) 10000;
+
     /// <summary>Registry entry for the stalactite selector ("PI Slam") entity.</summary>
     private static readonly EntityRegistryEntry StalactiteSelectorEntry = EntityRegistryEntry.Create(
         baseObjectName: "PI Slam",
-        type: EntityType.MossMotherStalactiteSelector,
+        type: MossMotherStalactiteSelector,
         parentName: StalactitesContainerName
     );
 
     /// <summary>Registry entry for individual stalactite ("Mossbone Stalactite") entities.</summary>
     private static readonly EntityRegistryEntry StalactiteEntry = EntityRegistryEntry.Create(
         baseObjectName: "Mossbone Stalactite",
-        type: EntityType.MossMotherStalactite,
+        type: MossMotherStalactite,
         parentName: StalactitesContainerName,
         componentTypes: [
             EntityComponentType.Velocity,
@@ -148,10 +154,10 @@ internal class MossMotherEncounterHandler : IEncounterHandler {
     /// </summary>
     private float _lastManagedStalactiteTriggerTime = float.NegativeInfinity;
 
-    /// <summary>True once a <see cref="EntityType.MossMotherStalactiteSelector"/> entity has been registered.</summary>
+    /// <summary>True once a stalactite selector entity has been registered.</summary>
     private bool _hasSyncedStalactiteSelector;
 
-    /// <summary>True once a <see cref="EntityType.MossMotherStalactite"/> entity has been registered.</summary>
+    /// <summary>True once a stalactite entity has been registered.</summary>
     private bool _hasSyncedStalactites;
 
     /// <summary>All managed gate GameObjects discovered in the battle scene hierarchy.</summary>
@@ -185,11 +191,8 @@ internal class MossMotherEncounterHandler : IEncounterHandler {
     public bool TryGetEntityEntry(GameObject gameObject, [NotNullWhen(true)] out EntityRegistryEntry? entry) {
         entry = null;
 
-        if (gameObject.scene.name != MossMotherScene) {
-            return false;
-        }
-
-        return EntityRegistry.TryGetEntry(LocalEntityEntries, gameObject, out entry);
+        return gameObject.scene.name == MossMotherScene &&
+               EntityRegistry.TryGetEntry(LocalEntityEntries, gameObject, out entry);
     }
 
     /// <inheritdoc />
@@ -223,11 +226,11 @@ internal class MossMotherEncounterHandler : IEncounterHandler {
 
     /// <inheritdoc />
     public void OnEntityRegistered(Entity entity) {
-        if (entity.Type == EntityType.MossMotherStalactiteSelector) {
+        if (entity.Type == MossMotherStalactiteSelector) {
             _hasSyncedStalactiteSelector = true;
         }
 
-        if (entity.Type == EntityType.MossMotherStalactite) {
+        if (entity.Type == MossMotherStalactite) {
             _hasSyncedStalactites = true;
         }
 
