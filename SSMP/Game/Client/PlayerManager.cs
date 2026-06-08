@@ -181,7 +181,6 @@ internal class PlayerManager : IPlayerManager {
 
         // Now we need to copy over a lot of variables from the local player object
         var localPlayerObject = HeroController.instance.gameObject;
-        playerPrefab.layer = localPlayerObject.layer;
 
         // Obtain colliders from both objects
         var collider = playerPrefab.GetComponent<BoxCollider2D>();
