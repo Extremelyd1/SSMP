@@ -591,11 +591,20 @@ internal class EntityNetworkData : IPoolable {
     /// </summary>
     public Packet Packet { get; set; } = new();
 
+    /// <summary>
+    /// Creates a pooled copy of this entity network data with an independent packet buffer.
+    /// </summary>
+    public EntityNetworkData Clone() {
+        var clone = ObjectPool<EntityNetworkData>.Get();
+        clone.Type = Type;
+        clone.Packet = new Packet(Packet.ToArray());
+        return clone;
+    }
+
     /// <inheritdoc />
     public void Reset() {
         Type = default;
-        // Reuse the existing Packet instance to preserve pooling benefits.
-        Packet.Clear();
+        Packet = new Packet();
     }
 
     /// <inheritdoc cref="IPacketData.WriteData" />
@@ -621,12 +630,12 @@ internal class EntityNetworkData : IPoolable {
         Type = (EntityComponentType) packet.ReadUShort();
 
         var length = packet.ReadUShort();
-        
-        // Clear and reuse existing Packet instance to avoid allocations
-        Packet.Clear();
+        var data = new byte[length];
         for (var i = 0; i < length; i++) {
-            Packet.Write(packet.ReadByte());
+            data[i] = packet.ReadByte();
         }
+
+        Packet = new Packet(data);
     }
 }
 

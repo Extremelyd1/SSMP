@@ -340,6 +340,8 @@ internal class PlayerManager : IPlayerManager {
         // Reset the local player's team
         LocalPlayerTeam = Team.None;
 
+        PlayerTargetRegistry.ClearRemotePlayers();
+
         // Clear all players
         RecycleAllPlayers();
 
@@ -368,6 +370,8 @@ internal class PlayerManager : IPlayerManager {
     /// </summary>
     /// <param name="playerData">The player data of the player.</param>
     private void RecyclePlayerByData(ClientPlayerData playerData) {
+        PlayerTargetRegistry.UnregisterRemotePlayer(playerData.PlayerObject);
+
         // First reset the player
         ResetPlayer(playerData);
 
@@ -448,15 +452,13 @@ internal class PlayerManager : IPlayerManager {
         // First recycle the player by player data if they have an active container
         RecyclePlayerByData(playerData);
 
-        GameObject playerContainer;
-
-        if (_inactivePlayers.Count <= 0) {
+        var playerContainer =
             // Create a new player container
-            playerContainer = CreateNewPlayerContainer();
-        } else {
-            // Dequeue a player container from the inactive players
-            playerContainer = _inactivePlayers.Dequeue();
-        }
+            _inactivePlayers.Count <= 0
+                ? CreateNewPlayerContainer()
+                :
+                // Dequeue a player container from the inactive players
+                _inactivePlayers.Dequeue();
 
         playerContainer.name = $"{PlayerContainerName} {playerData.Id}";
 
@@ -483,6 +485,8 @@ internal class PlayerManager : IPlayerManager {
         // Store the player data
         playerData.PlayerContainer = playerContainer;
         playerData.PlayerObject = playerObject;
+
+        PlayerTargetRegistry.RegisterRemotePlayer(playerObject);
     }
 
     /// <summary>
@@ -584,7 +588,7 @@ internal class PlayerManager : IPlayerManager {
             Logger.Debug($"Tried to update team for ID {id} while player data did not exists");
             return;
         }
-        
+
         // Store the old team for invoking the event later
         var oldTeam = playerData.Team;
 
@@ -793,7 +797,8 @@ internal class PlayerManager : IPlayerManager {
         var nameObject = new GameObject(UsernameObjectName) {
             transform = {
                 position = playerContainer.transform.position + Vector3.up * 1.5f
-            }};
+            }
+        };
         nameObject.transform.SetParent(playerContainer.transform);
         nameObject.transform.localScale = new Vector3(0.25f, 0.25f, nameObject.transform.localScale.z);
 

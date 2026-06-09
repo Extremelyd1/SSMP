@@ -576,7 +576,10 @@ internal abstract class ServerManager : IServerManager {
 
                 if (entityData.GenericData.Count > 0) {
                     reliableEntityUpdate.UpdateTypes.Add(EntityUpdateType.Data);
-                    reliableEntityUpdate.GenericData.AddRange(entityData.GenericData);
+
+                    foreach (var genericData in entityData.GenericData) {
+                        reliableEntityUpdate.GenericData.Add(genericData.Clone());
+                    }
                 }
 
                 if (entityData.HostFsmData.Count > 0) {
@@ -926,23 +929,20 @@ internal abstract class ServerManager : IServerManager {
                 }
             );
 
-            void ReplaceExistingDataWithSameType(EntityComponentType type, Packet data) {
+            void ReplaceExistingDataWithSameType(EntityNetworkData updateData) {
                 var existingData = entityData.GenericData.Find(
-                    d => d.Type == type
+                    d => d.Type == updateData.Type
                 );
                 if (existingData == null) {
-                    entityData.GenericData.Add(new EntityNetworkData {
-                        Type = type,
-                        Packet = data
-                    });
+                    entityData.GenericData.Add(updateData.Clone());
                 } else {
-                    existingData.Packet = data;
+                    existingData.Packet = new Packet(updateData.Packet.ToArray());
                 }
             }
 
             foreach (var updateData in entityUpdate.GenericData) {
                 if (updateData.Type > EntityComponentType.Death) {
-                    ReplaceExistingDataWithSameType(updateData.Type, updateData.Packet);
+                    ReplaceExistingDataWithSameType(updateData);
                 }
             }
         }

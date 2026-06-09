@@ -6,19 +6,22 @@ using HutongGames.PlayMaker;
 using HutongGames.PlayMaker.Actions;
 using Mono.Cecil.Cil;
 using MonoMod.Cil;
+using MonoMod.RuntimeDetour;
 using SSMP.Networking.Packet.Data;
 using SSMP.Util;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
 using Object = UnityEngine.Object;
 using Random = UnityEngine.Random;
+
 // ReSharper disable CollectionNeverUpdated.Local
 // ReSharper disable AssignNullToNotNullAttribute
 // ReSharper disable ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
 // ReSharper disable ConditionalAccessQualifierIsNonNullableAccordingToAPIContract
 #pragma warning disable CS0618 // Type or member is obsolete
 #pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider
+// adding the 'required' modifier or declaring as nullable.
 
 // ReSharper disable UnusedMember.Local
 // ReSharper disable UnusedParameter.Local
@@ -34,6 +37,7 @@ internal static class EntityFsmActions {
     /// The prefix of a method name that transforms an FSM action into network-able data.
     /// </summary>
     private const string GetMethodNamePrefix = "Get";
+
     /// <summary>
     /// The prefix of a method name that applies network data into an FSM action.
     /// </summary>
@@ -58,6 +62,7 @@ internal static class EntityFsmActions {
     /// Dictionary mapping a type of an FSM action to the corresponding method info of the "get" method in this class.
     /// </summary>
     private static readonly Dictionary<Type, MethodInfo> TypeGetMethodInfos = new();
+
     /// <summary>
     /// Dictionary mapping a type of an FSM action to the corresponding method info of the "apply" method in this class.
     /// </summary>
@@ -72,8 +77,38 @@ internal static class EntityFsmActions {
     /// <summary>
     /// List of actions that are executing while in a state and need to be stopped again when the state is exited.
     /// </summary>
-    private static readonly List<ActionInState> ActionsInState = new();
-    
+    private static readonly List<ActionInState> ActionsInState = [];
+
+    /// <summary>
+    /// ILHook for FlingObjectsFromGlobalPool.OnEnter.
+    /// </summary>
+    private static ILHook? _flingPoolHook;
+
+    /// <summary>
+    /// ILHook for FlingObjectsFromGlobalPoolVel.OnEnter.
+    /// </summary>
+    private static ILHook? _flingPoolVelHook;
+
+    /// <summary>
+    /// ILHook for FlingObjectsFromGlobalPoolTime.OnUpdate.
+    /// </summary>
+    private static ILHook? _flingPoolTimeUpdateHook;
+
+    /// <summary>
+    /// ILHook for FlingObjectsFromGlobalPoolTime.OnEnter (NOP emit).
+    /// </summary>
+    private static ILHook? _flingPoolTimeEnterNopHook;
+
+    /// <summary>
+    /// ILHook for GetRandomChild.DoGetRandomChild.
+    /// </summary>
+    private static ILHook? _getRandomChildHook;
+
+    /// <summary>
+    /// ILHook for SpawnBloodTime.OnEnter (NOP emit).
+    /// </summary>
+    private static ILHook? _spawnBloodTimeNopHook;
+
     /// <summary>
     /// Static constructor that initializes the set and dictionaries by checking all methods in the class.
     /// </summary>
@@ -105,19 +140,56 @@ internal static class EntityFsmActions {
             }
         }
 
-        // Register the IL hooks for modifying FSM action methods
-        // IL.HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPool.OnEnter += FlingObjectsFromGlobalPoolOnEnter;
-        // IL.HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPoolVel.OnEnter += FlingObjectsFromGlobalPoolVelOnEnter;
-        // IL.HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPoolTime.OnUpdate += FlingObjectsFromGlobalPoolTimeOnUpdate;
-        // IL.HutongGames.PlayMaker.Actions.GetRandomChild.DoGetRandomChild += GetRandomChildOnDoGetRandomChild;
-        
+        _flingPoolHook = new ILHook(
+            typeof(FlingObjectsFromGlobalPool).GetMethod(
+                nameof(FlingObjectsFromGlobalPool.OnEnter),
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
+            )!,
+            FlingObjectsFromGlobalPoolOnEnter
+        );
+        _flingPoolVelHook = new ILHook(
+            typeof(FlingObjectsFromGlobalPoolVel).GetMethod(
+                nameof(FlingObjectsFromGlobalPoolVel.OnEnter),
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
+            )!,
+            FlingObjectsFromGlobalPoolVelOnEnter
+        );
+        _flingPoolTimeUpdateHook = new ILHook(
+            typeof(FlingObjectsFromGlobalPoolTime).GetMethod(
+                "OnUpdate",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
+            )!,
+            FlingObjectsFromGlobalPoolTimeOnUpdate
+        );
+        _getRandomChildHook = new ILHook(
+            typeof(GetRandomChild).GetMethod(
+                "DoGetRandomChild",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
+            )!,
+            GetRandomChildOnDoGetRandomChild
+        );
+
         // Register IL hooks for the OnEnter method of certain classes. These OnEnter methods do not
         // have a method body and thus no IL instructions (apart from ret). Hooking this in the FsmActionHooks class
         // will not work, so we emit a NOP instruction to the body to make it hookable
-        // void EmitNop(ILContext il) => new ILCursor(il).Emit(OpCodes.Nop);
+        _flingPoolTimeEnterNopHook = new ILHook(
+            typeof(FlingObjectsFromGlobalPoolTime).GetMethod(
+                nameof(FlingObjectsFromGlobalPoolTime.OnEnter),
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
+            )!,
+            EmitNop
+        );
+        _spawnBloodTimeNopHook = new ILHook(
+            typeof(SpawnBloodTime).GetMethod(
+                nameof(SpawnBloodTime.OnEnter),
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
+            )!,
+            EmitNop
+        );
+        return;
 
-        // IL.HutongGames.PlayMaker.Actions.FlingObjectsFromGlobalPoolTime.OnEnter += EmitNop;
-        // IL.SpawnBloodTime.OnEnter += EmitNop;
+        // Register the IL hooks for modifying FSM action methods
+        void EmitNop(ILContext il) => new ILCursor(il).Emit(OpCodes.Nop);
     }
 
     /// <summary>
@@ -132,14 +204,15 @@ internal static class EntityFsmActions {
         var actionType = action.GetType();
         if (!TypeGetMethodInfos.TryGetValue(actionType, out var methodInfo)) {
             throw new InvalidOperationException(
-                $"Given action type: {action.GetType()} does not have an associated method to get");
+                $"Given action type: {action.GetType()} does not have an associated method to get"
+            );
         }
 
         var returnObject = methodInfo.Invoke(
             null,
             StaticNonPublicFlags,
             null,
-            new object[] { data, action },
+            [data, action],
             null!
         );
 
@@ -158,7 +231,8 @@ internal static class EntityFsmActions {
         var actionType = action.GetType();
         if (!TypeApplyMethodInfos.TryGetValue(actionType, out var methodInfo)) {
             throw new InvalidOperationException(
-                $"Given action type: {action.GetType()} does not have an associated method to apply");
+                $"Given action type: {action.GetType()} does not have an associated method to apply"
+            );
         }
 
         try {
@@ -166,7 +240,7 @@ internal static class EntityFsmActions {
                 null,
                 StaticNonPublicFlags,
                 null,
-                new object[] { data, action },
+                [data, action],
                 null!
             );
         } catch (Exception e) {
@@ -190,16 +264,16 @@ internal static class EntityFsmActions {
     private static bool IsObjectInRegistry(GameObject gameObject) {
         return EntityRegistry.TryGetEntry(gameObject, out _);
     }
-    
+
     /// <summary>
     /// Method to call the spawn event externally. TODO: refactor this into something more appropriate
     /// </summary>
     /// <param name="details">The spawn details for the event.</param>
     /// <returns>Whether an entity was registered from this spawn.</returns>
-    public static bool CallEntitySpawnEvent(EntitySpawnDetails details) {
-        return EntitySpawnEvent != null && EntitySpawnEvent.Invoke(details);
+    public static void CallEntitySpawnEvent(EntitySpawnDetails details) {
+        EntitySpawnEvent?.Invoke(details);
     }
-    
+
     /// <summary>
     /// Emit intercept instruction on the next Unity Random Range() call for the given IL cursor.
     /// </summary>
@@ -207,36 +281,39 @@ internal static class EntityFsmActions {
     /// <typeparam name="TValue">The return type of the random call.</typeparam>
     /// <typeparam name="TObject">The type of the FSM state action in which the random call occurs.</typeparam>
     private static void EmitRandomInterceptInstructions<TValue, TObject>(ILCursor c) where TObject : FsmStateAction {
-        // // Goto the next call instruction for Random.Range()
-        // c.GotoNext(i => i.MatchCall(typeof(Random), "Range"));
-        //
-        // // Move the cursor after the call instruction
-        // c.Index++;
-        //
-        // // Push the current instance of the class onto the stack
-        // c.Emit(OpCodes.Ldarg_0);
-        //
-        // // Emit a delegate that pops the current random value off the stack and puts it back after some processing 
-        // c.EmitDelegate<Func<TValue, TObject, TValue>>((value, instance) => {
-        //     // We need to check whether the game object that is being spawned with this action is not an object
-        //     // managed by the system. Because if so, we do not store the random values because the action for it
-        //     // is not being networked. Only the game object spawn is networked with an EntitySpawn packet directly.
-        //     var fsmGameObject = ReflectionHelper.GetField<TObject, FsmGameObject>(instance, "gameObject");
-        //     if (fsmGameObject != null && fsmGameObject.Value != null && IsObjectInRegistry(fsmGameObject.Value)) {
-        //         return value;
-        //     }
-        //     
-        //     if (!RandomActionValues.TryGetValue(instance, out var queue)) {
-        //         queue = new Queue<object>();
-        //         RandomActionValues[instance] = queue;
-        //     }
-        //
-        //     queue.Enqueue(value);
-        //
-        //     return value;
-        // });
+        // Goto the next call instruction for Random.Range()
+        c.GotoNext(i => i.MatchCall(typeof(Random), "Range"));
+
+        // Move the cursor after the call instruction
+        c.Index++;
+
+        // Push the current instance of the class onto the stack
+        c.Emit(OpCodes.Ldarg_0);
+
+        // Emit a delegate that pops the current random value off the stack and puts it back after some processing 
+        c.EmitDelegate<Func<TValue, TObject, TValue>>((value, instance) => {
+                // We need to check whether the game object that is being spawned with this action is not an object
+                // managed by the system. Because if so, we do not store the random values because the action for it
+                // is not being networked. Only the game object spawn is networked with an EntitySpawn packet directly.
+                if (typeof(TObject).GetField(
+                        "gameObject", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic
+                    )?.GetValue(instance) is FsmGameObject fsmGameObject && fsmGameObject.Value != null &&
+                    IsObjectInRegistry(fsmGameObject.Value)) {
+                    return value;
+                }
+
+                if (!RandomActionValues.TryGetValue(instance, out var queue)) {
+                    queue = new Queue<object>();
+                    RandomActionValues[instance] = queue;
+                }
+
+                queue.Enqueue(value);
+
+                return value;
+            }
+        );
     }
-    
+
     /// <summary>
     /// IL edit method for modifying the <see cref="FlingObjectsFromGlobalPool"/>
     /// <see cref="FlingObjectsFromGlobalPool.OnEnter"/> method to store the results of the random calls.
@@ -245,39 +322,42 @@ internal static class EntityFsmActions {
         try {
             // Create a cursor for this context
             var c = new ILCursor(il);
-            
+
             // Emit instructions for Random.Range calls for 1 int and 4 floats 
             EmitRandomInterceptInstructions<int, FlingObjectsFromGlobalPool>(c);
             EmitRandomInterceptInstructions<float, FlingObjectsFromGlobalPool>(c);
             EmitRandomInterceptInstructions<float, FlingObjectsFromGlobalPool>(c);
             EmitRandomInterceptInstructions<float, FlingObjectsFromGlobalPool>(c);
             EmitRandomInterceptInstructions<float, FlingObjectsFromGlobalPool>(c);
-            
+
             // Reset cursor
             c = new ILCursor(il);
 
             // Goto the next call instruction for ObjectPoolExtensions.Spawn
             c.GotoNext(i => i.MatchCall(typeof(ObjectPoolExtensions), "Spawn"));
-            
+
             // Move the cursor after the call instruction
             c.Index++;
-            
+
             // Push the current instance of the class onto the stack
             c.Emit(OpCodes.Ldarg_0);
-            
+
             // Emit a delegate that pops the spawned game object off the stack and uses it, then puts it back again
             c.EmitDelegate<Func<GameObject, FlingObjectsFromGlobalPool, GameObject>>((go, action) => {
-                //Logger.Debug($"Delegate of FlingObjectsFromGlobalPool: {go.name}");
-                if (EntitySpawnEvent != null && EntitySpawnEvent.Invoke(new EntitySpawnDetails {
-                        Type = EntitySpawnType.FsmAction,
-                        Action = action,
-                        GameObject = go
-                })) {
-                    Logger.Debug("FlingObjectsFromGlobalPool IL spawned object is entity");
+                    //Logger.Debug($"Delegate of FlingObjectsFromGlobalPool: {go.name}");
+                    if (EntitySpawnEvent != null && EntitySpawnEvent.Invoke(
+                            new EntitySpawnDetails {
+                                Type = EntitySpawnType.FsmAction,
+                                Action = action,
+                                GameObject = go
+                            }
+                        )) {
+                        Logger.Debug("FlingObjectsFromGlobalPool IL spawned object is entity");
+                    }
+
+                    return go;
                 }
-                
-                return go;
-            });
+            );
         } catch (Exception e) {
             Logger.Error($"Could not change FlingObjectsFromGlobalPool#OnEnter IL:\n{e}");
         }
@@ -291,44 +371,47 @@ internal static class EntityFsmActions {
         try {
             // Create a cursor for this context
             var c = new ILCursor(il);
-            
+
             // Emit instructions for Random.Range calls for 1 int and 4 floats 
             EmitRandomInterceptInstructions<int, FlingObjectsFromGlobalPoolVel>(c);
             EmitRandomInterceptInstructions<float, FlingObjectsFromGlobalPoolVel>(c);
             EmitRandomInterceptInstructions<float, FlingObjectsFromGlobalPoolVel>(c);
             EmitRandomInterceptInstructions<float, FlingObjectsFromGlobalPoolVel>(c);
             EmitRandomInterceptInstructions<float, FlingObjectsFromGlobalPoolVel>(c);
-            
+
             // Reset cursor
             c = new ILCursor(il);
 
             // Goto the next call instruction for ObjectPoolExtensions.Spawn
             c.GotoNext(i => i.MatchCall(typeof(ObjectPoolExtensions), "Spawn"));
-            
+
             // Move the cursor after the call instruction
             c.Index++;
-            
+
             // Push the current instance of the class onto the stack
             c.Emit(OpCodes.Ldarg_0);
-            
+
             // Emit a delegate that pops the spawned game object off the stack and uses it, then puts it back again
             c.EmitDelegate<Func<GameObject, FlingObjectsFromGlobalPoolVel, GameObject>>((go, action) => {
-                //Logger.Debug($"Delegate of FlingObjectsFromGlobalPoolVel: {go.name}");
-                if (EntitySpawnEvent != null && EntitySpawnEvent.Invoke(new EntitySpawnDetails {
-                        Type = EntitySpawnType.FsmAction,
-                        Action = action,
-                        GameObject = go
-                })) {
-                    Logger.Debug("FlingObjectsFromGlobalPoolVel IL spawned object is entity");
+                    //Logger.Debug($"Delegate of FlingObjectsFromGlobalPoolVel: {go.name}");
+                    if (EntitySpawnEvent != null && EntitySpawnEvent.Invoke(
+                            new EntitySpawnDetails {
+                                Type = EntitySpawnType.FsmAction,
+                                Action = action,
+                                GameObject = go
+                            }
+                        )) {
+                        Logger.Debug("FlingObjectsFromGlobalPoolVel IL spawned object is entity");
+                    }
+
+                    return go;
                 }
-                
-                return go;
-            });
+            );
         } catch (Exception e) {
             Logger.Error($"Could not change FlingObjectsFromGlobalPoolVel#OnEnter IL:\n{e}");
         }
     }
-    
+
     /// <summary>
     /// IL edit method for modifying the <see cref="FlingObjectsFromGlobalPoolTime"/>
     /// <see cref="FlingObjectsFromGlobalPoolTime.OnUpdate"/> method to network the repeated spawning of objects.
@@ -337,26 +420,29 @@ internal static class EntityFsmActions {
         try {
             // Create a cursor for this context
             var c = new ILCursor(il);
-            
+
             // Goto the next call instruction for Random.Range()
             c.GotoNext(i => i.MatchCall(typeof(ObjectPoolExtensions), "Spawn"));
 
             // Move the cursor after the call instruction
             c.Index++;
-            
+
             // Push the current instance of the class onto the stack
             c.Emit(OpCodes.Ldarg_0);
 
             // Emit a delegate that pops the spawned object off the stack and pushes it onto it again
             c.EmitDelegate<Func<GameObject, FlingObjectsFromGlobalPoolTime, GameObject>>((gameObject, action) => {
-                EntitySpawnEvent?.Invoke(new EntitySpawnDetails {
-                    Type = EntitySpawnType.FsmAction,
-                    Action = action,
-                    GameObject = gameObject
-                });
-                
-                return gameObject;
-            });
+                    EntitySpawnEvent?.Invoke(
+                        new EntitySpawnDetails {
+                            Type = EntitySpawnType.FsmAction,
+                            Action = action,
+                            GameObject = gameObject
+                        }
+                    );
+
+                    return gameObject;
+                }
+            );
         } catch (Exception e) {
             Logger.Error($"Could not change FlingObjectsFromGlobalPoolTime#OnUpdate IL:\n{e}");
         }
@@ -370,7 +456,7 @@ internal static class EntityFsmActions {
         try {
             // Create a cursor for this context
             var c = new ILCursor(il);
-            
+
             // Emit instructions for Random.Range calls for 1 int and 4 floats 
             EmitRandomInterceptInstructions<int, GetRandomChild>(c);
         } catch (Exception e) {
@@ -386,10 +472,10 @@ internal static class EntityFsmActions {
     /// <param name="stateName">The name of the state that was changed to.</param>
     public static void RegisterStateChange(HutongGames.PlayMaker.Fsm fsm, string stateName) {
         Logger.Debug($"RegisterStateChange: {fsm.Name}, {stateName}");
-    
+
         for (var i = ActionsInState.Count - 1; i >= 0; i--) {
             var actionInState = ActionsInState[i];
-            
+
             Logger.Debug($"  Action in state: {actionInState.Fsm.Name}, {actionInState.StateName}");
 
             if (actionInState.Fsm == fsm && actionInState.StateName != stateName) {
@@ -406,11 +492,13 @@ internal static class EntityFsmActions {
         // We first check whether this action results in the spawning of an entity that is managed by the
         // system. Because if so, it would already be handled by an EntitySpawn packet instead, and this will only
         // duplicate the spawning and leave it uncontrolled. So we don't send the data at all
-        if (EntitySpawnEvent != null && EntitySpawnEvent.Invoke(new EntitySpawnDetails {
-            Type = EntitySpawnType.FsmAction,
-            Action = action,
-            GameObject = action.storeObject.Value
-        })) {
+        if (EntitySpawnEvent != null && EntitySpawnEvent.Invoke(
+                new EntitySpawnDetails {
+                    Type = EntitySpawnType.FsmAction,
+                    Action = action,
+                    GameObject = action.storeObject.Value
+                }
+            )) {
             Logger.Debug($"Tried getting SpawnObjectFromGlobalPool network data, but spawned object is entity");
             return false;
         }
@@ -470,21 +558,23 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region FlingObjectsFromGlobalPool
-    
+
     private static bool GetNetworkDataFromAction(EntityNetworkData data, FlingObjectsFromGlobalPool action) {
         // We first check whether the game object belonging to the Rigidbody2D in the action is an object that is
         // managed by the system. Because if so, it means that we have already caught its spawning in the IL hook
         // for the action and sent an EntitySpawn packet instead. So we need not also network this action separately.
         var rigidbody = action.rb2d;
         if (rigidbody != null && rigidbody.gameObject != null && IsObjectInRegistry(rigidbody.gameObject)) {
-            Logger.Debug("Skipping getting network data for FlingObjectsFromGlobalPool, because spawned objects are managed by system");
+            Logger.Debug(
+                "Skipping getting network data for FlingObjectsFromGlobalPool, because spawned objects are managed by system"
+            );
             return false;
         }
-        
+
         var position = Vector3.zero;
-    
+
         var spawnPoint = action.spawnPoint.Value;
         if (spawnPoint != null) {
             position = spawnPoint.transform.position;
@@ -503,7 +593,7 @@ internal static class EntityFsmActions {
             Logger.Debug("Getting data for FlingObjectsFromGlobalPool has not enough items in queue 1");
             return false;
         }
-        
+
         data.Packet.Write(position.x);
         data.Packet.Write(position.y);
         data.Packet.Write(position.z);
@@ -517,19 +607,19 @@ internal static class EntityFsmActions {
                     Logger.Debug("Getting data for FlingObjectsFromGlobalPool has not enough items in queue 2");
                     return false;
                 }
-                
+
                 var originVariationX = (float) queue.Dequeue();
                 data.Packet.Write(originVariationX);
             } else {
                 data.Packet.Write(0f);
             }
-            
+
             if (action.originVariationY != null) {
                 if (queue.Count == 0) {
                     Logger.Debug("Getting data for FlingObjectsFromGlobalPool has not enough items in queue 3");
                     return false;
                 }
-                
+
                 var originVariationY = (float) queue.Dequeue();
                 data.Packet.Write(originVariationY);
             } else {
@@ -544,15 +634,15 @@ internal static class EntityFsmActions {
 
             var speed = (float) queue.Dequeue();
             var angle = (float) queue.Dequeue();
-            
+
             data.Packet.Write(speed);
             data.Packet.Write(angle);
         }
-        
+
         queue.Clear();
         return true;
     }
-    
+
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, FlingObjectsFromGlobalPool action) {
         var position = new Vector3(
             data.Packet.ReadFloat(),
@@ -590,23 +680,25 @@ internal static class EntityFsmActions {
             }
         }
     }
-    
+
     #endregion
-    
+
     #region FlingObjectsFromGlobalPoolVel
-    
+
     private static bool GetNetworkDataFromAction(EntityNetworkData data, FlingObjectsFromGlobalPoolVel action) {
         // We first check whether the game object belonging to the Rigidbody2D in the action is an object that is
         // managed by the system. Because if so, it means that we have already caught its spawning in the IL hook
         // for the action and sent an EntitySpawn packet instead. So we need not also network this action separately.
         var rigidbody = action.rb2d;
         if (rigidbody != null && rigidbody.gameObject != null && IsObjectInRegistry(rigidbody.gameObject)) {
-            Logger.Debug("Skipping getting network data for FlingObjectsFromGlobalPool, because spawned objects are managed by system");
+            Logger.Debug(
+                "Skipping getting network data for FlingObjectsFromGlobalPool, because spawned objects are managed by system"
+            );
             return false;
         }
-        
+
         var position = Vector3.zero;
-    
+
         var spawnPoint = action.spawnPoint.Value;
         if (spawnPoint != null) {
             position = spawnPoint.transform.position;
@@ -625,7 +717,7 @@ internal static class EntityFsmActions {
             Logger.Debug("Getting data for FlingObjectsFromGlobalPoolVel has not enough items in queue 1");
             return false;
         }
-        
+
         data.Packet.Write(position.x);
         data.Packet.Write(position.y);
         data.Packet.Write(position.z);
@@ -639,19 +731,19 @@ internal static class EntityFsmActions {
                     Logger.Debug("Getting data for FlingObjectsFromGlobalPoolVel has not enough items in queue 2");
                     return false;
                 }
-                
+
                 var originVariationX = (float) queue.Dequeue();
                 data.Packet.Write(originVariationX);
             } else {
                 data.Packet.Write(0f);
             }
-            
+
             if (action.originVariationY != null) {
                 if (queue.Count == 0) {
                     Logger.Debug("Getting data for FlingObjectsFromGlobalPoolVel has not enough items in queue 3");
                     return false;
                 }
-                
+
                 var originVariationY = (float) queue.Dequeue();
                 data.Packet.Write(originVariationY);
             } else {
@@ -666,15 +758,15 @@ internal static class EntityFsmActions {
 
             var speedX = (float) queue.Dequeue();
             var speedY = (float) queue.Dequeue();
-            
+
             data.Packet.Write(speedX);
             data.Packet.Write(speedY);
         }
-        
+
         queue.Clear();
         return true;
     }
-    
+
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, FlingObjectsFromGlobalPoolVel action) {
         var position = new Vector3(
             data.Packet.ReadFloat(),
@@ -705,20 +797,22 @@ internal static class EntityFsmActions {
             rigidBody.velocity = new Vector2(speedX, speedY);
         }
     }
-    
+
     #endregion
-    
+
     #region CreateObject
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, CreateObject action) {
         // We first check whether this action results in the spawning of an entity that is managed by the
         // system. Because if so, it would already be handled by an EntitySpawn packet instead, and this will only
         // duplicate the spawning and leave it uncontrolled. So we don't send the data at all
-        if (EntitySpawnEvent != null && EntitySpawnEvent.Invoke(new EntitySpawnDetails {
-            Type = EntitySpawnType.FsmAction,
-            Action = action,
-            GameObject = action.storeObject.Value
-        })) {
+        if (EntitySpawnEvent != null && EntitySpawnEvent.Invoke(
+                new EntitySpawnDetails {
+                    Type = EntitySpawnType.FsmAction,
+                    Action = action,
+                    GameObject = action.storeObject.Value
+                }
+            )) {
             Logger.Debug($"Tried getting CreateObject network data, but spawned object is entity");
             return false;
         }
@@ -747,7 +841,7 @@ internal static class EntityFsmActions {
                 euler = action.rotation.Value;
             }
         }
-        
+
         data.Packet.Write(position.x);
         data.Packet.Write(position.y);
         data.Packet.Write(position.z);
@@ -775,9 +869,7 @@ internal static class EntityFsmActions {
                     position += action.position.Value;
                 }
 
-                euler = !action.rotation.IsNone ? 
-                    action.rotation.Value : 
-                    action.spawnPoint.Value.transform.eulerAngles;
+                euler = !action.rotation.IsNone ? action.rotation.Value : action.spawnPoint.Value.transform.eulerAngles;
             } else {
                 if (!action.position.IsNone) {
                     position = action.position.Value;
@@ -849,8 +941,8 @@ internal static class EntityFsmActions {
         }
 
         rigidBody.velocity = new Vector2(
-            action.speed.Value * Mathf.Cos(num * ((float)System.Math.PI / 180f)),
-            action.speed.Value * Mathf.Sin(num * ((float)System.Math.PI / 180f))
+            action.speed.Value * Mathf.Cos(num * ((float) System.Math.PI / 180f)),
+            action.speed.Value * Mathf.Sin(num * ((float) System.Math.PI / 180f))
         );
     }
 
@@ -890,7 +982,7 @@ internal static class EntityFsmActions {
 
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, SetScale action) {
         Vector3 scale;
-        
+
         var gameObject = action.Fsm.GetOwnerDefaultTarget(action.gameObject);
 
         if (data == null) {
@@ -899,11 +991,11 @@ internal static class EntityFsmActions {
             if (!action.x.IsNone) {
                 scale.x = action.x.Value;
             }
-            
+
             if (!action.y.IsNone) {
                 scale.y = action.y.Value;
             }
-            
+
             if (!action.z.IsNone) {
                 scale.z = action.z.Value;
             }
@@ -931,10 +1023,10 @@ internal static class EntityFsmActions {
         if (gameObject == action.Fsm.GameObject) {
             return false;
         }
-        
+
         var setValue = action.setValue.Value;
         data.Packet.Write(setValue);
-        
+
         return true;
     }
 
@@ -960,7 +1052,7 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region SetFsmInt
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetFsmInt action) {
@@ -972,10 +1064,10 @@ internal static class EntityFsmActions {
         if (gameObject == action.Fsm.GameObject) {
             return false;
         }
-        
+
         var setValue = action.setValue.Value;
         data.Packet.Write(setValue);
-        
+
         return true;
     }
 
@@ -1014,7 +1106,7 @@ internal static class EntityFsmActions {
         if (gameObject == action.Fsm.GameObject) {
             return false;
         }
-        
+
         return true;
     }
 
@@ -1042,7 +1134,7 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region SetFsmString
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetFsmString action) {
@@ -1055,7 +1147,7 @@ internal static class EntityFsmActions {
         if (gameObject == action.Fsm.GameObject) {
             return false;
         }
-        
+
         return true;
     }
 
@@ -1083,7 +1175,7 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region SetParticleEmission
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetParticleEmission action) {
@@ -1108,14 +1200,14 @@ internal static class EntityFsmActions {
         if (particleSystem == null) {
             return;
         }
-        
+
 #pragma warning disable CS0618
         particleSystem.enableEmission = action.emission.Value;
 #pragma warning restore CS0618
     }
 
     #endregion
-    
+
     #region SetParticleEmissionRate
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetParticleEmissionRate action) {
@@ -1126,7 +1218,7 @@ internal static class EntityFsmActions {
         if (action.gameObject == null) {
             return;
         }
-        
+
         var gameObject = action.Fsm.GetOwnerDefaultTarget(action.gameObject);
         if (gameObject == null) {
             return;
@@ -1141,7 +1233,7 @@ internal static class EntityFsmActions {
 
         if (action.everyFrame) {
             MonoBehaviourUtil.Instance.OnUpdateEvent += Action;
-            
+
             new ActionInState {
                 Fsm = action.Fsm,
                 StateName = action.State.Name,
@@ -1157,7 +1249,7 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region SetParticleEmissionSpeed
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetParticleEmissionSpeed action) {
@@ -1168,7 +1260,7 @@ internal static class EntityFsmActions {
         if (action.gameObject == null) {
             return;
         }
-        
+
         var gameObject = action.Fsm.GetOwnerDefaultTarget(action.gameObject);
         if (gameObject == null) {
             return;
@@ -1178,12 +1270,12 @@ internal static class EntityFsmActions {
         if (particleSystem == null) {
             return;
         }
-        
+
         Action();
 
         if (action.everyFrame) {
             MonoBehaviourUtil.Instance.OnUpdateEvent += Action;
-            
+
             new ActionInState {
                 Fsm = action.Fsm,
                 StateName = action.State.Name,
@@ -1199,7 +1291,7 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region PlayParticleEmitter
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, PlayParticleEmitter action) {
@@ -1227,9 +1319,9 @@ internal static class EntityFsmActions {
             particleSystem.Emit(action.emit.Value);
         }
     }
-    
+
     #endregion
-    
+
     #region StopParticleEmitter
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, StopParticleEmitter action) {
@@ -1255,46 +1347,46 @@ internal static class EntityFsmActions {
             particleSystem.Stop();
         }
     }
-    
+
     #endregion
-    
+
     #region SetGameObject
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetGameObject action) {
         return true;
     }
-    
+
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, SetGameObject action) {
         action.variable.Value = action.gameObject.Value;
     }
-    
+
     #endregion
-    
+
     #region GetOwner
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, GetOwner action) {
         return true;
     }
-    
+
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, GetOwner action) {
         action.storeGameObject.Value = action.Owner;
     }
-    
+
     #endregion
-    
+
     #region GetHero
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, GetHero action) {
         return true;
     }
-    
+
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, GetHero action) {
         var heroController = HeroController.instance;
         action.storeResult.Value = heroController == null ? null : heroController.gameObject;
     }
-    
+
     #endregion
-    
+
     #region GetChild
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, GetChild action) {
@@ -1309,18 +1401,18 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region FindChild
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, FindChild action) {
         return true;
     }
-    
+
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, FindChild action) {
         if (action.Fsm == null) {
             return;
         }
-    
+
         var gameObject = action.Fsm.GetOwnerDefaultTarget(action.gameObject);
         if (gameObject == null) {
             return;
@@ -1329,15 +1421,15 @@ internal static class EntityFsmActions {
         var transform = gameObject.transform.Find(action.childName.Value);
         action.storeResult.Value = transform == null ? null : transform.gameObject;
     }
-    
+
     #endregion
-    
+
     #region FindGameObject
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, FindGameObject action) {
         return true;
     }
-    
+
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, FindGameObject action) {
         if (action.withTag.Value == "Untagged") {
             action.store.Value = GameObject.Find(action.objectName.Value);
@@ -1358,27 +1450,27 @@ internal static class EntityFsmActions {
 
         action.store.Value = null;
     }
-    
+
     #endregion
-    
+
     #region SetProperty
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetProperty action) {
         return true;
     }
-    
+
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, SetProperty action) {
         action.targetProperty.SetValue();
     }
-    
+
     #endregion
-    
+
     #region SetParent
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetParent action) {
         return true;
     }
-    
+
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, SetParent action) {
         var gameObject = action.Fsm.GetOwnerDefaultTarget(action.gameObject);
         if (gameObject == null) {
@@ -1395,7 +1487,7 @@ internal static class EntityFsmActions {
         if (action.resetLocalRotation.Value) {
             gameObject.transform.localRotation = Quaternion.identity;
         }
-        
+
         if (parent == null) {
             var fsms = gameObject.GetComponents<PlayMakerFSM>();
             foreach (var fsm in fsms) {
@@ -1407,27 +1499,27 @@ internal static class EntityFsmActions {
             }
         }
     }
-    
+
     #endregion
-    
+
     #region FindAlertRange
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, FindAlertRange action) {
         return true;
     }
-    
+
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, FindAlertRange action) {
         action.storeResult.Value = AlertRange.Find(action.target.GetSafe(action), action.childName);
     }
-    
+
     #endregion
-    
+
     #region GetParent
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, GetParent action) {
         return true;
     }
-    
+
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, GetParent action) {
         var gameObject = action.Fsm.GetOwnerDefaultTarget(action.gameObject);
         if (gameObject == null) {
@@ -1443,11 +1535,11 @@ internal static class EntityFsmActions {
 
         action.storeResult.Value = parent.gameObject;
     }
-    
+
     #endregion
-    
+
     #region SetVelocity2d
-    
+
 #pragma warning disable CS0618 // Type or member is obsolete
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetVelocity2d action) {
@@ -1455,7 +1547,7 @@ internal static class EntityFsmActions {
         if (gameObject == null) {
             return false;
         }
-        
+
         if (IsObjectInRegistry(gameObject)) {
             Logger.Debug("Tried getting SetVelocity2d network data, but entity is in registry");
             return false;
@@ -1477,13 +1569,13 @@ internal static class EntityFsmActions {
 
         data.Packet.Write(vector.x);
         data.Packet.Write(vector.y);
-        
+
         return true;
     }
-    
+
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, SetVelocity2d action) {
         var vector = new Vector2(
-            data.Packet.ReadFloat(), 
+            data.Packet.ReadFloat(),
             data.Packet.ReadFloat()
         );
 
@@ -1491,7 +1583,7 @@ internal static class EntityFsmActions {
         if (gameObject == null) {
             return;
         }
-        
+
         var rigidbody = gameObject.GetComponent<Rigidbody2D>();
         if (rigidbody == null) {
             return;
@@ -1499,15 +1591,15 @@ internal static class EntityFsmActions {
 
         rigidbody.velocity = vector;
     }
-    
+
     #endregion
-    
+
     #region SetMeshRenderer
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetMeshRenderer action) {
         return true;
     }
-    
+
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, SetMeshRenderer action) {
         var gameObject = action.Fsm.GetOwnerDefaultTarget(action.gameObject);
         if (gameObject == null) {
@@ -1521,9 +1613,9 @@ internal static class EntityFsmActions {
 
         meshRenderer.enabled = action.active.Value;
     }
-    
+
     #endregion
-    
+
     #region SetPosition
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetPosition action) {
@@ -1541,60 +1633,54 @@ internal static class EntityFsmActions {
         if (!action.vector.IsNone) {
             vector3 = action.vector.Value;
         } else {
-            if (action.space == Space.World) {
-                vector3 = gameObject.transform.position;
-            } else {
-                vector3 = gameObject.transform.localPosition;
-            }
+            vector3 = action.space == Space.World ? gameObject.transform.position : gameObject.transform.localPosition;
         }
-        
+
         if (!action.x.IsNone) {
             vector3.x = action.x.Value;
         }
-        
+
         if (!action.y.IsNone) {
             vector3.y = action.y.Value;
         }
-        
+
         if (!action.z.IsNone) {
             vector3.z = action.z.Value;
         }
-        
+
         data.Packet.Write(vector3.x);
         data.Packet.Write(vector3.y);
         data.Packet.Write(vector3.z);
-        
+
         return true;
     }
-    
+
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, SetPosition action) {
         Vector3 vector3;
-        
+
         var gameObject = action.Fsm.GetOwnerDefaultTarget(action.gameObject);
 
         if (data == null) {
             if (gameObject == null) {
                 return;
             }
-            
+
             if (!action.vector.IsNone) {
                 vector3 = action.vector.Value;
             } else {
-                if (action.space == Space.World) {
-                    vector3 = gameObject.transform.position;
-                } else {
-                    vector3 = gameObject.transform.localPosition;
-                }
+                vector3 = action.space == Space.World
+                    ? gameObject.transform.position
+                    : gameObject.transform.localPosition;
             }
-        
+
             if (!action.x.IsNone) {
                 vector3.x = action.x.Value;
             }
-        
+
             if (!action.y.IsNone) {
                 vector3.y = action.y.Value;
             }
-        
+
             if (!action.z.IsNone) {
                 vector3.z = action.z.Value;
             }
@@ -1604,7 +1690,7 @@ internal static class EntityFsmActions {
                 data.Packet.ReadFloat(),
                 data.Packet.ReadFloat()
             );
-            
+
             if (gameObject == null) {
                 return;
             }
@@ -1616,9 +1702,9 @@ internal static class EntityFsmActions {
             gameObject.transform.localPosition = vector3;
         }
     }
-    
+
     #endregion
-    
+
     #region SetRotation
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetRotation action) {
@@ -1635,11 +1721,9 @@ internal static class EntityFsmActions {
         Vector3 vector3;
         if (action.quaternion.IsNone) {
             if (action.vector.IsNone) {
-                if (action.space == Space.Self) {
-                    vector3 = gameObject.transform.localEulerAngles;
-                } else {
-                    vector3 = gameObject.transform.eulerAngles;
-                }
+                vector3 = action.space == Space.Self
+                    ? gameObject.transform.localEulerAngles
+                    : gameObject.transform.eulerAngles;
             } else {
                 vector3 = action.vector.Value;
             }
@@ -1658,14 +1742,14 @@ internal static class EntityFsmActions {
         if (!action.zAngle.IsNone) {
             vector3.z = action.zAngle.Value;
         }
-        
+
         data.Packet.Write(vector3.x);
         data.Packet.Write(vector3.y);
         data.Packet.Write(vector3.z);
-        
+
         return true;
     }
-    
+
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, SetRotation action) {
         var gameObject = action.Fsm.GetOwnerDefaultTarget(action.gameObject);
 
@@ -1673,13 +1757,13 @@ internal static class EntityFsmActions {
             Logger.Error("No data passed for applying SetRotation action");
             return;
         }
-        
+
         var vector3 = new Vector3(
             data.Packet.ReadFloat(),
             data.Packet.ReadFloat(),
             data.Packet.ReadFloat()
         );
-            
+
         if (gameObject == null) {
             return;
         }
@@ -1690,7 +1774,7 @@ internal static class EntityFsmActions {
             gameObject.transform.eulerAngles = vector3;
         }
     }
-    
+
     #endregion
 
     #region ActivateGameObject
@@ -1700,7 +1784,7 @@ internal static class EntityFsmActions {
         if (gameObject == null) {
             return false;
         }
-        
+
         if (IsObjectInRegistry(gameObject)) {
             Logger.Debug("Tried getting ActivateGameObject network data, but entity is in registry");
             return false;
@@ -1731,7 +1815,7 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region Tk2dPlayAnimation
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, Tk2dPlayAnimation action) {
@@ -1739,7 +1823,7 @@ internal static class EntityFsmActions {
         if (gameObject == null) {
             return false;
         }
-        
+
         if (IsObjectInRegistry(gameObject)) {
             Logger.Debug("Tried getting Tk2dPlayAnimation network data, but entity is in registry");
             return false;
@@ -1758,12 +1842,12 @@ internal static class EntityFsmActions {
         if (animator == null) {
             return;
         }
-        
+
         animator.Play(action.clipName.Value);
     }
 
     #endregion
-    
+
     #region Tk2dPlayFrame
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, Tk2dPlayFrame action) {
@@ -1771,7 +1855,7 @@ internal static class EntityFsmActions {
         if (gameObject == null) {
             return false;
         }
-        
+
         if (IsObjectInRegistry(gameObject)) {
             Logger.Debug("Tried getting Tk2dPlayFrame network data, but entity is in registry");
             return false;
@@ -1790,12 +1874,12 @@ internal static class EntityFsmActions {
         if (animator == null) {
             return;
         }
-        
+
         animator.PlayFromFrame(action.frame.Value);
     }
 
     #endregion
-    
+
     #region Tk2dPlayAnimationWithEvents
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, Tk2dPlayAnimationWithEvents action) {
@@ -1803,7 +1887,7 @@ internal static class EntityFsmActions {
         if (gameObject == null) {
             return false;
         }
-        
+
         if (IsObjectInRegistry(gameObject)) {
             Logger.Debug("Tried getting Tk2dPlayAnimationWithEvents network data, but entity is in registry");
             return false;
@@ -1822,12 +1906,12 @@ internal static class EntityFsmActions {
         if (animator == null) {
             return;
         }
-        
+
         animator.Play(action.clipName.Value);
     }
 
     #endregion
-    
+
     #region SpawnBlood
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SpawnBlood action) {
@@ -1875,7 +1959,7 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region SendEventByName
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SendEventByName action) {
@@ -1896,14 +1980,14 @@ internal static class EntityFsmActions {
 
             IEnumerator DelayEvent() {
                 yield return new WaitForSeconds(action.delay.Value);
-                
+
                 action.Fsm.Event(action.eventTarget, action.sendEvent.Value);
             }
         }
     }
 
     #endregion
-    
+
     #region SendEventByNameV2
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SendEventByNameV2 action) {
@@ -1924,14 +2008,14 @@ internal static class EntityFsmActions {
 
             IEnumerator DelayEvent() {
                 yield return new WaitForSeconds(action.delay.Value);
-                
+
                 action.Fsm.Event(action.eventTarget, action.sendEvent.Value);
             }
         }
     }
 
     #endregion
-    
+
     #region SendHealthManagerDeathEvent
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SendHealthManagerDeathEvent action) {
@@ -1951,12 +2035,12 @@ internal static class EntityFsmActions {
         if (healthManager == null) {
             return;
         }
-        
+
         healthManager.SendDeathEvent();
     }
 
     #endregion
-    
+
     #region ActivateAllChildren
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, ActivateAllChildren action) {
@@ -1975,7 +2059,7 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region SetBoxCollider2DSizeVector
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetBoxCollider2DSizeVector action) {
@@ -2003,7 +2087,7 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region SetVelocityAsAngle
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetVelocityAsAngle action) {
@@ -2011,7 +2095,7 @@ internal static class EntityFsmActions {
         if (gameObject == null) {
             return false;
         }
-        
+
         if (IsObjectInRegistry(gameObject)) {
             Logger.Debug("Tried getting SetVelocityAsAngle network data, but entity is in registry");
             return false;
@@ -2019,19 +2103,19 @@ internal static class EntityFsmActions {
 
         data.Packet.Write(action.speed.Value);
         data.Packet.Write(action.angle.Value);
-        
+
         return true;
     }
 
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, SetVelocityAsAngle action) {
         var speed = data.Packet.ReadFloat();
         var angle = data.Packet.ReadFloat();
-        
+
         var gameObject = action.Fsm.GetOwnerDefaultTarget(action.gameObject);
         if (gameObject == null) {
             return;
         }
-        
+
         var rigidbody = gameObject.GetComponent<Rigidbody2D>();
         if (rigidbody == null) {
             return;
@@ -2044,7 +2128,7 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region iTweenMoveBy
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, iTweenMoveBy action) {
@@ -2056,7 +2140,7 @@ internal static class EntityFsmActions {
         if (IsObjectInRegistry(gameObject)) {
             return false;
         }
-    
+
         return true;
     }
 
@@ -2065,12 +2149,11 @@ internal static class EntityFsmActions {
         if (gameObject == null) {
             return;
         }
-        
+
         var id = action.itweenID;
 
         var args = new Hashtable {
-            { "amount", action.vector.IsNone ? Vector3.zero : action.vector.Value }, 
-            {
+            { "amount", action.vector.IsNone ? Vector3.zero : action.vector.Value }, {
                 action.speed.IsNone ? "time" : "speed",
                 (float) (action.speed.IsNone
                     ? (action.time.IsNone ? 1.0 : action.time.Value)
@@ -2085,8 +2168,12 @@ internal static class EntityFsmActions {
             { "onstartparams", id },
             { "ignoretimescale", !action.realTime.IsNone && action.realTime.Value },
             { "space", action.space },
-            { "name", action.id.IsNone ? "" : (object) action.id.Value },
-            { "axis", action.axis == iTweenFsmAction.AxisRestriction.none ? "" : (object) Enum.GetName(typeof (iTweenFsmAction.AxisRestriction), action.axis) }
+            { "name", action.id.IsNone ? "" : (object) action.id.Value }, {
+                "axis",
+                action.axis == iTweenFsmAction.AxisRestriction.none
+                    ? ""
+                    : (object) Enum.GetName(typeof(iTweenFsmAction.AxisRestriction), action.axis)
+            }
         };
 
         if (!action.orientToPath.IsNone) {
@@ -2094,7 +2181,8 @@ internal static class EntityFsmActions {
         }
 
         if (!action.lookAtObject.IsNone) {
-            args.Add("looktarget",
+            args.Add(
+                "looktarget",
                 action.lookAtVector.IsNone
                     ? action.lookAtObject.Value.transform.position
                     : action.lookAtObject.Value.transform.position + action.lookAtVector.Value
@@ -2113,7 +2201,7 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region iTweenScaleTo
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, iTweenScaleTo action) {
@@ -2125,7 +2213,7 @@ internal static class EntityFsmActions {
         if (IsObjectInRegistry(gameObject)) {
             return false;
         }
-        
+
         return action.loopType == iTween.LoopType.none;
     }
 
@@ -2142,35 +2230,39 @@ internal static class EntityFsmActions {
         }
 
         var id = action.itweenID;
-        
-        iTween.ScaleTo(gameObject, iTween.Hash(
-            "scale", 
-            vector,
-            "name", 
-            action.id.IsNone ? "" : action.id.Value, 
-            action.speed.IsNone ? "time" : "speed", 
-            (float) (action.speed.IsNone ? action.time.IsNone ? 1.0 : action.time.Value : (double) action.speed.Value), 
-            "delay", 
-            (float) (action.delay.IsNone ? 0.0 : (double) action.delay.Value), 
-            "easetype", 
-            action.easeType, 
-            "looptype",
-            action.loopType, 
-            "oncomplete", 
-            "iTweenOnComplete", 
-            "oncompleteparams", 
-            id, 
-            "onstart", 
-            "iTweenOnStart", 
-            "onstartparams", 
-            id, 
-            "ignoretimescale", 
-            (action.realTime.IsNone ? 0 : action.realTime.Value ? 1 : 0) > 0
-        ));
+
+        iTween.ScaleTo(
+            gameObject, iTween.Hash(
+                "scale",
+                vector,
+                "name",
+                action.id.IsNone ? "" : action.id.Value,
+                action.speed.IsNone ? "time" : "speed",
+                (float) (action.speed.IsNone
+                    ? action.time.IsNone ? 1.0 : action.time.Value
+                    : (double) action.speed.Value),
+                "delay",
+                (float) (action.delay.IsNone ? 0.0 : (double) action.delay.Value),
+                "easetype",
+                action.easeType,
+                "looptype",
+                action.loopType,
+                "oncomplete",
+                "iTweenOnComplete",
+                "oncompleteparams",
+                id,
+                "onstart",
+                "iTweenOnStart",
+                "onstartparams",
+                id,
+                "ignoretimescale",
+                (action.realTime.IsNone ? 0 : action.realTime.Value ? 1 : 0) > 0
+            )
+        );
     }
 
     #endregion
-    
+
     #region SetTag
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetTag action) {
@@ -2187,7 +2279,7 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region DestroyObject
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, DestroyObject action) {
@@ -2213,7 +2305,7 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region SetGravity2dScale
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetGravity2dScale action) {
@@ -2221,12 +2313,12 @@ internal static class EntityFsmActions {
         if (gameObject == null) {
             return false;
         }
-        
+
         if (IsObjectInRegistry(gameObject)) {
             Logger.Debug("Tried getting SetGravity2dScale network data, but entity is in registry");
             return false;
         }
-        
+
         return true;
     }
 
@@ -2245,7 +2337,7 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region SetCollider
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetCollider action) {
@@ -2253,12 +2345,12 @@ internal static class EntityFsmActions {
         if (gameObject == null) {
             return false;
         }
-        
+
         if (IsObjectInRegistry(gameObject)) {
             Logger.Debug("Tried getting SetCollider network data, but entity is in registry");
             return false;
         }
-        
+
         return true;
     }
 
@@ -2277,14 +2369,14 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region SetStringValue
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetStringValue action) {
         if (action.stringVariable == null || action.stringValue == null) {
             return false;
         }
-        
+
         return true;
     }
 
@@ -2293,7 +2385,7 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region GetRandomChild
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, GetRandomChild action) {
@@ -2308,12 +2400,12 @@ internal static class EntityFsmActions {
 
         var randomIndex = (int) queue.Dequeue();
         data.Packet.Write((byte) randomIndex);
-        
+
         queue.Clear();
 
         return true;
     }
-    
+
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, GetRandomChild action) {
         var randomIndex = data.Packet.ReadByte();
 
@@ -2329,15 +2421,15 @@ internal static class EntityFsmActions {
 
         action.storeResult.Value = gameObject.transform.GetChild(randomIndex).gameObject;
     }
-    
+
     #endregion
-    
+
     #region DestroyComponent
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, DestroyComponent action) {
         return true;
     }
-    
+
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, DestroyComponent action) {
         var gameObject = action.Fsm.GetOwnerDefaultTarget(action.gameObject);
         if (gameObject == null) {
@@ -2351,9 +2443,9 @@ internal static class EntityFsmActions {
 
         Object.Destroy(component);
     }
-    
+
     #endregion
-    
+
     #region AddComponent
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, AddComponent action) {
@@ -2361,10 +2453,10 @@ internal static class EntityFsmActions {
             Logger.Debug("Tried getting data for AddComponent action, but removeOnExit is true");
             return false;
         }
-        
+
         return true;
     }
-    
+
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, AddComponent action) {
         var gameObject = action.Fsm.GetOwnerDefaultTarget(action.gameObject);
         if (gameObject == null) {
@@ -2374,44 +2466,40 @@ internal static class EntityFsmActions {
         var component = gameObject.AddComponent(ReflectionUtils.GetGlobalType(action.component.Value));
         action.storeComponent.Value = component;
     }
-    
+
     #endregion
-    
+
     #region PreBuildTK2DSprites
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, PreBuildTK2DSprites action) {
         return true;
     }
-    
+
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, PreBuildTK2DSprites action) {
         var gameObject = action.gameObject.Value;
         if (gameObject == null) {
             return;
         }
 
-        tk2dSprite[] sprites;
-
-        if (action.useChildren) {
-            sprites = gameObject.GetComponentsInChildren<tk2dSprite>(true);
-        } else {
-            sprites = gameObject.GetComponents<tk2dSprite>();
-        }
+        var sprites = action.useChildren
+            ? gameObject.GetComponentsInChildren<tk2dSprite>(true)
+            : gameObject.GetComponents<tk2dSprite>();
 
         foreach (var sprite in sprites) {
             sprite.ForceBuild();
         }
     }
-    
+
     #endregion
-    
+
     #region GetPosition
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, GetPosition action) {
         Logger.Debug($"Getting network data for GetPosition: {action.Fsm.GameObject.name}, {action.Fsm.Name}");
-        
+
         return action.Fsm.GameObject.name.StartsWith("Colosseum Manager") && action.Fsm.Name.Equals("Battle Control");
     }
-    
+
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, GetPosition action) {
         var gameObject = action.Fsm.GetOwnerDefaultTarget(action.gameObject);
         if (gameObject == null) {
@@ -2424,22 +2512,22 @@ internal static class EntityFsmActions {
         action.y.Value = vector3.y;
         action.z.Value = vector3.z;
     }
-    
+
     #endregion
-    
+
     #region CallMethodProper
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, CallMethodProper action) {
         Logger.Debug($"Getting network data for CallMethodProper: {action.Fsm.GameObject.name}, {action.Fsm.Name}");
-        
-        return action.Fsm.GameObject.name.StartsWith("Colosseum Manager") && 
-               action.Fsm.Name.Equals("Battle Control") || 
-               action.Fsm.GameObject.name.StartsWith("Mantis Lord Throne") && 
+
+        return action.Fsm.GameObject.name.StartsWith("Colosseum Manager") &&
+               action.Fsm.Name.Equals("Battle Control") ||
+               action.Fsm.GameObject.name.StartsWith("Mantis Lord Throne") &&
                action.Fsm.Name.Equals("Mantis Throne Main") ||
-               action.Fsm.GameObject.name.Equals("Radiance") && 
+               action.Fsm.GameObject.name.Equals("Radiance") &&
                action.Fsm.Name.Equals("Control");
     }
-    
+
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, CallMethodProper action) {
         if (action.behaviour.Value == null) {
             return;
@@ -2489,9 +2577,9 @@ internal static class EntityFsmActions {
 
         action.storeResult.SetValue(obj);
     }
-    
+
     #endregion
-    
+
     #region AudioPlay
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, AudioPlay action) {
@@ -2508,7 +2596,7 @@ internal static class EntityFsmActions {
         if (audioSource == null || !audioSource.enabled) {
             return;
         }
-        
+
         var audioClip = action.oneShotClip.Value as AudioClip;
         if (audioClip == null) {
             audioSource.Play();
@@ -2567,7 +2655,7 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region AudioPlayerOneShot
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, AudioPlayerOneShot action) {
@@ -2603,15 +2691,11 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region AudioPlayerOneShotSingle
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, AudioPlayerOneShotSingle action) {
-        if (action.audioPlayer.IsNone || action.spawnPoint.IsNone || action.spawnPoint.Value == null) {
-            return false;
-        }
-        
-        return true;
+        return !action.audioPlayer.IsNone && !action.spawnPoint.IsNone && action.spawnPoint.Value != null;
     }
 
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, AudioPlayerOneShotSingle action) {
@@ -2640,12 +2724,12 @@ internal static class EntityFsmActions {
         if (audioClip == null) {
             return;
         }
-        
+
         audioSource.PlayOneShot(audioClip);
     }
 
     #endregion
-    
+
     #region SetAudioClip
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetAudioClip action) {
@@ -2667,7 +2751,7 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region SetAudioPitch
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetAudioPitch action) {
@@ -2689,9 +2773,9 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region AudioStop
-    
+
     private static bool GetNetworkDataFromAction(EntityNetworkData data, AudioStop action) {
         return true;
     }
@@ -2706,14 +2790,14 @@ internal static class EntityFsmActions {
         if (audioSource == null) {
             return;
         }
-        
+
         audioSource.Stop();
     }
 
     #endregion
-    
+
     #region SetAudioVolume
-    
+
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetAudioVolume action) {
         return true;
     }
@@ -2733,15 +2817,11 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region AudioPlayRandom
-    
+
     private static bool GetNetworkDataFromAction(EntityNetworkData data, AudioPlayRandom action) {
-        if (action.audioClips.Length == 0) {
-            return false;
-        }
-        
-        return true;
+        return action.audioClips.Length != 0;
     }
 
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, AudioPlayRandom action) {
@@ -2766,9 +2846,9 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region AudioPlayInState
-    
+
     private static bool GetNetworkDataFromAction(EntityNetworkData data, AudioPlayInState action) {
         return true;
     }
@@ -2791,22 +2871,22 @@ internal static class EntityFsmActions {
         if (!action.volume.IsNone) {
             audioSource.volume = action.volume.Value;
         }
-        
-        var exitAction = () => {
+
+        void ExitAction() {
             audioSource.Stop();
-        };
+        }
 
         new ActionInState {
             Fsm = action.Fsm,
             StateName = action.State.Name,
-            ExitAction = exitAction
+            ExitAction = ExitAction
         }.Register();
     }
 
     #endregion
 
     #region SpawnBloodTime
-    
+
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SpawnBloodTime action) {
         return true;
     }
@@ -2843,7 +2923,7 @@ internal static class EntityFsmActions {
         //         if (GlobalPrefabDefaults.Instance == null) {
         //             break;
         //         }
-        //         
+        //
         //         GlobalPrefabDefaults.Instance.SpawnBlood(
         //             position,
         //             spawnMin,
@@ -2859,16 +2939,16 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region FlingObjectsFromGlobalPoolTime
-    
+
     private static bool GetNetworkDataFromAction(EntityNetworkData data, FlingObjectsFromGlobalPoolTime action) {
         return true;
     }
 
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, FlingObjectsFromGlobalPoolTime action) {
         var coroutine = MonoBehaviourUtil.Instance.StartCoroutine(Behaviour());
-        
+
         new ActionInState {
             Fsm = action.Fsm,
             StateName = action.State.Name,
@@ -2927,7 +3007,7 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region SendMessage
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SendMessage action) {
@@ -2999,11 +3079,13 @@ internal static class EntityFsmActions {
             case SendMessage.MessageType.BroadcastMessage:
                 gameObject.BroadcastMessage(action.functionCall.FunctionName, parameter, action.options);
                 break;
+            default:
+                throw new ArgumentOutOfRangeException();
         }
     }
 
     #endregion
-    
+
     #region SetCircleCollider
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetCircleCollider action) {
@@ -3023,7 +3105,7 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region SetPolygonCollider
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetPolygonCollider action) {
@@ -3043,22 +3125,24 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region PreSpawnGameObjects
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, PreSpawnGameObjects action) {
         if (EntitySpawnEvent != null) {
             var spawnedEntity = false;
-            
+
             var arr = action.storeArray.Values;
             for (var i = 0; i < arr.Length; i++) {
                 var spawnedGo = (GameObject) arr[i];
 
-                if (EntitySpawnEvent.Invoke(new EntitySpawnDetails {
-                    Type = EntitySpawnType.FsmAction,
-                    Action = action,
-                    GameObject = spawnedGo
-                })) {
+                if (EntitySpawnEvent.Invoke(
+                        new EntitySpawnDetails {
+                            Type = EntitySpawnType.FsmAction,
+                            Action = action,
+                            GameObject = spawnedGo
+                        }
+                    )) {
                     Logger.Debug("Tried getting PreSpawnGameObjects network data, but spawned objects contains entity");
                     spawnedEntity = true;
                 }
@@ -3068,7 +3152,7 @@ internal static class EntityFsmActions {
                 return false;
             }
         }
-        
+
         return true;
     }
 
@@ -3096,7 +3180,7 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region SetSpriteRenderer
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetSpriteRenderer action) {
@@ -3116,7 +3200,7 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region MoveLiftChain
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, MoveLiftChain action) {
@@ -3138,7 +3222,7 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region StopLiftChain
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, StopLiftChain action) {
@@ -3182,7 +3266,7 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     #region EndGGBossScene
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, EndGGBossScene action) {
@@ -3196,7 +3280,7 @@ internal static class EntityFsmActions {
     }
 
     #endregion
-    
+
     /// <summary>
     /// Class that keeps track of an action that executes while in a certain state of the FSM.
     /// </summary>
@@ -3235,7 +3319,7 @@ internal static class EntityFsmActions {
             if (Coroutine != null) {
                 MonoBehaviourUtil.Instance.StopCoroutine(Coroutine);
             }
-            
+
             ExitAction?.Invoke();
         }
     }

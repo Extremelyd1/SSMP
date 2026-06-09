@@ -126,7 +126,7 @@ internal class ClientManager : IClientManager {
     /// This is used to determine whether to apply save data from the server to the client and warp them to a bench.
     /// </summary>
     private bool _autoConnect;
-    
+
     /// <summary>
     /// Stores the fallback address (IP:Port) of the last connection attempt for automatic retries.
     /// </summary>
@@ -177,7 +177,7 @@ internal class ClientManager : IClientManager {
 
     /// <inheritdoc />
     public IMapManager MapManager => _mapManager;
-    
+
     /// <inheritdoc />
     public IServerSettings ServerSettings => _serverSettings;
 
@@ -185,7 +185,9 @@ internal class ClientManager : IClientManager {
     public IModSettings ModSettings => _modSettings;
 
     /// <inheritdoc />
-    public string Username => !_netClient.IsConnected ? throw new Exception("Client is not connected, username is undefined") : _username!;
+    public string Username => !_netClient.IsConnected
+        ? throw new Exception("Client is not connected, username is undefined")
+        : _username!;
 
     /// <inheritdoc />
     public IReadOnlyCollection<IClientPlayer> Players => _playerData.Values;
@@ -260,7 +262,7 @@ internal class ClientManager : IClientManager {
         _animationManager.Initialize(_serverSettings);
         _mapManager.Initialize();
 
-        // _entityManager.Initialize();
+        _entityManager.Initialize();
         // _saveManager.Initialize();
 
         RegisterCommands();
@@ -294,9 +296,7 @@ internal class ClientManager : IClientManager {
         _netClient.ConnectEvent += OnClientConnect;
         _netClient.TimeoutEvent += OnTimeout;
 
-        EventHooks.GameManagerQuitGame += () => {
-            _modSettings.Save();
-        };
+        EventHooks.GameManagerQuitGame += () => { _modSettings.Save(); };
     }
 
     /// <summary>
@@ -311,10 +311,10 @@ internal class ClientManager : IClientManager {
         _gamePatcher.RegisterHooks();
         _fsmPatcher.RegisterHooks();
 
-        // if (_fullSynchronisation) {
-        //     _entityManager.RegisterHooks();
-        //     _saveManager.RegisterHooks();
-        // }
+        if (_fullSynchronisation) {
+            _entityManager.RegisterHooks();
+            //_saveManager.RegisterHooks();
+        }
 
         // Register handlers for various things
         SceneManager.activeSceneChanged += OnSceneChange;
@@ -339,10 +339,10 @@ internal class ClientManager : IClientManager {
         _gamePatcher.DeregisterHooks();
         _fsmPatcher.DeregisterHooks();
 
-        // if (_fullSynchronisation) {
-        //     _entityManager.DeregisterHooks();
-        //     _saveManager.DeregisterHooks();
-        // }
+        if (_fullSynchronisation) {
+            _entityManager.DeregisterHooks();
+            //_saveManager.DeregisterHooks();
+        }
 
         // Deregister handlers for various things
         SceneManager.activeSceneChanged -= OnSceneChange;
@@ -670,29 +670,27 @@ internal class ClientManager : IClientManager {
 
         if (!_autoConnect) {
             if (_fullSynchronisation) {
-                // This was not an auto-connect and full synchronisation is enabled, so we set save data.
-                // Otherwise, with hosting we already have the save data, or with no full synchronisation, we don't
-                // need it.
-                // _saveManager.SetSaveWithData(serverInfo.CurrentSave);
-                // _uiManager.EnterGameFromMultiplayerMenu(serverInfo.CurrentSave.NewForPlayer);
-            } else {
-                // This was not an auto-connect and full synchronisation is disabled, so we need to prompt the user
-                // with a local save file that they want to use
-                _uiManager.OpenSaveSlotSelection(saveSelected => {
-                        // If this callback executes, but we have not selected a save (by pressing the back button on
-                        // the save selection screen, we need to disconnect from the server again, because we are not
-                        // entering the world
-                        if (saveSelected) {
-                            _netClient.UpdateManager.AddPlayerSettingUpdate(
-                                crestType: CrestTypeExt.FromInternal(PlayerData.instance.CurrentCrestID)
-                            );
-                            return;
-                        }
-
-                        Disconnect();
-                    }
+                // Full sync currently does not serialize CurrentSave in ServerInfo.
+                // Falling back to local slot selection avoids dereferencing missing packet data.
+                Logger.Warn(
+                    "Full synchronisation is enabled, but CurrentSave was not provided. Falling back to local save slot selection."
                 );
             }
+
+            _uiManager.OpenSaveSlotSelection(saveSelected => {
+                    // If this callback executes, but we have not selected a save (by pressing the back button on
+                    // the save selection screen, we need to disconnect from the server again, because we are not
+                    // entering the world
+                    if (saveSelected) {
+                        _netClient.UpdateManager.AddPlayerSettingUpdate(
+                            crestType: CrestTypeExt.FromInternal(PlayerData.instance.CurrentCrestID)
+                        );
+                        return;
+                    }
+
+                    Disconnect();
+                }
+            );
         } else {
             _netClient.UpdateManager.AddPlayerSettingUpdate(
                 crestType: CrestTypeExt.FromInternal(PlayerData.instance.CurrentCrestID)
@@ -702,7 +700,7 @@ internal class ClientManager : IClientManager {
         // Fill the player data dictionary with the info from the packet
         foreach (var playerInfo in serverInfo.PlayerInfos) {
             _playerData[playerInfo.Id] = new ClientPlayerData {
-                Id = playerInfo.Id, 
+                Id = playerInfo.Id,
                 Username = playerInfo.Username,
                 Team = playerInfo.Team,
                 SkinId = playerInfo.SkinId,
