@@ -142,14 +142,21 @@ internal class HealthManagerComponent : EntityComponent {
     /// Callback method for updates to check whether invincibility changes.
     /// </summary>
     private void OnUpdate() {
-        var newHp = _healthManager.Host.hp;
+        var observedHealthManager = IsControlled ? _healthManager.Client : _healthManager.Host;
+        if (observedHealthManager == null) {
+            return;
+        }
+
+        var newHp = observedHealthManager.hp;
         if (newHp != _lastHp) {
+            var damageDelta = System.Math.Max(_lastHp - newHp, 0);
             _lastHp = newHp;
 
             var hpData = new EntityNetworkData {
                 Type = EntityComponentType.Health
             };
             hpData.Packet.Write(newHp);
+            hpData.Packet.Write(damageDelta);
 
             SendData(hpData);
         }
@@ -189,7 +196,7 @@ internal class HealthManagerComponent : EntityComponent {
     public override void Update(EntityNetworkData data, bool alreadyInSceneUpdate) {
         Logger.Info("Received health manager update");
 
-        if (!IsControlled) {
+        if (!IsControlled && data.Type != EntityComponentType.Health) {
             Logger.Info("  Entity was not controlled");
             return;
         }
@@ -207,17 +214,7 @@ internal class HealthManagerComponent : EntityComponent {
             _allowDeath = true;
             _healthManager.Client.Die(attackDirection, attackType, ignoreEvasion);
         } else if (data.Type == EntityComponentType.Health) {
-            var newHp = data.Packet.ReadInt();
-
-            _lastHp = newHp;
-
-            if (_healthManager.Host != null) {
-                _healthManager.Host.hp = newHp;
-            }
-
-            if (_healthManager.Client != null) {
-                _healthManager.Client.hp = newHp;
-            }
+            UpdateHealth(data, alreadyInSceneUpdate);
         } else if (data.Type == EntityComponentType.Invincibility) {
             var newInvincible = data.Packet.ReadBool();
             var newInvincibleFromDir = data.Packet.ReadByte();
@@ -227,10 +224,70 @@ internal class HealthManagerComponent : EntityComponent {
                 _healthManager.Host.InvincibleFromDirection = newInvincibleFromDir;
             }
 
-            if (_healthManager.Client != null) {
-                _healthManager.Client.IsInvincible = newInvincible;
-                _healthManager.Client.InvincibleFromDirection = newInvincibleFromDir;
+            if (_healthManager.Client == null) {
+                return;
             }
+
+            _healthManager.Client.IsInvincible = newInvincible;
+            _healthManager.Client.InvincibleFromDirection = newInvincibleFromDir;
+        }
+    }
+
+    /// <summary>
+    /// Applies a health update while preserving local damage from all players.
+    /// </summary>
+    /// <param name="data">The health update data.</param>
+    /// <param name="alreadyInSceneUpdate">Whether this update is an authoritative scene snapshot.</param>
+    private void UpdateHealth(EntityNetworkData data, bool alreadyInSceneUpdate) {
+        var reportedHp = data.Packet.ReadInt();
+        var damageDelta = data.Packet.Length >= sizeof(int) * 2
+            ? data.Packet.ReadInt()
+            : System.Math.Max(GetCurrentHp() - reportedHp, 0);
+
+        if (alreadyInSceneUpdate) {
+            ApplyHp(reportedHp, triggerHostDeath: false);
+            return;
+        }
+
+        if (damageDelta > 0) {
+            ApplyHp(Mathf.Max(GetCurrentHp() - damageDelta, -1000), triggerHostDeath: true);
+            return;
+        }
+
+        if (reportedHp < GetCurrentHp()) {
+            ApplyHp(reportedHp, triggerHostDeath: true);
+        }
+    }
+
+    /// <summary>
+    /// Gets the health value from the locally active side of the entity.
+    /// </summary>
+    /// <returns>The current HP value.</returns>
+    private int GetCurrentHp() {
+        var healthManager = IsControlled ? _healthManager.Client : _healthManager.Host;
+        return healthManager != null ? healthManager.hp : _lastHp;
+    }
+
+    /// <summary>
+    /// Applies HP to both entity copies and optionally runs host death when a remote hit was lethal.
+    /// </summary>
+    /// <param name="newHp">The HP value to apply.</param>
+    /// <param name="triggerHostDeath">Whether the scene host should run death when HP crosses zero.</param>
+    private void ApplyHp(int newHp, bool triggerHostDeath) {
+        var wasAlive = GetCurrentHp() > 0;
+
+        _lastHp = newHp;
+
+        if (_healthManager.Host != null) {
+            _healthManager.Host.hp = newHp;
+        }
+
+        if (_healthManager.Client != null) {
+            _healthManager.Client.hp = newHp;
+        }
+
+        if (triggerHostDeath && !IsControlled && wasAlive && newHp <= 0 && _healthManager.Host != null) {
+            _healthManager.Host.Die(null, AttackTypes.Generic, true);
         }
     }
 

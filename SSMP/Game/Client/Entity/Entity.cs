@@ -403,6 +403,7 @@ internal class Entity {
                 healthManager
             );
             _components[EntityComponentType.Death] = hmComponent;
+            _components[EntityComponentType.Health] = hmComponent;
             _components[EntityComponentType.Invincibility] = hmComponent;
 
             // Check if the object from the health manager is in any of the colosseum trial scenes and remove the
@@ -414,7 +415,7 @@ internal class Entity {
                 clientHealthManager.SetGeoLarge(0);
             }
 
-            addedComponentsString += " Death Invincibility";
+            addedComponentsString += " Death Health Invincibility";
         }
 
         var climber = Object.Client.GetComponent<Climber>();
