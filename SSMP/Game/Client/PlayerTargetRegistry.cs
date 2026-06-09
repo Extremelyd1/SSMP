@@ -42,7 +42,7 @@ internal static class PlayerTargetRegistry {
     /// </summary>
     /// <param name="gameObject">The object to inspect.</param>
     /// <returns>The tracked player root if found; otherwise null.</returns>
-    private static GameObject? GetTrackedPlayerRoot(GameObject? gameObject) {
+    public static GameObject? GetTrackedPlayerRoot(GameObject? gameObject) {
         var heroObject = HeroController.instance == null ? null : HeroController.instance.gameObject;
 
         while (gameObject != null) {

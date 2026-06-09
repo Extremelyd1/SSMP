@@ -201,8 +201,7 @@ internal class GamePatcher {
             OnGetHeroOnEnter
         );
 
-        // Disabled for now: these hooks add continuous reflection, physics, and scene-scan overhead
-        // across active AI and were the likely source of the large framerate regression.
+        MonoBehaviourUtil.Instance.OnUpdateEvent += OnUpdateRetargetEnemyTransforms;
     }
 
     /// <summary>
@@ -579,6 +578,40 @@ internal class GamePatcher {
 
         UpdateCachedTargetField<WalkerV2>(WalkerV2HeroField);
         UpdateCachedTargetField<ScuttlerControl>(ScuttlerControlHeroField);
+        UpdateCachedFsmPlayerTargets();
+    }
+
+    /// <summary>
+    /// Refreshes PlayMaker object variables that currently point at a tracked player.
+    /// </summary>
+    private static void UpdateCachedFsmPlayerTargets() {
+        foreach (var fsm in UnityEngine.Object.FindObjectsByType<PlayMakerFSM>(
+                     FindObjectsInactive.Exclude,
+                     FindObjectsSortMode.None
+                 )) {
+            if (fsm == null || !fsm.isActiveAndEnabled) {
+                continue;
+            }
+
+            if (PlayerTargetRegistry.GetTrackedPlayerRoot(fsm.gameObject) != null) {
+                continue;
+            }
+
+            var nearestPlayer = PlayerTargetRegistry.GetNearestPlayer(fsm.gameObject);
+            if (nearestPlayer == null) {
+                continue;
+            }
+
+            foreach (var variable in fsm.FsmVariables.GameObjectVariables) {
+                if (variable == null ||
+                    variable.Value == nearestPlayer ||
+                    PlayerTargetRegistry.GetTrackedPlayerRoot(variable.Value) == null) {
+                    continue;
+                }
+
+                variable.Value = nearestPlayer;
+            }
+        }
     }
 
     /// <summary>
