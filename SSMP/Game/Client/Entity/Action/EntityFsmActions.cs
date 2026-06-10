@@ -51,7 +51,7 @@ internal static class EntityFsmActions {
     /// <summary>
     /// Set containing types of actions that are supported for transformation by a method in this class.
     /// </summary>
-    public static readonly HashSet<Type> SupportedActionTypes = new();
+    public static readonly HashSet<Type> SupportedActionTypes = [];
 
     /// <summary>
     /// Event that is called when an entity is spawned from an object.
@@ -513,19 +513,12 @@ internal static class EntityFsmActions {
                 position += action.position.Value;
             }
 
-            if (!action.rotation.IsNone) {
-                euler = action.rotation.Value;
-            } else {
-                euler = spawnPoint.transform.eulerAngles;
-            }
+            euler = !action.rotation.IsNone ? action.rotation.Value : spawnPoint.transform.eulerAngles;
         } else {
-            if (!action.position.IsNone) {
+            if (!action.position.IsNone)
                 position = action.position.Value;
-            }
-
-            if (!action.rotation.IsNone) {
+            if (!action.rotation.IsNone)
                 euler = action.rotation.Value;
-            }
         }
 
         data.Packet.Write(position.x);
@@ -551,10 +544,12 @@ internal static class EntityFsmActions {
             data.Packet.ReadFloat()
         );
 
-        if (action.gameObject != null) {
-            var spawnedObject = action.gameObject.Value.Spawn(position, Quaternion.Euler(euler));
-            action.storeObject.Value = spawnedObject;
+        if (action.gameObject == null) {
+            return;
         }
+
+        var spawnedObject = action.gameObject.Value.Spawn(position, Quaternion.Euler(euler));
+        action.storeObject.Value = spawnedObject;
     }
 
     #endregion

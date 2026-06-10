@@ -254,9 +254,9 @@ internal class HealthManagerComponent : EntityComponent {
             return;
         }
 
-        if (reportedHp < GetCurrentHp()) {
-            ApplyHp(reportedHp, triggerHostDeath: true);
-        }
+        // Apply unconditionally: covers both healing/HP increases and
+        // authoritative corrections downward when damageDelta wasn't provided.
+        ApplyHp(reportedHp, triggerHostDeath: true);
     }
 
     /// <summary>

@@ -1044,8 +1044,11 @@ internal class ClientManager : IClientManager {
             return;
         }
 
-        if (hostTransfer.Demote) _entityManager.InitializeSceneClient();
-        else _entityManager.BecomeSceneHost();
+        if (hostTransfer.Demote) {
+            _entityManager.InitializeSceneClient();
+        } else {
+            _entityManager.BecomeSceneHost();
+        }
     }
 
     /// <summary>

@@ -116,7 +116,7 @@ internal static class PlayerTargetRegistry {
     /// Enumerates all currently tracked player root objects.
     /// </summary>
     /// <returns>The local hero root and all registered remote player roots.</returns>
-    private static IEnumerable<GameObject> GetAllPlayerObjects() {
+    internal static IEnumerable<GameObject> GetAllPlayerObjects() {
         if (HeroController.instance != null) {
             yield return HeroController.instance.gameObject;
         }

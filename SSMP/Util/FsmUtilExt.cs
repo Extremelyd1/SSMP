@@ -16,7 +16,7 @@ public static class FsmUtilExt {
     /// <param name="stateName">The name of the state.</param>
     /// <param name="index">The index of the action within that state.</param>
     /// <returns>The FsmStateAction from the FSM or null if the action could not be found.</returns>
-    public static FsmStateAction? GetAction(this PlayMakerFSM fsm, string stateName, int index) {
+    private static FsmStateAction? GetAction(this PlayMakerFSM fsm, string stateName, int index) {
         foreach (var t in fsm.FsmStates) {
             if (t.Name != stateName) {
                 continue;

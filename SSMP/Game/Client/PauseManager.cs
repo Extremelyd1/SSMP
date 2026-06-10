@@ -1,57 +1,89 @@
 using System.Collections;
 using System.Reflection;
 using GlobalEnums;
+using SSMP.Hooks;
 using SSMP.Networking.Client;
 using UnityEngine;
 using MonoMod.RuntimeDetour;
-using SSMP.Hooks;
 
 namespace SSMP.Game.Client;
 
 /// <summary>
-/// Handles pause related things to prevent player being invincible in pause menu while connected to a server.
+/// Handles pause-related behavior while connected to a server.
 /// </summary>
 internal class PauseManager {
     /// <summary>
-    /// The net client instance.
+    /// Minimum positive time scale accepted by the vanilla time-scale logic.
+    /// Smaller values are treated as paused.
+    /// </summary>
+    private const float MinPositiveTimeScale = 0.00999999977648258f;
+
+    /// <summary>
+    /// Binding flags used to access vanilla instance members regardless of visibility.
+    /// </summary>
+    private const BindingFlags InstanceMemberFlags =
+        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+
+    /// <summary>
+    /// Binding flags used to invoke private vanilla instance methods.
+    /// </summary>
+    private const BindingFlags PrivateInstanceInvokeFlags =
+        BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.InvokeMethod;
+
+    /// <summary>
+    /// The net client used to check whether multiplayer pause handling should be active.
     /// </summary>
     private readonly NetClient _netClient;
 
+    /// <summary>
+    /// Hook for <c>UIManager.TogglePauseGame</c>.
+    /// </summary>
     private Hook? _uiManagerTogglePauseGameHook;
+
+    /// <summary>
+    /// Hook for <c>HeroController.Pause</c>.
+    /// </summary>
     private Hook? _heroControllerPauseHook;
+
+    /// <summary>
+    /// Hook for <c>TransitionPoint.OnTriggerEnter2D</c>.
+    /// </summary>
     private Hook? _transitionPointOnTriggerEnter2DHook;
+
+    /// <summary>
+    /// Hook for <c>HeroController.DieFromHazard</c>.
+    /// </summary>
     private Hook? _heroControllerDieFromHazardHook;
 
+    /// <summary>
+    /// Creates a new pause manager.
+    /// </summary>
+    /// <param name="netClient">The client used to determine multiplayer connection state.</param>
     public PauseManager(NetClient netClient) {
         _netClient = netClient;
     }
 
     /// <summary>
-    /// Registers the required method hooks.
+    /// Registers the hooks used to override vanilla pause behavior while connected.
     /// </summary>
     public void RegisterHooks() {
         _uiManagerTogglePauseGameHook = new Hook(
-            typeof(UIManager).GetMethod(
-                "TogglePauseGame", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic
-            )!,
+            typeof(UIManager).GetMethod("TogglePauseGame", InstanceMemberFlags)!,
             UIManagerOnTogglePauseGame
         );
+
         _heroControllerPauseHook = new Hook(
-            typeof(HeroController).GetMethod(
-                "Pause", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic
-            )!,
+            typeof(HeroController).GetMethod("Pause", InstanceMemberFlags)!,
             HeroControllerOnPause
         );
+
         _transitionPointOnTriggerEnter2DHook = new Hook(
-            typeof(TransitionPoint).GetMethod(
-                "OnTriggerEnter2D", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic
-            )!,
+            typeof(TransitionPoint).GetMethod("OnTriggerEnter2D", InstanceMemberFlags)!,
             TransitionPointOnOnTriggerEnter2D
         );
+
         _heroControllerDieFromHazardHook = new Hook(
-            typeof(HeroController).GetMethod(
-                "DieFromHazard", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic
-            )!,
+            typeof(HeroController).GetMethod("DieFromHazard", InstanceMemberFlags)!,
             HeroControllerOnDieFromHazard
         );
 
@@ -59,7 +91,7 @@ internal class PauseManager {
     }
 
     /// <summary>
-    /// Deregisters the required method hooks.
+    /// Deregisters all pause-related hooks and event subscriptions.
     /// </summary>
     public void DeregisterHooks() {
         _uiManagerTogglePauseGameHook?.Dispose();
@@ -77,42 +109,68 @@ internal class PauseManager {
         EventHooks.HeroControllerDie -= HeroControllerDieHook;
     }
 
+    /// <summary>
+    /// Original <c>UIManager.TogglePauseGame</c> delegate signature.
+    /// </summary>
+    /// <param name="self">The UI manager instance.</param>
     private delegate void OrigTogglePauseGame(UIManager self);
 
+    /// <summary>
+    /// Detour for <c>UIManager.TogglePauseGame</c>.
+    /// Keeps time running after using the pause menu while connected to a server.
+    /// </summary>
+    /// <param name="orig">The original vanilla method.</param>
+    /// <param name="self">The UI manager instance.</param>
     private void UIManagerOnTogglePauseGame(OrigTogglePauseGame orig, UIManager self) {
         if (!_netClient.IsConnected) {
             orig(self);
             return;
         }
 
-        var field = typeof(UIManager).GetField(
-            "ignoreUnpause", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public
-        );
-        var setTimeScale = !(bool) (field?.GetValue(self) ?? false);
+        var field = typeof(UIManager).GetField("ignoreUnpause", InstanceMemberFlags);
+        var shouldRestoreTimeScale = !(bool) (field?.GetValue(self) ?? false);
 
         orig(self);
 
-        if (setTimeScale) {
+        if (shouldRestoreTimeScale) {
             SetTimeScale(1f);
         }
     }
 
+    /// <summary>
+    /// Event callback fired when the hero dies.
+    /// </summary>
+    /// <param name="nonLethal">Whether the death was non-lethal.</param>
+    /// <param name="frostDeath">Whether the death was caused by frost.</param>
     private void HeroControllerDieHook(bool nonLethal, bool frostDeath) {
         OnDeath();
     }
 
     /// <summary>
-    /// Callback method for when the player dies.
-    /// If we are paused while the player dies, the game enters a state where the cursor is visible
-    /// while not in the pause menu, but not being able to give any input apart from opening the pause menu.
-    /// Therefore, we unpause immediately before dying to prevent this.
+    /// Handles hero death by forcing the game out of pause before the death flow continues.
     /// </summary>
     private void OnDeath() {
         ImmediateUnpauseIfPaused();
     }
 
+    /// <summary>
+    /// Original <c>HeroController.DieFromHazard</c> delegate signature.
+    /// </summary>
+    /// <param name="self">The hero controller instance.</param>
+    /// <param name="hazardType">The hazard type that caused the death.</param>
+    /// <param name="angle">The hazard impact angle.</param>
+    /// <returns>The original hazard death coroutine.</returns>
     private delegate IEnumerator OrigDieFromHazard(HeroController self, HazardType hazardType, float angle);
 
+    /// <summary>
+    /// Detour for <c>HeroController.DieFromHazard</c>.
+    /// Forces an immediate unpause before starting the hazard death coroutine.
+    /// </summary>
+    /// <param name="orig">The original vanilla method.</param>
+    /// <param name="self">The hero controller instance.</param>
+    /// <param name="hazardType">The hazard type that caused the death.</param>
+    /// <param name="angle">The hazard impact angle.</param>
+    /// <returns>The original hazard death coroutine.</returns>
     private IEnumerator HeroControllerOnDieFromHazard(
         OrigDieFromHazard orig,
         HeroController self,
@@ -124,8 +182,20 @@ internal class PauseManager {
         return orig(self, hazardType, angle);
     }
 
+    /// <summary>
+    /// Original <c>TransitionPoint.OnTriggerEnter2D</c> delegate signature.
+    /// </summary>
+    /// <param name="self">The transition point instance.</param>
+    /// <param name="obj">The collider that entered the transition trigger.</param>
     private delegate void OrigOnTriggerEnter2D(TransitionPoint self, Collider2D obj);
 
+    /// <summary>
+    /// Detour for <c>TransitionPoint.OnTriggerEnter2D</c>.
+    /// Forces an immediate unpause before non-door scene transitions.
+    /// </summary>
+    /// <param name="orig">The original vanilla method.</param>
+    /// <param name="self">The transition point instance.</param>
+    /// <param name="obj">The collider that entered the transition trigger.</param>
     private void TransitionPointOnOnTriggerEnter2D(
         OrigOnTriggerEnter2D orig,
         TransitionPoint self,
@@ -138,8 +208,18 @@ internal class PauseManager {
         orig(self, obj);
     }
 
+    /// <summary>
+    /// Original <c>HeroController.Pause</c> delegate signature.
+    /// </summary>
+    /// <param name="self">The hero controller instance.</param>
     private delegate void OrigPause(HeroController self);
 
+    /// <summary>
+    /// Detour for <c>HeroController.Pause</c>.
+    /// Prevents the vanilla pause state while connected, but still resets input.
+    /// </summary>
+    /// <param name="orig">The original vanilla method.</param>
+    /// <param name="self">The hero controller instance.</param>
     private void HeroControllerOnPause(OrigPause orig, HeroController self) {
         if (!_netClient.IsConnected) {
             orig(self);
@@ -148,7 +228,7 @@ internal class PauseManager {
 
         typeof(HeroController).InvokeMember(
             "ResetInput",
-            BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.InvokeMethod,
+            PrivateInstanceInvokeFlags,
             null,
             HeroController.instance,
             null
@@ -156,35 +236,36 @@ internal class PauseManager {
     }
 
     /// <summary>
-    /// Unpauses the game immediately if it was paused.
+    /// Unpauses the game immediately if the UI is currently in the paused state.
     /// </summary>
     private static void ImmediateUnpauseIfPaused() {
-        if (UIManager.instance != null) {
-            if (UIManager.instance.uiState.Equals(UIState.PAUSED)) {
-                var gm = global::GameManager.instance;
-
-                gm.gameCams.ResumeCameraShake();
-                gm.inputHandler.PreventPause();
-                gm.actorSnapshotUnpaused.TransitionTo(0f);
-                gm.isPaused = false;
-                gm.ui.AudioGoToGameplay(0.2f);
-                gm.ui.SetState(UIState.PLAYING);
-                gm.SetState(GameState.PLAYING);
-                if (HeroController.instance != null) {
-                    HeroController.instance.UnPause();
-                }
-
-                MenuButtonList.ClearAllLastSelected();
-                gm.inputHandler.AllowPause();
-            }
+        if (UIManager.instance == null || !UIManager.instance.uiState.Equals(UIState.PAUSED)) {
+            return;
         }
+
+        var gameManager = global::GameManager.instance;
+
+        gameManager.gameCams.ResumeCameraShake();
+        gameManager.inputHandler.PreventPause();
+        gameManager.actorSnapshotUnpaused.TransitionTo(0f);
+        gameManager.isPaused = false;
+        gameManager.ui.AudioGoToGameplay(0.2f);
+        gameManager.ui.SetState(UIState.PLAYING);
+        gameManager.SetState(GameState.PLAYING);
+
+        if (HeroController.instance != null) {
+            HeroController.instance.UnPause();
+        }
+
+        MenuButtonList.ClearAllLastSelected();
+        gameManager.inputHandler.AllowPause();
     }
 
     /// <summary>
-    /// Sets the time scale similarly to the method GameManager#SetTimeScale.
+    /// Sets the Unity time scale using the same lower-bound behavior as <c>GameManager.SetTimeScale</c>.
     /// </summary>
-    /// <param name="timeScale">The new time scale.</param>
+    /// <param name="timeScale">The requested time scale.</param>
     public static void SetTimeScale(float timeScale) {
-        Time.timeScale = timeScale > 0.00999999977648258f ? timeScale : 0.0f;
+        Time.timeScale = timeScale > MinPositiveTimeScale ? timeScale : 0.0f;
     }
 }
