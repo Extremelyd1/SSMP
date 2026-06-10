@@ -127,6 +127,7 @@ internal class GamePatcher {
     private ILHook? _healthManagerTakeDamageHook;
     private Hook? _callMethodProperDoMethodCallHook;
     private Hook? _cameraLockAreaIsInApplicableGameStateHook;
+    private Hook? _crawlerStopCrawlingHook;
 
     /// <summary>
     /// The NetClient instance to check if we are connected to a server.
@@ -201,6 +202,11 @@ internal class GamePatcher {
             OnGetHeroOnEnter
         );
 
+        _crawlerStopCrawlingHook = new Hook(
+            typeof(Crawler).GetMethod("StopCrawling", InstancePublicFlags | InstanceNonPublicFlags)!,
+            OnCrawlerStopCrawling
+        );
+
         MonoBehaviourUtil.Instance.OnUpdateEvent += OnUpdateRetargetEnemyTransforms;
     }
 
@@ -247,6 +253,9 @@ internal class GamePatcher {
         _walkerUpdateWaitingForConditionsHook?.Dispose();
         _walkerUpdateWaitingForConditionsHook = null;
 
+        _crawlerStopCrawlingHook?.Dispose();
+        _crawlerStopCrawlingHook = null;
+
         if (MonoBehaviourUtil.Instance != null) {
             MonoBehaviourUtil.Instance.OnUpdateEvent -= OnUpdateRetargetEnemyTransforms;
         }
@@ -263,6 +272,17 @@ internal class GamePatcher {
         }
 
         orig(self);
+    }
+
+    /// <summary>
+    /// Guards <see cref="Crawler.StopCrawling"/> against NullReferenceExceptions during destruction/disable.
+    /// </summary>
+    private static void OnCrawlerStopCrawling(Action<Crawler> orig, Crawler self) {
+        try {
+            orig(self);
+        } catch (NullReferenceException) {
+            Logger.Debug("Safely caught NullReferenceException in Crawler.StopCrawling");
+        }
     }
 
     /// <summary>
