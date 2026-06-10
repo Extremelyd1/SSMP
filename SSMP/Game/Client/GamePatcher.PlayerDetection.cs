@@ -10,26 +10,70 @@ namespace SSMP.Game.Client;
 /// Contains multiplayer-aware player detection patches for enemy AI and PlayMaker actions.
 /// </summary>
 internal partial class GamePatcher {
+    /// <summary>
+    /// AlertRange line-of-sight mode value that uses the alert range object's own transform as the sight origin.
+    /// </summary>
     private const int AlertRangeLineOfSightSelf = 1;
+
+    /// <summary>
+    /// AlertRange line-of-sight mode value that uses the alert range object's parent or initial parent as the sight origin.
+    /// </summary>
     private const int AlertRangeLineOfSightParent = 2;
+
+    /// <summary>
+    /// Unity layer mask used for terrain obstruction checks during enemy line-of-sight tests.
+    /// </summary>
     private const int TerrainLayerMask = 256;
 
+    /// <summary>
+    /// Reflected private field storing the AlertRange line-of-sight mode.
+    /// </summary>
     private static readonly FieldInfo? AlertRangeLineOfSightField =
         typeof(AlertRange).GetField("lineOfSight", InstanceNonPublicFlags);
 
+    /// <summary>
+    /// Reflected private field storing the original parent transform used by AlertRange line-of-sight checks.
+    /// </summary>
     private static readonly FieldInfo? AlertRangeInitialParentField =
         typeof(AlertRange).GetField("initialParent", InstanceNonPublicFlags);
 
+    /// <summary>
+    /// Reflected private field storing the alert ranges tracked by a LineOfSightDetector.
+    /// </summary>
     private static readonly FieldInfo? LineOfSightDetectorAlertRangesField =
         typeof(LineOfSightDetector).GetField("alertRanges", InstanceNonPublicFlags);
 
+    /// <summary>
+    /// Reflected private field storing whether a LineOfSightDetector can currently see the hero.
+    /// </summary>
     private static readonly FieldInfo? LineOfSightDetectorCanSeeHeroField =
         typeof(LineOfSightDetector).GetField("canSeeHero", InstanceNonPublicFlags);
 
+    /// <summary>
+    /// Hook for overriding the PlayMaker GetHero action with the enemy-approved multiplayer target.
+    /// </summary>
     private Hook? _getHeroOnEnterHook;
+
+    /// <summary>
+    /// Hook for replacing AlertRange hero checks with multiplayer-aware approved-target checks.
+    /// </summary>
     private Hook? _alertRangeIsHeroInRangeHook;
+
+    /// <summary>
+    /// Hook for replacing LineOfSightDetector visibility updates with approved-target visibility checks.
+    /// </summary>
     private Hook? _lineOfSightDetectorUpdateHook;
-    private const float TargetSwitchDistanceBias = 4f;
+
+    /// <summary>
+    /// Alert range name fragments that identify ranges which may validate an existing approved target,
+    /// but must not acquire or switch to a new target.
+    /// </summary>
+    private static readonly string[] NonAcquiringAlertRangeNameParts = [
+        "Chomp",
+        "Unalert",
+        "Attack",
+        "Hit"
+    ];
 
     /// <summary>
     /// Registers detection-specific hooks.
@@ -101,62 +145,34 @@ internal partial class GamePatcher {
         var owner = GetEnemyTargetOwner(self.gameObject);
         var approvedTarget = GetApprovedEnemyTarget(owner);
 
-        // Chomp / Attack / Hit / Unalert ranges must never choose a new target.
-        // They only check the already-approved target.
         if (!CanAcquireMultiplayerTarget(self)) {
-            if (approvedTarget == null) {
-                return false;
-            }
-
-            return IsPlayerInsideAlertRange(self, approvedTarget) &&
-                   HasLineOfSightToAlertRangeTarget(self, approvedTarget);
+            return IsValidTargetForAlertRange(self, approvedTarget);
         }
 
-        // Main acquisition range:
-        // If we already have a valid target, KEEP IT. Do not nearest-player swap every frame.
-        if (approvedTarget != null &&
-            IsPlayerInsideAlertRange(self, approvedTarget) &&
-            HasLineOfSightToAlertRangeTarget(self, approvedTarget)) {
+        var candidateTarget = GetNearestPlayerInsideAlertRange(self);
+        if (candidateTarget != null &&
+            HasLineOfSightToAlertRangeTarget(self, candidateTarget) &&
+            (approvedTarget == null || ShouldSwitchApprovedTarget(owner, approvedTarget, candidateTarget))) {
+            ApproveEnemyTarget(owner, candidateTarget);
             return true;
         }
 
-        // Only acquire a new target when the old one is missing or invalid.
-        var newTarget = GetNearestPlayerInsideAlertRange(self);
-        if (newTarget == null) {
-            return approvedTarget != null &&
-                   IsPlayerInsideAlertRange(self, approvedTarget) &&
-                   HasLineOfSightToAlertRangeTarget(self, approvedTarget);
-        }
-
-        if (!HasLineOfSightToAlertRangeTarget(self, newTarget)) {
-            return approvedTarget != null &&
-                   IsPlayerInsideAlertRange(self, approvedTarget) &&
-                   HasLineOfSightToAlertRangeTarget(self, approvedTarget);
-        }
-
-        if (approvedTarget == null || ShouldSwitchApprovedTarget(owner, approvedTarget, newTarget)) {
-            ApproveEnemyTarget(owner, newTarget);
-            return true;
-        }
-
-        return IsPlayerInsideAlertRange(self, approvedTarget) &&
-               HasLineOfSightToAlertRangeTarget(self, approvedTarget);
+        return IsValidTargetForAlertRange(self, approvedTarget);
     }
-    
-    private static bool ShouldSwitchApprovedTarget(GameObject owner, GameObject approvedTarget, GameObject candidateTarget) {
-        if (approvedTarget == candidateTarget) {
-            return false;
-        }
 
-        if (!IsHeroLikeObject(approvedTarget)) {
-            return true;
-        }
-
-        var ownerPosition = (Vector2) owner.transform.position;
-        var approvedDistance = ((Vector2) approvedTarget.transform.position - ownerPosition).sqrMagnitude;
-        var candidateDistance = ((Vector2) candidateTarget.transform.position - ownerPosition).sqrMagnitude;
-
-        return candidateDistance + TargetSwitchDistanceBias < approvedDistance;
+    /// <summary>
+    /// Determines whether a previously approved target is still valid for a specific alert range.
+    /// </summary>
+    /// <param name="alertRange">The alert range to validate against.</param>
+    /// <param name="target">The approved target to validate.</param>
+    /// <returns>
+    /// <see langword="true"/> when the target is inside the alert range and visible; otherwise
+    /// <see langword="false"/>.
+    /// </returns>
+    private static bool IsValidTargetForAlertRange(AlertRange alertRange, GameObject? target) {
+        return target != null &&
+               IsPlayerInsideAlertRange(alertRange, target) &&
+               HasLineOfSightToAlertRangeTarget(alertRange, target);
     }
 
     /// <summary>
@@ -341,12 +357,26 @@ internal partial class GamePatcher {
             return false;
         }
 
-        var rangeName = alertRange.name;
+        return !IsNonAcquiringAlertRangeName(alertRange.name);
+    }
 
-        return !rangeName.Contains("Chomp") &&
-               !rangeName.Contains("Unalert") &&
-               !rangeName.Contains("Attack") &&
-               !rangeName.Contains("Hit");
+    /// <summary>
+    /// Determines whether an alert range name belongs to a range that should only validate an existing target,
+    /// not acquire a new one.
+    /// </summary>
+    /// <param name="rangeName">The alert range object name.</param>
+    /// <returns>
+    /// <see langword="true"/> when the range should not acquire a new multiplayer target; otherwise
+    /// <see langword="false"/>.
+    /// </returns>
+    private static bool IsNonAcquiringAlertRangeName(string rangeName) {
+        foreach (var blockedNamePart in NonAcquiringAlertRangeNameParts) {
+            if (rangeName.Contains(blockedNamePart, StringComparison.OrdinalIgnoreCase)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

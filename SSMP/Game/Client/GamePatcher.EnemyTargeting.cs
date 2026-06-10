@@ -14,8 +14,20 @@ namespace SSMP.Game.Client;
 /// Contains multiplayer-aware aggression, retargeting, and walking patches for enemy AI.
 /// </summary>
 internal partial class GamePatcher {
+    /// <summary>
+    /// Minimum interval, in seconds, between periodic refreshes of cached vanilla enemy target fields.
+    /// </summary>
     private const float EnemyRetargetIntervalSeconds = 0.2f;
 
+    /// <summary>
+    /// Squared-distance bias used before switching an enemy from its current approved target to a new candidate target.
+    /// Higher values make target switching less twitchy.
+    /// </summary>
+    private const float TargetSwitchDistanceBias = 4f;
+
+    /// <summary>
+    /// Approved multiplayer target per enemy owner instance ID.
+    /// </summary>
     private static readonly Dictionary<int, GameObject> EnemyApprovedTargets = new();
 
     /// <summary>
@@ -23,7 +35,6 @@ internal partial class GamePatcher {
     /// enemy-approved multiplayer target.
     /// </summary>
     private static readonly HashSet<Type> TargetedFsmActionTypes = [
-        typeof(GetHero),
         typeof(ChaseObject),
         typeof(ChaseObjectV2),
         typeof(ChaseObjectGround),
@@ -47,84 +58,174 @@ internal partial class GamePatcher {
     /// </summary>
     private static readonly Dictionary<Type, FieldInfo[]> TargetedActionGameObjectFieldCache = new();
 
+    /// <summary>
+    /// Reflected private field storing the camera used by <see cref="Walker"/> startup and distance checks.
+    /// </summary>
     private static readonly FieldInfo? WalkerMainCameraField =
         typeof(Walker).GetField("mainCamera", InstanceNonPublicFlags);
 
+    /// <summary>
+    /// Reflected private field storing whether a <see cref="Walker"/> has passed its camera-distance activation check.
+    /// </summary>
     private static readonly FieldInfo? WalkerDidFulfilCameraDistanceConditionField =
         typeof(Walker).GetField("didFulfilCameraDistanceCondition", InstanceNonPublicFlags);
 
+    /// <summary>
+    /// Reflected private field storing whether a <see cref="Walker"/> has passed its hero-X activation check.
+    /// </summary>
     private static readonly FieldInfo? WalkerDidFulfilHeroXConditionField =
         typeof(Walker).GetField("didFulfilHeroXCondition", InstanceNonPublicFlags);
 
+    /// <summary>
+    /// Reflected private field storing the X position used by <see cref="Walker"/> hero-X activation logic.
+    /// </summary>
     private static readonly FieldInfo? WalkerWaitHeroXField =
         typeof(Walker).GetField("waitHeroX", InstanceNonPublicFlags);
 
+    /// <summary>
+    /// Reflected private field storing whether a <see cref="Walker"/> should wait for the hero-X activation condition.
+    /// </summary>
     private static readonly FieldInfo? WalkerWaitForHeroXField =
         typeof(Walker).GetField("waitForHeroX", InstanceNonPublicFlags);
 
+    /// <summary>
+    /// Reflected field storing whether a <see cref="Walker"/> starts inactive until activation conditions are satisfied.
+    /// </summary>
     private static readonly FieldInfo? WalkerStartInactiveField =
         typeof(Walker).GetField("startInactive", InstanceNonPublicFlags | BindingFlags.Public);
 
+    /// <summary>
+    /// Reflected private field storing whether a <see cref="Walker"/> is configured as an ambush enemy.
+    /// </summary>
     private static readonly FieldInfo? WalkerAmbushField =
         typeof(Walker).GetField("ambush", InstanceNonPublicFlags);
 
+    /// <summary>
+    /// Reflected private field storing the regular turn cooldown remaining for a <see cref="Walker"/>.
+    /// </summary>
     private static readonly FieldInfo? WalkerTurnCooldownRemainingField =
         typeof(Walker).GetField("turnCooldownRemaining", InstanceNonPublicFlags);
 
+    /// <summary>
+    /// Reflected private field storing the aggro edge-turn cooldown remaining for a <see cref="Walker"/>.
+    /// </summary>
     private static readonly FieldInfo? WalkerAggroEdgeTurnCooldownRemainingField =
         typeof(Walker).GetField("aggroEdgeTurnCooldownRemaining", InstanceNonPublicFlags);
 
+    /// <summary>
+    /// Reflected private field storing the current facing direction of a <see cref="Walker"/>.
+    /// </summary>
     private static readonly FieldInfo? WalkerCurrentFacingField =
         typeof(Walker).GetField("currentFacing", InstanceNonPublicFlags);
 
+    /// <summary>
+    /// Reflected private field storing the body collider used by <see cref="Walker"/> movement and sweep checks.
+    /// </summary>
     private static readonly FieldInfo? WalkerBodyColliderField =
         typeof(Walker).GetField("bodyCollider", InstanceNonPublicFlags);
 
+    /// <summary>
+    /// Reflected private field storing whether a <see cref="Walker"/> is prevented from turning to face the hero.
+    /// </summary>
     private static readonly FieldInfo? WalkerPreventTurningToFaceHeroField =
         typeof(Walker).GetField("preventTurningToFaceHero", InstanceNonPublicFlags);
 
+    /// <summary>
+    /// Reflected private field storing the line-of-sight detector used by a <see cref="Walker"/>.
+    /// </summary>
     private static readonly FieldInfo? WalkerLineOfSightDetectorField =
         typeof(Walker).GetField("lineOfSightDetector", InstanceNonPublicFlags);
 
+    /// <summary>
+    /// Reflected private field storing the alert range used by a <see cref="Walker"/>.
+    /// </summary>
     private static readonly FieldInfo? WalkerAlertRangeField =
         typeof(Walker).GetField("alertRange", InstanceNonPublicFlags);
 
+    /// <summary>
+    /// Reflected field storing whether a <see cref="Walker"/> should ignore ledge / hole checks.
+    /// </summary>
     private static readonly FieldInfo? WalkerIgnoreHolesField =
         typeof(Walker).GetField("ignoreHoles", InstanceNonPublicFlags | BindingFlags.Public);
 
+    /// <summary>
+    /// Reflected private field storing the X offset applied to <see cref="Walker"/> edge checks.
+    /// </summary>
     private static readonly FieldInfo? WalkerEdgeXAdjusterField =
         typeof(Walker).GetField("edgeXAdjuster", InstanceNonPublicFlags);
 
+    /// <summary>
+    /// Reflected private field storing the remaining walk time before a pausing <see cref="Walker"/> stops.
+    /// </summary>
     private static readonly FieldInfo? WalkerWalkTimeRemainingField =
         typeof(Walker).GetField("walkTimeRemaining", InstanceNonPublicFlags);
 
+    /// <summary>
+    /// Reflected private field storing whether a <see cref="Walker"/> may pause when it loses its target.
+    /// </summary>
     private static readonly FieldInfo? WalkerPausesField =
         typeof(Walker).GetField("pauses", InstanceNonPublicFlags);
 
+    /// <summary>
+    /// Reflected private field storing the rigidbody used by <see cref="Walker"/> movement.
+    /// </summary>
     private static readonly FieldInfo? WalkerBodyField =
         typeof(Walker).GetField("body", InstanceNonPublicFlags);
 
+    /// <summary>
+    /// Reflected field storing the right-facing walk speed for a <see cref="Walker"/>.
+    /// </summary>
     private static readonly FieldInfo? WalkerWalkSpeedRField =
         typeof(Walker).GetField("walkSpeedR", InstanceNonPublicFlags | BindingFlags.Public);
 
+    /// <summary>
+    /// Reflected field storing the left-facing walk speed for a <see cref="Walker"/>.
+    /// </summary>
     private static readonly FieldInfo? WalkerWalkSpeedLField =
         typeof(Walker).GetField("walkSpeedL", InstanceNonPublicFlags | BindingFlags.Public);
 
+    /// <summary>
+    /// Reflected private method used to make a <see cref="Walker"/> begin turning.
+    /// </summary>
     private static readonly MethodInfo? WalkerBeginTurningMethod =
         typeof(Walker).GetMethod("BeginTurning", InstanceNonPublicFlags);
 
+    /// <summary>
+    /// Reflected private method used to make a <see cref="Walker"/> enter its stopped state.
+    /// </summary>
     private static readonly MethodInfo? WalkerBeginStoppedMethod =
         typeof(Walker).GetMethod("BeginStopped", InstanceNonPublicFlags);
 
+    /// <summary>
+    /// Reflected private field storing the cached hero transform used by <see cref="WalkerV2"/>.
+    /// </summary>
     private static readonly FieldInfo? WalkerV2HeroField =
         typeof(WalkerV2).GetField("hero", InstanceNonPublicFlags);
 
+    /// <summary>
+    /// Reflected private field storing the cached hero transform or object used by <see cref="ScuttlerControl"/>.
+    /// </summary>
     private static readonly FieldInfo? ScuttlerControlHeroField =
         typeof(ScuttlerControl).GetField("hero", InstanceNonPublicFlags);
 
+    /// <summary>
+    /// Hook for replacing <see cref="Walker"/> walking updates with multiplayer-aware target handling.
+    /// </summary>
     private Hook? _walkerUpdateWalkingHook;
+
+    /// <summary>
+    /// Hook for replacing <see cref="Walker"/> activation-condition updates with multiplayer-aware target handling.
+    /// </summary>
     private Hook? _walkerUpdateWaitingForConditionsHook;
+
+    /// <summary>
+    /// Hooks registered on target-consuming FSM action <c>OnEnter</c> methods.
+    /// </summary>
     private readonly List<Hook> _targetedFsmActionEnterHooks = [];
+
+    /// <summary>
+    /// Next unscaled time at which cached vanilla enemy target fields should be refreshed.
+    /// </summary>
     private float _nextEnemyRetargetTime;
 
     /// <summary>
@@ -145,35 +246,13 @@ internal partial class GamePatcher {
     /// </summary>
     /// <param name="requester">The enemy object or one of its child/component objects.</param>
     /// <param name="target">The tracked player target approved by acquisition.</param>
-    private static void ApproveEnemyTarget(GameObject enemyObject, GameObject target) {
-        var owner = GetEnemyTargetOwner(enemyObject);
-        var ownerId = owner.GetInstanceID();
-
-        EnemyApprovedTargets.TryGetValue(ownerId, out var oldTarget);
-
-        if (oldTarget == target) {
-            return;
-        }
-
-        Logger.Debug(
-            $"[EnemyTargeting] APPROVE owner={owner.name} id={ownerId} " +
-            $"old={oldTarget?.name ?? "null"} new={target.name}"
-        );
-
-        EnemyApprovedTargets[ownerId] = target;
-    }
-
-    /// <summary>
-    /// Clears the approved multiplayer target for an enemy.
-    /// </summary>
-    /// <param name="requester">The enemy object or one of its child/component objects.</param>
-    private static void ClearApprovedEnemyTarget(GameObject requester) {
+    private static void ApproveEnemyTarget(GameObject requester, GameObject target) {
         var owner = GetEnemyTargetOwner(requester);
-        if (owner == null) {
+        if (owner == null || target == null) {
             return;
         }
 
-        EnemyApprovedTargets.Remove(owner.GetInstanceID());
+        EnemyApprovedTargets[owner.GetInstanceID()] = target;
     }
 
     /// <summary>
@@ -221,7 +300,7 @@ internal partial class GamePatcher {
 
         foreach (var actionType in TargetedFsmActionTypes) {
             var onEnterMethod = actionType.GetMethod("OnEnter", InstancePublicFlags | InstanceNonPublicFlags);
-            if (onEnterMethod == null) {
+            if (onEnterMethod == null || onEnterMethod.DeclaringType != actionType) {
                 continue;
             }
 
@@ -229,7 +308,8 @@ internal partial class GamePatcher {
                 _targetedFsmActionEnterHooks.Add(new Hook(onEnterMethod, OnTargetedFsmActionEnter));
             } catch (Exception e) {
                 Logger.Debug(
-                    $"Could not hook {actionType.Name}.OnEnter for target retargeting: {e.GetType().Name}: {e.Message}"
+                    $"Could not hook {actionType.Name}.OnEnter for target retargeting: " +
+                    $"{e.GetType().Name}: {e.Message}"
                 );
             }
         }
@@ -258,7 +338,7 @@ internal partial class GamePatcher {
     }
 
     /// <summary>
-    /// Replaces <see cref="Walker"/>'s hero-position startup gate with nearest tracked-player evaluation.
+    /// Replaces <see cref="Walker"/>'s hero-position startup gate with approved-target evaluation.
     /// </summary>
     /// <param name="orig">The original method.</param>
     /// <param name="self">The walker being updated.</param>
@@ -306,7 +386,7 @@ internal partial class GamePatcher {
     }
 
     /// <summary>
-    /// Replaces <see cref="Walker"/>'s hero-facing chase logic with nearest tracked-player evaluation.
+    /// Replaces <see cref="Walker"/>'s hero-facing chase logic with approved-target evaluation.
     /// </summary>
     /// <param name="orig">The original method.</param>
     /// <param name="self">The walker being updated.</param>
@@ -397,7 +477,6 @@ internal partial class GamePatcher {
         var walkSpeedL = (float?) WalkerWalkSpeedLField?.GetValue(self) ?? 0f;
         body.linearVelocity = new Vector2(currentFacing > 0 ? walkSpeedR : walkSpeedL, body.linearVelocity.y);
     }
-
 
     /// <summary>
     /// Refreshes enemy target references that need to follow the approved multiplayer target.
@@ -652,6 +731,36 @@ internal partial class GamePatcher {
         var rightOwner = GetEnemyTargetOwner(right);
 
         return leftOwner != null && rightOwner != null && leftOwner == rightOwner;
+    }
+
+    /// <summary>
+    /// Determines whether an enemy should transfer its approved target to a new candidate.
+    /// </summary>
+    /// <param name="owner">The enemy owner.</param>
+    /// <param name="approvedTarget">The currently approved target.</param>
+    /// <param name="candidateTarget">The candidate target found by the acquisition range.</param>
+    /// <returns>
+    /// <see langword="true"/> when the candidate is clearly closer than the current approved target; otherwise
+    /// <see langword="false"/>.
+    /// </returns>
+    private static bool ShouldSwitchApprovedTarget(
+        GameObject owner,
+        GameObject approvedTarget,
+        GameObject candidateTarget
+    ) {
+        if (approvedTarget == candidateTarget) {
+            return false;
+        }
+
+        if (!IsHeroLikeObject(approvedTarget)) {
+            return true;
+        }
+
+        var ownerPosition = (Vector2) owner.transform.position;
+        var approvedDistance = ((Vector2) approvedTarget.transform.position - ownerPosition).sqrMagnitude;
+        var candidateDistance = ((Vector2) candidateTarget.transform.position - ownerPosition).sqrMagnitude;
+
+        return candidateDistance + TargetSwitchDistanceBias < approvedDistance;
     }
 
     /// <summary>

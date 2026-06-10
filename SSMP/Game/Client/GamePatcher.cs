@@ -13,23 +13,64 @@ using Logger = SSMP.Logging.Logger;
 namespace SSMP.Game.Client;
 
 /// <summary>
-/// Class that manager patches such as IL and On hooks that are standalone patches for the multiplayer to function
-/// correctly.
+/// Registers and owns standalone multiplayer patches for player-only interactions, enemy target actions,
+/// camera locks, damage feedback, and transition filtering.
 /// </summary>
 internal partial class GamePatcher {
+    /// <summary>
+    /// Binding flags used to access private instance members through reflection.
+    /// </summary>
     private const BindingFlags InstanceNonPublicFlags = BindingFlags.NonPublic | BindingFlags.Instance;
+
+    /// <summary>
+    /// Binding flags used to access public instance members through reflection.
+    /// </summary>
     private const BindingFlags InstancePublicFlags = BindingFlags.Public | BindingFlags.Instance;
 
+    /// <summary>
+    /// Binding flags used to access private, public, and static members through reflection.
+    /// </summary>
     private const BindingFlags StaticNonPublicPublicFlags =
         BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static;
 
+    /// <summary>
+    /// Hook for retargeting <see cref="ChaseObject"/> movement before the original buzz chase logic runs.
+    /// </summary>
     private Hook? _chaseObjectDoBuzzHook;
+
+    /// <summary>
+    /// Hook for retargeting <see cref="ChaseObjectV2"/> movement before the original chase logic runs.
+    /// </summary>
     private Hook? _chaseObjectV2DoChaseHook;
+
+    /// <summary>
+    /// IL hook for suppressing local-only tink feedback and correcting remote-hit tink effects.
+    /// </summary>
     private ILHook? _tinkEffectOnTriggerEnter2DHook;
+
+    /// <summary>
+    /// IL hook for suppressing local-only invincibility feedback caused by remote player hits.
+    /// </summary>
     private ILHook? _healthManagerInvincibleHook;
+
+    /// <summary>
+    /// IL hook for preventing remote player hits from granting local-only rewards or side effects.
+    /// </summary>
     private ILHook? _healthManagerTakeDamageHook;
+
+    /// <summary>
+    /// Hook for filtering local-only PlayMaker method calls such as hero recoil and bounce feedback.
+    /// </summary>
     private Hook? _callMethodProperDoMethodCallHook;
+
+    /// <summary>
+    /// Hook for allowing camera lock checks to remain valid while connected and paused.
+    /// </summary>
     private Hook? _cameraLockAreaIsInApplicableGameStateHook;
+
+    /// <summary>
+    /// Hook for guarding <see cref="Crawler.StopCrawling"/> against destruction-time null reference errors.
+    /// </summary>
     private Hook? _crawlerStopCrawlingHook;
 
     /// <summary>
@@ -37,13 +78,12 @@ internal partial class GamePatcher {
     /// </summary>
     private readonly NetClient _netClient;
 
-
     public GamePatcher(NetClient netClient) {
         _netClient = netClient;
     }
 
     /// <summary>
-    /// Register the hooks.
+    /// Registers all gameplay hooks owned by this patcher.
     /// </summary>
     public void RegisterHooks() {
         _tinkEffectOnTriggerEnter2DHook = new ILHook(
@@ -96,15 +136,14 @@ internal partial class GamePatcher {
         EventHooks.CameraLockAreaAwake += OnCameraLockAreaAwake;
 
         _chaseObjectDoBuzzHook = new Hook(
-            typeof(ChaseObject).GetMethod("DoBuzz", InstanceNonPublicFlags),
+            typeof(ChaseObject).GetMethod("DoBuzz", InstanceNonPublicFlags)!,
             OnChaseObjectDoBuzz
         );
 
         _chaseObjectV2DoChaseHook = new Hook(
-            typeof(ChaseObjectV2).GetMethod("DoChase", InstanceNonPublicFlags),
+            typeof(ChaseObjectV2).GetMethod("DoChase", InstanceNonPublicFlags)!,
             OnChaseObjectV2DoChase
         );
-
 
         RegisterDetectionHooks();
 
@@ -117,7 +156,7 @@ internal partial class GamePatcher {
     }
 
     /// <summary>
-    /// De-register the hooks.
+    /// Deregisters and disposes all gameplay hooks owned by this patcher.
     /// </summary>
     public void DeregisterHooks() {
         _tinkEffectOnTriggerEnter2DHook?.Dispose();
@@ -140,6 +179,8 @@ internal partial class GamePatcher {
 
         EventHooks.TransitionPointOnTriggerEnter2DIL -= ILTransitionPointOnTrigger2D;
         EventHooks.TransitionPointOnTriggerStay2DIL -= ILTransitionPointOnTrigger2D;
+
+        EventHooks.CameraLockAreaAwake -= OnCameraLockAreaAwake;
 
         _chaseObjectDoBuzzHook?.Dispose();
         _chaseObjectDoBuzzHook = null;
