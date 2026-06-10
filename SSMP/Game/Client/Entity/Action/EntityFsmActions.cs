@@ -1750,28 +1750,43 @@ internal static class EntityFsmActions {
         return true;
     }
 
-    private static void ApplyNetworkDataFromAction(EntityNetworkData data, SetRotation action) {
+    private static void ApplyNetworkDataFromAction(EntityNetworkData? data, SetRotation action) {
         var gameObject = action.Fsm.GetOwnerDefaultTarget(action.gameObject);
 
+        Vector3 euler;
         if (data == null) {
-            Logger.Error("No data passed for applying SetRotation action");
-            return;
-        }
+            // Host path: read current state from the FSM action.
+            if (gameObject == null) return;
 
-        var vector3 = new Vector3(
-            data.Packet.ReadFloat(),
-            data.Packet.ReadFloat(),
-            data.Packet.ReadFloat()
-        );
+            if (!action.quaternion.IsNone) {
+                euler = action.quaternion.Value.eulerAngles;
+            } else if (!action.vector.IsNone) {
+                euler = action.vector.Value;
+            } else {
+                euler = action.space == Space.Self
+                    ? gameObject.transform.localEulerAngles
+                    : gameObject.transform.eulerAngles;
+            }
 
-        if (gameObject == null) {
-            return;
+            if (!action.xAngle.IsNone) euler.x = action.xAngle.Value;
+            if (!action.yAngle.IsNone) euler.y = action.yAngle.Value;
+            if (!action.zAngle.IsNone) euler.z = action.zAngle.Value;
+        } else {
+            // Client path: always consume packet bytes to keep the stream in sync,
+            // even if the target object is gone.
+            euler = new Vector3(
+                data.Packet.ReadFloat(),
+                data.Packet.ReadFloat(),
+                data.Packet.ReadFloat()
+            );
+
+            if (gameObject == null) return;
         }
 
         if (action.space == Space.Self) {
-            gameObject.transform.localEulerAngles = vector3;
+            gameObject.transform.localEulerAngles = euler;
         } else {
-            gameObject.transform.eulerAngles = vector3;
+            gameObject.transform.eulerAngles = euler;
         }
     }
 

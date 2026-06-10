@@ -33,11 +33,12 @@ internal static class EntityInitializer {
     /// <summary>
     /// Array of types that should be removed from client-side enemies so it doesn't interfere with remote behaviour.
     /// </summary>
-    private static readonly Type[] ToRemoveTypes = {
+    private static readonly Type[] ToRemoveTypes = [
         typeof(Walker),
         typeof(Rigidbody2D),
-        typeof(BigCentipede)
-    };
+        typeof(BigCentipede),
+        typeof(Crawler)
+    ];
 
     /// <summary>
     /// Array of types of actions that should be skipped during initialization. 

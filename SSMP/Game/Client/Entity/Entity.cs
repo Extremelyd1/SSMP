@@ -1090,9 +1090,14 @@ internal class Entity {
             // Before setting the state, we replace the actions of the to-be state to only include the ones that
             // should be executed again (including actions with "everyFrame" on true or that continuously check
             // collisions for example).
+            if (string.IsNullOrEmpty(snapshot.CurrentState)) {
+                Logger.Debug("Not setting FSM state, because current state is empty");
+                continue;
+            }
+
             var state = fsm.GetState(snapshot.CurrentState);
             if (state == null) {
-                Logger.Debug("  Not setting FSM state, because current state is empty");
+                Logger.Debug($"  Not setting FSM state, because state '{snapshot.CurrentState}' was not found");
                 continue;
             }
 
