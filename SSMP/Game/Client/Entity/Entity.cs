@@ -189,9 +189,9 @@ internal class Entity {
 
         _lastIsActive = _hasParent ? Object.Host.activeSelf : Object.Host.activeInHierarchy;
 
-        Logger.Info(
-            $"Entity '{Object.Host.name}' was original active: {_originalIsActive}, last active: {_lastIsActive}"
-        );
+        //Logger.Info(
+        //    $"Entity '{Object.Host.name}' was original active: {_originalIsActive}, last active: {_lastIsActive}"
+        //);
 
         // Add a position interpolation component to the enemy so we can smooth out position updates
         Object.Client.AddComponent<PredictiveInterpolation>();
@@ -215,7 +215,7 @@ internal class Entity {
                 _animationClipNameIds.Add(animationClip.name, (byte) index++);
 
                 if (index > byte.MaxValue) {
-                    Logger.Error($"Too many animation clips to fit in a byte for entity: {Object.Client.name}");
+                    //Logger.Error($"Too many animation clips to fit in a byte for entity: {Object.Client.name}");
                     break;
                 }
             }
@@ -305,7 +305,7 @@ internal class Entity {
     private void DestroyManagedChildren(GameObject root) {
         foreach (var child in root.GetChildren()) {
             if (EntityRegistry.TryGetEntry(child, out var entry)) {
-                Logger.Debug($"Found managed child: {child.name}, {entry.Type}, destroying it");
+                //Logger.Debug($"Found managed child: {child.name}, {entry.Type}, destroying it");
                 UnityEngine.Object.Destroy(child);
             } else {
                 DestroyManagedChildren(child);
@@ -318,7 +318,7 @@ internal class Entity {
     /// </summary>
     /// <param name="fsm">The Playmaker FSM to process.</param>
     private void ProcessHostFsm(PlayMakerFSM fsm) {
-        Logger.Info($"Processing host FSM: {fsm.Fsm.Name}");
+        //Logger.Info($"Processing host FSM: {fsm.Fsm.Name}");
 
         EntityInitializer.CheckPreProcessFsm(fsm);
 
@@ -337,9 +337,9 @@ internal class Entity {
                 }
 
                 if (action.Fsm == null) {
-                    Logger.Error(
-                        $"FSM in action for state ({i}, {state.Name}), action ({j}, {action.GetType()}) is null"
-                    );
+                    //Logger.Error(
+                    //    $"FSM in action for state ({i}, {state.Name}), action ({j}, {action.GetType()}) is null"
+                    //);
                     continue;
                 }
 
@@ -349,9 +349,9 @@ internal class Entity {
                     StateIndex = i,
                     ActionIndex = j
                 };
-                Logger.Info(
-                    $"Created hooked action: {action.GetType()}, {_fsms.Host.IndexOf(fsm)}, {stateName}, {j}"
-                );
+                //Logger.Info(
+                //    $"Created hooked action: {action.GetType()}, {_fsms.Host.IndexOf(fsm)}, {stateName}, {j}"
+                //);
 
                 if (_hookedTypes.Add(action.GetType())) {
                     FsmActionHooks.RegisterFsmStateActionType(action.GetType(), OnActionEntered);
@@ -377,7 +377,7 @@ internal class Entity {
     /// </summary>
     /// <param name="fsm">The Playmaker FSM to process.</param>
     private void ProcessClientFsm(PlayMakerFSM fsm) {
-        Logger.Info($"Processing client FSM: {fsm.Fsm.Name}");
+        //Logger.Info($"Processing client FSM: {fsm.Fsm.Name}");
         EntityInitializer.InitializeFsm(fsm);
         fsm.enabled = false;
     }
@@ -438,7 +438,7 @@ internal class Entity {
         var hostCollider = Object.Host.GetComponent<Collider2D>();
         var clientCollider = Object.Client.GetComponent<Collider2D>();
         if (hostCollider != null && clientCollider != null) {
-            Logger.Info($"Adding collider component to entity: {Object.Host.name}");
+            //Logger.Info($"Adding collider component to entity: {Object.Host.name}");
 
             var collider = new HostClientPair<Collider2D> {
                 Host = hostCollider,
@@ -458,7 +458,7 @@ internal class Entity {
         var hostDamageHero = Object.Host.GetComponent<DamageHero>();
         var clientDamageHero = Object.Client.GetComponent<DamageHero>();
         if (hostDamageHero != null && clientDamageHero != null) {
-            Logger.Info($"Adding DamageHero component to entity: {Object.Host.name}");
+            //Logger.Info($"Adding DamageHero component to entity: {Object.Host.name}");
 
             var damageHero = new HostClientPair<DamageHero> {
                 Host = hostDamageHero,
@@ -478,7 +478,7 @@ internal class Entity {
         var hostMeshRenderer = Object.Host.GetComponent<MeshRenderer>();
         var clientMeshRenderer = Object.Client.GetComponent<MeshRenderer>();
         if (hostMeshRenderer != null && clientMeshRenderer != null) {
-            Logger.Info($"Adding MeshRenderer component to entity: {Object.Host.name}");
+            //Logger.Info($"Adding MeshRenderer component to entity: {Object.Host.name}");
 
             var meshRenderer = new HostClientPair<MeshRenderer> {
                 Host = hostMeshRenderer,
@@ -501,7 +501,7 @@ internal class Entity {
         foreach (var type in types) {
             var component = ComponentFactory.InstantiateByType(type, _netClient, Id, Object);
             if (component == null) {
-                Logger.Debug($"Could not instantiate component for type: {type}");
+                //Logger.Debug($"Could not instantiate component for type: {type}");
             } else {
                 _components[type] = component;
             }
@@ -509,7 +509,7 @@ internal class Entity {
             addedComponentsString += $" {type}";
         }
 
-        Logger.Debug(addedComponentsString);
+        //Logger.Debug(addedComponentsString);
     }
 
     /// <summary>
@@ -575,10 +575,10 @@ internal class Entity {
         if (!_hookedActions.TryGetValue(self, out var hookedEntityAction)) {
             return;
         }
-
-        Logger.Info(
-            $"Entity ({Id}, {Type}) hooked action: {self.Fsm.Name}, {self.State.Name}, {self.GetType()} ({hookedEntityAction.FsmIndex}, {hookedEntityAction.StateIndex}, {hookedEntityAction.ActionIndex})"
-        );
+//
+        //Logger.Info(
+        //    $"Entity ({Id}, {Type}) hooked action: {self.Fsm.Name}, {self.State.Name}, {self.GetType()} ({hookedEntityAction.FsmIndex}, {hookedEntityAction.StateIndex}, {hookedEntityAction.ActionIndex})"
+        //);
 
         var networkData = new EntityNetworkData {
             Type = EntityComponentType.Fsm
@@ -607,11 +607,11 @@ internal class Entity {
             if (_lastIsActive) {
                 // If the host object was active, but now it null (or destroyed in Unity), we can send
                 // to the server that the entity can be regarded as inactive
-                Logger.Info(
-                    Object.Client == null
-                        ? $"Entity ({Id}, {Type}) host and client object is null (or destroyed) and was active"
-                        : $"Entity '{Object.Client.name}' host object is null (or destroyed) and was active"
-                );
+                //Logger.Info(
+                //    Object.Client == null
+                //        ? $"Entity ({Id}, {Type}) host and client object is null (or destroyed) and was active"
+                //        : $"Entity '{Object.Client.name}' host object is null (or destroyed) and was active"
+                //);
 
                 _lastIsActive = false;
 
@@ -629,12 +629,12 @@ internal class Entity {
         if (_isControlled) {
             if (hostObjectActive) {
                 if (!_isSceneHostDetermined) {
-                    Logger.Info(
-                        $"Entity '{Object.Host.name}' host object became active, but scene host is not determined yet, re-disabling for now"
-                    );
+                   //Logger.Info(
+                   //    $"Entity '{Object.Host.name}' host object became active, but scene host is not determined yet, re-disabling for now"
+                   //);
                     _originalIsActive = true;
                 } else {
-                    Logger.Info($"Entity '{Object.Host.name}' host object became active, re-disabling");
+                    //Logger.Info($"Entity '{Object.Host.name}' host object became active, re-disabling");
                 }
 
                 Object.Host.SetActive(false);
@@ -705,7 +705,7 @@ internal class Entity {
         if (newActive != _lastIsActive) {
             _lastIsActive = newActive;
 
-            Logger.Info($"Entity '{Object.Host.name}' changed active: {newActive}");
+            //Logger.Info($"Entity '{Object.Host.name}' changed active: {newActive}");
 
             _netClient.UpdateManager.UpdateEntityIsActive(
                 Id,
@@ -726,7 +726,7 @@ internal class Entity {
                 data.Types.Add(EntityHostFsmData.Type.State);
                 data.CurrentState = (byte) Array.IndexOf(fsm.FsmStates, fsm.Fsm.ActiveState);
 
-                Logger.Debug($"Entity ({Id}, {Type}) host changed states: {lastStateName}, {fsm.ActiveStateName}");
+                //Logger.Debug($"Entity ({Id}, {Type}) host changed states: {lastStateName}, {fsm.ActiveStateName}");
             }
 
             // Define a method that allows generalization of checking for changes in all FSM variables
@@ -742,7 +742,7 @@ internal class Entity {
                     var snapshotVar = snapshotArray[i];
 
                     if (snapshotVar == null) {
-                        Logger.Warn("No last value found for FSM var");
+                        //Logger.Warn("No last value found for FSM var");
                         continue;
                     }
 
@@ -830,7 +830,7 @@ internal class Entity {
     ) {
         if (self == _animator.Client) {
             if (!_allowClientAnimation) {
-                Logger.Info($"Entity '{Object.Client.name}' client animator tried playing animation");
+                //Logger.Info($"Entity '{Object.Client.name}' client animator tried playing animation");
             } else {
                 // Logger.Info($"Entity '{_object.Client.name}' client animator was allowed to play animation");
 
@@ -853,11 +853,11 @@ internal class Entity {
         }
 
         if (!_animationClipNameIds.TryGetValue(clip.name, out var animationId)) {
-            Logger.Warn($"Entity '{Object.Client.name}' played unknown animation: {clip.name}");
+            //Logger.Warn($"Entity '{Object.Client.name}' played unknown animation: {clip.name}");
             return;
         }
 
-        Logger.Info($"Entity '{Object.Host.name}' sends animation: {clip.name}, {animationId}, {clip.wrapMode}");
+        //Logger.Info($"Entity '{Object.Host.name}' sends animation: {clip.name}, {animationId}, {clip.wrapMode}");
         _netClient.UpdateManager.UpdateEntityAnimation(
             Id,
             animationId,
@@ -871,7 +871,7 @@ internal class Entity {
     /// </summary>
     private void ObjectPoolOnRecycleGameObject(Action<GameObject> orig, GameObject obj) {
         if (obj == Object.Client) {
-            Logger.Debug($"Client object of entity: {Id}, {Type} tried to be recycled");
+            //Logger.Debug($"Client object of entity: {Id}, {Type} tried to be recycled");
             return;
         }
 
@@ -898,9 +898,9 @@ internal class Entity {
             return;
         }
 
-        Logger.Debug(
-            $"Entity '{Object.Host.name}' tried changing active of host object, while host is not determined yet, updating original active to: {self.activate.Value}"
-        );
+        //Logger.Debug(
+        //    $"Entity '{Object.Host.name}' tried changing active of host object, while host is not determined yet, updating original active to: {self.activate.Value}"
+        //);
 
         // Update the original active value to whatever this action will set
         // Also, we do not let this action execute any further since we do not want it to modify our host object
@@ -918,9 +918,9 @@ internal class Entity {
         // Otherwise we might trigger the update sending of activity twice
         _lastIsActive = _hasParent ? Object.Host.activeSelf : Object.Host.activeInHierarchy;
 
-        Logger.Info(
-            $"Initializing entity '{Object.Host.name}' with active: {_originalIsActive}, sending active: {_lastIsActive}"
-        );
+        //Logger.Info(
+        //    $"Initializing entity '{Object.Host.name}' with active: {_originalIsActive}, sending active: {_lastIsActive}"
+        //);
 
         _netClient.UpdateManager.UpdateEntityIsActive(Id, _lastIsActive);
 
@@ -953,7 +953,7 @@ internal class Entity {
     /// Makes the entity a host entity if the client user became the scene host.
     /// </summary>
     public void MakeHost() {
-        Logger.Info($"Making entity ({Id}, {Type}) a host entity");
+        //Logger.Info($"Making entity ({Id}, {Type}) a host entity");
 
         // If the client object is null, we don't have to care about doing anything for the host object anymore
         if (Object.Client == null) {
@@ -967,17 +967,17 @@ internal class Entity {
                 component.IsControlled = false;
             }
 
-            Logger.Debug("  Client object null, enabling host object and returning");
+            //Logger.Debug("  Client object null, enabling host object and returning");
             return;
         }
 
         if (_hasParent) {
-            Logger.Debug("  Entity has parent, only setting local transform");
+            //Logger.Debug("  Entity has parent, only setting local transform");
 
             Object.Host.transform.localPosition = _lastPosition = Object.Client.transform.localPosition;
             Object.Host.transform.localScale = _lastScale = Object.Client.transform.localScale;
         } else {
-            Logger.Debug("  Entity has no parent, calculating transform");
+            //Logger.Debug("  Entity has no parent, calculating transform");
 
             var clientPos = Object.Client.transform.localPosition;
             var parentPos = Vector3.zero;
@@ -1015,12 +1015,12 @@ internal class Entity {
             _animator.Host.playAutomatically = false;
         }
 
-        Logger.Debug("  Restoring FSM variables from snapshots");
+        //.Debug("  Restoring FSM variables from snapshots");
 
         for (var fsmIndex = 0; fsmIndex < _fsms.Host.Count; fsmIndex++) {
             var fsm = _fsms.Host[fsmIndex];
 
-            Logger.Debug($"    Restoring variables for FSM: {fsm.Fsm.Name}");
+            //Logger.Debug($"    Restoring variables for FSM: {fsm.Fsm.Name}");
 
             // Force initialize the host FSM, since it might have been disabled before initializing
             EntityInitializer.InitializeFsm(fsm);
@@ -1056,7 +1056,7 @@ internal class Entity {
         Object.Client.SetActive(false);
         Object.Host.SetActive(clientActive);
 
-        Logger.Debug($"  Set Active of host object to: {clientActive}, disabling client object");
+        //Logger.Debug($"  Set Active of host object to: {clientActive}, disabling client object");
 
         // We need to set the isKinematic property of rigid bodies to ensure physics work again after enabling
         // the host object. In Hornet 1 this is necessary because another state sets this property normally in the
@@ -1064,7 +1064,7 @@ internal class Entity {
         // For the Mantis Lord and City Elevator entity, this should never be disabled, since they are always kinematic.
         var rigidBody = Object.Host.GetComponent<Rigidbody2D>();
         if (rigidBody != null) {
-            Logger.Debug("  Resetting isKinematic of Rigidbody to ensure physics work for host object");
+            //Logger.Debug("  Resetting isKinematic of Rigidbody to ensure physics work for host object");
             rigidBody.isKinematic = false;
         }
 
@@ -1082,13 +1082,13 @@ internal class Entity {
                 var clientAnimation = currentClip.name;
                 var wrapMode = currentClip.wrapMode;
 
-                Logger.Debug($"  Animator and current clip present, updating animation: {clientAnimation}, {wrapMode}");
+                //Logger.Debug($"  Animator and current clip present, updating animation: {clientAnimation}, {wrapMode}");
 
                 LateUpdateAnimation(_animator.Host, clientAnimation, wrapMode);
             }
         }
 
-        Logger.Debug("  Restoring FSM states from snapshots");
+        //Logger.Debug("  Restoring FSM states from snapshots");
 
         for (var fsmIndex = 0; fsmIndex < _fsms.Host.Count; fsmIndex++) {
             var fsm = _fsms.Host[fsmIndex];
@@ -1098,22 +1098,22 @@ internal class Entity {
             // should be executed again (including actions with "everyFrame" on true or that continuously check
             // collisions for example).
             if (string.IsNullOrEmpty(snapshot.CurrentState)) {
-                Logger.Debug("Not setting FSM state, because current state is empty");
+                //.Debug("Not setting FSM state, because current state is empty");
                 continue;
             }
 
             var state = fsm.GetState(snapshot.CurrentState);
             if (state == null) {
-                Logger.Debug($"  Not setting FSM state, because state '{snapshot.CurrentState}' was not found");
+                //Logger.Debug($"  Not setting FSM state, because state '{snapshot.CurrentState}' was not found");
                 continue;
             }
 
-            Logger.Debug($"  Setting FSM state: {snapshot.CurrentState}");
+            //Logger.Debug($"  Setting FSM state: {snapshot.CurrentState}");
 
             var oldActions = state.Actions;
             var newActions = oldActions.Where(ActionRegistry.IsActionContinuous).ToArray();
 
-            Logger.Debug($"  Only using actions: {string.Join(", ", newActions.Select(a => a.GetType().ToString()))}");
+            //Logger.Debug($"  Only using actions: {string.Join(", ", newActions.Select(a => a.GetType().ToString()))}");
 
             // Replace the actions, set the state and reset the actions again
             state.Actions = newActions;
@@ -1128,7 +1128,7 @@ internal class Entity {
     /// <param name="position">The new position.</param>
     public void UpdatePosition(Math_Vector2 position) {
         if (Object.Client == null || Object.Host == null) {
-            Logger.Warn($"Cannot update position for entity ({Id}, {Type}), client or host object is null");
+            //.Warn($"Cannot update position for entity ({Id}, {Type}), client or host object is null");
             return;
         }
 
@@ -1152,7 +1152,7 @@ internal class Entity {
     /// <param name="scale">The new scale data.</param>
     public void UpdateScale(EntityUpdate.ScaleData scale) {
         if (Object.Client == null) {
-            Logger.Warn($"Cannot update scale for entity ({Id}, {Type}), client object is null");
+            //Logger.Warn($"Cannot update scale for entity ({Id}, {Type}), client object is null");
             return;
         }
 
@@ -1216,16 +1216,16 @@ internal class Entity {
         bool alreadyInSceneUpdate
     ) {
         if (_animator.Client == null) {
-            Logger.Warn($"Entity '{Object.Client.name}' received animation while client animator does not exist");
+            //Logger.Warn($"Entity '{Object.Client.name}' received animation while client animator does not exist");
             return;
         }
 
         if (!_animationClipNameIds.TryGetValue(animationId, out var clipName)) {
-            Logger.Warn($"Entity '{Object.Client.name}' received unknown animation ID: {animationId}");
+            //Logger.Warn($"Entity '{Object.Client.name}' received unknown animation ID: {animationId}");
             return;
         }
 
-        Logger.Info($"Entity '{Object.Client.name}' received animation: {animationId}, {clipName}, {wrapMode}");
+        //Logger.Info($"Entity '{Object.Client.name}' received animation: {animationId}, {clipName}, {wrapMode}");
 
         // All paths lead to calling the Play method of the sprite animator that is hooked, so we allow the call
         // through the hook
@@ -1260,7 +1260,7 @@ internal class Entity {
 
         var clip = animator.GetClipByName(clipName);
 
-        Logger.Debug($"Entity ({Id}, {Type}) LateUpdateAnimation: {clip.name}, {wrapMode}");
+        //Logger.Debug($"Entity ({Id}, {Type}) LateUpdateAnimation: {clip.name}, {wrapMode}");
 
         switch (wrapMode) {
             case tk2dSpriteAnimationClip.WrapMode.LoopSection:
@@ -1287,10 +1287,10 @@ internal class Entity {
     /// <param name="active">The new value for active.</param>
     public void UpdateIsActive(bool active) {
         if (Object.Client != null) {
-            Logger.Info($"Entity '{Object.Client.name}' received active: {active}");
+            //Logger.Info($"Entity '{Object.Client.name}' received active: {active}");
             Object.Client.SetActive(active);
         } else {
-            Logger.Warn($"Entity ({Id}, {Type}) could not update active, because client object is null");
+            //Logger.Warn($"Entity ({Id}, {Type}) could not update active, because client object is null");
         }
     }
 
@@ -1327,9 +1327,9 @@ internal class Entity {
                 var state = fsm.FsmStates[stateIndex];
                 var action = state.Actions[actionIndex];
 
-                Logger.Info(
-                    $"Received entity network data for FSM: {fsm.Fsm.Name}, {state.Name}, {actionIndex} ({action.GetType()})"
-                );
+                //Logger.Info(
+                //    $"Received entity network data for FSM: {fsm.Fsm.Name}, {state.Name}, {actionIndex} ({action.GetType()})"
+                //);
 
                 EntityFsmActions.ApplyNetworkDataFromAction(data, action);
 
@@ -1349,7 +1349,7 @@ internal class Entity {
     public void UpdateHostFsmData(Dictionary<byte, EntityHostFsmData> hostFsmData) {
         foreach (var (fsmIndex, data) in hostFsmData) {
             if (_fsms.Host.Count <= fsmIndex) {
-                Logger.Warn($"Tried to update host FSM data for unknown FSM index: {fsmIndex}");
+                //Logger.Warn($"Tried to update host FSM data for unknown FSM index: {fsmIndex}");
                 continue;
             }
 
@@ -1359,7 +1359,7 @@ internal class Entity {
             if (data.Types.Contains(EntityHostFsmData.Type.State)) {
                 var states = hostFsm.FsmStates;
                 if (states.Length <= data.CurrentState) {
-                    Logger.Warn($"Tried to update host FSM state for unknown state index: {data.CurrentState}");
+                    //Logger.Warn($"Tried to update host FSM state for unknown state index: {data.CurrentState}");
                 } else {
                     var stateName = states[data.CurrentState].Name;
 
@@ -1382,9 +1382,9 @@ internal class Entity {
                 if (data.Types.Contains(type)) {
                     foreach (var pair in dataDict) {
                         if (fsmVarArray.Length <= pair.Key) {
-                            Logger.Warn(
-                                $"Tried to update host FSM var ({typeof(TBase)}) for unknown index: {pair.Key}"
-                            );
+                            //Logger.Warn(
+                            //    $"Tried to update host FSM var ({typeof(TBase)}) for unknown index: {pair.Key}"
+                            //);
                         } else {
                             setValueAction.Invoke(pair.Key, fsmVarArray[pair.Key], pair.Value);
                         }

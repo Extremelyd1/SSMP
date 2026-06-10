@@ -75,8 +75,8 @@ internal static class PlayerTargetRegistry {
     /// </summary>
     /// <param name="requesterPosition">The position to measure from.</param>
     /// <returns>The nearest tracked player if one exists; otherwise null.</returns>
-    public static GameObject? GetNearestPlayer(Vector3 requesterPosition) {
-        return GetNearestPlayer(requesterPosition, GetAllPlayerObjects());
+    private static GameObject? GetNearestPlayer(Vector3 requesterPosition) {
+        return GetNearestPlayer(requesterPosition, GetTrackedPlayers());
     }
 
     /// <summary>
@@ -85,7 +85,7 @@ internal static class PlayerTargetRegistry {
     /// <param name="requesterPosition">The position to measure from.</param>
     /// <param name="candidates">The candidate objects to evaluate.</param>
     /// <returns>The nearest tracked player if one exists; otherwise null.</returns>
-    public static GameObject? GetNearestPlayer(Vector3 requesterPosition, IEnumerable<GameObject> candidates) {
+    private static GameObject? GetNearestPlayer(Vector3 requesterPosition, IEnumerable<GameObject> candidates) {
         GameObject? nearestPlayer = null;
         var nearestDistanceSqr = float.MaxValue;
         var seenPlayers = new HashSet<GameObject>();
@@ -116,13 +116,15 @@ internal static class PlayerTargetRegistry {
     /// Enumerates all currently tracked player root objects.
     /// </summary>
     /// <returns>The local hero root and all registered remote player roots.</returns>
-    internal static IEnumerable<GameObject> GetAllPlayerObjects() {
+    public static IEnumerable<GameObject> GetTrackedPlayers() {
         if (HeroController.instance != null) {
             yield return HeroController.instance.gameObject;
         }
 
         foreach (var playerObject in RemotePlayerObjects) {
-            yield return playerObject;
+            if (playerObject != null && playerObject.activeInHierarchy) {
+                yield return playerObject;
+            }
         }
     }
 }

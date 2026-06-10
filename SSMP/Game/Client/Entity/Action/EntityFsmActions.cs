@@ -244,11 +244,11 @@ internal static class EntityFsmActions {
                 null!
             );
         } catch (Exception e) {
-            Logger.Warn($"Apply method threw exception: {e.GetType()}, {e.Message}, {e.StackTrace}");
+            //Logger.Warn($"Apply method threw exception: {e.GetType()}, {e.Message}, {e.StackTrace}");
 
             e = e.InnerException;
             while (e != null) {
-                Logger.Warn($"  Inner exception: {e.GetType()}, {e.Message}, {e.StackTrace}");
+                //Logger.Warn($"  Inner exception: {e.GetType()}, {e.Message}, {e.StackTrace}");
 
                 e = e.InnerException;
             }
@@ -352,14 +352,14 @@ internal static class EntityFsmActions {
                                 GameObject = go
                             }
                         )) {
-                        Logger.Debug("FlingObjectsFromGlobalPool IL spawned object is entity");
+                        //Logger.Debug("FlingObjectsFromGlobalPool IL spawned object is entity");
                     }
 
                     return go;
                 }
             );
         } catch (Exception e) {
-            Logger.Error($"Could not change FlingObjectsFromGlobalPool#OnEnter IL:\n{e}");
+            //Logger.Error($"Could not change FlingObjectsFromGlobalPool#OnEnter IL:\n{e}");
         }
     }
 
@@ -401,14 +401,14 @@ internal static class EntityFsmActions {
                                 GameObject = go
                             }
                         )) {
-                        Logger.Debug("FlingObjectsFromGlobalPoolVel IL spawned object is entity");
+                        //Logger.Debug("FlingObjectsFromGlobalPoolVel IL spawned object is entity");
                     }
 
                     return go;
                 }
             );
         } catch (Exception e) {
-            Logger.Error($"Could not change FlingObjectsFromGlobalPoolVel#OnEnter IL:\n{e}");
+            //Logger.Error($"Could not change FlingObjectsFromGlobalPoolVel#OnEnter IL:\n{e}");
         }
     }
 
@@ -444,7 +444,7 @@ internal static class EntityFsmActions {
                 }
             );
         } catch (Exception e) {
-            Logger.Error($"Could not change FlingObjectsFromGlobalPoolTime#OnUpdate IL:\n{e}");
+            //Logger.Error($"Could not change FlingObjectsFromGlobalPoolTime#OnUpdate IL:\n{e}");
         }
     }
 
@@ -460,7 +460,7 @@ internal static class EntityFsmActions {
             // Emit instructions for Random.Range calls for 1 int and 4 floats 
             EmitRandomInterceptInstructions<int, GetRandomChild>(c);
         } catch (Exception e) {
-            Logger.Error($"Could not change GetRandomChild#DoGetRandomChild IL:\n{e}");
+            //Logger.Error($"Could not change GetRandomChild#DoGetRandomChild IL:\n{e}");
         }
     }
 
@@ -471,15 +471,15 @@ internal static class EntityFsmActions {
     /// <param name="fsm">The FSM that changed states.</param>
     /// <param name="stateName">The name of the state that was changed to.</param>
     public static void RegisterStateChange(HutongGames.PlayMaker.Fsm fsm, string stateName) {
-        Logger.Debug($"RegisterStateChange: {fsm.Name}, {stateName}");
+        //Logger.Debug($"RegisterStateChange: {fsm.Name}, {stateName}");
 
         for (var i = ActionsInState.Count - 1; i >= 0; i--) {
             var actionInState = ActionsInState[i];
 
-            Logger.Debug($"  Action in state: {actionInState.Fsm.Name}, {actionInState.StateName}");
+            //Logger.Debug($"  Action in state: {actionInState.Fsm.Name}, {actionInState.StateName}");
 
             if (actionInState.Fsm == fsm && actionInState.StateName != stateName) {
-                Logger.Debug("EntityFsmActions: state changed, cancelling action in state");
+                //Logger.Debug("EntityFsmActions: state changed, cancelling action in state");
                 actionInState.ExitState();
                 ActionsInState.RemoveAt(i);
             }
@@ -499,7 +499,7 @@ internal static class EntityFsmActions {
                     GameObject = action.storeObject.Value
                 }
             )) {
-            Logger.Debug($"Tried getting SpawnObjectFromGlobalPool network data, but spawned object is entity");
+            //Logger.Debug($"Tried getting SpawnObjectFromGlobalPool network data, but spawned object is entity");
             return false;
         }
 
@@ -562,9 +562,9 @@ internal static class EntityFsmActions {
         // for the action and sent an EntitySpawn packet instead. So we need not also network this action separately.
         var rigidbody = action.rb2d;
         if (rigidbody != null && rigidbody.gameObject != null && IsObjectInRegistry(rigidbody.gameObject)) {
-            Logger.Debug(
-                "Skipping getting network data for FlingObjectsFromGlobalPool, because spawned objects are managed by system"
-            );
+            //Logger.Debug(
+            //    "Skipping getting network data for FlingObjectsFromGlobalPool, because spawned objects are managed by system"
+            //);
             return false;
         }
 
@@ -585,7 +585,7 @@ internal static class EntityFsmActions {
         }
 
         if (queue.Count == 0) {
-            Logger.Debug("Getting data for FlingObjectsFromGlobalPool has not enough items in queue 1");
+            //Logger.Debug("Getting data for FlingObjectsFromGlobalPool has not enough items in queue 1");
             return false;
         }
 
@@ -599,7 +599,7 @@ internal static class EntityFsmActions {
         for (var i = 0; i < numSpawns; i++) {
             if (action.originVariationX != null) {
                 if (queue.Count == 0) {
-                    Logger.Debug("Getting data for FlingObjectsFromGlobalPool has not enough items in queue 2");
+                    //Logger.Debug("Getting data for FlingObjectsFromGlobalPool has not enough items in queue 2");
                     return false;
                 }
 
@@ -611,7 +611,7 @@ internal static class EntityFsmActions {
 
             if (action.originVariationY != null) {
                 if (queue.Count == 0) {
-                    Logger.Debug("Getting data for FlingObjectsFromGlobalPool has not enough items in queue 3");
+                    //Logger.Debug("Getting data for FlingObjectsFromGlobalPool has not enough items in queue 3");
                     return false;
                 }
 
@@ -622,7 +622,7 @@ internal static class EntityFsmActions {
             }
 
             if (queue.Count < 2) {
-                Logger.Debug("Getting data for FlingObjectsFromGlobalPool has not enough items in queue 4");
+                //Logger.Debug("Getting data for FlingObjectsFromGlobalPool has not enough items in queue 4");
                 queue.Clear();
                 return false;
             }
@@ -686,9 +686,9 @@ internal static class EntityFsmActions {
         // for the action and sent an EntitySpawn packet instead. So we need not also network this action separately.
         var rigidbody = action.rb2d;
         if (rigidbody != null && rigidbody.gameObject != null && IsObjectInRegistry(rigidbody.gameObject)) {
-            Logger.Debug(
-                "Skipping getting network data for FlingObjectsFromGlobalPool, because spawned objects are managed by system"
-            );
+            //Logger.Debug(
+            //    "Skipping getting network data for FlingObjectsFromGlobalPool, because spawned objects are managed by system"
+            //);
             return false;
         }
 
@@ -709,7 +709,7 @@ internal static class EntityFsmActions {
         }
 
         if (queue.Count == 0) {
-            Logger.Debug("Getting data for FlingObjectsFromGlobalPoolVel has not enough items in queue 1");
+            //Logger.Debug("Getting data for FlingObjectsFromGlobalPoolVel has not enough items in queue 1");
             return false;
         }
 
@@ -723,7 +723,7 @@ internal static class EntityFsmActions {
         for (var i = 0; i < numSpawns; i++) {
             if (action.originVariationX != null) {
                 if (queue.Count == 0) {
-                    Logger.Debug("Getting data for FlingObjectsFromGlobalPoolVel has not enough items in queue 2");
+                    //Logger.Debug("Getting data for FlingObjectsFromGlobalPoolVel has not enough items in queue 2");
                     return false;
                 }
 
@@ -735,7 +735,7 @@ internal static class EntityFsmActions {
 
             if (action.originVariationY != null) {
                 if (queue.Count == 0) {
-                    Logger.Debug("Getting data for FlingObjectsFromGlobalPoolVel has not enough items in queue 3");
+                    //Logger.Debug("Getting data for FlingObjectsFromGlobalPoolVel has not enough items in queue 3");
                     return false;
                 }
 
@@ -746,7 +746,7 @@ internal static class EntityFsmActions {
             }
 
             if (queue.Count < 2) {
-                Logger.Debug("Getting data for FlingObjectsFromGlobalPoolVel has not enough items in queue 4");
+                //Logger.Debug("Getting data for FlingObjectsFromGlobalPoolVel has not enough items in queue 4");
                 queue.Clear();
                 return false;
             }
@@ -808,7 +808,7 @@ internal static class EntityFsmActions {
                     GameObject = action.storeObject.Value
                 }
             )) {
-            Logger.Debug($"Tried getting CreateObject network data, but spawned object is entity");
+            //Logger.Debug($"Tried getting CreateObject network data, but spawned object is entity");
             return false;
         }
 
@@ -849,7 +849,7 @@ internal static class EntityFsmActions {
     }
 
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, CreateObject action) {
-        Logger.Debug("ApplyNetworkDataFromAction CreateObject");
+        //Logger.Debug("ApplyNetworkDataFromAction CreateObject");
 
         Vector3 position;
         Vector3 euler;
@@ -1489,7 +1489,7 @@ internal static class EntityFsmActions {
                 if (fsm.Fsm.Name.Equals("destroy_if_gameobject_null")) {
                     Object.Destroy(fsm);
 
-                    Logger.Debug($"De-parented object contained \"{fsm.Fsm.Name}\" FSM, removing it");
+                    //Logger.Debug($"De-parented object contained \"{fsm.Fsm.Name}\" FSM, removing it");
                 }
             }
         }
@@ -1544,7 +1544,7 @@ internal static class EntityFsmActions {
         }
 
         if (IsObjectInRegistry(gameObject)) {
-            Logger.Debug("Tried getting SetVelocity2d network data, but entity is in registry");
+            //Logger.Debug("Tried getting SetVelocity2d network data, but entity is in registry");
             return false;
         }
 
@@ -1620,7 +1620,7 @@ internal static class EntityFsmActions {
         }
 
         if (IsObjectInRegistry(gameObject)) {
-            Logger.Debug("Tried getting SetPosition network data, but entity is in registry");
+            //Logger.Debug("Tried getting SetPosition network data, but entity is in registry");
             return false;
         }
 
@@ -1709,7 +1709,7 @@ internal static class EntityFsmActions {
         }
 
         if (IsObjectInRegistry(gameObject)) {
-            Logger.Debug("Tried getting SetPosition network data, but entity is in registry");
+            //Logger.Debug("Tried getting SetPosition network data, but entity is in registry");
             return false;
         }
 
@@ -1796,7 +1796,7 @@ internal static class EntityFsmActions {
         }
 
         if (IsObjectInRegistry(gameObject)) {
-            Logger.Debug("Tried getting ActivateGameObject network data, but entity is in registry");
+            //Logger.Debug("Tried getting ActivateGameObject network data, but entity is in registry");
             return false;
         }
 
@@ -1835,7 +1835,7 @@ internal static class EntityFsmActions {
         }
 
         if (IsObjectInRegistry(gameObject)) {
-            Logger.Debug("Tried getting Tk2dPlayAnimation network data, but entity is in registry");
+            //Logger.Debug("Tried getting Tk2dPlayAnimation network data, but entity is in registry");
             return false;
         }
 
@@ -1867,7 +1867,7 @@ internal static class EntityFsmActions {
         }
 
         if (IsObjectInRegistry(gameObject)) {
-            Logger.Debug("Tried getting Tk2dPlayFrame network data, but entity is in registry");
+            //Logger.Debug("Tried getting Tk2dPlayFrame network data, but entity is in registry");
             return false;
         }
 
@@ -1899,7 +1899,7 @@ internal static class EntityFsmActions {
         }
 
         if (IsObjectInRegistry(gameObject)) {
-            Logger.Debug("Tried getting Tk2dPlayAnimationWithEvents network data, but entity is in registry");
+            //Logger.Debug("Tried getting Tk2dPlayAnimationWithEvents network data, but entity is in registry");
             return false;
         }
 
@@ -2107,7 +2107,7 @@ internal static class EntityFsmActions {
         }
 
         if (IsObjectInRegistry(gameObject)) {
-            Logger.Debug("Tried getting SetVelocityAsAngle network data, but entity is in registry");
+            //Logger.Debug("Tried getting SetVelocityAsAngle network data, but entity is in registry");
             return false;
         }
 
@@ -2325,7 +2325,7 @@ internal static class EntityFsmActions {
         }
 
         if (IsObjectInRegistry(gameObject)) {
-            Logger.Debug("Tried getting SetGravity2dScale network data, but entity is in registry");
+            //Logger.Debug("Tried getting SetGravity2dScale network data, but entity is in registry");
             return false;
         }
 
@@ -2357,7 +2357,7 @@ internal static class EntityFsmActions {
         }
 
         if (IsObjectInRegistry(gameObject)) {
-            Logger.Debug("Tried getting SetCollider network data, but entity is in registry");
+            //Logger.Debug("Tried getting SetCollider network data, but entity is in registry");
             return false;
         }
 
@@ -2404,7 +2404,7 @@ internal static class EntityFsmActions {
         }
 
         if (queue.Count == 0) {
-            Logger.Debug("Getting data for GetRandomChild has not enough items in queue");
+            //Logger.Debug("Getting data for GetRandomChild has not enough items in queue");
             return false;
         }
 
@@ -2460,7 +2460,7 @@ internal static class EntityFsmActions {
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, AddComponent action) {
         if (action.removeOnExit.Value) {
-            Logger.Debug("Tried getting data for AddComponent action, but removeOnExit is true");
+            //.Debug("Tried getting data for AddComponent action, but removeOnExit is true");
             return false;
         }
 
@@ -2505,7 +2505,7 @@ internal static class EntityFsmActions {
     #region GetPosition
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, GetPosition action) {
-        Logger.Debug($"Getting network data for GetPosition: {action.Fsm.GameObject.name}, {action.Fsm.Name}");
+        //Logger.Debug($"Getting network data for GetPosition: {action.Fsm.GameObject.name}, {action.Fsm.Name}");
 
         return action.Fsm.GameObject.name.StartsWith("Colosseum Manager") && action.Fsm.Name.Equals("Battle Control");
     }
@@ -2528,7 +2528,7 @@ internal static class EntityFsmActions {
     #region CallMethodProper
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, CallMethodProper action) {
-        Logger.Debug($"Getting network data for CallMethodProper: {action.Fsm.GameObject.name}, {action.Fsm.Name}");
+        //Logger.Debug($"Getting network data for CallMethodProper: {action.Fsm.GameObject.name}, {action.Fsm.Name}");
 
         return action.Fsm.GameObject.name.StartsWith("Colosseum Manager") &&
                action.Fsm.Name.Equals("Battle Control") ||
@@ -2576,7 +2576,7 @@ internal static class EntityFsmActions {
             try {
                 obj = methodInfo.Invoke(component, paramArray);
             } catch (Exception e) {
-                Logger.Error($"Error applying CallMethodProper:\n{e}");
+                //Logger.Error($"Error applying CallMethodProper:\n{e}");
                 return;
             }
         }
@@ -3153,7 +3153,7 @@ internal static class EntityFsmActions {
                             GameObject = spawnedGo
                         }
                     )) {
-                    Logger.Debug("Tried getting PreSpawnGameObjects network data, but spawned objects contains entity");
+                    //Logger.Debug("Tried getting PreSpawnGameObjects network data, but spawned objects contains entity");
                     spawnedEntity = true;
                 }
             }

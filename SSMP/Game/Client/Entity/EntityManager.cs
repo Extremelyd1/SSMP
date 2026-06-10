@@ -235,6 +235,10 @@ internal class EntityManager {
                                      .Where(e => e.gameObject.scene == scene)
                                      .SelectMany(ExpandDeathEffects);
 
+        var fromFsms = Object.FindObjectsOfType<PlayMakerFSM>(true)
+                             .Where(fsm => fsm.gameObject.scene == scene)
+                             .Select(fsm => fsm.gameObject);
+
         var fromComponents = new[] {
             Object.FindObjectsOfType<Climber>(true).Select(c => c.gameObject),
             Object.FindObjectsOfType<Walker>(true).Select(c => c.gameObject),
@@ -245,11 +249,13 @@ internal class EntityManager {
 
         return fromDeathEffects
                // Expand each object to itself and all children
-               .SelectMany(obj => obj == null ? [] : obj.GetChildren().Prepend(obj))
+               .Concat(fromFsms)
+               .SelectMany(obj => obj == null ? Array.Empty<GameObject>() : obj.GetChildren().Prepend(obj))
                .Concat(fromComponents)
                .Where(obj => obj.scene == scene)
                .Distinct();
     }
+
 
     private static IEnumerable<GameObject> ExpandDeathEffects(EnemyDeathEffects deathEffects) {
         try {
@@ -289,8 +295,6 @@ internal class EntityManager {
             return false;
         }
 
-        // Commented-out branches for EnemySpawnerComponent and SpawnJarComponent left in source intentionally.
-
         if (!EntityRegistry.TryGetEntry(details.Action.Fsm.GameObject, out var entry)) {
             Logger.Warn("Could not find registry entry for spawning type of object");
             return false;
@@ -316,9 +320,9 @@ internal class EntityManager {
             var update = _pendingUpdates.Dequeue();
 
             var applied = update switch {
-                EntityUpdate eu        => HandleEntityUpdate(eu),
+                EntityUpdate eu => HandleEntityUpdate(eu),
                 ReliableEntityUpdate r => HandleReliableEntityUpdate(r),
-                _                      => true  // Unknown subtype; discard.
+                _ => true
             };
 
             if (!applied) {

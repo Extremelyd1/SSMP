@@ -186,6 +186,16 @@ internal class PlayerManager : IPlayerManager {
         var collider = playerPrefab.GetComponent<BoxCollider2D>();
         // We're not using the fact that Hornet has a BoxCollider as opposed to any other collider
         var localCollider = localPlayerObject.GetComponent<Collider2D>();
+
+        collider.isTrigger = true;
+        collider.offset = localCollider.offset;
+        collider.enabled = true;
+
+        if (localCollider is BoxCollider2D localBoxCollider) {
+            collider.size = localBoxCollider.size;
+        } else {
+            collider.size = localCollider.bounds.size;
+        }
         var localColliderBounds = localCollider.bounds;
 
         // Copy collider offset and size
@@ -194,17 +204,12 @@ internal class PlayerManager : IPlayerManager {
         collider.size = localColliderBounds.size;
         collider.enabled = true;
 
-        // Copy collider bounds
-        var bounds = collider.bounds;
-        var localBounds = localColliderBounds;
-        bounds.min = localBounds.min;
-        bounds.max = localBounds.max;
-
         // Set Rigidbody properties
         var rigidbody = playerPrefab.GetComponent<Rigidbody2D>();
         rigidbody.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
-        rigidbody.gravityScale = 0;
+        rigidbody.gravityScale = 0f;
         rigidbody.bodyType = RigidbodyType2D.Kinematic;
+        rigidbody.simulated = true;
 
         // Set up sprite flash. Must be deactivated beforehand to fill properties in awake
         playerPrefab.SetActive(false);
