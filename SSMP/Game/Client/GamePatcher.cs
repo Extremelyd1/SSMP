@@ -297,8 +297,13 @@ internal class GamePatcher {
         }
 
         var requester = self.Fsm?.GameObject;
-        self.storeResult.Value = PlayerTargetRegistry.GetNearestPlayer(requester);
-        self.Finish();
+        if (requester != null && requester.GetComponentInParent<HealthManager>() != null) {
+            self.storeResult.Value = PlayerTargetRegistry.GetNearestPlayer(requester);
+            self.Finish();
+            return;
+        }
+
+        orig(self);
     }
 
     /// <summary>
@@ -610,6 +615,10 @@ internal class GamePatcher {
                      FindObjectsSortMode.None
                  )) {
             if (fsm == null || !fsm.isActiveAndEnabled) {
+                continue;
+            }
+
+            if (fsm.GetComponentInParent<HealthManager>() == null) {
                 continue;
             }
 

@@ -486,6 +486,19 @@ internal class PlayerManager : IPlayerManager {
         playerData.PlayerContainer = playerContainer;
         playerData.PlayerObject = playerObject;
 
+        // Ignore collisions between local player and remote player
+        if (HeroController.instance != null) {
+            var localColliders = HeroController.instance.GetComponentsInChildren<Collider2D>(true);
+            var remoteColliders = playerContainer.GetComponentsInChildren<Collider2D>(true);
+            foreach (var localCol in localColliders) {
+                foreach (var remoteCol in remoteColliders) {
+                    if (localCol != null && remoteCol != null) {
+                        Physics2D.IgnoreCollision(localCol, remoteCol, true);
+                    }
+                }
+            }
+        }
+
         PlayerTargetRegistry.RegisterRemotePlayer(playerObject);
     }
 
