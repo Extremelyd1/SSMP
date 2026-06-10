@@ -9,11 +9,21 @@ using UnityEngine;
 
 namespace SSMP.Animation.Effects.Tools;
 
+/// <summary>
+/// Class for the tool effect of the Tacks.
+/// </summary>
 internal class Tacks : BaseAttackTool {
+    /// <summary>
+    /// Cached prefab for the attacking Tacks.
+    /// </summary>
     private static GameObject? _modifiedPrefab;
 
+    /// <summary>
+    /// Dictionary mapping player object IDs to a list of Tacks they own.
+    /// </summary>
     private static readonly Dictionary<int, List<GameObject>> TackGroups = [];
 
+    /// <inheritdoc/>
     public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
         // Play audio
         var toolFsm = HeroController.instance.toolsFSM;
@@ -23,7 +33,7 @@ internal class Tacks : BaseAttackTool {
         var poisoned = EffectIsPoisoned(effectInfo);
 
         // Determine scatter angle
-        var isFacingRight = playerObject.transform.localScale.x == -1;
+        var isFacingRight = playerObject.transform.localScale.x < 0;
         if (EffectIsOnWall(effectInfo)) {
             isFacingRight = !isFacingRight;
         }
@@ -62,10 +72,8 @@ internal class Tacks : BaseAttackTool {
             var tack = prefab.Spawn(group.transform);
 
             // Set damage settings
-            if (tack.TryGetComponent<DamageHero>(out var damager)) {
-                damager.enabled = ShouldDoDamage && ServerSettings.IsPvpEnabled;
-                damager.SetDamageAmount(1);
-            }
+            // TODO: add damage setting for this tool
+            SetDamageHeroState(tack);
 
             // Set spawn position
             var variationX = Random.Range(-0.1f, 0.1f);

@@ -5,7 +5,6 @@ using SSMP.Animation.Effects;
 using SSMP.Animation.Effects.Movement;
 using SSMP.Animation.Effects.SilkSkills;
 using SSMP.Animation.Effects.Tools;
-using SSMP.Api.Client;
 using SSMP.Collection;
 using SSMP.Fsm;
 using SSMP.Game;
@@ -1046,7 +1045,11 @@ internal class AnimationManager {
         _stopSendingAnimationUntilSceneChange = false;
     }
 
-    public void OnPlayerLeaveScene(IClientPlayer player) {
+    /// <summary>
+    /// Callback method when a player leaves the scene. Used to destroy leftover animation effect objects.
+    /// </summary>
+    /// <param name="player">The player that left the scene.</param>
+    public void OnPlayerLeaveScene(ClientPlayerData player) {
         Tacks.DestroyPlayerTacks(player.PlayerObject);
     }
 
@@ -1513,6 +1516,10 @@ internal class AnimationManager {
         ToolItemManager.BoundAttackToolUsed += AttackToolUsed;
     }
 
+    /// <summary>
+    /// Callback method for when the local player uses a tool.
+    /// </summary>
+    /// <param name="binding">The AttackToolBinding enum for the used tool.</param>
     private void AttackToolUsed(AttackToolBinding binding) {
         var tool = ToolItemManager.GetBoundAttackTool(binding, ToolEquippedReadSource.Active);
         if (tool == null) {

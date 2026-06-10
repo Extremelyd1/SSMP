@@ -5,6 +5,9 @@ using UnityEngine;
 
 namespace SSMP.Animation.Effects.Tools;
 
+/// <summary>
+/// Class for the tool effect of the Straight Pin.
+/// </summary>
 internal class StraightPin : BaseAttackTool {
     /// <summary>
     /// Cached prefab for the attacking straight pin.
@@ -22,7 +25,7 @@ internal class StraightPin : BaseAttackTool {
         // Set up modified prefab
         if (!_modifiedPrefab) {
             var prefab = tool.usageOptions.ThrowPrefab;
-            _modifiedPrefab = EffectUtils.SpawnGlobalPoolObject(prefab, playerObject.transform, 0, false);
+            _modifiedPrefab = EffectUtils.SpawnGlobalPoolObject(prefab, playerObject.transform, 0);
             if (!_modifiedPrefab) return;
 
             _modifiedPrefab.SetActive(false);
@@ -44,10 +47,8 @@ internal class StraightPin : BaseAttackTool {
         pin.transform.localScale = new Vector3(scale, 1, 1);
 
         // Set damage settings
-        if (pin.TryGetComponent<DamageHero>(out var damager)) {
-            damager.enabled = ShouldDoDamage && ServerSettings.IsPvpEnabled;
-            damager.SetDamageAmount(1);
-        }
+        // TODO: add damage setting for this tool
+        SetDamageHeroState(pin);
 
         // Set initial velocity
         if (pin.TryGetComponent<Rigidbody2D>(out var body)) {

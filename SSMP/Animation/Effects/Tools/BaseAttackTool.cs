@@ -1,13 +1,12 @@
 using System.Collections.Generic;
 using GlobalSettings;
-using SSMP.Internals;
-using UnityEngine;
-using Logger = SSMP.Logging.Logger;
 
 namespace SSMP.Animation.Effects.Tools;
 
+/// <summary>
+/// Base class for animation effects of attack tools.
+/// </summary>
 internal abstract class BaseAttackTool : DamageAnimationEffect {
-
     /// <summary>
     /// Map of attack tool names to their corresponding enum value.
     /// </summary>
@@ -43,7 +42,7 @@ internal abstract class BaseAttackTool : DamageAnimationEffect {
     /// Gets important tool information, such as poison status and the tool being used.
     /// </summary>
     /// <returns>The tool info.</returns>
-    public static byte[]? GetToolInfo() {
+    public static byte[] GetToolInfo() {
         return [
             (byte) (HasPoison() ? 1 : 0),
             (byte) (HeroController.instance.IsOnWall() ? 1 : 0)
@@ -51,12 +50,12 @@ internal abstract class BaseAttackTool : DamageAnimationEffect {
     }
 
     /// <inheritdoc/>
-    public override byte[]? GetEffectInfo() {
+    public override byte[] GetEffectInfo() {
         return GetToolInfo();
     }
 
     /// <summary>
-    /// Determines whether the players tools have the Pollip Pouch poison effect.
+    /// Determines whether the local player's tools have the Pollip Pouch poison effect.
     /// </summary>
     /// <returns>True if the player has the Pollip Pouch equipped, otherwise false.</returns>
     protected static bool HasPoison() {

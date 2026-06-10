@@ -5,9 +5,12 @@ using UnityEngine;
 
 namespace SSMP.Animation.Effects.Tools;
 
+/// <summary>
+/// Class for the tool effect of the Threefold Pin.
+/// </summary>
 internal class ThreefoldPin : BaseAttackTool {
     /// <summary>
-    /// Cached prefab for one attacking pin.
+    /// Cached prefab for one attacking Threefold Pin.
     /// </summary>
     private static GameObject? _modifiedPrefab;
 
@@ -19,9 +22,8 @@ internal class ThreefoldPin : BaseAttackTool {
         // Set up modified prefab
         if (!_modifiedPrefab) {
             var prefab = fsm.GetFirstAction<SpawnObjectFromGlobalPool>("TriPin Ground L");
-            if (prefab == null) return;
 
-            _modifiedPrefab = EffectUtils.SpawnGlobalPoolObject(prefab, playerObject.transform, 0, false);
+            _modifiedPrefab = EffectUtils.SpawnGlobalPoolObject(prefab, playerObject.transform, 0);
             if (!_modifiedPrefab) return;
 
             _modifiedPrefab.SetActive(false);
@@ -32,7 +34,7 @@ internal class ThreefoldPin : BaseAttackTool {
 
         // Play audio
         var audio = fsm.GetFirstAction<PlayAudioEventRandom>("TriPin Type");
-        if (audio != null) AudioUtil.PlayAudio(audio, playerObject);
+        AudioUtil.PlayAudio(audio, playerObject);
 
         // Spawn pins
         var isOnWall = EffectIsOnWall(effectInfo);
@@ -69,7 +71,7 @@ internal class ThreefoldPin : BaseAttackTool {
         var maxAngle = minAngle + 3;
 
         var facingDirection = playerObject.transform.localScale.x * (onWall ? -1 : 1);
-        if (facingDirection == -1) {
+        if (facingDirection < 0) {
             directionToSet = 0;
             scaleX = 1.2f;
             maxAngle = 180 - minAngle;
@@ -104,7 +106,8 @@ internal class ThreefoldPin : BaseAttackTool {
         if (pin.TryGetComponent<ToolPin>(out var controller)) {
             StraightPin.SetPinPoison(controller, poisoned);
 
-            // Allows deflecting pins, but causes some side effects that make it look a bit worse (disappears immediately after hitting walls)
+            // Allows deflecting pins, but causes some side effects that make it look a bit worse (disappears
+            // immediately after hitting walls)
             controller.tinked = ServerSettings.IsPvpEnabled && ShouldDoDamage;
         }
     }
