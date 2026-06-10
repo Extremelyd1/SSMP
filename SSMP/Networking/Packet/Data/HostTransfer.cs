@@ -15,13 +15,20 @@ internal class HostTransfer : IPacketData {
     /// </summary>
     public string SceneName { get; set; } = null!;
 
+    /// <summary>
+    /// If true, the player should stop being the scene host and become a client instead.
+    /// </summary>
+    public bool Demote { get; set; }
+
     /// <inheritdoc />
     public void WriteData(IPacket packet) {
         packet.Write(SceneName);
+        packet.Write(Demote);
     }
 
     /// <inheritdoc />
     public void ReadData(IPacket packet) {
         SceneName = packet.ReadString();
+        Demote = packet.ReadBool();
     }
 }

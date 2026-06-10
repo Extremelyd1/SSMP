@@ -518,6 +518,7 @@ internal abstract class ServerManager : IServerManager {
         var entitySpawnList = new List<EntitySpawn>();
         var entityUpdateList = new List<EntityUpdate>();
         var reliableEntityUpdateList = new List<ReliableEntityUpdate>();
+        var makeEnteringPlayerHost = false;
 
         if (FullSynchronisation) {
             foreach (var keyDataPair in _entityData) {
@@ -594,10 +595,34 @@ internal abstract class ServerManager : IServerManager {
                 reliableEntityUpdateList.Add(reliableEntityUpdate);
             }
 
+            makeEnteringPlayerHost = false;
             if (!alreadyPlayersInScene) {
-                Logger.Debug($"No players already in scene, making {playerData.Id} the scene host");
+                makeEnteringPlayerHost = true;
+            } else if (playerData.LastHostedScene == playerData.CurrentScene) {
+                makeEnteringPlayerHost = true;
+
+                // Find the current host in this scene and demote them
+                foreach (var (key, otherPlayerData) in _playerData) {
+                    if (key == playerData.Id) {
+                        continue;
+                    }
+
+                    if (otherPlayerData.CurrentScene == playerData.CurrentScene && otherPlayerData.IsSceneHost) {
+                        otherPlayerData.IsSceneHost = false;
+                        var otherUpdateManager = _netServer.GetUpdateManagerForClient(key);
+                        otherUpdateManager?.SetSceneHostTransfer(playerData.CurrentScene, demote: true);
+                        Logger.Info($"Demoted player {key} ({otherPlayerData.Username}) in scene {playerData.CurrentScene} since the previous host {playerData.Id} ({playerData.Username}) re-entered");
+                        break;
+                    }
+                }
+            }
+
+            if (makeEnteringPlayerHost) {
+                Logger.Debug($"Making {playerData.Id} the scene host");
                 playerData.IsSceneHost = true;
             }
+
+            playerData.LastHostedScene = null;
         }
 
         _netServer.GetUpdateManagerForClient(playerData.Id)?.AddPlayerAlreadyInSceneData(
@@ -605,7 +630,7 @@ internal abstract class ServerManager : IServerManager {
             entitySpawnList,
             entityUpdateList,
             reliableEntityUpdateList,
-            FullSynchronisation && !alreadyPlayersInScene
+            FullSynchronisation && makeEnteringPlayerHost
         );
     }
 
@@ -1154,6 +1179,28 @@ internal abstract class ServerManager : IServerManager {
         //     
         //     Logger.Info("  Wiped player save data (Steel Soul)");
         // }
+
+        if (FullSynchronisation && playerData.IsSceneHost) {
+            var sceneName = playerData.CurrentScene;
+            foreach (var idPlayerDataPair in _playerData) {
+                if (idPlayerDataPair.Key == id) {
+                    continue;
+                }
+
+                var otherPlayerData = idPlayerDataPair.Value;
+                if (otherPlayerData.CurrentScene == sceneName) {
+                    var updateManager = _netServer.GetUpdateManagerForClient(idPlayerDataPair.Key);
+                    updateManager?.SetSceneHostTransfer(sceneName);
+
+                    playerData.IsSceneHost = false;
+                    playerData.LastHostedScene = sceneName;
+                    otherPlayerData.IsSceneHost = true;
+
+                    Logger.Info($"Player {id} ({playerData.Username}) died. Host transferred to {idPlayerDataPair.Key} ({otherPlayerData.Username}) in scene {sceneName}");
+                    break;
+                }
+            }
+        }
 
         SendDataInSameScene(
             id,

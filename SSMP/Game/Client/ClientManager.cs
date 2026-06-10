@@ -1034,7 +1034,9 @@ internal class ClientManager : IClientManager {
             return;
         }
 
-        Logger.Info($"Received scene host transfer for scene: {hostTransfer.SceneName}");
+        Logger.Info(
+            $"Received scene host transfer for scene: {hostTransfer.SceneName} (demote: {hostTransfer.Demote})"
+        );
 
         var currentScene = SceneManager.GetActiveScene().name;
         if (currentScene != hostTransfer.SceneName) {
@@ -1042,7 +1044,8 @@ internal class ClientManager : IClientManager {
             return;
         }
 
-        _entityManager.BecomeSceneHost();
+        if (hostTransfer.Demote) _entityManager.InitializeSceneClient();
+        else _entityManager.BecomeSceneHost();
     }
 
     /// <summary>

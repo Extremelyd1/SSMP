@@ -55,6 +55,11 @@ internal class ServerPlayerData : IServerPlayer {
     public bool IsSceneHost { get; set; }
 
     /// <summary>
+    /// The name of the scene this player last hosted before dying or leaving.
+    /// </summary>
+    public string? LastHostedScene { get; set; }
+
+    /// <summary>
     /// Reference of the authorized list for checking whether this player is authorized.
     /// </summary>
     private readonly AuthKeyList _authorizedList;

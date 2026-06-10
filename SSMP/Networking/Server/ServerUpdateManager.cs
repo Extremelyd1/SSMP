@@ -434,8 +434,9 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     /// Set that the receiving player should become scene host of their current scene.
     /// </summary>
     /// <param name="sceneName">The name of the scene in which the player becomes scene host.</param>
-    public void SetSceneHostTransfer(string sceneName) {
-        var hostTransfer = new HostTransfer { SceneName = sceneName };
+    /// <param name="demote">If true, demotes the player from scene host to client.</param>
+    public void SetSceneHostTransfer(string sceneName, bool demote = false) {
+        var hostTransfer = new HostTransfer { SceneName = sceneName, Demote = demote };
 
         lock (Lock) {
             CurrentUpdatePacket.SetSendingPacketData(ClientUpdatePacketId.SceneHostTransfer, hostTransfer);

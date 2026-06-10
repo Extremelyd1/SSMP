@@ -1015,6 +1015,43 @@ internal class Entity {
             _animator.Host.playAutomatically = false;
         }
 
+        Logger.Debug("  Restoring FSM variables from snapshots");
+
+        for (var fsmIndex = 0; fsmIndex < _fsms.Host.Count; fsmIndex++) {
+            var fsm = _fsms.Host[fsmIndex];
+
+            Logger.Debug($"    Restoring variables for FSM: {fsm.Fsm.Name}");
+
+            // Force initialize the host FSM, since it might have been disabled before initializing
+            EntityInitializer.InitializeFsm(fsm);
+
+            var snapshot = _fsmSnapshots[fsmIndex];
+
+            for (var i = 0; i < snapshot.Floats.Length; i++) {
+                fsm.FsmVariables.FloatVariables[i].Value = snapshot.Floats[i];
+            }
+
+            for (var i = 0; i < snapshot.Ints.Length; i++) {
+                fsm.FsmVariables.IntVariables[i].Value = snapshot.Ints[i];
+            }
+
+            for (var i = 0; i < snapshot.Bools.Length; i++) {
+                fsm.FsmVariables.BoolVariables[i].Value = snapshot.Bools[i];
+            }
+
+            for (var i = 0; i < snapshot.Strings.Length; i++) {
+                fsm.FsmVariables.StringVariables[i].Value = snapshot.Strings[i];
+            }
+
+            for (var i = 0; i < snapshot.Vector2s.Length; i++) {
+                fsm.FsmVariables.Vector2Variables[i].Value = snapshot.Vector2s[i];
+            }
+
+            for (var i = 0; i < snapshot.Vector3s.Length; i++) {
+                fsm.FsmVariables.Vector3Variables[i].Value = snapshot.Vector3s[i];
+            }
+        }
+
         var clientActive = Object.Client.activeSelf;
         Object.Client.SetActive(false);
         Object.Host.SetActive(clientActive);
@@ -1051,41 +1088,11 @@ internal class Entity {
             }
         }
 
-        Logger.Debug("  Restoring FSMs from snapshots");
+        Logger.Debug("  Restoring FSM states from snapshots");
 
         for (var fsmIndex = 0; fsmIndex < _fsms.Host.Count; fsmIndex++) {
             var fsm = _fsms.Host[fsmIndex];
-
-            Logger.Debug($"    Restoring FSM: {fsm.Fsm.Name}");
-
-            // Force initialize the host FSM, since it might have been disabled before initializing
-            EntityInitializer.InitializeFsm(fsm);
-
             var snapshot = _fsmSnapshots[fsmIndex];
-
-            for (var i = 0; i < snapshot.Floats.Length; i++) {
-                fsm.FsmVariables.FloatVariables[i].Value = snapshot.Floats[i];
-            }
-
-            for (var i = 0; i < snapshot.Ints.Length; i++) {
-                fsm.FsmVariables.IntVariables[i].Value = snapshot.Ints[i];
-            }
-
-            for (var i = 0; i < snapshot.Bools.Length; i++) {
-                fsm.FsmVariables.BoolVariables[i].Value = snapshot.Bools[i];
-            }
-
-            for (var i = 0; i < snapshot.Strings.Length; i++) {
-                fsm.FsmVariables.StringVariables[i].Value = snapshot.Strings[i];
-            }
-
-            for (var i = 0; i < snapshot.Vector2s.Length; i++) {
-                fsm.FsmVariables.Vector2Variables[i].Value = snapshot.Vector2s[i];
-            }
-
-            for (var i = 0; i < snapshot.Vector3s.Length; i++) {
-                fsm.FsmVariables.Vector3Variables[i].Value = snapshot.Vector3s[i];
-            }
 
             // Before setting the state, we replace the actions of the to-be state to only include the ones that
             // should be executed again (including actions with "everyFrame" on true or that continuously check
