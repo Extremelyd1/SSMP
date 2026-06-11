@@ -12,8 +12,7 @@ using Logger = SSMP.Logging.Logger;
 namespace SSMP.Game.Client.Entity.Component;
 
 // TODO: make sure that the data sent on death is saved as state on the server, so new clients entering
-// scenes can start with the entity disabled/already dead
-// TODO: periodically (or on hit) sync the health of the entity so on scene host transfer we can reset health
+// TODO: scenes can start with the entity disabled/already dead
 /// <inheritdoc />
 /// This component manages the <see cref="HealthManager"/> component of the entity.
 internal class HealthManagerComponent : EntityComponent {
@@ -139,7 +138,7 @@ internal class HealthManagerComponent : EntityComponent {
     }
 
     /// <summary>
-    /// Callback method for updates to check whether invincibility changes.
+    /// Callback method for updates to check whether health or invincibility changes.
     /// </summary>
     private void OnUpdate() {
         var observedHealthManager = IsControlled ? _healthManager.Client : _healthManager.Host;
@@ -149,14 +148,13 @@ internal class HealthManagerComponent : EntityComponent {
 
         var newHp = observedHealthManager.hp;
         if (newHp != _lastHp) {
-            var damageDelta = System.Math.Max(_lastHp - newHp, 0);
             _lastHp = newHp;
 
             var hpData = new EntityNetworkData {
                 Type = EntityComponentType.Health
             };
+
             hpData.Packet.Write(newHp);
-            hpData.Packet.Write(damageDelta);
 
             SendData(hpData);
         }
@@ -234,29 +232,14 @@ internal class HealthManagerComponent : EntityComponent {
     }
 
     /// <summary>
-    /// Applies a health update while preserving local damage from all players.
+    /// Applies an absolute health update from the network.
     /// </summary>
     /// <param name="data">The health update data.</param>
     /// <param name="alreadyInSceneUpdate">Whether this update is an authoritative scene snapshot.</param>
     private void UpdateHealth(EntityNetworkData data, bool alreadyInSceneUpdate) {
         var reportedHp = data.Packet.ReadInt();
-        var damageDelta = data.Packet.Length >= sizeof(int) * 2
-            ? data.Packet.ReadInt()
-            : System.Math.Max(GetCurrentHp() - reportedHp, 0);
 
-        if (alreadyInSceneUpdate) {
-            ApplyHp(reportedHp, triggerHostDeath: false);
-            return;
-        }
-
-        if (damageDelta > 0) {
-            ApplyHp(Mathf.Max(GetCurrentHp() - damageDelta, -1000), triggerHostDeath: true);
-            return;
-        }
-
-        // Apply unconditionally: covers both healing/HP increases and
-        // authoritative corrections downward when damageDelta wasn't provided.
-        ApplyHp(reportedHp, triggerHostDeath: true);
+        ApplyHp(reportedHp, triggerHostDeath: !alreadyInSceneUpdate);
     }
 
     /// <summary>

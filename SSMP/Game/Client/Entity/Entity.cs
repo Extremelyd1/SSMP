@@ -14,8 +14,9 @@ using SSMP.Networking.Client;
 using SSMP.Networking.Packet.Data;
 using SSMP.Util;
 using UnityEngine;
-using Logger = SSMP.Logging.Logger;
 using Math_Vector2 = SSMP.Math.Vector2;
+
+//using Logger = SSMP.Logging.Logger;
 
 // ReSharper disable ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
 #pragma warning disable CS8604 // Possible null reference argument.
@@ -304,7 +305,7 @@ internal class Entity {
     /// <param name="root">The root game object to start searching for children.</param>
     private void DestroyManagedChildren(GameObject root) {
         foreach (var child in root.GetChildren()) {
-            if (EntityRegistry.TryGetEntry(child, out var entry)) {
+            if (EntityRegistry.TryGetEntry(child, out _ /*var entry*/)) {
                 //Logger.Debug($"Found managed child: {child.name}, {entry.Type}, destroying it");
                 UnityEngine.Object.Destroy(child);
             } else {
@@ -324,7 +325,7 @@ internal class Entity {
 
         for (var i = 0; i < fsm.FsmStates.Length; i++) {
             var state = fsm.FsmStates[i];
-            var stateName = state.Name;
+            //var stateName = state.Name;
 
             for (var j = 0; j < state.Actions.Length; j++) {
                 var action = state.Actions[j];
@@ -386,7 +387,7 @@ internal class Entity {
     /// Check the host and client objects for components that are supported for networking.
     /// </summary>
     private void HandleComponents(EntityComponentType[] types) {
-        var addedComponentsString = $"Adding components to entity ({Object.Host.name}, {Id}):";
+        //var addedComponentsString = $"Adding components to entity ({Object.Host.name}, {Id}):";
 
         var hostHealthManager = Object.Host.GetComponent<HealthManager>();
         var clientHealthManager = Object.Client.GetComponent<HealthManager>();
@@ -415,7 +416,7 @@ internal class Entity {
                 clientHealthManager.SetGeoLarge(0);
             }
 
-            addedComponentsString += " Death Health Invincibility";
+            //addedComponentsString += " Death Health Invincibility";
         }
 
         var climber = Object.Client.GetComponent<Climber>();
@@ -432,7 +433,7 @@ internal class Entity {
                 Object
             );
 
-            addedComponentsString += " Climber Rotation";
+            //addedComponentsString += " Climber Rotation";
         }
 
         var hostCollider = Object.Host.GetComponent<Collider2D>();
@@ -452,7 +453,7 @@ internal class Entity {
                 collider
             );
 
-            addedComponentsString += " Collider";
+            //addedComponentsString += " Collider";
         }
 
         var hostDamageHero = Object.Host.GetComponent<DamageHero>();
@@ -472,7 +473,7 @@ internal class Entity {
                 damageHero
             );
 
-            addedComponentsString += " DamageHero";
+            //addedComponentsString += " DamageHero";
         }
 
         var hostMeshRenderer = Object.Host.GetComponent<MeshRenderer>();
@@ -492,7 +493,7 @@ internal class Entity {
                 meshRenderer
             );
 
-            addedComponentsString += " MeshRenderer";
+            //addedComponentsString += " MeshRenderer";
         }
 
         EntityInitializer.RemoveClientTypes(Object.Client);
@@ -506,7 +507,7 @@ internal class Entity {
                 _components[type] = component;
             }
 
-            addedComponentsString += $" {type}";
+            //addedComponentsString += $" {type}";
         }
 
         //Logger.Debug(addedComponentsString);
@@ -629,9 +630,9 @@ internal class Entity {
         if (_isControlled) {
             if (hostObjectActive) {
                 if (!_isSceneHostDetermined) {
-                   //Logger.Info(
-                   //    $"Entity '{Object.Host.name}' host object became active, but scene host is not determined yet, re-disabling for now"
-                   //);
+                    //Logger.Info(
+                    //    $"Entity '{Object.Host.name}' host object became active, but scene host is not determined yet, re-disabling for now"
+                    //);
                     _originalIsActive = true;
                 } else {
                     //Logger.Info($"Entity '{Object.Host.name}' host object became active, re-disabling");
@@ -1373,25 +1374,6 @@ internal class Entity {
 
             var fsms = new[] { hostFsm, _fsms.Client[fsmIndex] };
 
-            void CondUpdateVars<TFsm, TBase>(
-                EntityHostFsmData.Type type,
-                Dictionary<byte, TBase> dataDict,
-                TFsm[] fsmVarArray,
-                Action<byte, TFsm, TBase> setValueAction
-            ) {
-                if (data.Types.Contains(type)) {
-                    foreach (var pair in dataDict) {
-                        if (fsmVarArray.Length <= pair.Key) {
-                            //Logger.Warn(
-                            //    $"Tried to update host FSM var ({typeof(TBase)}) for unknown index: {pair.Key}"
-                            //);
-                        } else {
-                            setValueAction.Invoke(pair.Key, fsmVarArray[pair.Key], pair.Value);
-                        }
-                    }
-                }
-            }
-
             foreach (var fsm in fsms) {
                 CondUpdateVars(
                     EntityHostFsmData.Type.Floats,
@@ -1447,6 +1429,27 @@ internal class Entity {
                         snapshot.Vector3s[index] = (Vector3) value;
                     }
                 );
+            }
+
+            continue;
+
+            void CondUpdateVars<TFsm, TBase>(
+                EntityHostFsmData.Type type,
+                Dictionary<byte, TBase> dataDict,
+                TFsm[] fsmVarArray,
+                Action<byte, TFsm, TBase> setValueAction
+            ) {
+                if (data.Types.Contains(type)) {
+                    foreach (var pair in dataDict) {
+                        if (fsmVarArray.Length <= pair.Key) {
+                            //Logger.Warn(
+                            //    $"Tried to update host FSM var ({typeof(TBase)}) for unknown index: {pair.Key}"
+                            //);
+                        } else {
+                            setValueAction.Invoke(pair.Key, fsmVarArray[pair.Key], pair.Value);
+                        }
+                    }
+                }
             }
         }
     }
