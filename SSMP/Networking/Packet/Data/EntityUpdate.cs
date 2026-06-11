@@ -583,9 +583,18 @@ internal class ReliableEntityUpdate : BaseEntityUpdate, IPoolable {
 /// </summary>
 internal class EntityNetworkData : IPoolable {
     /// <summary>
+    /// Sentinel value indicating an unknown or unassigned sender ID.
+    /// </summary>
+    private const ushort UnknownSenderId = ushort.MaxValue;
+
+    /// <summary>
     /// The type of the data.
     /// </summary>
     public EntityComponentType Type { get; set; }
+    /// <summary>
+    /// The ID of the player who sent this update.
+    /// </summary>
+    public ushort SenderId { get; set; } = UnknownSenderId;
     /// <summary>
     /// Packet instance containing the data for easy reading and writing of data.
     /// </summary>
@@ -597,6 +606,7 @@ internal class EntityNetworkData : IPoolable {
     public EntityNetworkData Clone() {
         var clone = ObjectPool<EntityNetworkData>.Get();
         clone.Type = Type;
+        clone.SenderId = SenderId;
         clone.Packet = new Packet(Packet.ToArray());
         return clone;
     }
@@ -604,12 +614,14 @@ internal class EntityNetworkData : IPoolable {
     /// <inheritdoc />
     public void Reset() {
         Type = default;
+        SenderId = UnknownSenderId;
         Packet = new Packet();
     }
 
     /// <inheritdoc cref="IPacketData.WriteData" />
     public void WriteData(IPacket packet) {
         packet.Write((ushort) Type);
+        packet.Write(SenderId);
 
         var data = Packet.ToArray();
         
@@ -628,6 +640,7 @@ internal class EntityNetworkData : IPoolable {
     /// <inheritdoc cref="IPacketData.ReadData" />
     public void ReadData(IPacket packet) {
         Type = (EntityComponentType) packet.ReadUShort();
+        SenderId = packet.ReadUShort();
 
         var length = packet.ReadUShort();
         var data = new byte[length];

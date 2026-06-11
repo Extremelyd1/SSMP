@@ -87,6 +87,11 @@ internal class ClientPlayerAlreadyInScene : IPacketData {
     public bool SceneHost { get; set; }
 
     /// <summary>
+    /// The current scene host epoch.
+    /// </summary>
+    public uint SceneHostEpoch { get; set; }
+
+    /// <summary>
     /// Construct the client player already in scene data.
     /// </summary>
     public ClientPlayerAlreadyInScene() {
@@ -131,6 +136,7 @@ internal class ClientPlayerAlreadyInScene : IPacketData {
         }
 
         packet.Write(SceneHost);
+        packet.Write(SceneHostEpoch);
     }
 
     /// <inheritdoc />
@@ -184,6 +190,7 @@ internal class ClientPlayerAlreadyInScene : IPacketData {
         }
 
         SceneHost = packet.ReadBool();
+        SceneHostEpoch = packet.ReadUInt();
     }
 }
 

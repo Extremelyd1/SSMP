@@ -43,10 +43,10 @@ internal class DreamPlatformComponent : EntityComponent {
         }
     }
 
-    /// <summary>
-    /// Hook for the Start method of DreamPlatform. Used to prevent the original method from registering event
-    /// handlers to the trigger enter/exit.
-    /// </summary>
+    // /// <summary>
+    // /// Hook for the Start method of DreamPlatform. Used to prevent the original method from registering event
+    // /// handlers to the trigger enter/exit.
+    // /// </summary>
     // private void DreamPlatformOnStart(On.DreamPlatform.orig_Start orig, DreamPlatform self) {
     //     if (self == _platform.Client || self == _platform.Host) {
     //         return;
@@ -150,7 +150,7 @@ internal class DreamPlatformComponent : EntityComponent {
     }
 
     /// <inheritdoc />
-    public override void InitializeHost() {
+    protected override void InitializeHost() {
     }
 
     /// <inheritdoc />

@@ -912,7 +912,7 @@ internal class Entity {
     /// <summary>
     /// Initializes the entity when the client user is the scene host.
     /// </summary>
-    public void InitializeHost() {
+    public void InitializeHost(uint sceneHostEpoch = 0) {
         Object.Host.SetActive(_originalIsActive);
 
         // Also update the last active variable to account for this potential change
@@ -930,7 +930,7 @@ internal class Entity {
 
         foreach (var component in _components.Values) {
             component.IsControlled = false;
-            component.InitializeHost();
+            component.InitializeHost(sceneHostEpoch);
         }
 
         // Deregister the hook for updating the active value of the host object
@@ -942,18 +942,22 @@ internal class Entity {
     /// Initializes the entity when the client user is a scene client. Only sets a variable to indicate the scene
     /// host has been determined.
     /// </summary>
-    public void InitializeClient() {
+    public void InitializeClient(uint sceneHostEpoch = 0) {
         _isSceneHostDetermined = true;
 
         // Deregister the hook for updating the active value of the host object
         _activateGameObjectHook?.Dispose();
         _activateGameObjectHook = null;
+
+        foreach (var component in _components.Values) {
+            component.InitializeClient(sceneHostEpoch);
+        }
     }
 
     /// <summary>
     /// Makes the entity a host entity if the client user became the scene host.
     /// </summary>
-    public void MakeHost() {
+    public void MakeHost(uint sceneHostEpoch) {
         //Logger.Info($"Making entity ({Id}, {Type}) a host entity");
 
         // If the client object is null, we don't have to care about doing anything for the host object anymore
@@ -966,6 +970,7 @@ internal class Entity {
 
             foreach (var component in _components.Values) {
                 component.IsControlled = false;
+                component.InitializeHost(sceneHostEpoch);
             }
 
             //Logger.Debug("  Client object null, enabling host object and returning");
@@ -1053,42 +1058,6 @@ internal class Entity {
             }
         }
 
-        var clientActive = Object.Client.activeSelf;
-        Object.Client.SetActive(false);
-        Object.Host.SetActive(clientActive);
-
-        //Logger.Debug($"  Set Active of host object to: {clientActive}, disabling client object");
-
-        // We need to set the isKinematic property of rigid bodies to ensure physics work again after enabling
-        // the host object. In Hornet 1 this is necessary because another state sets this property normally in the
-        // fight. See the "Wake" or "Refight Ready" state of the "Control" FSM on Hornet 1.
-        // For the Mantis Lord and City Elevator entity, this should never be disabled, since they are always kinematic.
-        var rigidBody = Object.Host.GetComponent<Rigidbody2D>();
-        if (rigidBody != null) {
-            //Logger.Debug("  Resetting isKinematic of Rigidbody to ensure physics work for host object");
-            rigidBody.isKinematic = false;
-        }
-
-        _lastIsActive = _hasParent ? Object.Host.activeSelf : Object.Host.activeInHierarchy;
-
-        _isControlled = false;
-
-        foreach (var component in _components.Values) {
-            component.IsControlled = false;
-        }
-
-        if (_animator.Client != null) {
-            var currentClip = _animator.Client.CurrentClip;
-            if (currentClip != null) {
-                var clientAnimation = currentClip.name;
-                var wrapMode = currentClip.wrapMode;
-
-                //Logger.Debug($"  Animator and current clip present, updating animation: {clientAnimation}, {wrapMode}");
-
-                LateUpdateAnimation(_animator.Host, clientAnimation, wrapMode);
-            }
-        }
-
         //Logger.Debug("  Restoring FSM states from snapshots");
 
         for (var fsmIndex = 0; fsmIndex < _fsms.Host.Count; fsmIndex++) {
@@ -1112,7 +1081,9 @@ internal class Entity {
             //Logger.Debug($"  Setting FSM state: {snapshot.CurrentState}");
 
             var oldActions = state.Actions;
-            var newActions = oldActions.Where(ActionRegistry.IsActionContinuous).ToArray();
+            var newActions = oldActions.Where(a =>
+                ActionRegistry.IsActionContinuous(a) || ActionRegistry.IsActionTransferSafeSetup(a)
+            ).ToArray();
 
             //Logger.Debug($"  Only using actions: {string.Join(", ", newActions.Select(a => a.GetType().ToString()))}");
 
@@ -1120,6 +1091,46 @@ internal class Entity {
             state.Actions = newActions;
             fsm.SetState(snapshot.CurrentState);
             state.Actions = oldActions;
+        }
+
+        // We need to set the isKinematic property of rigid bodies to ensure physics work again after enabling
+        // the host object. In Hornet 1 this is necessary because another state sets this property normally in the
+        // fight. See the "Wake" or "Refight Ready" state of the "Control" FSM on Hornet 1.
+        // For the Mantis Lord and City Elevator entity, this should never be disabled, since they are always kinematic.
+        var rigidBody = Object.Host.GetComponent<Rigidbody2D>();
+        if (rigidBody != null) {
+            //Logger.Debug("  Resetting isKinematic of Rigidbody to ensure physics work for host object");
+            rigidBody.isKinematic = false;
+        }
+
+        _isControlled = false;
+
+        foreach (var component in _components.Values) {
+            component.IsControlled = false;
+        }
+
+        if (_animator.Client != null) {
+            var currentClip = _animator.Client.CurrentClip;
+            if (currentClip != null) {
+                var clientAnimation = currentClip.name;
+                var wrapMode = currentClip.wrapMode;
+
+                //Logger.Debug($"  Animator and current clip present, updating animation: {clientAnimation}, {wrapMode}");
+
+                LateUpdateAnimation(_animator.Host, clientAnimation, wrapMode);
+            }
+        }
+
+        var clientActive = Object.Client.activeSelf;
+        Object.Client.SetActive(false);
+        Object.Host.SetActive(clientActive);
+
+        //Logger.Debug($"  Set Active of host object to: {clientActive}, disabling client object");
+
+        _lastIsActive = _hasParent ? Object.Host.activeSelf : Object.Host.activeInHierarchy;
+
+        foreach (var component in _components.Values) {
+            component.InitializeHost(sceneHostEpoch);
         }
     }
 
@@ -1305,6 +1316,10 @@ internal class Entity {
             if (data.Type == EntityComponentType.Fsm) {
                 PlayMakerFSM fsm;
 
+                if (_fsms.Client == null) {
+                    continue;
+                }
+
                 if (_fsms.Client.Count > 1) {
                     // Do a check on the length of the data
                     if (data.Packet.Length < 3) {
@@ -1312,6 +1327,9 @@ internal class Entity {
                     }
 
                     var fsmIndex = data.Packet.ReadByte();
+                    if (fsmIndex >= _fsms.Client.Count) {
+                        continue;
+                    }
                     fsm = _fsms.Client[fsmIndex];
                 } else {
                     // Do a check on the length of the data
@@ -1319,13 +1337,26 @@ internal class Entity {
                         continue;
                     }
 
+                    if (_fsms.Client.Count == 0) {
+                        continue;
+                    }
                     fsm = _fsms.Client[0];
+                }
+
+                if (fsm == null || fsm.FsmStates == null) {
+                    continue;
                 }
 
                 var stateIndex = data.Packet.ReadByte();
                 var actionIndex = data.Packet.ReadByte();
 
+                if (stateIndex >= fsm.FsmStates.Length) {
+                    continue;
+                }
                 var state = fsm.FsmStates[stateIndex];
+                if (state == null || state.Actions == null || actionIndex >= state.Actions.Length) {
+                    continue;
+                }
                 var action = state.Actions[actionIndex];
 
                 //Logger.Info(
@@ -1351,6 +1382,10 @@ internal class Entity {
         foreach (var (fsmIndex, data) in hostFsmData) {
             if (_fsms.Host.Count <= fsmIndex) {
                 //Logger.Warn($"Tried to update host FSM data for unknown FSM index: {fsmIndex}");
+                continue;
+            }
+
+            if (_fsms.Client == null || _fsms.Client.Count <= fsmIndex || _fsms.Client[fsmIndex] == null) {
                 continue;
             }
 

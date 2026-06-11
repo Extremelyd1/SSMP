@@ -22,14 +22,14 @@ internal class EnemySpawnerComponent : EntityComponent {
     ) : base(netClient, entityId, gameObject) {
         _spawner = spawner;
         spawner.Client.enabled = false;
-        
+
         // On.EnemySpawner.Start += EnemySpawnerOnStart;
         spawner.Host.OnEnemySpawned += OnEnemySpawned;
     }
 
-    /// <summary>
-    /// Hook for when the EnemySpawner starts to check whether the interpolation move happens.
-    /// </summary>
+    // /// <summary>
+    // /// Hook for when the EnemySpawner starts to check whether the interpolation move happens.
+    // /// </summary>
     // private void EnemySpawnerOnStart(On.EnemySpawner.orig_Start orig, EnemySpawner self) {
     //     orig(self);
     //
@@ -46,39 +46,43 @@ internal class EnemySpawnerComponent : EntityComponent {
     //         SendData(data);
     //     }
     // }
-    
+
     /// <summary>
     /// Hook for when the enemy object is spawned from the spawner so we can call the spawn event.
     /// </summary>
     /// <param name="obj">The spawned game object.</param>
     private void OnEnemySpawned(GameObject obj) {
-        EntityFsmActions.CallEntitySpawnEvent(new EntitySpawnDetails {
-            Type = EntitySpawnType.EnemySpawnerComponent,
-            GameObject = obj
-        });
+        EntityFsmActions.CallEntitySpawnEvent(
+            new EntitySpawnDetails {
+                Type = EntitySpawnType.EnemySpawnerComponent,
+                GameObject = obj
+            }
+        );
     }
 
     /// <inheritdoc />
-    public override void InitializeHost() {
+    protected override void InitializeHost() {
     }
 
     /// <inheritdoc />
     public override void Update(EntityNetworkData data, bool alreadyInSceneUpdate) {
-        iTween.MoveBy(_spawner.Client.gameObject, new Hashtable {
-            {
-                "amount",
-                _spawner.Client.moveBy
-            }, {
-                "time",
-                _spawner.Client.easeTime
-            }, {
-                "easetype",
-                _spawner.Client.easeType
-            }, {
-                "space",
-                Space.World
+        iTween.MoveBy(
+            _spawner.Client.gameObject, new Hashtable {
+                {
+                    "amount",
+                    _spawner.Client.moveBy
+                }, {
+                    "time",
+                    _spawner.Client.easeTime
+                }, {
+                    "easetype",
+                    _spawner.Client.easeType
+                }, {
+                    "space",
+                    Space.World
+                }
             }
-        });
+        );
     }
 
     /// <inheritdoc />

@@ -74,26 +74,29 @@ internal class EntityManager {
         ClearEntities();
     }
 
-    public void InitializeSceneHost() {
-        Logger.Info("We are scene host, releasing control of all registered entities");
+    public void InitializeSceneHost(uint sceneHostEpoch = 0) {
+        Logger.Info($"We are scene host, releasing control of all registered entities (epoch {sceneHostEpoch})");
         IsSceneHost = true;
-        foreach (var entity in _entities.Values) entity.InitializeHost();
+        foreach (var entity in _entities.Values) entity.InitializeHost(sceneHostEpoch);
         _sceneRoleDetermined = true;
         DrainPendingUpdates();
     }
 
-    public void InitializeSceneClient() {
-        Logger.Info("We are scene client, taking control of all registered entities");
+    public void InitializeSceneClient(uint sceneHostEpoch = 0) {
+        Logger.Info($"We are scene client, taking control of all registered entities (epoch {sceneHostEpoch})");
         IsSceneHost = false;
-        foreach (var entity in _entities.Values) entity.InitializeClient();
+        foreach (var entity in _entities.Values) entity.InitializeClient(sceneHostEpoch);
         _sceneRoleDetermined = true;
         DrainPendingUpdates();
     }
 
-    public void BecomeSceneHost() {
-        Logger.Info("Becoming scene host");
+    public void BecomeSceneHost(uint sceneHostEpoch = 0) {
+        Logger.Info($"Becoming scene host (epoch {sceneHostEpoch})");
         IsSceneHost = true;
-        foreach (var entity in _entities.Values) entity.MakeHost();
+        foreach (var entity in _entities.Values) entity.MakeHost(sceneHostEpoch);
+
+        // Immediately refresh targeting fields for all active enemies
+        GamePatcher.ForceImmediateRetarget();
     }
 
     /// <summary>

@@ -189,15 +189,18 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     /// <param name="entityUpdateList">An enumerable of EntityUpdate instances to add.</param>
     /// <param name="reliableEntityUpdateList">An enumerable of ReliableEntityUpdate instances to add.</param>
     /// <param name="sceneHost">Whether the player is the scene host.</param>
+    /// <param name="sceneHostEpoch">The current scene host epoch.</param>
     public void AddPlayerAlreadyInSceneData(
         IEnumerable<ClientPlayerEnterScene> playerEnterSceneList,
         IEnumerable<EntitySpawn> entitySpawnList,
         IEnumerable<EntityUpdate> entityUpdateList,
         IEnumerable<ReliableEntityUpdate> reliableEntityUpdateList,
-        bool sceneHost
+        bool sceneHost,
+        uint sceneHostEpoch
     ) {
         var alreadyInScene = new ClientPlayerAlreadyInScene {
-            SceneHost = sceneHost
+            SceneHost = sceneHost,
+            SceneHostEpoch = sceneHostEpoch
         };
         alreadyInScene.PlayerEnterSceneList.AddRange(playerEnterSceneList);
         alreadyInScene.EntitySpawnList.AddRange(entitySpawnList);
@@ -434,9 +437,10 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     /// Set that the receiving player should become scene host of their current scene.
     /// </summary>
     /// <param name="sceneName">The name of the scene in which the player becomes scene host.</param>
+    /// <param name="sceneHostEpoch">The scene-host epoch assigned by the server.</param>
     /// <param name="demote">If true, demotes the player from scene host to client.</param>
-    public void SetSceneHostTransfer(string sceneName, bool demote = false) {
-        var hostTransfer = new HostTransfer { SceneName = sceneName, Demote = demote };
+    public void SetSceneHostTransfer(string sceneName, uint sceneHostEpoch, bool demote = false) {
+        var hostTransfer = new HostTransfer { SceneName = sceneName, Demote = demote, SceneHostEpoch = sceneHostEpoch };
 
         lock (Lock) {
             CurrentUpdatePacket.SetSendingPacketData(ClientUpdatePacketId.SceneHostTransfer, hostTransfer);

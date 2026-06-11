@@ -5,10 +5,12 @@ using HutongGames.PlayMaker;
 using Newtonsoft.Json;
 using SSMP.Util;
 using Logger = SSMP.Logging.Logger;
-// ReSharper disable ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
 
-namespace SSMP.Game.Client.Entity.Action; 
+// ReSharper disable ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider
+// adding the 'required' modifier or declaring as nullable.
+
+namespace SSMP.Game.Client.Entity.Action;
 
 /// <summary>
 /// Static class that manages loading and storing of action data. Specifically, which actions execute every frame.
@@ -18,7 +20,7 @@ internal static class ActionRegistry {
     /// The file path of the embedded resource file for the action registry.
     /// </summary>
     private const string ActionRegistryFilePath = "SSMP.Resource.action-registry.json";
-    
+
     /// <summary>
     /// List of all entity registry entries that are loaded from the embedded file.
     /// </summary>
@@ -66,6 +68,37 @@ internal static class ActionRegistry {
         Logger.Warn($"Could not find type of the field on FSM state action class: {type}, {entry.UpdateField}");
         return false;
     }
+
+    /// <summary>
+    /// Set of FSM action types that are safe to run as setup actions during host transfer.
+    /// These actions rebuild cached targets or object references but do not cause gameplay side effects.
+    /// </summary>
+    private static readonly HashSet<string> TransferSafeSetupActionTypes = [
+        "GetHero",
+        "GetHeroObject",
+        "GetOwner",
+        "GetParent",
+        "GetChild",
+        "FindChild",
+        "FindGameObject",
+        "SetGameObject",
+        "FaceObject",
+        "FaceObjectV2",
+        "FaceDirection",
+        "CheckTargetDirection",
+        "GetAngleToTarget2D",
+        "GetDistance",
+        "DistanceBetweenPoints2D",
+        "FindAlertRange"
+    ];
+
+    /// <summary>
+    /// Checks whether the given FSM action is a transfer-safe setup action that should be executed
+    /// during host transfer to rebuild cached targets or object references.
+    /// </summary>
+    public static bool IsActionTransferSafeSetup(FsmStateAction action) {
+        return TransferSafeSetupActionTypes.Contains(action.GetType().Name);
+    }
 }
 
 /// <summary>
@@ -77,7 +110,7 @@ internal class ActionRegistryEntry {
     /// </summary>
     [JsonProperty("type")]
     public string Type { get; set; }
-    
+
     /// <summary>
     /// The name of the field that controls whether the actions is checked every frame.
     /// </summary>

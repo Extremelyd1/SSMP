@@ -495,6 +495,15 @@ internal partial class GamePatcher {
     }
 
     /// <summary>
+    /// Forces an immediate retargeting update for all targeted FSM actions and components.
+    /// </summary>
+    public static void ForceImmediateRetarget() {
+        UpdateTargetedFsmActions();
+        UpdateCachedTargetField<WalkerV2>(WalkerV2HeroField);
+        UpdateCachedTargetField<ScuttlerControl>(ScuttlerControlHeroField);
+    }
+
+    /// <summary>
     /// Forces a target-consuming FSM action to use the approved multiplayer target of its owning enemy.
     /// </summary>
     /// <param name="action">The FSM action to retarget.</param>

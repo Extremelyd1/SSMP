@@ -837,10 +837,10 @@ internal class ClientManager : IClientManager {
         if (_fullSynchronisation) {
             if (alreadyInScene.SceneHost) {
                 // Notify the entity manager that we are scene host
-                _entityManager.InitializeSceneHost();
+                _entityManager.InitializeSceneHost(alreadyInScene.SceneHostEpoch);
             } else {
                 // Notify the entity manager that we are scene client (non-host)
-                _entityManager.InitializeSceneClient();
+                _entityManager.InitializeSceneClient(alreadyInScene.SceneHostEpoch);
             }
 
             foreach (var entitySpawn in alreadyInScene.EntitySpawnList) {
@@ -1045,9 +1045,9 @@ internal class ClientManager : IClientManager {
         }
 
         if (hostTransfer.Demote) {
-            _entityManager.InitializeSceneClient();
+            _entityManager.InitializeSceneClient(hostTransfer.SceneHostEpoch);
         } else {
-            _entityManager.BecomeSceneHost();
+            _entityManager.BecomeSceneHost(hostTransfer.SceneHostEpoch);
         }
     }
 

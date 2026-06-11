@@ -54,14 +54,24 @@ internal class HealthManagerComponent : EntityComponent {
     private int _lastInvincibleFromDirection;
 
     /// <summary>
+    /// The current scene host epoch from our perspective.
+    /// </summary>
+    private uint _currentHealthEpoch;
+
+    /// <summary>
+    /// The highest received scene host epoch.
+    /// </summary>
+    private uint _lastReceivedHealthEpoch;
+
+    /// <summary>
     /// Monotonically increasing local health update ID sent to other clients.
     /// </summary>
     private uint _nextHealthUpdateId;
 
     /// <summary>
-    /// The last received health update ID to prevent duplicate or out-of-order updates.
+    /// Dictionary of the last received health update ID per sender to prevent duplicate/out-of-order updates.
     /// </summary>
-    private uint _lastReceivedHealthUpdateId;
+    private readonly System.Collections.Generic.Dictionary<ushort, uint> _lastReceivedHealthUpdateIdBySender = new();
 
     public HealthManagerComponent(
         NetClient netClient,
@@ -174,6 +184,7 @@ internal class HealthManagerComponent : EntityComponent {
 
             hpData.Packet.Write(previousHp);
             hpData.Packet.Write(newHp);
+            hpData.Packet.Write(_currentHealthEpoch);
             hpData.Packet.Write(_nextHealthUpdateId);
 
             SendData(hpData);
@@ -207,7 +218,24 @@ internal class HealthManagerComponent : EntityComponent {
     }
 
     /// <inheritdoc />
-    public override void InitializeHost() {
+    public override void InitializeHost(uint sceneHostEpoch) {
+        ResetHealthOrderingForEpoch(sceneHostEpoch);
+        var currentHp = GetCurrentHp();
+        ApplyHp(currentHp, triggerHostDeath: false);
+    }
+
+    /// <inheritdoc />
+    public override void InitializeClient(uint sceneHostEpoch) {
+        ResetHealthOrderingForEpoch(sceneHostEpoch);
+        var currentHp = GetCurrentHp();
+        ApplyHp(currentHp, triggerHostDeath: false);
+    }
+
+    private void ResetHealthOrderingForEpoch(uint sceneHostEpoch) {
+        _currentHealthEpoch = sceneHostEpoch;
+        _lastReceivedHealthEpoch = sceneHostEpoch;
+        _nextHealthUpdateId = 0;
+        _lastReceivedHealthUpdateIdBySender.Clear();
     }
 
     /// <inheritdoc />
@@ -260,16 +288,31 @@ internal class HealthManagerComponent : EntityComponent {
     private void UpdateHealth(EntityNetworkData data, bool alreadyInSceneUpdate) {
         var previousHp = data.Packet.ReadInt();
         var newHp = data.Packet.ReadInt();
+        var healthEpoch = data.Packet.ReadUInt();
         var healthUpdateId = data.Packet.ReadUInt();
 
         if (alreadyInSceneUpdate) {
+            ResetHealthOrderingForEpoch(healthEpoch);
             ApplyHp(newHp, triggerHostDeath: false);
         } else {
-            if (healthUpdateId <= _lastReceivedHealthUpdateId) {
+            if (healthEpoch < _lastReceivedHealthEpoch) {
                 return;
             }
 
-            _lastReceivedHealthUpdateId = healthUpdateId;
+            if (healthEpoch > _lastReceivedHealthEpoch) {
+                _lastReceivedHealthEpoch = healthEpoch;
+                _lastReceivedHealthUpdateIdBySender.Clear();
+                if (IsControlled) {
+                    _currentHealthEpoch = healthEpoch;
+                }
+            }
+
+            var senderId = data.SenderId;
+            if (_lastReceivedHealthUpdateIdBySender.TryGetValue(senderId, out var lastId) && healthUpdateId <= lastId) {
+                return;
+            }
+
+            _lastReceivedHealthUpdateIdBySender[senderId] = healthUpdateId;
 
             var currentHp = GetCurrentHp();
             var damage = System.Math.Max(previousHp - newHp, 0);

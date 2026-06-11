@@ -14,6 +14,7 @@ internal abstract class EntityComponent {
     /// The net client for networking.
     /// </summary>
     private readonly NetClient _netClient;
+
     /// <summary>
     /// The ID of the entity.
     /// </summary>
@@ -53,7 +54,28 @@ internal abstract class EntityComponent {
     /// <summary>
     /// Initializes the entity component when the client user is the scene host.
     /// </summary>
-    public abstract void InitializeHost();
+    protected virtual void InitializeHost() {
+    }
+
+    /// <summary>
+    /// Initializes the entity component when the client user is the scene host with an epoch.
+    /// </summary>
+    public virtual void InitializeHost(uint sceneHostEpoch) {
+        InitializeHost();
+    }
+
+    /// <summary>
+    /// Initializes the entity component when the client user is a scene client.
+    /// </summary>
+    private static void InitializeClient() {
+    }
+
+    /// <summary>
+    /// Initializes the entity component when the client user is a scene client with an epoch.
+    /// </summary>
+    public virtual void InitializeClient(uint sceneHostEpoch) {
+        InitializeClient();
+    }
 
     /// <summary>
     /// Update the entity component with the given data.
@@ -61,6 +83,7 @@ internal abstract class EntityComponent {
     /// <param name="data">The data to update with.</param>
     /// <param name="alreadyInSceneUpdate">Whether this data is from an already in scene packet.</param>
     public abstract void Update(EntityNetworkData data, bool alreadyInSceneUpdate);
+
     /// <summary>
     /// Destroy the entity component.
     /// </summary>

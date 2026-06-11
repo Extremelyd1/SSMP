@@ -2,6 +2,7 @@ using SSMP.Networking.Client;
 using SSMP.Networking.Packet.Data;
 using SSMP.Util;
 using UnityEngine;
+
 #pragma warning disable CS0618 // Type or member is obsolete
 
 namespace SSMP.Game.Client.Entity.Component;
@@ -57,7 +58,7 @@ internal class VelocityComponent : EntityComponent {
         var newVelocity = _rigidbody.velocity;
         if (newVelocity != _lastVelocity) {
             _lastVelocity = newVelocity;
-            
+
             var data = new EntityNetworkData {
                 Type = EntityComponentType.Velocity
             };
@@ -69,7 +70,7 @@ internal class VelocityComponent : EntityComponent {
     }
 
     /// <inheritdoc />
-    public override void InitializeHost() {
+    protected override void InitializeHost() {
     }
 
     /// <inheritdoc />
@@ -77,7 +78,7 @@ internal class VelocityComponent : EntityComponent {
         if (!IsControlled) {
             return;
         }
-        
+
         var velocity = new Vector2(
             data.Packet.ReadFloat(),
             data.Packet.ReadFloat()

@@ -4,7 +4,7 @@ using SSMP.Util;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
 
-namespace SSMP.Game.Client.Entity.Component; 
+namespace SSMP.Game.Client.Entity.Component;
 
 /// <inheritdoc />
 /// This component manages the Z-position of an entity.
@@ -13,14 +13,14 @@ internal class ZPositionComponent : EntityComponent {
     /// The last value of the Z position.
     /// </summary>
     private float _lastZ;
-    
+
     public ZPositionComponent(
-        NetClient netClient, 
-        ushort entityId, 
+        NetClient netClient,
+        ushort entityId,
         HostClientPair<GameObject> gameObject
     ) : base(netClient, entityId, gameObject) {
         _lastZ = gameObject.Host.transform.position.z;
-        
+
         MonoBehaviourUtil.Instance.OnUpdateEvent += OnUpdate;
     }
 
@@ -50,7 +50,7 @@ internal class ZPositionComponent : EntityComponent {
     }
 
     /// <inheritdoc />
-    public override void InitializeHost() {
+    protected override void InitializeHost() {
     }
 
     /// <inheritdoc />
@@ -58,11 +58,13 @@ internal class ZPositionComponent : EntityComponent {
         if (!IsControlled) {
             return;
         }
-        
+
         var newZ = data.Packet.ReadFloat();
-        
+
         SetZ(GameObject.Host);
         SetZ(GameObject.Client);
+
+        return;
 
         void SetZ(GameObject gameObject) {
             var position = gameObject.transform.position;

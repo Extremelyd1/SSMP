@@ -59,7 +59,15 @@ internal abstract class ServerManager : IServerManager {
     /// </summary>
     private readonly ConcurrentDictionary<ushort, ServerPlayerData> _playerData;
 
+    /// <summary>
+    /// Dictionary mapping entity keys to their server entity data instances.
+    /// </summary>
     private readonly ConcurrentDictionary<ServerEntityKey, ServerEntityData> _entityData;
+
+    /// <summary>
+    /// Dictionary mapping scene names to their current scene host epochs.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, uint> _sceneHostEpochs;
 
     /// <summary>
     /// The white-list for managing player logins.
@@ -209,6 +217,7 @@ internal abstract class ServerManager : IServerManager {
         InternalServerSettings = serverSettings;
         _playerData = new ConcurrentDictionary<ushort, ServerPlayerData>();
         _entityData = new ConcurrentDictionary<ServerEntityKey, ServerEntityData>();
+        _sceneHostEpochs = new ConcurrentDictionary<string, uint>();
 
         CommandManager = new ServerCommandManager();
         var eventAggregator = new EventAggregator();
@@ -233,6 +242,15 @@ internal abstract class ServerManager : IServerManager {
         _skinCommand = new SkinCommand(this);
         _helpCommand = new HelpCommand(this);
         // _copySaveCommand = new CopySaveCommand(this, ServerSaveData);
+    }
+
+    /// <summary>
+    /// Gets the next scene host epoch for the given scene name, incrementing it if it already exists.
+    /// </summary>
+    /// <param name="sceneName">The name of the scene.</param>
+    /// <returns>The next scene host epoch.</returns>
+    private uint GetNextSceneHostEpoch(string sceneName) {
+        return _sceneHostEpochs.AddOrUpdate(sceneName, 1, (_, current) => current + 1);
     }
 
     #region Internal server manager methods
@@ -603,22 +621,26 @@ internal abstract class ServerManager : IServerManager {
             var makeEnteringPlayerHost = !alreadyPlayersInScene || isReturningPreviousHost;
 
             if (shouldDemoteCurrentHost) {
+                var epoch = GetNextSceneHostEpoch(playerData.CurrentScene);
                 foreach (var (key, otherPlayerData) in _playerData) {
                     if (key == playerData.Id) continue;
-                    if (otherPlayerData.CurrentScene != playerData.CurrentScene ||
-                        !otherPlayerData.IsSceneHost) continue;
+                    if (otherPlayerData.CurrentScene != playerData.CurrentScene) continue;
 
-                    otherPlayerData.IsSceneHost = false;
+                    if (otherPlayerData.IsSceneHost) {
+                        otherPlayerData.IsSceneHost = false;
 
-                    _netServer
-                        .GetUpdateManagerForClient(key)
-                        ?.SetSceneHostTransfer(playerData.CurrentScene, demote: true);
+                        _netServer
+                            .GetUpdateManagerForClient(key)
+                            ?.SetSceneHostTransfer(playerData.CurrentScene, epoch, demote: true);
 
-                    Logger.Info(
-                        $"Demoted player {key} ({otherPlayerData.Username}) in scene {playerData.CurrentScene} since the previous host {playerData.Id} ({playerData.Username}) re-entered"
-                    );
-
-                    break;
+                        Logger.Info(
+                            $"Demoted player {key} ({otherPlayerData.Username}) in scene {playerData.CurrentScene} since the previous host {playerData.Id} ({playerData.Username}) re-entered (epoch {epoch})"
+                        );
+                    } else {
+                        _netServer
+                            .GetUpdateManagerForClient(key)
+                            ?.SetSceneHostTransfer(playerData.CurrentScene, epoch, demote: true);
+                    }
                 }
             }
 
@@ -628,13 +650,15 @@ internal abstract class ServerManager : IServerManager {
             }
 
             playerData.LastHostedScene = null;
+            var sceneHostEpoch = _sceneHostEpochs.GetOrAdd(playerData.CurrentScene, 0u);
 
             _netServer.GetUpdateManagerForClient(playerData.Id)?.AddPlayerAlreadyInSceneData(
                 enterSceneList,
                 entitySpawnList,
                 entityUpdateList,
                 reliableEntityUpdateList,
-                _fullSynchronisation && makeEnteringPlayerHost
+                _fullSynchronisation && makeEnteringPlayerHost,
+                sceneHostEpoch
             );
         }
     }
@@ -968,10 +992,12 @@ internal abstract class ServerManager : IServerManager {
                     entityData.GenericData.Add(updateData.Clone());
                 } else {
                     existingData.Packet = new Packet(updateData.Packet.ToArray());
+                    existingData.SenderId = updateData.SenderId;
                 }
             }
 
             foreach (var updateData in entityUpdate.GenericData) {
+                updateData.SenderId = id;
                 if (updateData.Type > EntityComponentType.Death) {
                     ReplaceExistingDataWithSameType(updateData);
                 }
@@ -979,10 +1005,7 @@ internal abstract class ServerManager : IServerManager {
         }
 
         if (entityUpdate.UpdateTypes.Contains(EntityUpdateType.HostFsm)) {
-            foreach (var pair in entityUpdate.HostFsmData) {
-                var fsmIndex = pair.Key;
-                var data = pair.Value;
-
+            foreach (var (fsmIndex, data) in entityUpdate.HostFsmData) {
                 if (!entityData.HostFsmData.TryGetValue(fsmIndex, out var existingData)) {
                     existingData = new EntityHostFsmData();
                     entityData.HostFsmData[fsmIndex] = existingData;
@@ -1065,43 +1088,38 @@ internal abstract class ServerManager : IServerManager {
 
         // Keep track of whether the scene that the player has left is now empty
         var isSceneNowEmpty = true;
-
-        foreach (var idPlayerDataPair in _playerData) {
-            if (idPlayerDataPair.Key == id) {
-                continue;
-            }
-
-            var otherPlayerData = idPlayerDataPair.Value;
-
-            // Send a packet to all clients in the scene that the player has left their scene
-            if (otherPlayerData.CurrentScene == sceneName) {
-                Logger.Info($"Sending leave scene packet to {idPlayerDataPair.Key}");
-
-                // We have now found at least one player that is still in this scene
+        var scenePlayers = new List<KeyValuePair<ushort, ServerPlayerData>>();
+        foreach (var pair in _playerData) {
+            if (pair.Key != id && pair.Value.CurrentScene == sceneName) {
                 isSceneNowEmpty = false;
+                scenePlayers.Add(pair);
+            }
+        }
 
-                var updateManager = _netServer.GetUpdateManagerForClient(idPlayerDataPair.Key);
+        if (_fullSynchronisation && playerData.IsSceneHost && scenePlayers.Count > 0) {
+            var epoch = GetNextSceneHostEpoch(sceneName);
+            var newHostPair = scenePlayers[0];
+            newHostPair.Value.IsSceneHost = true;
+            playerData.IsSceneHost = false;
 
-                // We check if the player is the scene host, which will never be the case if FullSync is disabled
-                if (playerData.IsSceneHost) {
-                    // If the leaving player was the scene host, we can make this player the new scene host
-                    updateManager?.SetSceneHostTransfer(sceneName);
+            Logger.Info(
+                $"Player {id} left scene. Host transferred to {newHostPair.Key} in scene {sceneName} (epoch {epoch})"
+            );
 
-                    // Reset the scene host variable in the leaving player, so only a single other player
-                    // becomes the scene host
-                    playerData.IsSceneHost = false;
+            foreach (var pair in scenePlayers) {
+                var updateManager = _netServer.GetUpdateManagerForClient(pair.Key);
+                bool isNewHost = (pair.Key == newHostPair.Key);
+                updateManager?.SetSceneHostTransfer(sceneName, epoch, demote: !isNewHost);
+            }
+        }
 
-                    // Also set the player data of the new scene host
-                    otherPlayerData.IsSceneHost = true;
-
-                    Logger.Info($"  {idPlayerDataPair.Key} has become scene host");
-                }
-
-                if (disconnected) {
-                    updateManager?.AddPlayerDisconnectData(id, username, timeout);
-                } else {
-                    updateManager?.AddPlayerLeaveSceneData(id, sceneName);
-                }
+        foreach (var pair in scenePlayers) {
+            Logger.Info($"Sending leave scene packet to {pair.Key}");
+            var updateManager = _netServer.GetUpdateManagerForClient(pair.Key);
+            if (disconnected) {
+                updateManager?.AddPlayerDisconnectData(id, username, timeout);
+            } else {
+                updateManager?.AddPlayerLeaveSceneData(id, sceneName);
             }
         }
 
@@ -1188,24 +1206,28 @@ internal abstract class ServerManager : IServerManager {
 
         if (_fullSynchronisation && playerData.IsSceneHost) {
             var sceneName = playerData.CurrentScene;
-            foreach (var idPlayerDataPair in _playerData) {
-                if (idPlayerDataPair.Key == id) {
-                    continue;
+            var scenePlayers = new List<KeyValuePair<ushort, ServerPlayerData>>();
+            foreach (var pair in _playerData) {
+                if (pair.Key != id && pair.Value.CurrentScene == sceneName) {
+                    scenePlayers.Add(pair);
                 }
+            }
 
-                var otherPlayerData = idPlayerDataPair.Value;
-                if (otherPlayerData.CurrentScene == sceneName) {
-                    var updateManager = _netServer.GetUpdateManagerForClient(idPlayerDataPair.Key);
-                    updateManager?.SetSceneHostTransfer(sceneName);
+            if (scenePlayers.Count > 0) {
+                var epoch = GetNextSceneHostEpoch(sceneName);
+                var newHostPair = scenePlayers[0];
+                newHostPair.Value.IsSceneHost = true;
+                playerData.IsSceneHost = false;
+                playerData.LastHostedScene = sceneName;
 
-                    playerData.IsSceneHost = false;
-                    playerData.LastHostedScene = sceneName;
-                    otherPlayerData.IsSceneHost = true;
+                Logger.Info(
+                    $"Player {id} ({playerData.Username}) died. Host transferred to {newHostPair.Key} ({newHostPair.Value.Username}) in scene {sceneName} (epoch {epoch})"
+                );
 
-                    Logger.Info(
-                        $"Player {id} ({playerData.Username}) died. Host transferred to {idPlayerDataPair.Key} ({otherPlayerData.Username}) in scene {sceneName}"
-                    );
-                    break;
+                foreach (var pair in scenePlayers) {
+                    var updateManager = _netServer.GetUpdateManagerForClient(pair.Key);
+                    var isNewHost = (pair.Key == newHostPair.Key);
+                    updateManager?.SetSceneHostTransfer(sceneName, epoch, demote: !isNewHost);
                 }
             }
         }

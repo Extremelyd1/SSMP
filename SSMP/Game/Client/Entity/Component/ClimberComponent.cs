@@ -23,7 +23,7 @@ internal class ClimberComponent : EntityComponent {
     }
 
     /// <inheritdoc />
-    public override void InitializeHost() {
+    protected override void InitializeHost() {
         if (_climber != null) {
             _climber.enabled = true;
         }
