@@ -1,6 +1,5 @@
 using System;
 using System.Reflection;
-using GlobalEnums;
 using HutongGames.PlayMaker.Actions;
 using Mono.Cecil.Cil;
 using MonoMod.Cil;
@@ -588,10 +587,7 @@ internal partial class GamePatcher {
     /// </summary>
     private bool CameraLockAreaOnIsInApplicableGameState(Func<bool> orig) {
         try {
-            var gameManager = global::GameManager.UnsafeInstance;
-            if (_netClient.IsConnected &&
-                gameManager != null &&
-                gameManager.GameState == GameState.PAUSED) {
+            if (_netClient.IsConnected && PauseManager.IsMultiplayerPauseMenuOpen) {
                 return true;
             }
 

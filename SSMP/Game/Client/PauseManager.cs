@@ -1,17 +1,21 @@
 using System.Collections;
 using System.Reflection;
 using GlobalEnums;
+using MonoMod.RuntimeDetour;
 using SSMP.Hooks;
 using SSMP.Networking.Client;
 using UnityEngine;
-using MonoMod.RuntimeDetour;
 
 namespace SSMP.Game.Client;
 
 /// <summary>
 /// Handles pause-related behavior while connected to a server.
 /// </summary>
-internal class PauseManager {
+/// <remarks>
+/// Known quirk: because multiplayer pause keeps world time running, Hornet can preserve some pre-pause physics
+/// momentum instead of freezing instantly like vanilla pause. Do not fix unless it becomes gameplay-impacting.
+/// </remarks>
+internal sealed class PauseManager {
     /// <summary>
     /// Minimum positive time scale accepted by the vanilla time-scale logic.
     /// Smaller values are treated as paused.
@@ -25,13 +29,12 @@ internal class PauseManager {
         BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
     /// <summary>
-    /// Binding flags used to invoke private vanilla instance methods.
+    /// Whether the vanilla pause menu is currently open while connected to a server.
     /// </summary>
-    private const BindingFlags PrivateInstanceInvokeFlags =
-        BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.InvokeMethod;
+    public static bool IsMultiplayerPauseMenuOpen { get; private set; }
 
     /// <summary>
-    /// The net client used to check whether multiplayer pause handling should be active.
+    /// The net client used to determine whether multiplayer pause handling should be active.
     /// </summary>
     private readonly NetClient _netClient;
 
@@ -42,6 +45,7 @@ internal class PauseManager {
 
     /// <summary>
     /// Hook for <c>HeroController.Pause</c>.
+    /// Used only to restore world time after vanilla pauses the local hero.
     /// </summary>
     private Hook? _heroControllerPauseHook;
 
@@ -64,7 +68,7 @@ internal class PauseManager {
     }
 
     /// <summary>
-    /// Registers the hooks used to override vanilla pause behavior while connected.
+    /// Registers pause-related hooks.
     /// </summary>
     public void RegisterHooks() {
         _uiManagerTogglePauseGameHook = new Hook(
@@ -79,7 +83,7 @@ internal class PauseManager {
 
         _transitionPointOnTriggerEnter2DHook = new Hook(
             typeof(TransitionPoint).GetMethod("OnTriggerEnter2D", InstanceMemberFlags)!,
-            TransitionPointOnOnTriggerEnter2D
+            TransitionPointOnTriggerEnter2D
         );
 
         _heroControllerDieFromHazardHook = new Hook(
@@ -91,7 +95,7 @@ internal class PauseManager {
     }
 
     /// <summary>
-    /// Deregisters all pause-related hooks and event subscriptions.
+    /// Deregisters pause-related hooks.
     /// </summary>
     public void DeregisterHooks() {
         _uiManagerTogglePauseGameHook?.Dispose();
@@ -107,6 +111,8 @@ internal class PauseManager {
         _heroControllerDieFromHazardHook = null;
 
         EventHooks.HeroControllerDie -= HeroControllerDieHook;
+
+        IsMultiplayerPauseMenuOpen = false;
     }
 
     /// <summary>
@@ -117,25 +123,26 @@ internal class PauseManager {
 
     /// <summary>
     /// Detour for <c>UIManager.TogglePauseGame</c>.
-    /// Keeps time running after using the pause menu while connected to a server.
+    /// Lets vanilla pause and unpause run normally, then restores simulation time while connected.
     /// </summary>
     /// <param name="orig">The original vanilla method.</param>
     /// <param name="self">The UI manager instance.</param>
     private void UIManagerOnTogglePauseGame(OrigTogglePauseGame orig, UIManager self) {
         if (!_netClient.IsConnected) {
+            IsMultiplayerPauseMenuOpen = false;
             orig(self);
             return;
         }
 
-        var field = typeof(UIManager).GetField("ignoreUnpause", InstanceMemberFlags);
-        var shouldRestoreTimeScale = !(bool) (field?.GetValue(self) ?? false);
-
         orig(self);
 
-        if (shouldRestoreTimeScale) {
+        IsMultiplayerPauseMenuOpen = self.uiState == UIState.PAUSED;
+
+        if (IsMultiplayerPauseMenuOpen) {
             SetTimeScale(1f);
         }
     }
+
 
     /// <summary>
     /// Event callback fired when the hero dies.
@@ -143,13 +150,6 @@ internal class PauseManager {
     /// <param name="nonLethal">Whether the death was non-lethal.</param>
     /// <param name="frostDeath">Whether the death was caused by frost.</param>
     private void HeroControllerDieHook(bool nonLethal, bool frostDeath) {
-        OnDeath();
-    }
-
-    /// <summary>
-    /// Handles hero death by forcing the game out of pause before the death flow continues.
-    /// </summary>
-    private void OnDeath() {
         ImmediateUnpauseIfPaused();
     }
 
@@ -178,7 +178,6 @@ internal class PauseManager {
         float angle
     ) {
         ImmediateUnpauseIfPaused();
-
         return orig(self, hazardType, angle);
     }
 
@@ -196,7 +195,7 @@ internal class PauseManager {
     /// <param name="orig">The original vanilla method.</param>
     /// <param name="self">The transition point instance.</param>
     /// <param name="obj">The collider that entered the transition trigger.</param>
-    private void TransitionPointOnOnTriggerEnter2D(
+    private void TransitionPointOnTriggerEnter2D(
         OrigOnTriggerEnter2D orig,
         TransitionPoint self,
         Collider2D obj
@@ -208,6 +207,7 @@ internal class PauseManager {
         orig(self, obj);
     }
 
+
     /// <summary>
     /// Original <c>HeroController.Pause</c> delegate signature.
     /// </summary>
@@ -216,30 +216,32 @@ internal class PauseManager {
 
     /// <summary>
     /// Detour for <c>HeroController.Pause</c>.
-    /// Prevents the vanilla pause state while connected, but still resets input.
+    /// Lets vanilla pause Hornet normally, then restores world time while connected.
     /// </summary>
     /// <param name="orig">The original vanilla method.</param>
     /// <param name="self">The hero controller instance.</param>
     private void HeroControllerOnPause(OrigPause orig, HeroController self) {
+        orig(self);
+
         if (!_netClient.IsConnected) {
-            orig(self);
             return;
         }
 
-        typeof(HeroController).InvokeMember(
-            "ResetInput",
-            PrivateInstanceInvokeFlags,
-            null,
-            HeroController.instance,
-            null
-        );
+        if (UIManager.instance != null && UIManager.instance.uiState == UIState.PAUSED) {
+            IsMultiplayerPauseMenuOpen = true;
+            SetTimeScale(1f);
+        }
     }
 
     /// <summary>
     /// Unpauses the game immediately if the UI is currently in the paused state.
+    /// Used for death, hazard death, and scene transitions where the pause menu must not remain open.
     /// </summary>
     private static void ImmediateUnpauseIfPaused() {
-        if (UIManager.instance == null || !UIManager.instance.uiState.Equals(UIState.PAUSED)) {
+        IsMultiplayerPauseMenuOpen = false;
+
+        if (UIManager.instance == null || UIManager.instance.uiState != UIState.PAUSED) {
+            SetTimeScale(1f);
             return;
         }
 
@@ -259,13 +261,15 @@ internal class PauseManager {
 
         MenuButtonList.ClearAllLastSelected();
         gameManager.inputHandler.AllowPause();
+
+        SetTimeScale(1f);
     }
 
     /// <summary>
-    /// Sets the Unity time scale using the same lower-bound behavior as <c>GameManager.SetTimeScale</c>.
+    /// Sets Unity time scale using the same lower-bound behavior as <c>GameManager.SetTimeScale</c>.
     /// </summary>
     /// <param name="timeScale">The requested time scale.</param>
     public static void SetTimeScale(float timeScale) {
-        Time.timeScale = timeScale > MinPositiveTimeScale ? timeScale : 0.0f;
+        Time.timeScale = timeScale > MinPositiveTimeScale ? timeScale : 0f;
     }
 }
