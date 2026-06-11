@@ -11,8 +11,7 @@ using Logger = SSMP.Logging.Logger;
 
 namespace SSMP.Game.Client.Entity.Component;
 
-// TODO: make sure that the data sent on death is saved as state on the server, so new clients entering
-// TODO: scenes can start with the entity disabled/already dead
+// TODO: preserve entity HP and AI/FSM state during scene host transfer.
 /// <inheritdoc />
 /// This component manages the <see cref="HealthManager"/> component of the entity.
 internal class HealthManagerComponent : EntityComponent {
@@ -44,9 +43,25 @@ internal class HealthManagerComponent : EntityComponent {
     private int _lastHp;
 
     /// <summary>
+    /// The starting HP of the health manager.
+    /// Used to clamp incoming healing from other clients.
+    /// </summary>
+    private readonly int _initialHp;
+
+    /// <summary>
     /// The last value for the "invincibleFromDirection" variable of the health manager.
     /// </summary>
     private int _lastInvincibleFromDirection;
+
+    /// <summary>
+    /// Monotonically increasing local health update ID sent to other clients.
+    /// </summary>
+    private uint _nextHealthUpdateId;
+
+    /// <summary>
+    /// The last received health update ID to prevent duplicate or out-of-order updates.
+    /// </summary>
+    private uint _lastReceivedHealthUpdateId;
 
     public HealthManagerComponent(
         NetClient netClient,
@@ -58,6 +73,7 @@ internal class HealthManagerComponent : EntityComponent {
 
         _lastInvincible = healthManager.Host.IsInvincible;
         _lastHp = healthManager.Host.hp;
+        _initialHp = healthManager.Host.hp;
         _lastInvincibleFromDirection = healthManager.Host.InvincibleFromDirection;
 
         var dieMethod = Array.Find(
@@ -148,13 +164,17 @@ internal class HealthManagerComponent : EntityComponent {
 
         var newHp = observedHealthManager.hp;
         if (newHp != _lastHp) {
+            var previousHp = _lastHp;
             _lastHp = newHp;
+            _nextHealthUpdateId++;
 
             var hpData = new EntityNetworkData {
                 Type = EntityComponentType.Health
             };
 
+            hpData.Packet.Write(previousHp);
             hpData.Packet.Write(newHp);
+            hpData.Packet.Write(_nextHealthUpdateId);
 
             SendData(hpData);
         }
@@ -232,14 +252,40 @@ internal class HealthManagerComponent : EntityComponent {
     }
 
     /// <summary>
-    /// Applies an absolute health update from the network.
+    /// Applies a health update from the network.
+    /// Scene snapshots are applied as absolute HP,
+    /// while live updates are merged as HP deltas
+    /// so delayed packets do not overwrite local damage or healing.
     /// </summary>
-    /// <param name="data">The health update data.</param>
-    /// <param name="alreadyInSceneUpdate">Whether this update is an authoritative scene snapshot.</param>
     private void UpdateHealth(EntityNetworkData data, bool alreadyInSceneUpdate) {
-        var reportedHp = data.Packet.ReadInt();
+        var previousHp = data.Packet.ReadInt();
+        var newHp = data.Packet.ReadInt();
+        var healthUpdateId = data.Packet.ReadUInt();
 
-        ApplyHp(reportedHp, triggerHostDeath: !alreadyInSceneUpdate);
+        if (alreadyInSceneUpdate) {
+            ApplyHp(newHp, triggerHostDeath: false);
+        } else {
+            if (healthUpdateId <= _lastReceivedHealthUpdateId) {
+                return;
+            }
+
+            _lastReceivedHealthUpdateId = healthUpdateId;
+
+            var currentHp = GetCurrentHp();
+            var damage = System.Math.Max(previousHp - newHp, 0);
+            var healing = System.Math.Max(newHp - previousHp, 0);
+
+            var targetHp = currentHp;
+            if (damage > 0) {
+                targetHp -= damage;
+            }
+
+            if (healing > 0) {
+                targetHp = System.Math.Min(targetHp + healing, _initialHp);
+            }
+
+            ApplyHp(targetHp, triggerHostDeath: true);
+        }
     }
 
     /// <summary>
