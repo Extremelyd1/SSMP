@@ -143,6 +143,10 @@ internal partial class GamePatcher {
     /// <returns>True when the relevant tracked player is inside this alert range and visible; otherwise false.</returns>
     private static bool OnAlertRangeIsHeroInRange(AlertRange self) {
         var owner = GetEnemyTargetOwner(self.gameObject);
+        if (owner == null) {
+            return false;
+        }
+
         var approvedTarget = GetApprovedEnemyTarget(owner);
 
         if (!CanAcquireMultiplayerTarget(self)) {

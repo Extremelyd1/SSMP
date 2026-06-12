@@ -32,6 +32,11 @@ internal partial class GamePatcher {
     private static readonly Dictionary<int, GameObject> EnemyApprovedTargets = new();
 
     /// <summary>
+    /// Cached resolved enemy target owner per GameObject instance ID to avoid deep transform parent lookups.
+    /// </summary>
+    private static readonly Dictionary<int, GameObject> TargetOwnerCache = new();
+
+    /// <summary>
     /// Active PlayMaker FSM action types that consume an enemy target and should be forced to use the
     /// enemy-approved multiplayer target.
     /// </summary>
@@ -198,25 +203,55 @@ internal partial class GamePatcher {
         typeof(Walker).GetMethod("BeginStopped", InstanceNonPublicFlags);
 
     private static readonly Func<Walker, Camera?>? GetWalkerMainCamera = CompileGetter<Camera?>(WalkerMainCameraField);
-    private static readonly Func<Walker, bool>? GetWalkerDidFulfilCameraDistanceCondition = CompileGetter<bool>(WalkerDidFulfilCameraDistanceConditionField);
-    private static readonly Action<Walker, bool>? SetWalkerDidFulfilCameraDistanceCondition = CompileSetter<bool>(WalkerDidFulfilCameraDistanceConditionField);
-    private static readonly Func<Walker, bool>? GetWalkerDidFulfilHeroXCondition = CompileGetter<bool>(WalkerDidFulfilHeroXConditionField);
-    private static readonly Action<Walker, bool>? SetWalkerDidFulfilHeroXCondition = CompileSetter<bool>(WalkerDidFulfilHeroXConditionField);
+
+    private static readonly Func<Walker, bool>? GetWalkerDidFulfilCameraDistanceCondition =
+        CompileGetter<bool>(WalkerDidFulfilCameraDistanceConditionField);
+
+    private static readonly Action<Walker, bool>? SetWalkerDidFulfilCameraDistanceCondition =
+        CompileSetter<bool>(WalkerDidFulfilCameraDistanceConditionField);
+
+    private static readonly Func<Walker, bool>? GetWalkerDidFulfilHeroXCondition =
+        CompileGetter<bool>(WalkerDidFulfilHeroXConditionField);
+
+    private static readonly Action<Walker, bool>? SetWalkerDidFulfilHeroXCondition =
+        CompileSetter<bool>(WalkerDidFulfilHeroXConditionField);
+
     private static readonly Func<Walker, float>? GetWalkerWaitHeroX = CompileGetter<float>(WalkerWaitHeroXField);
     private static readonly Func<Walker, bool>? GetWalkerWaitForHeroX = CompileGetter<bool>(WalkerWaitForHeroXField);
     private static readonly Func<Walker, bool>? GetWalkerStartInactive = CompileGetter<bool>(WalkerStartInactiveField);
     private static readonly Func<Walker, bool>? GetWalkerAmbush = CompileGetter<bool>(WalkerAmbushField);
-    private static readonly Func<Walker, float>? GetWalkerTurnCooldownRemaining = CompileGetter<float>(WalkerTurnCooldownRemainingField);
-    private static readonly Func<Walker, float>? GetWalkerAggroEdgeTurnCooldownRemaining = CompileGetter<float>(WalkerAggroEdgeTurnCooldownRemainingField);
+
+    private static readonly Func<Walker, float>? GetWalkerTurnCooldownRemaining =
+        CompileGetter<float>(WalkerTurnCooldownRemainingField);
+
+    private static readonly Func<Walker, float>? GetWalkerAggroEdgeTurnCooldownRemaining =
+        CompileGetter<float>(WalkerAggroEdgeTurnCooldownRemainingField);
+
     private static readonly Func<Walker, int>? GetWalkerCurrentFacing = CompileGetter<int>(WalkerCurrentFacingField);
-    private static readonly Func<Walker, Collider2D?>? GetWalkerBodyCollider = CompileGetter<Collider2D?>(WalkerBodyColliderField);
-    private static readonly Func<Walker, bool>? GetWalkerPreventTurningToFaceHero = CompileGetter<bool>(WalkerPreventTurningToFaceHeroField);
-    private static readonly Func<Walker, LineOfSightDetector?>? GetWalkerLineOfSightDetector = CompileGetter<LineOfSightDetector?>(WalkerLineOfSightDetectorField);
-    private static readonly Func<Walker, AlertRange?>? GetWalkerAlertRange = CompileGetter<AlertRange?>(WalkerAlertRangeField);
+
+    private static readonly Func<Walker, Collider2D?>? GetWalkerBodyCollider =
+        CompileGetter<Collider2D?>(WalkerBodyColliderField);
+
+    private static readonly Func<Walker, bool>? GetWalkerPreventTurningToFaceHero =
+        CompileGetter<bool>(WalkerPreventTurningToFaceHeroField);
+
+    private static readonly Func<Walker, LineOfSightDetector?>? GetWalkerLineOfSightDetector =
+        CompileGetter<LineOfSightDetector?>(WalkerLineOfSightDetectorField);
+
+    private static readonly Func<Walker, AlertRange?>? GetWalkerAlertRange =
+        CompileGetter<AlertRange?>(WalkerAlertRangeField);
+
     private static readonly Func<Walker, bool>? GetWalkerIgnoreHoles = CompileGetter<bool>(WalkerIgnoreHolesField);
-    private static readonly Func<Walker, float>? GetWalkerEdgeXAdjuster = CompileGetter<float>(WalkerEdgeXAdjusterField);
-    private static readonly Func<Walker, float>? GetWalkerWalkTimeRemaining = CompileGetter<float>(WalkerWalkTimeRemainingField);
-    private static readonly Action<Walker, float>? SetWalkerWalkTimeRemaining = CompileSetter<float>(WalkerWalkTimeRemainingField);
+
+    private static readonly Func<Walker, float>?
+        GetWalkerEdgeXAdjuster = CompileGetter<float>(WalkerEdgeXAdjusterField);
+
+    private static readonly Func<Walker, float>? GetWalkerWalkTimeRemaining =
+        CompileGetter<float>(WalkerWalkTimeRemainingField);
+
+    private static readonly Action<Walker, float>? SetWalkerWalkTimeRemaining =
+        CompileSetter<float>(WalkerWalkTimeRemainingField);
+
     private static readonly Func<Walker, bool>? GetWalkerPauses = CompileGetter<bool>(WalkerPausesField);
     private static readonly Func<Walker, Rigidbody2D?>? GetWalkerBody = CompileGetter<Rigidbody2D?>(WalkerBodyField);
     private static readonly Func<Walker, float>? GetWalkerWalkSpeedR = CompileGetter<float>(WalkerWalkSpeedRField);
@@ -224,12 +259,14 @@ internal partial class GamePatcher {
 
     private static readonly Action<Walker, int>? WalkerBeginTurningDelegate =
         WalkerBeginTurningMethod != null
-            ? (Action<Walker, int>)Delegate.CreateDelegate(typeof(Action<Walker, int>), null, WalkerBeginTurningMethod)
+            ? (Action<Walker, int>) Delegate.CreateDelegate(typeof(Action<Walker, int>), null, WalkerBeginTurningMethod)
             : null;
 
     private static readonly Action<Walker, Walker.StopReasons>? WalkerBeginStoppedDelegate =
         WalkerBeginStoppedMethod != null
-            ? (Action<Walker, Walker.StopReasons>)Delegate.CreateDelegate(typeof(Action<Walker, Walker.StopReasons>), null, WalkerBeginStoppedMethod)
+            ? (Action<Walker, Walker.StopReasons>) Delegate.CreateDelegate(
+                typeof(Action<Walker, Walker.StopReasons>), null, WalkerBeginStoppedMethod
+            )
             : null;
 
     private static Func<Walker, TField>? CompileGetter<TField>(FieldInfo? field) {
@@ -258,39 +295,94 @@ internal partial class GamePatcher {
         }
     }
 
-    private static Camera? GetMainCamera(Walker self) => GetWalkerMainCamera != null ? GetWalkerMainCamera(self) : (Camera?)WalkerMainCameraField?.GetValue(self);
-    private static bool GetDidFulfilCameraDistanceCondition(Walker self) => GetWalkerDidFulfilCameraDistanceCondition != null ? GetWalkerDidFulfilCameraDistanceCondition(self) : (bool?)WalkerDidFulfilCameraDistanceConditionField?.GetValue(self) ?? false;
+    private static Camera? GetMainCamera(Walker self) => GetWalkerMainCamera != null
+        ? GetWalkerMainCamera(self)
+        : (Camera?) WalkerMainCameraField?.GetValue(self);
+
+    private static bool GetDidFulfilCameraDistanceCondition(Walker self) =>
+        GetWalkerDidFulfilCameraDistanceCondition?.Invoke(self) ??
+        ((bool?) WalkerDidFulfilCameraDistanceConditionField?.GetValue(self) ?? false);
+
     private static void SetDidFulfilCameraDistanceCondition(Walker self, bool value) {
         if (SetWalkerDidFulfilCameraDistanceCondition != null) SetWalkerDidFulfilCameraDistanceCondition(self, value);
         else WalkerDidFulfilCameraDistanceConditionField?.SetValue(self, value);
     }
-    private static bool GetDidFulfilHeroXCondition(Walker self) => GetWalkerDidFulfilHeroXCondition != null ? GetWalkerDidFulfilHeroXCondition(self) : (bool?)WalkerDidFulfilHeroXConditionField?.GetValue(self) ?? false;
+
+    private static bool GetDidFulfilHeroXCondition(Walker self) => GetWalkerDidFulfilHeroXCondition?.Invoke(self) ??
+                                                                   ((bool?) WalkerDidFulfilHeroXConditionField
+                                                                       ?.GetValue(self) ?? false);
+
     private static void SetDidFulfilHeroXCondition(Walker self, bool value) {
         if (SetWalkerDidFulfilHeroXCondition != null) SetWalkerDidFulfilHeroXCondition(self, value);
         else WalkerDidFulfilHeroXConditionField?.SetValue(self, value);
     }
-    private static float GetWaitHeroX(Walker self) => GetWalkerWaitHeroX != null ? GetWalkerWaitHeroX(self) : (float?)WalkerWaitHeroXField?.GetValue(self) ?? 0f;
-    private static bool GetWaitForHeroX(Walker self) => GetWalkerWaitForHeroX != null ? GetWalkerWaitForHeroX(self) : (bool?)WalkerWaitForHeroXField?.GetValue(self) ?? false;
-    private static bool GetStartInactive(Walker self) => GetWalkerStartInactive != null ? GetWalkerStartInactive(self) : (bool?)WalkerStartInactiveField?.GetValue(self) ?? false;
-    private static bool GetAmbush(Walker self) => GetWalkerAmbush != null ? GetWalkerAmbush(self) : (bool?)WalkerAmbushField?.GetValue(self) ?? false;
-    private static float GetTurnCooldownRemaining(Walker self) => GetWalkerTurnCooldownRemaining != null ? GetWalkerTurnCooldownRemaining(self) : (float?)WalkerTurnCooldownRemainingField?.GetValue(self) ?? 0f;
-    private static float GetAggroEdgeTurnCooldownRemaining(Walker self) => GetWalkerAggroEdgeTurnCooldownRemaining != null ? GetWalkerAggroEdgeTurnCooldownRemaining(self) : (float?)WalkerAggroEdgeTurnCooldownRemainingField?.GetValue(self) ?? 0f;
-    private static int GetCurrentFacing(Walker self) => GetWalkerCurrentFacing != null ? GetWalkerCurrentFacing(self) : (int?)WalkerCurrentFacingField?.GetValue(self) ?? 0;
-    private static Collider2D? GetBodyCollider(Walker self) => GetWalkerBodyCollider != null ? GetWalkerBodyCollider(self) : (Collider2D?)WalkerBodyColliderField?.GetValue(self);
-    private static bool GetPreventTurningToFaceHero(Walker self) => GetWalkerPreventTurningToFaceHero != null ? GetWalkerPreventTurningToFaceHero(self) : (bool?)WalkerPreventTurningToFaceHeroField?.GetValue(self) ?? false;
-    private static LineOfSightDetector? GetLineOfSightDetector(Walker self) => GetWalkerLineOfSightDetector != null ? GetWalkerLineOfSightDetector(self) : (LineOfSightDetector?)WalkerLineOfSightDetectorField?.GetValue(self);
-    private static AlertRange? GetAlertRange(Walker self) => GetWalkerAlertRange != null ? GetWalkerAlertRange(self) : (AlertRange?)WalkerAlertRangeField?.GetValue(self);
-    private static bool GetIgnoreHoles(Walker self) => GetWalkerIgnoreHoles != null ? GetWalkerIgnoreHoles(self) : (bool?)WalkerIgnoreHolesField?.GetValue(self) ?? false;
-    private static float GetEdgeXAdjuster(Walker self) => GetWalkerEdgeXAdjuster != null ? GetWalkerEdgeXAdjuster(self) : (float?)WalkerEdgeXAdjusterField?.GetValue(self) ?? 0f;
-    private static float GetWalkTimeRemaining(Walker self) => GetWalkerWalkTimeRemaining != null ? GetWalkerWalkTimeRemaining(self) : (float?)WalkerWalkTimeRemainingField?.GetValue(self) ?? 0f;
+
+    private static float GetWaitHeroX(Walker self) =>
+        GetWalkerWaitHeroX?.Invoke(self) ?? ((float?) WalkerWaitHeroXField?.GetValue(self) ?? 0f);
+
+    private static bool GetWaitForHeroX(Walker self) => GetWalkerWaitForHeroX?.Invoke(self) ??
+                                                        ((bool?) WalkerWaitForHeroXField?.GetValue(self) ?? false);
+
+    private static bool GetStartInactive(Walker self) => GetWalkerStartInactive?.Invoke(self) ??
+                                                         ((bool?) WalkerStartInactiveField?.GetValue(self) ?? false);
+
+    private static bool GetAmbush(Walker self) =>
+        GetWalkerAmbush?.Invoke(self) ?? ((bool?) WalkerAmbushField?.GetValue(self) ?? false);
+
+    private static float GetTurnCooldownRemaining(Walker self) => GetWalkerTurnCooldownRemaining?.Invoke(self) ??
+                                                                  ((float?) WalkerTurnCooldownRemainingField?.GetValue(
+                                                                      self
+                                                                  ) ?? 0f);
+
+    private static float GetAggroEdgeTurnCooldownRemaining(Walker self) =>
+        GetWalkerAggroEdgeTurnCooldownRemaining?.Invoke(self) ??
+        ((float?) WalkerAggroEdgeTurnCooldownRemainingField?.GetValue(self) ?? 0f);
+
+    private static int GetCurrentFacing(Walker self) => GetWalkerCurrentFacing?.Invoke(self) ??
+                                                        ((int?) WalkerCurrentFacingField?.GetValue(self) ?? 0);
+
+    private static Collider2D? GetBodyCollider(Walker self) => GetWalkerBodyCollider != null
+        ? GetWalkerBodyCollider(self)
+        : (Collider2D?) WalkerBodyColliderField?.GetValue(self);
+
+    private static bool GetPreventTurningToFaceHero(Walker self) => GetWalkerPreventTurningToFaceHero?.Invoke(self) ??
+                                                                    ((bool?) WalkerPreventTurningToFaceHeroField
+                                                                        ?.GetValue(self) ?? false);
+
+    private static LineOfSightDetector? GetLineOfSightDetector(Walker self) => GetWalkerLineOfSightDetector != null
+        ? GetWalkerLineOfSightDetector(self)
+        : (LineOfSightDetector?) WalkerLineOfSightDetectorField?.GetValue(self);
+
+    private static AlertRange? GetAlertRange(Walker self) => GetWalkerAlertRange != null
+        ? GetWalkerAlertRange(self)
+        : (AlertRange?) WalkerAlertRangeField?.GetValue(self);
+
+    private static bool GetIgnoreHoles(Walker self) => GetWalkerIgnoreHoles?.Invoke(self) ??
+                                                       ((bool?) WalkerIgnoreHolesField?.GetValue(self) ?? false);
+
+    private static float GetEdgeXAdjuster(Walker self) => GetWalkerEdgeXAdjuster?.Invoke(self) ??
+                                                          ((float?) WalkerEdgeXAdjusterField?.GetValue(self) ?? 0f);
+
+    private static float GetWalkTimeRemaining(Walker self) => GetWalkerWalkTimeRemaining?.Invoke(self) ??
+                                                              ((float?) WalkerWalkTimeRemainingField?.GetValue(self) ??
+                                                               0f);
+
     private static void SetWalkTimeRemaining(Walker self, float value) {
         if (SetWalkerWalkTimeRemaining != null) SetWalkerWalkTimeRemaining(self, value);
         else WalkerWalkTimeRemainingField?.SetValue(self, value);
     }
-    private static bool GetPauses(Walker self) => GetWalkerPauses != null ? GetWalkerPauses(self) : (bool?)WalkerPausesField?.GetValue(self) ?? false;
-    private static Rigidbody2D? GetBody(Walker self) => GetWalkerBody != null ? GetWalkerBody(self) : (Rigidbody2D?)WalkerBodyField?.GetValue(self);
-    private static float GetWalkSpeedR(Walker self) => GetWalkerWalkSpeedR != null ? GetWalkerWalkSpeedR(self) : (float?)WalkerWalkSpeedRField?.GetValue(self) ?? 0f;
-    private static float GetWalkSpeedL(Walker self) => GetWalkerWalkSpeedL != null ? GetWalkerWalkSpeedL(self) : (float?)WalkerWalkSpeedLField?.GetValue(self) ?? 0f;
+
+    private static bool GetPauses(Walker self) =>
+        GetWalkerPauses?.Invoke(self) ?? ((bool?) WalkerPausesField?.GetValue(self) ?? false);
+
+    private static Rigidbody2D? GetBody(Walker self) =>
+        GetWalkerBody != null ? GetWalkerBody(self) : (Rigidbody2D?) WalkerBodyField?.GetValue(self);
+
+    private static float GetWalkSpeedR(Walker self) =>
+        GetWalkerWalkSpeedR?.Invoke(self) ?? ((float?) WalkerWalkSpeedRField?.GetValue(self) ?? 0f);
+
+    private static float GetWalkSpeedL(Walker self) =>
+        GetWalkerWalkSpeedL?.Invoke(self) ?? ((float?) WalkerWalkSpeedLField?.GetValue(self) ?? 0f);
 
     private static void InvokeBeginTurning(Walker self, int newFacing) {
         if (WalkerBeginTurningDelegate != null) WalkerBeginTurningDelegate(self, newFacing);
@@ -339,7 +431,11 @@ internal partial class GamePatcher {
     /// </summary>
     /// <param name="requester">The enemy object or one of its child/component objects.</param>
     /// <returns>The approved tracked player target, or <see langword="null"/> when no valid target is approved.</returns>
-    private static GameObject? GetApprovedEnemyTarget(GameObject requester) {
+    private static GameObject? GetApprovedEnemyTarget(GameObject? requester) {
+        if (requester == null) {
+            return null;
+        }
+
         var owner = GetEnemyTargetOwner(requester);
         return owner != null && EnemyApprovedTargets.TryGetValue(owner.GetInstanceID(), out var target) &&
                target != null
@@ -378,6 +474,7 @@ internal partial class GamePatcher {
         RegisterTargetedFsmActionEnterHooks();
 
         MonoBehaviourUtil.Instance.OnUpdateEvent += OnUpdateRetargetEnemyTransforms;
+        UnityEngine.SceneManagement.SceneManager.activeSceneChanged += OnActiveSceneChanged;
     }
 
     /// <summary>
@@ -395,6 +492,18 @@ internal partial class GamePatcher {
         if (MonoBehaviourUtil.Instance != null) {
             MonoBehaviourUtil.Instance.OnUpdateEvent -= OnUpdateRetargetEnemyTransforms;
         }
+
+        UnityEngine.SceneManagement.SceneManager.activeSceneChanged -= OnActiveSceneChanged;
+        ClearTargetCaches();
+    }
+
+    private static void OnActiveSceneChanged(UnityEngine.SceneManagement.Scene from, UnityEngine.SceneManagement.Scene to) {
+        ClearTargetCaches();
+    }
+
+    private static void ClearTargetCaches() {
+        EnemyApprovedTargets.Clear();
+        TargetOwnerCache.Clear();
     }
 
     /// <summary>
@@ -949,23 +1058,36 @@ internal partial class GamePatcher {
     /// or movement controllers. This method normalizes those callers back to the actual enemy instance so target state
     /// is stored per mob instead of accidentally shared through a scene/root container.
     /// </remarks>
-    private static GameObject GetEnemyTargetOwner(GameObject obj) {
+    private static GameObject? GetEnemyTargetOwner(GameObject obj) {
+        if (obj == null) {
+            return obj;
+        }
+
+        var instanceId = obj.GetInstanceID();
+        if (TargetOwnerCache.TryGetValue(instanceId, out var cachedOwner) && cachedOwner != null) {
+            return cachedOwner;
+        }
+
+        GameObject resolvedOwner;
         var healthManager = obj.GetComponentInParent<HealthManager>();
         if (healthManager != null) {
-            return healthManager.gameObject;
+            resolvedOwner = healthManager.gameObject;
+        } else {
+            var walker = obj.GetComponentInParent<Walker>();
+            if (walker != null) {
+                resolvedOwner = walker.gameObject;
+            } else {
+                var walkerV2 = obj.GetComponentInParent<WalkerV2>();
+                if (walkerV2 != null) {
+                    resolvedOwner = walkerV2.gameObject;
+                } else {
+                    var fsm = obj.GetComponentInParent<PlayMakerFSM>();
+                    resolvedOwner = fsm != null ? fsm.gameObject : obj;
+                }
+            }
         }
 
-        var walker = obj.GetComponentInParent<Walker>();
-        if (walker != null) {
-            return walker.gameObject;
-        }
-
-        var walkerV2 = obj.GetComponentInParent<WalkerV2>();
-        if (walkerV2 != null) {
-            return walkerV2.gameObject;
-        }
-
-        var fsm = obj.GetComponentInParent<PlayMakerFSM>();
-        return fsm != null ? fsm.gameObject : obj;
+        TargetOwnerCache[instanceId] = resolvedOwner;
+        return resolvedOwner;
     }
 }
