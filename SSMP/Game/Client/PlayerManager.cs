@@ -189,19 +189,9 @@ internal class PlayerManager : IPlayerManager {
 
         collider.isTrigger = true;
         collider.offset = localCollider.offset;
-        collider.enabled = true;
-
-        if (localCollider is BoxCollider2D localBoxCollider) {
-            collider.size = localBoxCollider.size;
-        } else {
-            collider.size = localCollider.bounds.size;
-        }
-        var localColliderBounds = localCollider.bounds;
-
-        // Copy collider offset and size
-        collider.isTrigger = true;
-        collider.offset = localCollider.offset;
-        collider.size = localColliderBounds.size;
+        collider.size = localCollider is BoxCollider2D localBoxCollider
+            ? localBoxCollider.size
+            : localCollider.bounds.size;
         collider.enabled = true;
 
         // Set Rigidbody properties
