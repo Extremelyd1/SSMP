@@ -78,6 +78,12 @@ internal abstract class EntityComponent {
     }
 
     /// <summary>
+    /// Performs periodic update polling for host components.
+    /// </summary>
+    public virtual void OnUpdate() {
+    }
+
+    /// <summary>
     /// Update the entity component with the given data.
     /// </summary>
     /// <param name="data">The data to update with.</param>

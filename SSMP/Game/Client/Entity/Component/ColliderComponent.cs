@@ -1,6 +1,5 @@
 using SSMP.Networking.Client;
 using SSMP.Networking.Packet.Data;
-using SSMP.Util;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
 
@@ -26,14 +25,13 @@ internal class ColliderComponent : EntityComponent {
         HostClientPair<Collider2D> collider
     ) : base(netClient, entityId, gameObject) {
         _collider = collider;
-
-        MonoBehaviourUtil.Instance.OnUpdateEvent += OnUpdateCollider;
     }
 
     /// <summary>
     /// Callback for checking the collider each update.
     /// </summary>
-    private void OnUpdateCollider() {
+    /// <inheritdoc />
+    public override void OnUpdate() {
         if (IsControlled) {
             return;
         }
@@ -88,6 +86,5 @@ internal class ColliderComponent : EntityComponent {
 
     /// <inheritdoc />
     public override void Destroy() {
-        MonoBehaviourUtil.Instance.OnUpdateEvent -= OnUpdateCollider;
     }
 }

@@ -1,6 +1,5 @@
 using SSMP.Networking.Client;
 using SSMP.Networking.Packet.Data;
-using SSMP.Util;
 using UnityEngine;
 
 namespace SSMP.Game.Client.Entity.Component;
@@ -26,14 +25,13 @@ internal class SpriteRendererComponent : EntityComponent {
     ) : base(netClient, entityId, gameObject) {
         _spriteRenderer = spriteRenderer;
         _lastEnabled = spriteRenderer.Host.enabled;
-
-        MonoBehaviourUtil.Instance.OnUpdateEvent += OnUpdate;
     }
 
     /// <summary>
     /// Callback method to check for sprite renderer updates.
     /// </summary>
-    private void OnUpdate() {
+    /// <inheritdoc />
+    public override void OnUpdate() {
         if (IsControlled) {
             return;
         }
@@ -68,6 +66,5 @@ internal class SpriteRendererComponent : EntityComponent {
 
     /// <inheritdoc />
     public override void Destroy() {
-        MonoBehaviourUtil.Instance.OnUpdateEvent -= OnUpdate;
     }
 }

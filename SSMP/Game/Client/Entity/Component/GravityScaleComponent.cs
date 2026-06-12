@@ -1,9 +1,8 @@
 using SSMP.Networking.Client;
 using SSMP.Networking.Packet.Data;
-using SSMP.Util;
 using UnityEngine;
 
-namespace SSMP.Game.Client.Entity.Component; 
+namespace SSMP.Game.Client.Entity.Component;
 
 /// <inheritdoc />
 /// This component manages the gravity scale of an entity.
@@ -12,34 +11,33 @@ internal class GravityScaleComponent : EntityComponent {
     /// The host <see cref="Rigidbody2D"/> unity component of the entity.
     /// </summary>
     private readonly Rigidbody2D _rigidbody;
-    
+
     /// <summary>
     /// The last value of the gravity scale.
     /// </summary>
     private float _lastScale;
-    
+
     /// <summary>
     /// The gravity scale received from updates to this component. Used to keep track of the gravity scale as we
     /// cannot apply it the rigidbody of our host object as long as the host object is not active.
     /// </summary>
     private float? _receivedGravityScale;
-    
+
     public GravityScaleComponent(
-        NetClient netClient, 
-        ushort entityId, 
+        NetClient netClient,
+        ushort entityId,
         HostClientPair<GameObject> gameObject,
         Rigidbody2D rigidbody
     ) : base(netClient, entityId, gameObject) {
         _rigidbody = rigidbody;
         _lastScale = rigidbody.gravityScale;
-        
-        MonoBehaviourUtil.Instance.OnUpdateEvent += OnUpdate;
     }
 
     /// <summary>
     /// Callback for checking the gravity scale each update.
     /// </summary>
-    private void OnUpdate() {
+    /// <inheritdoc />
+    public override void OnUpdate() {
         if (IsControlled) {
             return;
         }
@@ -56,7 +54,7 @@ internal class GravityScaleComponent : EntityComponent {
         var newGravityScale = _rigidbody.gravityScale;
         if (!newGravityScale.Equals(_lastScale)) {
             _lastScale = newGravityScale;
-            
+
             var data = new EntityNetworkData {
                 Type = EntityComponentType.GravityScale
             };
@@ -81,6 +79,5 @@ internal class GravityScaleComponent : EntityComponent {
 
     /// <inheritdoc />
     public override void Destroy() {
-        MonoBehaviourUtil.Instance.OnUpdateEvent -= OnUpdate;
     }
 }

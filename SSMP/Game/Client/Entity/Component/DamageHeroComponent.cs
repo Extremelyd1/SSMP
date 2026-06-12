@@ -1,6 +1,5 @@
 using SSMP.Networking.Client;
 using SSMP.Networking.Packet.Data;
-using SSMP.Util;
 using UnityEngine;
 
 namespace SSMP.Game.Client.Entity.Component;
@@ -26,14 +25,13 @@ internal class DamageHeroComponent : EntityComponent {
     ) : base(netClient, entityId, gameObject) {
         _damageHero = damageHero;
         _lastDamageDealt = damageHero.Host.damageDealt;
-
-        MonoBehaviourUtil.Instance.OnUpdateEvent += OnUpdate;
     }
 
     /// <summary>
     /// Callback method to check for damage hero updates.
     /// </summary>
-    private void OnUpdate() {
+    /// <inheritdoc />
+    public override void OnUpdate() {
         if (IsControlled) {
             return;
         }
@@ -68,6 +66,5 @@ internal class DamageHeroComponent : EntityComponent {
 
     /// <inheritdoc />
     public override void Destroy() {
-        MonoBehaviourUtil.Instance.OnUpdateEvent -= OnUpdate;
     }
 }

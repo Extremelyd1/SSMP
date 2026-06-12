@@ -166,7 +166,8 @@ internal class HealthManagerComponent : EntityComponent {
     /// <summary>
     /// Callback method for updates to check whether health or invincibility changes.
     /// </summary>
-    private void OnUpdate() {
+    /// <inheritdoc />
+    public override void OnUpdate() {
         var observedHealthManager = IsControlled ? _healthManager.Client : _healthManager.Host;
         if (observedHealthManager == null) {
             return;

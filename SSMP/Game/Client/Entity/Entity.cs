@@ -104,6 +104,11 @@ internal class Entity {
     private readonly Dictionary<EntityComponentType, EntityComponent> _components;
 
     /// <summary>
+    /// Unique list of components that require periodic update calls on the host.
+    /// </summary>
+    private readonly List<EntityComponent> _updatableComponents;
+
+    /// <summary>
     /// Dictionary mapping FSM actions to their entity action data instances.
     /// </summary>
     private readonly Dictionary<FsmStateAction, HookedEntityAction> _hookedActions;
@@ -288,6 +293,15 @@ internal class Entity {
         HandleComponents(types);
 
         HandleEnemyDeathEffects();
+
+        _updatableComponents = new List<EntityComponent>();
+        foreach (var component in _components.Values) {
+            if (component != null && 
+                component is not HealthManagerComponent && 
+                !_updatableComponents.Contains(component)) {
+                _updatableComponents.Add(component);
+            }
+        }
 
         Object.Host.SetActive(false);
         Object.Client.SetActive(false);
@@ -658,6 +672,10 @@ internal class Entity {
             }
 
             return;
+        }
+
+        for (var i = 0; i < _updatableComponents.Count; i++) {
+            _updatableComponents[i].OnUpdate();
         }
 
         var transform = Object.Host.transform;

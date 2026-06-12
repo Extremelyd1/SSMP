@@ -1,6 +1,5 @@
 using SSMP.Networking.Client;
 using SSMP.Networking.Packet.Data;
-using SSMP.Util;
 using UnityEngine;
 
 namespace SSMP.Game.Client.Entity.Component;
@@ -18,13 +17,13 @@ internal class RotationComponent : EntityComponent {
         ushort entityId,
         HostClientPair<GameObject> gameObject
     ) : base(netClient, entityId, gameObject) {
-        MonoBehaviourUtil.Instance.OnUpdateEvent += OnUpdateRotation;
     }
 
     /// <summary>
     /// Callback method to check for rotation updates.
     /// </summary>
-    private void OnUpdateRotation() {
+    /// <inheritdoc />
+    public override void OnUpdate() {
         if (IsControlled) {
             return;
         }
@@ -72,6 +71,5 @@ internal class RotationComponent : EntityComponent {
 
     /// <inheritdoc />
     public override void Destroy() {
-        MonoBehaviourUtil.Instance.OnUpdateEvent -= OnUpdateRotation;
     }
 }
