@@ -11,7 +11,6 @@ using Logger = SSMP.Logging.Logger;
 
 namespace SSMP.Game.Client.Entity.Component;
 
-// TODO: preserve entity HP and AI/FSM state during scene host transfer.
 /// <inheritdoc />
 /// This component manages the <see cref="HealthManager"/> component of the entity.
 internal class HealthManagerComponent : EntityComponent {
@@ -149,9 +148,8 @@ internal class HealthManagerComponent : EntityComponent {
 
         orig(self, attackDirection, attackType, ignoreEvasion);
 
-        var data = new EntityNetworkData {
-            Type = EntityComponentType.Death
-        };
+        var data = ObjectPool<EntityNetworkData>.Get();
+        data.Type = EntityComponentType.Death;
 
         if (attackDirection.HasValue) {
             data.Packet.Write(true);
@@ -189,6 +187,7 @@ internal class HealthManagerComponent : EntityComponent {
                     _hasPendingControlledHealCorrection = true;
                     _pendingControlledHealCorrectionAt = Time.unscaledTime + ControlledHealCorrectionDelaySeconds;
                 }
+
                 return;
             }
 
@@ -197,9 +196,9 @@ internal class HealthManagerComponent : EntityComponent {
             _lastHp = newHp;
             _nextHealthUpdateId++;
 
-            var hpData = new EntityNetworkData {
-                Type = EntityComponentType.Health
-            };
+            // Obtain a pooled network data instance to avoid new allocations
+            var hpData = ObjectPool<EntityNetworkData>.Get();
+            hpData.Type = EntityComponentType.Health;
 
             hpData.Packet.Write(previousHp);
             hpData.Packet.Write(newHp);
@@ -209,29 +208,21 @@ internal class HealthManagerComponent : EntityComponent {
             SendData(hpData);
         }
 
-        var invincibilityData = new EntityNetworkData {
-            Type = EntityComponentType.Invincibility
-        };
-
-        var shouldSendInvincibility = false;
-
         var newInvincible = _healthManager.Host.IsInvincible;
-        if (newInvincible != _lastInvincible) {
-            _lastInvincible = newInvincible;
-            shouldSendInvincibility = true;
-        }
-
-        invincibilityData.Packet.Write(newInvincible);
-
         var newInvincibleFromDir = _healthManager.Host.InvincibleFromDirection;
-        if (newInvincibleFromDir != _lastInvincibleFromDirection) {
+
+        // Only retrieve and populate invincibilityData from the pool if a value has actually changed,
+        // preventing unnecessary allocations on 99.9% of frames.
+        if (newInvincible != _lastInvincible || newInvincibleFromDir != _lastInvincibleFromDirection) {
+            _lastInvincible = newInvincible;
             _lastInvincibleFromDirection = newInvincibleFromDir;
-            shouldSendInvincibility = true;
-        }
 
-        invincibilityData.Packet.Write((byte) newInvincibleFromDir);
+            var invincibilityData = ObjectPool<EntityNetworkData>.Get();
+            invincibilityData.Type = EntityComponentType.Invincibility;
 
-        if (shouldSendInvincibility) {
+            invincibilityData.Packet.Write(newInvincible);
+            invincibilityData.Packet.Write((byte) newInvincibleFromDir);
+
             SendData(invincibilityData);
         }
     }
