@@ -185,7 +185,7 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     /// Add player already in scene data to the current packet.
     /// </summary>
     /// <param name="playerEnterSceneList">An enumerable of ClientPlayerEnterScene instances to add.</param>
-    /// <param name="entitySpawnList">An enumerable of EntitySpawn instances to add.</param> 
+    /// <param name="entitySpawnList">An enumerable of EntitySpawn instances to add.</param>
     /// <param name="entityUpdateList">An enumerable of EntityUpdate instances to add.</param>
     /// <param name="reliableEntityUpdateList">An enumerable of ReliableEntityUpdate instances to add.</param>
     /// <param name="sceneHost">Whether the player is the scene host.</param>
@@ -428,7 +428,9 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
             if (entityUpdate.HostFsmData.TryGetValue(fsmIndex, out var existingData)) {
                 existingData.MergeData(data);
             } else {
-                entityUpdate.HostFsmData.Add(fsmIndex, data);
+                var pooledData = ObjectPool<EntityHostFsmData>.Get();
+                pooledData.MergeData(data);
+                entityUpdate.HostFsmData.Add(fsmIndex, pooledData);
             }
         }
     }
@@ -485,7 +487,6 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
                 playerSettingUpdate.UpdateTypes.Add(PlayerSettingUpdateType.Skin);
                 playerSettingUpdate.SkinId = skinId.Value;
             }
-            
         }
     }
 

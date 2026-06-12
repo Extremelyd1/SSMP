@@ -297,7 +297,9 @@ internal class ClientUpdateManager : UpdateManager<ServerUpdatePacket, ServerUpd
             if (entityUpdate.HostFsmData.TryGetValue(fsmIndex, out var existingData)) {
                 existingData.MergeData(data);
             } else {
-                entityUpdate.HostFsmData.Add(fsmIndex, data);
+                var pooledData = ObjectPool<EntityHostFsmData>.Get();
+                pooledData.MergeData(data);
+                entityUpdate.HostFsmData.Add(fsmIndex, pooledData);
             }
         }
     }
