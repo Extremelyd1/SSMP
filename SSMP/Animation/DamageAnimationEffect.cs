@@ -30,12 +30,20 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
     /// <summary>
     /// Cached delegate to store enemy HP before applying remote visual-only damage.
     /// </summary>
-    private static readonly Action<HealthManager, HitInstance> WillDamageEnemyOptionsDelegate = StoreHpBeforeRemoteVisualHit;
+    private static readonly Action<HealthManager, HitInstance> WillDamageEnemyOptionsDelegate =
+        StoreHpBeforeRemoteVisualHit;
 
     /// <summary>
     /// Cached delegate to restore enemy HP after applying remote visual-only damage.
     /// </summary>
     private static readonly Action<HealthManager> DamagedEnemyHealthManagerDelegate = RestoreHpAfterRemoteVisualHit;
+
+    /// <summary>
+    /// Initializes static fields of the <see cref="DamageAnimationEffect"/> class and registers scene transition hooks to prevent memory leaks.
+    /// </summary>
+    static DamageAnimationEffect() {
+        UnityEngine.SceneManagement.SceneManager.activeSceneChanged += (_, _) => RemoteVisualHitHpBefore.Clear();
+    }
 
     /// <inheritdoc/>
     public abstract override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo);
