@@ -145,4 +145,21 @@ internal static class PlayerTargetRegistry {
 
         return TrackedPlayersCache;
     }
+
+    /// <summary>
+    /// Determines whether the supplied object represents a vanilla hero, local player, remote tracked player,
+    /// or another player-like target that should be eligible for retargeting.
+    /// </summary>
+    public static bool IsHeroLikeObject(GameObject? obj) {
+        if (obj == null) {
+            return false;
+        }
+
+        return obj.name == "Hero_Hornet(Clone)" ||
+               obj.name == "Hero_Hornet" ||
+               obj.name == "Player Prefab" ||
+               obj.CompareTag("Player") ||
+               obj.GetComponent<HeroController>() != null ||
+               GetTrackedPlayerRoot(obj) != null;
+    }
 }

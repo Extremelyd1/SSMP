@@ -7,6 +7,7 @@ using MonoMod.RuntimeDetour;
 using SSMP.Hooks;
 using SSMP.Networking.Client;
 using SSMP.Game.Client.Entity;
+using SSMP.Util;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
 
@@ -243,30 +244,12 @@ internal partial class GamePatcher {
     }
 
     /// <summary>
-    /// Resolves the top-level transform for a hit source.
-    /// </summary>
-    /// <param name="source">The source object stored on a hit or attack object.</param>
-    /// <returns>The highest reachable transform, or null when the source is unavailable.</returns>
-    private static Transform? GetHitSourceRoot(GameObject? source) {
-        var transform = source?.transform;
-        if (transform == null) {
-            return null;
-        }
-
-        while (transform.parent != null) {
-            transform = transform.parent;
-        }
-
-        return transform;
-    }
-
-    /// <summary>
     /// Determines whether a hit source belongs to the local player.
     /// </summary>
     /// <param name="source">The source object stored on a hit or attack object.</param>
     /// <returns>True when the source is local or unknown; otherwise false.</returns>
     private static bool IsLocalHitSource(GameObject? source) {
-        var root = GetHitSourceRoot(source);
+        var root = source.GetHitSourceRoot();
         if (root == null) {
             return true;
         }
@@ -290,7 +273,7 @@ internal partial class GamePatcher {
     /// <param name="source">The source object stored on a hit or attack object.</param>
     /// <returns>The root transform position when available, otherwise the source position or zero.</returns>
     private static Vector3 GetHitSourcePosition(GameObject? source) {
-        var root = GetHitSourceRoot(source);
+        var root = source.GetHitSourceRoot();
         if (root != null) {
             return root.position;
         }

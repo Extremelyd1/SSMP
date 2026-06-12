@@ -171,4 +171,20 @@ internal static class GameObjectUtil {
             obj.SetActive(true);
         }
     }
+
+    /// <summary>
+    /// Walks up the transform parent hierarchy to find the top-level root transform.
+    /// </summary>
+    public static Transform? GetHitSourceRoot(this GameObject? source) {
+        var transform = source?.transform;
+        if (transform == null) {
+            return null;
+        }
+
+        while (transform.parent != null) {
+            transform = transform.parent;
+        }
+
+        return transform;
+    }
 }

@@ -3,6 +3,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using MonoMod.RuntimeDetour;
+using SSMP.Game.Client.Entity;
 using UnityEngine;
 
 namespace SSMP.Game.Client;
@@ -284,31 +285,6 @@ internal partial class GamePatcher {
         return bestPlayer;
     }
 
-    /// <summary>
-    /// Determines whether the supplied object represents a vanilla hero, local player, remote tracked player,
-    /// or another player-like target that should be eligible for retargeting.
-    /// </summary>
-    /// <param name="obj">The object to inspect.</param>
-    /// <returns>
-    /// <see langword="true"/> when the object appears to be a hero/player target reference; otherwise,
-    /// <see langword="false"/>.
-    /// </returns>
-    /// <remarks>
-    /// This is used to safely replace cached single-player hero references inside FSM variables and vanilla components
-    /// with the approved tracked multiplayer player.
-    /// </remarks>
-    private static bool IsHeroLikeObject(GameObject? obj) {
-        if (obj == null) {
-            return false;
-        }
-
-        return obj.name == "Hero_Hornet(Clone)" ||
-               obj.name == "Hero_Hornet" ||
-               obj.name == "Player Prefab" ||
-               obj.CompareTag("Player") ||
-               obj.GetComponent<HeroController>() != null ||
-               PlayerTargetRegistry.GetTrackedPlayerRoot(obj) != null;
-    }
 
     /// <summary>
     /// Determines whether a tracked player should be considered inside the supplied alert range.
@@ -374,7 +350,24 @@ internal partial class GamePatcher {
             return !boxed.Value;
         }
 
-        var isNonAcquiring = IsNonAcquiringAlertRangeName(alertRange.name);
+        var owner = GetEnemyTargetOwner(alertRange.gameObject);
+        EntityRegistryEntry? entry = null;
+        if (owner != null) {
+            EntityRegistry.TryGetEntry(owner, out entry);
+        }
+
+        var isNonAcquiring = false;
+        if (entry is { NonAcquiringRanges: not null }) {
+            foreach (var blockedNamePart in entry.NonAcquiringRanges) {
+                if (alertRange.name.Contains(blockedNamePart, StringComparison.OrdinalIgnoreCase)) {
+                    isNonAcquiring = true;
+                    break;
+                }
+            }
+        } else {
+            isNonAcquiring = IsNonAcquiringAlertRangeName(alertRange.name);
+        }
+
         NonAcquiringAlertRanges.Add(alertRange, new BoxedBool { Value = isNonAcquiring });
 
         return !isNonAcquiring;

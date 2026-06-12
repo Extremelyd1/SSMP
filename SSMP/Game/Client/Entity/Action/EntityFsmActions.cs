@@ -564,7 +564,8 @@ internal static class EntityFsmActions {
         var rigidbody = action.rb2d;
         if (rigidbody != null && rigidbody.gameObject != null && IsObjectInRegistry(rigidbody.gameObject)) {
             //Logger.Debug(
-            //    "Skipping getting network data for FlingObjectsFromGlobalPool, because spawned objects are managed by system"
+            //    "Skipping getting network data for FlingObjectsFromGlobalPool, because spawned objects are managed by
+            // system"
             //);
             return false;
         }
@@ -688,7 +689,8 @@ internal static class EntityFsmActions {
         var rigidbody = action.rb2d;
         if (rigidbody != null && rigidbody.gameObject != null && IsObjectInRegistry(rigidbody.gameObject)) {
             //Logger.Debug(
-            //    "Skipping getting network data for FlingObjectsFromGlobalPool, because spawned objects are managed by system"
+            //    "Skipping getting network data for FlingObjectsFromGlobalPool, because spawned objects are managed by
+            // system"
             //);
             return false;
         }
@@ -3144,8 +3146,8 @@ internal static class EntityFsmActions {
             var spawnedEntity = false;
 
             var arr = action.storeArray.Values;
-            for (var i = 0; i < arr.Length; i++) {
-                var spawnedGo = (GameObject) arr[i];
+            foreach (var t in arr) {
+                var spawnedGo = (GameObject) t;
 
                 if (EntitySpawnEvent.Invoke(
                         new EntitySpawnDetails {
@@ -3154,7 +3156,8 @@ internal static class EntityFsmActions {
                             GameObject = spawnedGo
                         }
                     )) {
-                    //Logger.Debug("Tried getting PreSpawnGameObjects network data, but spawned objects contains entity");
+                    //Logger.Debug("Tried getting PreSpawnGameObjects network data, but spawned objects contains
+                    // entity");
                     spawnedEntity = true;
                 }
             }

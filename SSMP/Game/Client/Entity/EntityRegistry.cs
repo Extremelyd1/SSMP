@@ -186,6 +186,13 @@ internal class EntityRegistryEntry {
     public EntityComponentType[]? ComponentTypes { get; set; }
 
     /// <summary>
+    /// Alert range name fragments that identify ranges which may validate an existing approved target,
+    /// but must not acquire or switch to a new target.
+    /// </summary>
+    [JsonProperty("non_acquiring_ranges")]
+    public List<string>? NonAcquiringRanges { get; set; }
+
+    /// <summary>
     /// Child entries nested under this entry. Populated from the registry file and validated
     /// during startup. Null if no children are defined.
     /// </summary>

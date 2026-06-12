@@ -4,7 +4,10 @@ using System.Linq.Expressions;
 using System.Reflection;
 using HutongGames.PlayMaker;
 using HutongGames.PlayMaker.Actions;
+using MonoMod.Cil;
+using Mono.Cecil.Cil;
 using MonoMod.RuntimeDetour;
+using SSMP.Game.Client.Entity.Action;
 using SSMP.Util;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
@@ -37,27 +40,29 @@ internal partial class GamePatcher {
     private static readonly Dictionary<int, GameObject> TargetOwnerCache = new();
 
     /// <summary>
-    /// Active PlayMaker FSM action types that consume an enemy target and should be forced to use the
-    /// enemy-approved multiplayer target.
+    /// Searches active assemblies to find a PlayMaker FSM action type matching the given class name.
     /// </summary>
-    private static readonly HashSet<Type> TargetedFsmActionTypes = [
-        typeof(ChaseObject),
-        typeof(ChaseObjectV2),
-        typeof(ChaseObjectGround),
-        typeof(FaceObject),
-        typeof(FaceObjectV2),
-        typeof(FaceDirection),
-        typeof(DistanceFly),
-        typeof(DistanceFlyV2),
-        typeof(DistanceFlySmooth),
-        typeof(FireAtTarget),
-        typeof(GetDistance),
-        typeof(CheckTargetDirection),
-        typeof(GetAngleToTarget2D),
-        typeof(DistanceBetweenPoints2D),
-        typeof(CheckAlertRange),
-        typeof(CheckCanSeeHero)
-    ];
+    /// <param name="name">The name of the action class.</param>
+    /// <returns>The resolved action <see cref="Type"/>, or null if not found.</returns>
+    private static Type? GetFsmActionTypeByName(string name) {
+        var actionAssembly = typeof(GetHero).Assembly;
+        var type = actionAssembly.GetType($"HutongGames.PlayMaker.Actions.{name}");
+        if (type != null) return type;
+
+        var gameAssembly = typeof(Walker).Assembly;
+        type = gameAssembly.GetType($"HutongGames.PlayMaker.Actions.{name}");
+        if (type != null) return type;
+
+        type = gameAssembly.GetType(name);
+        if (type != null) return type;
+
+        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies()) {
+            type = assembly.GetType(name) ?? assembly.GetType($"HutongGames.PlayMaker.Actions.{name}");
+            if (type != null) return type;
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// Cached reflected <see cref="FsmGameObject"/> fields for target-consuming FSM action types.
@@ -65,334 +70,10 @@ internal partial class GamePatcher {
     private static readonly Dictionary<Type, FieldInfo[]> TargetedActionGameObjectFieldCache = new();
 
     /// <summary>
-    /// Reflected private field storing the camera used by <see cref="Walker"/> startup and distance checks.
+    /// Reflected private field storing the cached hero transform or controller used by <see cref="Walker"/>.
     /// </summary>
-    private static readonly FieldInfo? WalkerMainCameraField =
-        typeof(Walker).GetField("mainCamera", InstanceNonPublicFlags);
-
-    /// <summary>
-    /// Reflected private field storing whether a <see cref="Walker"/> has passed its camera-distance activation check.
-    /// </summary>
-    private static readonly FieldInfo? WalkerDidFulfilCameraDistanceConditionField =
-        typeof(Walker).GetField("didFulfilCameraDistanceCondition", InstanceNonPublicFlags);
-
-    /// <summary>
-    /// Reflected private field storing whether a <see cref="Walker"/> has passed its hero-X activation check.
-    /// </summary>
-    private static readonly FieldInfo? WalkerDidFulfilHeroXConditionField =
-        typeof(Walker).GetField("didFulfilHeroXCondition", InstanceNonPublicFlags);
-
-    /// <summary>
-    /// Reflected private field storing the X position used by <see cref="Walker"/> hero-X activation logic.
-    /// </summary>
-    private static readonly FieldInfo? WalkerWaitHeroXField =
-        typeof(Walker).GetField("waitHeroX", InstanceNonPublicFlags);
-
-    /// <summary>
-    /// Reflected private field storing whether a <see cref="Walker"/> should wait for the hero-X activation condition.
-    /// </summary>
-    private static readonly FieldInfo? WalkerWaitForHeroXField =
-        typeof(Walker).GetField("waitForHeroX", InstanceNonPublicFlags);
-
-    /// <summary>
-    /// Reflected field storing whether a <see cref="Walker"/> starts inactive until activation conditions are satisfied.
-    /// </summary>
-    private static readonly FieldInfo? WalkerStartInactiveField =
-        typeof(Walker).GetField("startInactive", InstanceNonPublicFlags | BindingFlags.Public);
-
-    /// <summary>
-    /// Reflected private field storing whether a <see cref="Walker"/> is configured as an ambush enemy.
-    /// </summary>
-    private static readonly FieldInfo? WalkerAmbushField =
-        typeof(Walker).GetField("ambush", InstanceNonPublicFlags);
-
-    /// <summary>
-    /// Reflected private field storing the regular turn cooldown remaining for a <see cref="Walker"/>.
-    /// </summary>
-    private static readonly FieldInfo? WalkerTurnCooldownRemainingField =
-        typeof(Walker).GetField("turnCooldownRemaining", InstanceNonPublicFlags);
-
-    /// <summary>
-    /// Reflected private field storing the aggro edge-turn cooldown remaining for a <see cref="Walker"/>.
-    /// </summary>
-    private static readonly FieldInfo? WalkerAggroEdgeTurnCooldownRemainingField =
-        typeof(Walker).GetField("aggroEdgeTurnCooldownRemaining", InstanceNonPublicFlags);
-
-    /// <summary>
-    /// Reflected private field storing the current facing direction of a <see cref="Walker"/>.
-    /// </summary>
-    private static readonly FieldInfo? WalkerCurrentFacingField =
-        typeof(Walker).GetField("currentFacing", InstanceNonPublicFlags);
-
-    /// <summary>
-    /// Reflected private field storing the body collider used by <see cref="Walker"/> movement and sweep checks.
-    /// </summary>
-    private static readonly FieldInfo? WalkerBodyColliderField =
-        typeof(Walker).GetField("bodyCollider", InstanceNonPublicFlags);
-
-    /// <summary>
-    /// Reflected private field storing whether a <see cref="Walker"/> is prevented from turning to face the hero.
-    /// </summary>
-    private static readonly FieldInfo? WalkerPreventTurningToFaceHeroField =
-        typeof(Walker).GetField("preventTurningToFaceHero", InstanceNonPublicFlags);
-
-    /// <summary>
-    /// Reflected private field storing the line-of-sight detector used by a <see cref="Walker"/>.
-    /// </summary>
-    private static readonly FieldInfo? WalkerLineOfSightDetectorField =
-        typeof(Walker).GetField("lineOfSightDetector", InstanceNonPublicFlags);
-
-    /// <summary>
-    /// Reflected private field storing the alert range used by a <see cref="Walker"/>.
-    /// </summary>
-    private static readonly FieldInfo? WalkerAlertRangeField =
-        typeof(Walker).GetField("alertRange", InstanceNonPublicFlags);
-
-    /// <summary>
-    /// Reflected field storing whether a <see cref="Walker"/> should ignore ledge / hole checks.
-    /// </summary>
-    private static readonly FieldInfo? WalkerIgnoreHolesField =
-        typeof(Walker).GetField("ignoreHoles", InstanceNonPublicFlags | BindingFlags.Public);
-
-    /// <summary>
-    /// Reflected private field storing the X offset applied to <see cref="Walker"/> edge checks.
-    /// </summary>
-    private static readonly FieldInfo? WalkerEdgeXAdjusterField =
-        typeof(Walker).GetField("edgeXAdjuster", InstanceNonPublicFlags);
-
-    /// <summary>
-    /// Reflected private field storing the remaining walk time before a pausing <see cref="Walker"/> stops.
-    /// </summary>
-    private static readonly FieldInfo? WalkerWalkTimeRemainingField =
-        typeof(Walker).GetField("walkTimeRemaining", InstanceNonPublicFlags);
-
-    /// <summary>
-    /// Reflected private field storing whether a <see cref="Walker"/> may pause when it loses its target.
-    /// </summary>
-    private static readonly FieldInfo? WalkerPausesField =
-        typeof(Walker).GetField("pauses", InstanceNonPublicFlags);
-
-    /// <summary>
-    /// Reflected private field storing the rigidbody used by <see cref="Walker"/> movement.
-    /// </summary>
-    private static readonly FieldInfo? WalkerBodyField =
-        typeof(Walker).GetField("body", InstanceNonPublicFlags);
-
-    /// <summary>
-    /// Reflected field storing the right-facing walk speed for a <see cref="Walker"/>.
-    /// </summary>
-    private static readonly FieldInfo? WalkerWalkSpeedRField =
-        typeof(Walker).GetField("walkSpeedR", InstanceNonPublicFlags | BindingFlags.Public);
-
-    /// <summary>
-    /// Reflected field storing the left-facing walk speed for a <see cref="Walker"/>.
-    /// </summary>
-    private static readonly FieldInfo? WalkerWalkSpeedLField =
-        typeof(Walker).GetField("walkSpeedL", InstanceNonPublicFlags | BindingFlags.Public);
-
-    /// <summary>
-    /// Reflected private method used to make a <see cref="Walker"/> begin turning.
-    /// </summary>
-    private static readonly MethodInfo? WalkerBeginTurningMethod =
-        typeof(Walker).GetMethod("BeginTurning", InstanceNonPublicFlags);
-
-    /// <summary>
-    /// Reflected private method used to make a <see cref="Walker"/> enter its stopped state.
-    /// </summary>
-    private static readonly MethodInfo? WalkerBeginStoppedMethod =
-        typeof(Walker).GetMethod("BeginStopped", InstanceNonPublicFlags);
-
-    private static readonly Func<Walker, Camera?>? GetWalkerMainCamera = CompileGetter<Camera?>(WalkerMainCameraField);
-
-    private static readonly Func<Walker, bool>? GetWalkerDidFulfilCameraDistanceCondition =
-        CompileGetter<bool>(WalkerDidFulfilCameraDistanceConditionField);
-
-    private static readonly Action<Walker, bool>? SetWalkerDidFulfilCameraDistanceCondition =
-        CompileSetter<bool>(WalkerDidFulfilCameraDistanceConditionField);
-
-    private static readonly Func<Walker, bool>? GetWalkerDidFulfilHeroXCondition =
-        CompileGetter<bool>(WalkerDidFulfilHeroXConditionField);
-
-    private static readonly Action<Walker, bool>? SetWalkerDidFulfilHeroXCondition =
-        CompileSetter<bool>(WalkerDidFulfilHeroXConditionField);
-
-    private static readonly Func<Walker, float>? GetWalkerWaitHeroX = CompileGetter<float>(WalkerWaitHeroXField);
-    private static readonly Func<Walker, bool>? GetWalkerWaitForHeroX = CompileGetter<bool>(WalkerWaitForHeroXField);
-    private static readonly Func<Walker, bool>? GetWalkerStartInactive = CompileGetter<bool>(WalkerStartInactiveField);
-    private static readonly Func<Walker, bool>? GetWalkerAmbush = CompileGetter<bool>(WalkerAmbushField);
-
-    private static readonly Func<Walker, float>? GetWalkerTurnCooldownRemaining =
-        CompileGetter<float>(WalkerTurnCooldownRemainingField);
-
-    private static readonly Func<Walker, float>? GetWalkerAggroEdgeTurnCooldownRemaining =
-        CompileGetter<float>(WalkerAggroEdgeTurnCooldownRemainingField);
-
-    private static readonly Func<Walker, int>? GetWalkerCurrentFacing = CompileGetter<int>(WalkerCurrentFacingField);
-
-    private static readonly Func<Walker, Collider2D?>? GetWalkerBodyCollider =
-        CompileGetter<Collider2D?>(WalkerBodyColliderField);
-
-    private static readonly Func<Walker, bool>? GetWalkerPreventTurningToFaceHero =
-        CompileGetter<bool>(WalkerPreventTurningToFaceHeroField);
-
-    private static readonly Func<Walker, LineOfSightDetector?>? GetWalkerLineOfSightDetector =
-        CompileGetter<LineOfSightDetector?>(WalkerLineOfSightDetectorField);
-
-    private static readonly Func<Walker, AlertRange?>? GetWalkerAlertRange =
-        CompileGetter<AlertRange?>(WalkerAlertRangeField);
-
-    private static readonly Func<Walker, bool>? GetWalkerIgnoreHoles = CompileGetter<bool>(WalkerIgnoreHolesField);
-
-    private static readonly Func<Walker, float>?
-        GetWalkerEdgeXAdjuster = CompileGetter<float>(WalkerEdgeXAdjusterField);
-
-    private static readonly Func<Walker, float>? GetWalkerWalkTimeRemaining =
-        CompileGetter<float>(WalkerWalkTimeRemainingField);
-
-    private static readonly Action<Walker, float>? SetWalkerWalkTimeRemaining =
-        CompileSetter<float>(WalkerWalkTimeRemainingField);
-
-    private static readonly Func<Walker, bool>? GetWalkerPauses = CompileGetter<bool>(WalkerPausesField);
-    private static readonly Func<Walker, Rigidbody2D?>? GetWalkerBody = CompileGetter<Rigidbody2D?>(WalkerBodyField);
-    private static readonly Func<Walker, float>? GetWalkerWalkSpeedR = CompileGetter<float>(WalkerWalkSpeedRField);
-    private static readonly Func<Walker, float>? GetWalkerWalkSpeedL = CompileGetter<float>(WalkerWalkSpeedLField);
-
-    private static readonly Action<Walker, int>? WalkerBeginTurningDelegate =
-        WalkerBeginTurningMethod != null
-            ? (Action<Walker, int>) Delegate.CreateDelegate(typeof(Action<Walker, int>), null, WalkerBeginTurningMethod)
-            : null;
-
-    private static readonly Action<Walker, Walker.StopReasons>? WalkerBeginStoppedDelegate =
-        WalkerBeginStoppedMethod != null
-            ? (Action<Walker, Walker.StopReasons>) Delegate.CreateDelegate(
-                typeof(Action<Walker, Walker.StopReasons>), null, WalkerBeginStoppedMethod
-            )
-            : null;
-
-    private static Func<Walker, TField>? CompileGetter<TField>(FieldInfo? field) {
-        if (field == null) return null;
-        try {
-            var param = Expression.Parameter(typeof(Walker), "self");
-            var fieldExp = Expression.Field(param, field);
-            return Expression.Lambda<Func<Walker, TField>>(fieldExp, param).Compile();
-        } catch (Exception e) {
-            Logger.Error($"Failed to compile getter for field {field.Name}: {e.Message}");
-            return null;
-        }
-    }
-
-    private static Action<Walker, TField>? CompileSetter<TField>(FieldInfo? field) {
-        if (field == null) return null;
-        try {
-            var paramSelf = Expression.Parameter(typeof(Walker), "self");
-            var paramVal = Expression.Parameter(typeof(TField), "val");
-            var fieldExp = Expression.Field(paramSelf, field);
-            var assign = Expression.Assign(fieldExp, paramVal);
-            return Expression.Lambda<Action<Walker, TField>>(assign, paramSelf, paramVal).Compile();
-        } catch (Exception e) {
-            Logger.Error($"Failed to compile setter for field {field.Name}: {e.Message}");
-            return null;
-        }
-    }
-
-    private static Camera? GetMainCamera(Walker self) => GetWalkerMainCamera != null
-        ? GetWalkerMainCamera(self)
-        : (Camera?) WalkerMainCameraField?.GetValue(self);
-
-    private static bool GetDidFulfilCameraDistanceCondition(Walker self) =>
-        GetWalkerDidFulfilCameraDistanceCondition?.Invoke(self) ??
-        ((bool?) WalkerDidFulfilCameraDistanceConditionField?.GetValue(self) ?? false);
-
-    private static void SetDidFulfilCameraDistanceCondition(Walker self, bool value) {
-        if (SetWalkerDidFulfilCameraDistanceCondition != null) SetWalkerDidFulfilCameraDistanceCondition(self, value);
-        else WalkerDidFulfilCameraDistanceConditionField?.SetValue(self, value);
-    }
-
-    private static bool GetDidFulfilHeroXCondition(Walker self) => GetWalkerDidFulfilHeroXCondition?.Invoke(self) ??
-                                                                   ((bool?) WalkerDidFulfilHeroXConditionField
-                                                                       ?.GetValue(self) ?? false);
-
-    private static void SetDidFulfilHeroXCondition(Walker self, bool value) {
-        if (SetWalkerDidFulfilHeroXCondition != null) SetWalkerDidFulfilHeroXCondition(self, value);
-        else WalkerDidFulfilHeroXConditionField?.SetValue(self, value);
-    }
-
-    private static float GetWaitHeroX(Walker self) =>
-        GetWalkerWaitHeroX?.Invoke(self) ?? ((float?) WalkerWaitHeroXField?.GetValue(self) ?? 0f);
-
-    private static bool GetWaitForHeroX(Walker self) => GetWalkerWaitForHeroX?.Invoke(self) ??
-                                                        ((bool?) WalkerWaitForHeroXField?.GetValue(self) ?? false);
-
-    private static bool GetStartInactive(Walker self) => GetWalkerStartInactive?.Invoke(self) ??
-                                                         ((bool?) WalkerStartInactiveField?.GetValue(self) ?? false);
-
-    private static bool GetAmbush(Walker self) =>
-        GetWalkerAmbush?.Invoke(self) ?? ((bool?) WalkerAmbushField?.GetValue(self) ?? false);
-
-    private static float GetTurnCooldownRemaining(Walker self) => GetWalkerTurnCooldownRemaining?.Invoke(self) ??
-                                                                  ((float?) WalkerTurnCooldownRemainingField?.GetValue(
-                                                                      self
-                                                                  ) ?? 0f);
-
-    private static float GetAggroEdgeTurnCooldownRemaining(Walker self) =>
-        GetWalkerAggroEdgeTurnCooldownRemaining?.Invoke(self) ??
-        ((float?) WalkerAggroEdgeTurnCooldownRemainingField?.GetValue(self) ?? 0f);
-
-    private static int GetCurrentFacing(Walker self) => GetWalkerCurrentFacing?.Invoke(self) ??
-                                                        ((int?) WalkerCurrentFacingField?.GetValue(self) ?? 0);
-
-    private static Collider2D? GetBodyCollider(Walker self) => GetWalkerBodyCollider != null
-        ? GetWalkerBodyCollider(self)
-        : (Collider2D?) WalkerBodyColliderField?.GetValue(self);
-
-    private static bool GetPreventTurningToFaceHero(Walker self) => GetWalkerPreventTurningToFaceHero?.Invoke(self) ??
-                                                                    ((bool?) WalkerPreventTurningToFaceHeroField
-                                                                        ?.GetValue(self) ?? false);
-
-    private static LineOfSightDetector? GetLineOfSightDetector(Walker self) => GetWalkerLineOfSightDetector != null
-        ? GetWalkerLineOfSightDetector(self)
-        : (LineOfSightDetector?) WalkerLineOfSightDetectorField?.GetValue(self);
-
-    private static AlertRange? GetAlertRange(Walker self) => GetWalkerAlertRange != null
-        ? GetWalkerAlertRange(self)
-        : (AlertRange?) WalkerAlertRangeField?.GetValue(self);
-
-    private static bool GetIgnoreHoles(Walker self) => GetWalkerIgnoreHoles?.Invoke(self) ??
-                                                       ((bool?) WalkerIgnoreHolesField?.GetValue(self) ?? false);
-
-    private static float GetEdgeXAdjuster(Walker self) => GetWalkerEdgeXAdjuster?.Invoke(self) ??
-                                                          ((float?) WalkerEdgeXAdjusterField?.GetValue(self) ?? 0f);
-
-    private static float GetWalkTimeRemaining(Walker self) => GetWalkerWalkTimeRemaining?.Invoke(self) ??
-                                                              ((float?) WalkerWalkTimeRemainingField?.GetValue(self) ??
-                                                               0f);
-
-    private static void SetWalkTimeRemaining(Walker self, float value) {
-        if (SetWalkerWalkTimeRemaining != null) SetWalkerWalkTimeRemaining(self, value);
-        else WalkerWalkTimeRemainingField?.SetValue(self, value);
-    }
-
-    private static bool GetPauses(Walker self) =>
-        GetWalkerPauses?.Invoke(self) ?? ((bool?) WalkerPausesField?.GetValue(self) ?? false);
-
-    private static Rigidbody2D? GetBody(Walker self) =>
-        GetWalkerBody != null ? GetWalkerBody(self) : (Rigidbody2D?) WalkerBodyField?.GetValue(self);
-
-    private static float GetWalkSpeedR(Walker self) =>
-        GetWalkerWalkSpeedR?.Invoke(self) ?? ((float?) WalkerWalkSpeedRField?.GetValue(self) ?? 0f);
-
-    private static float GetWalkSpeedL(Walker self) =>
-        GetWalkerWalkSpeedL?.Invoke(self) ?? ((float?) WalkerWalkSpeedLField?.GetValue(self) ?? 0f);
-
-    private static void InvokeBeginTurning(Walker self, int newFacing) {
-        if (WalkerBeginTurningDelegate != null) WalkerBeginTurningDelegate(self, newFacing);
-        else WalkerBeginTurningMethod?.Invoke(self, [newFacing]);
-    }
-
-    private static void InvokeBeginStopped(Walker self, Walker.StopReasons reason) {
-        if (WalkerBeginStoppedDelegate != null) WalkerBeginStoppedDelegate(self, reason);
-        else WalkerBeginStoppedMethod?.Invoke(self, [reason]);
-    }
+    private static readonly FieldInfo? WalkerHeroField =
+        typeof(Walker).GetField("hero", InstanceNonPublicFlags);
 
     /// <summary>
     /// Reflected private field storing the cached hero transform used by <see cref="WalkerV2"/>.
@@ -406,15 +87,36 @@ internal partial class GamePatcher {
     private static readonly FieldInfo? ScuttlerControlHeroField =
         typeof(ScuttlerControl).GetField("hero", InstanceNonPublicFlags);
 
+    private static readonly Func<Walker, HeroController?>? GetWalkerHero =
+        CompileGetter<HeroController?>(WalkerHeroField);
+
+    /// <summary>
+    /// Compiles a dynamic lambda delegate for retrieving the value of a private field on a <see cref="Walker"/> instance.
+    /// </summary>
+    /// <typeparam name="TField">The expected return type of the field.</typeparam>
+    /// <param name="field">The reflected <see cref="FieldInfo"/> to read.</param>
+    /// <returns>A compiled getter delegate, or null if compile fails.</returns>
+    private static Func<Walker, TField>? CompileGetter<TField>(FieldInfo? field) {
+        if (field == null) return null;
+        try {
+            var param = Expression.Parameter(typeof(Walker), "self");
+            var fieldExp = Expression.Field(param, field);
+            return Expression.Lambda<Func<Walker, TField>>(fieldExp, param).Compile();
+        } catch (Exception e) {
+            Logger.Error($"Failed to compile getter for field {field.Name}: {e.Message}");
+            return null;
+        }
+    }
+
     /// <summary>
     /// Hook for replacing <see cref="Walker"/> walking updates with multiplayer-aware target handling.
     /// </summary>
-    private Hook? _walkerUpdateWalkingHook;
+    private ILHook? _walkerUpdateWalkingHook;
 
     /// <summary>
     /// Hook for replacing <see cref="Walker"/> activation-condition updates with multiplayer-aware target handling.
     /// </summary>
-    private Hook? _walkerUpdateWaitingForConditionsHook;
+    private ILHook? _walkerUpdateWaitingForConditionsHook;
 
     /// <summary>
     /// Hooks registered on target-consuming FSM action <c>OnEnter</c> methods.
@@ -461,14 +163,14 @@ internal partial class GamePatcher {
     /// Registers aggression-specific hooks and periodic target refresh logic.
     /// </summary>
     private void RegisterAggressionHooks() {
-        _walkerUpdateWalkingHook = new Hook(
+        _walkerUpdateWalkingHook = new ILHook(
             typeof(Walker).GetMethod("UpdateWalking", InstanceNonPublicFlags)!,
-            OnWalkerUpdateWalking
+            ILWalkerUpdateWalking
         );
 
-        _walkerUpdateWaitingForConditionsHook = new Hook(
+        _walkerUpdateWaitingForConditionsHook = new ILHook(
             typeof(Walker).GetMethod("UpdateWaitingForConditions", InstanceNonPublicFlags)!,
-            OnWalkerUpdateWaitingForConditions
+            ILWalkerUpdateWaitingForConditions
         );
 
         RegisterTargetedFsmActionEnterHooks();
@@ -497,6 +199,11 @@ internal partial class GamePatcher {
         ClearTargetCaches();
     }
 
+    /// <summary>
+    /// Clears the active target caches when the current game scene changes.
+    /// </summary>
+    /// <param name="from">The previous scene.</param>
+    /// <param name="to">The newly loaded active scene.</param>
     private static void OnActiveSceneChanged(
         UnityEngine.SceneManagement.Scene from,
         UnityEngine.SceneManagement.Scene to
@@ -504,19 +211,26 @@ internal partial class GamePatcher {
         ClearTargetCaches();
     }
 
+    /// <summary>
+    /// Clears the approved target maps and the enemy target owner resolution caches.
+    /// </summary>
     private static void ClearTargetCaches() {
         EnemyApprovedTargets.Clear();
         TargetOwnerCache.Clear();
     }
 
     /// <summary>
-    /// Hooks target-consuming FSM action <c>OnEnter</c> methods so their target fields are corrected before
-    /// one-shot logic such as firing, distance checks, or state gates can read the vanilla hero singleton.
+    /// Registers RuntimeDetour hooks for target-consuming FSM action OnEnter methods.
     /// </summary>
     private void RegisterTargetedFsmActionEnterHooks() {
         DisposeTargetedFsmActionEnterHooks();
 
-        foreach (var actionType in TargetedFsmActionTypes) {
+        foreach (var actionName in ActionRegistry.TargetedFsmActionTypes) {
+            var actionType = GetFsmActionTypeByName(actionName);
+            if (actionType == null) {
+                continue;
+            }
+
             var onEnterMethod = actionType.GetMethod("OnEnter", InstancePublicFlags | InstanceNonPublicFlags);
             if (onEnterMethod == null || onEnterMethod.DeclaringType != actionType) {
                 continue;
@@ -556,140 +270,99 @@ internal partial class GamePatcher {
     }
 
     /// <summary>
-    /// Replaces <see cref="Walker"/>'s hero-position startup gate with approved-target evaluation.
+    /// Resolves the approved target transform for a <see cref="Walker"/> instance.
+    /// Falls back to the vanilla target field when no approved multiplayer target exists.
     /// </summary>
-    /// <param name="orig">The original method.</param>
-    /// <param name="self">The walker being updated.</param>
-    private static void OnWalkerUpdateWaitingForConditions(Action<Walker> orig, Walker self) {
-        var targetObject = GetApprovedEnemyTarget(self.gameObject);
-        var target = targetObject == null ? null : targetObject.transform;
-
-        if (target == null) {
-            orig(self);
-            return;
+    /// <param name="self">The walker being queried.</param>
+    /// <returns>The transform of the target, or null if none is available.</returns>
+    private static Transform? GetApprovedEnemyTargetTransform(Walker self) {
+        var approvedTarget = GetApprovedEnemyTarget(self.gameObject);
+        if (approvedTarget != null) {
+            return approvedTarget.transform;
         }
 
-        var mainCamera = GetMainCamera(self);
-        var didFulfilCameraDistanceCondition = GetDidFulfilCameraDistanceCondition(self);
-        var didFulfilHeroXCondition = GetDidFulfilHeroXCondition(self);
+        var hero = GetWalkerHero?.Invoke(self) ?? (HeroController?) WalkerHeroField?.GetValue(self);
+        return hero != null ? hero.transform : null;
+    }
 
-        if (!didFulfilCameraDistanceCondition &&
-            mainCamera != null &&
-            (mainCamera.transform.position - self.transform.position).sqrMagnitude < 3600f) {
-            didFulfilCameraDistanceCondition = true;
-            SetDidFulfilCameraDistanceCondition(self, true);
-        }
+    /// <summary>
+    /// IL hook that rewrites hero field reads in <see cref="Walker.UpdateWaitingForConditions"/>
+    /// to use the approved multiplayer target instead.
+    /// </summary>
+    /// <param name="il">The IL context to modify.</param>
+    private static void ILWalkerUpdateWaitingForConditions(ILContext il) {
+        try {
+            var c = new ILCursor(il);
 
-        var waitHeroX = GetWaitHeroX(self);
-        if (didFulfilCameraDistanceCondition &&
-            !didFulfilHeroXCondition &&
-            Mathf.Abs(target.position.x - waitHeroX) < 1f) {
-            didFulfilHeroXCondition = true;
-            SetDidFulfilHeroXCondition(self, true);
-        }
-
-        var waitForHeroX = GetWaitForHeroX(self);
-        var startInactive = GetStartInactive(self);
-        var ambush = GetAmbush(self);
-
-        if (didFulfilCameraDistanceCondition &&
-            (!waitForHeroX || didFulfilHeroXCondition) &&
-            !startInactive &&
-            !ambush) {
-            InvokeBeginStopped(self, Walker.StopReasons.Bored);
-            self.StartMoving();
+            while (c.TryGotoNext(
+                       MoveType.Before,
+                       i => i.MatchLdarg(0),
+                       i => i.MatchLdfld(typeof(Walker), "hero")
+                   )) {
+                if (c.Next.Next.Next != null &&
+                    c.Next.Next.Next.MatchCallvirt(typeof(Component), "get_transform")) {
+                    c.RemoveRange(3);
+                    c.Emit(OpCodes.Ldarg_0);
+                    c.Emit(
+                        OpCodes.Call,
+                        typeof(GamePatcher).GetMethod(
+                            nameof(GetApprovedEnemyTargetTransform), BindingFlags.NonPublic | BindingFlags.Static
+                        )!
+                    );
+                } else {
+                    c.RemoveRange(2);
+                    c.Emit(OpCodes.Ldarg_0);
+                    c.Emit(
+                        OpCodes.Call,
+                        typeof(GamePatcher).GetMethod(
+                            nameof(GetApprovedEnemyTargetTransform), BindingFlags.NonPublic | BindingFlags.Static
+                        )!
+                    );
+                }
+            }
+        } catch (Exception e) {
+            Logger.Error($"Could not apply ILWalkerUpdateWaitingForConditions hook: {e}");
         }
     }
 
     /// <summary>
-    /// Replaces <see cref="Walker"/>'s hero-facing chase logic with approved-target evaluation.
+    /// IL hook that rewrites hero field reads in <see cref="Walker.UpdateWalking"/>
+    /// to use the approved multiplayer target instead.
     /// </summary>
-    /// <param name="orig">The original method.</param>
-    /// <param name="self">The walker being updated.</param>
-    private static void OnWalkerUpdateWalking(Action<Walker> orig, Walker self) {
-        var targetObject = GetApprovedEnemyTarget(self.gameObject);
-        var target = targetObject == null ? null : targetObject.transform;
+    /// <param name="il">The IL context to modify.</param>
+    private static void ILWalkerUpdateWalking(ILContext il) {
+        try {
+            var c = new ILCursor(il);
 
-        if (target == null) {
-            orig(self);
-            return;
-        }
-
-        var turnCooldownRemaining = GetTurnCooldownRemaining(self);
-        var aggroEdgeTurnCooldownRemaining = GetAggroEdgeTurnCooldownRemaining(self);
-        var currentFacing = GetCurrentFacing(self);
-        var bodyCollider = GetBodyCollider(self);
-        var lineOfSightDetector = GetLineOfSightDetector(self);
-        var alertRange = GetAlertRange(self);
-        var body = GetBody(self);
-
-        if (bodyCollider == null || body == null || currentFacing == 0) {
-            orig(self);
-            return;
-        }
-
-        var canCheckTurn = turnCooldownRemaining <= 0f;
-        var canAggroTurn = aggroEdgeTurnCooldownRemaining <= 0f;
-
-        if (canCheckTurn) {
-            if (new Sweep(bodyCollider, 1 - currentFacing, 3).Check(
-                    bodyCollider.bounds.extents.x + 0.5f,
-                    33024,
-                    useTriggers: false
-                )) {
-                InvokeBeginTurning(self, -currentFacing);
-                return;
-            }
-
-            var preventTurningToFaceHero = GetPreventTurningToFaceHero(self);
-            var seesTarget = lineOfSightDetector == null || lineOfSightDetector.CanSeeHero;
-            var targetInRange = alertRange != null && alertRange.IsHeroInRange();
-            var targetIsInFront = target.position.x > self.transform.position.x != currentFacing > 0;
-
-            if (!preventTurningToFaceHero && canAggroTurn && targetIsInFront && seesTarget && targetInRange) {
-                InvokeBeginTurning(self, -currentFacing);
-                return;
-            }
-
-            var ignoreHoles = GetIgnoreHoles(self);
-            var edgeXAdjuster = GetEdgeXAdjuster(self);
-            if (!ignoreHoles &&
-                !new Sweep(bodyCollider, 3, 3).Check(
-                    0.25f,
-                    33024,
-                    out _,
-                    useTriggers: false,
-                    new Vector2((bodyCollider.bounds.extents.x + 0.5f + edgeXAdjuster) * currentFacing, 0f)
-                )) {
-                InvokeBeginTurning(self, -currentFacing);
-                return;
-            }
-        }
-
-        if (!canAggroTurn) {
-            SetWalkTimeRemaining(self, 0f);
-        } else {
-            var pauses = GetPauses(self);
-            var lostTarget = (lineOfSightDetector != null && !lineOfSightDetector.CanSeeHero) ||
-                             alertRange == null ||
-                             !alertRange.IsHeroInRange();
-
-            if (pauses && lostTarget) {
-                var walkTimeRemaining = GetWalkTimeRemaining(self);
-                walkTimeRemaining -= Time.deltaTime;
-
-                if (walkTimeRemaining <= 0f) {
-                    InvokeBeginStopped(self, Walker.StopReasons.Bored);
-                    return;
+            while (c.TryGotoNext(
+                       MoveType.Before,
+                       i => i.MatchLdarg(0),
+                       i => i.MatchLdfld(typeof(Walker), "hero")
+                   )) {
+                if (c.Next.Next.Next != null &&
+                    c.Next.Next.Next.MatchCallvirt(typeof(Component), "get_transform")) {
+                    c.RemoveRange(3);
+                    c.Emit(OpCodes.Ldarg_0);
+                    c.Emit(
+                        OpCodes.Call,
+                        typeof(GamePatcher).GetMethod(
+                            nameof(GetApprovedEnemyTargetTransform), BindingFlags.NonPublic | BindingFlags.Static
+                        )!
+                    );
+                } else {
+                    c.RemoveRange(2);
+                    c.Emit(OpCodes.Ldarg_0);
+                    c.Emit(
+                        OpCodes.Call,
+                        typeof(GamePatcher).GetMethod(
+                            nameof(GetApprovedEnemyTargetTransform), BindingFlags.NonPublic | BindingFlags.Static
+                        )!
+                    );
                 }
-
-                SetWalkTimeRemaining(self, walkTimeRemaining);
             }
+        } catch (Exception e) {
+            Logger.Error($"Could not apply ILWalkerUpdateWalking hook: {e}");
         }
-
-        var walkSpeedR = GetWalkSpeedR(self);
-        var walkSpeedL = GetWalkSpeedL(self);
-        body.linearVelocity = new Vector2(currentFacing > 0 ? walkSpeedR : walkSpeedL, body.linearVelocity.y);
     }
 
     /// <summary>
@@ -791,7 +464,7 @@ internal partial class GamePatcher {
                 continue;
             }
 
-            if (!TargetedFsmActionTypes.Contains(action.GetType())) {
+            if (!ActionRegistry.TargetedFsmActionTypes.Contains(action.GetType().Name)) {
                 continue;
             }
 
@@ -857,7 +530,8 @@ internal partial class GamePatcher {
 
         var isTargetVariable = !string.IsNullOrEmpty(variableName) && IsTargetVariableName(variableName);
         var isHeroLikeValue =
-            currentTarget == null || currentTarget == approvedTarget || IsHeroLikeObject(currentTarget);
+            currentTarget == null || currentTarget == approvedTarget ||
+            PlayerTargetRegistry.IsHeroLikeObject(currentTarget);
 
         if (!isTargetVariable && !isHeroLikeValue) {
             return;
@@ -908,7 +582,7 @@ internal partial class GamePatcher {
                field.Name.Equals("targetGameObject", StringComparison.OrdinalIgnoreCase) ||
                field.Name.Equals("targetObj", StringComparison.OrdinalIgnoreCase) ||
                field.Name.Equals("gameObject", StringComparison.OrdinalIgnoreCase) &&
-               IsHeroLikeObject(fsmGameObject.Value);
+               PlayerTargetRegistry.IsHeroLikeObject(fsmGameObject.Value);
     }
 
     /// <summary>
@@ -991,7 +665,7 @@ internal partial class GamePatcher {
             return false;
         }
 
-        if (!IsHeroLikeObject(approvedTarget)) {
+        if (!PlayerTargetRegistry.IsHeroLikeObject(approvedTarget)) {
             return true;
         }
 
