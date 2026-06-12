@@ -143,7 +143,7 @@ internal class EntityManager {
             return;
         }
 
-        // Any entity of the same type works as a template — FSMs and components are identical across instances.
+        // Any entity of the same type works as a template - FSMs and components are identical across instances.
         var templateEntity = _entities.Values.FirstOrDefault(e => e.Type == spawningType);
         if (templateEntity == null) {
             Logger.Warn("Could not find entity with same type for spawning");
