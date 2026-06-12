@@ -43,6 +43,11 @@ internal class EntityManager {
     public bool IsSceneHost { get; private set; }
     private bool _sceneRoleDetermined;
 
+    /// <summary>
+    /// Gets all currently registered active entities.
+    /// </summary>
+    public Dictionary<ushort, Entity>.ValueCollection ActiveEntities => _entities.Values;
+
     public EntityManager(NetClient netClient) {
         _netClient = netClient;
         _entities = new Dictionary<ushort, Entity>();

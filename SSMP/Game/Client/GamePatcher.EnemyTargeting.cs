@@ -525,11 +525,24 @@ internal partial class GamePatcher {
     /// Updates active enemy FSM target-consuming actions so they use their approved multiplayer target.
     /// </summary>
     private static void UpdateTargetedFsmActions() {
-        foreach (var fsm in UnityEngine.Object.FindObjectsByType<PlayMakerFSM>(
-                     FindObjectsInactive.Exclude,
-                     FindObjectsSortMode.None
-                 )) {
-            RetargetActiveTargetedFsmActions(fsm);
+        if (_entityManagerInstance == null) {
+            return;
+        }
+
+        foreach (var entity in _entityManagerInstance.ActiveEntities) {
+            if (entity == null) {
+                continue;
+            }
+
+            var hostFsms = entity.HostFsms;
+            foreach (var fsm in hostFsms) {
+                RetargetActiveTargetedFsmActions(fsm);
+            }
+
+            var clientFsms = entity.ClientFsms;
+            foreach (var fsm in clientFsms) {
+                RetargetActiveTargetedFsmActions(fsm);
+            }
         }
     }
 
@@ -779,28 +792,48 @@ internal partial class GamePatcher {
     /// <param name="field">The field that stores the cached target.</param>
     private static void UpdateCachedTargetField<TComponent>(FieldInfo? field)
         where TComponent : Behaviour {
-        if (field == null) {
+        if (field == null || _entityManagerInstance == null) {
             return;
         }
 
-        foreach (var component in UnityEngine.Object.FindObjectsByType<TComponent>(
-                     FindObjectsInactive.Exclude,
-                     FindObjectsSortMode.None
-                 )) {
-            if (component == null || !component.isActiveAndEnabled) {
+        foreach (var entity in _entityManagerInstance.ActiveEntities) {
+            if (entity == null) {
                 continue;
             }
 
-            var target = GetApprovedEnemyTarget(component.gameObject);
-            if (target == null) {
-                continue;
+            if (entity.Object.Host != null) {
+                var component = entity.Object.Host.GetComponentInChildren<TComponent>();
+                if (component != null && component.isActiveAndEnabled) {
+                    UpdateComponentTarget(component, field);
+                }
             }
 
-            if (field.FieldType == typeof(Transform)) {
-                field.SetValue(component, target.transform);
-            } else if (field.FieldType == typeof(GameObject)) {
-                field.SetValue(component, target);
+            if (entity.Object.Client != null) {
+                var component = entity.Object.Client.GetComponentInChildren<TComponent>();
+                if (component != null && component.isActiveAndEnabled) {
+                    UpdateComponentTarget(component, field);
+                }
             }
+        }
+    }
+
+    /// <summary>
+    /// Updates the target reference of a component instance with the approved enemy target.
+    /// </summary>
+    /// <typeparam name="TComponent">The behaviour type containing the cached target field.</typeparam>
+    /// <param name="component">The component instance to update.</param>
+    /// <param name="field">The target field to write the approved target to.</param>
+    private static void UpdateComponentTarget<TComponent>(TComponent component, FieldInfo field)
+        where TComponent : Behaviour {
+        var target = GetApprovedEnemyTarget(component.gameObject);
+        if (target == null) {
+            return;
+        }
+
+        if (field.FieldType == typeof(Transform)) {
+            field.SetValue(component, target.transform);
+        } else if (field.FieldType == typeof(GameObject)) {
+            field.SetValue(component, target);
         }
     }
 

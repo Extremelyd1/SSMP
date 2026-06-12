@@ -74,6 +74,16 @@ internal class Entity {
     public HostClientPair<GameObject> Object { get; }
 
     /// <summary>
+    /// Gets the list of PlayMaker FSMs on the host game object.
+    /// </summary>
+    public List<PlayMakerFSM> HostFsms => _fsms.Host;
+
+    /// <summary>
+    /// Gets the list of PlayMaker FSMs on the client game object.
+    /// </summary>
+    public List<PlayMakerFSM> ClientFsms => _fsms.Client;
+
+    /// <summary>
     /// Host-client pair for the sprite animators.
     /// </summary>
     private readonly HostClientPair<tk2dSpriteAnimator> _animator;

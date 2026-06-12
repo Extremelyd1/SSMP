@@ -6,6 +6,7 @@ using MonoMod.Cil;
 using MonoMod.RuntimeDetour;
 using SSMP.Hooks;
 using SSMP.Networking.Client;
+using SSMP.Game.Client.Entity;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
 
@@ -77,8 +78,14 @@ internal partial class GamePatcher {
     /// </summary>
     private readonly NetClient _netClient;
 
-    public GamePatcher(NetClient netClient) {
+    /// <summary>
+    /// The static EntityManager instance used by enemy targeting to avoid scene-wide object scans.
+    /// </summary>
+    private static EntityManager? _entityManagerInstance;
+
+    public GamePatcher(NetClient netClient, EntityManager entityManager) {
         _netClient = netClient;
+        _entityManagerInstance = entityManager;
     }
 
     /// <summary>
