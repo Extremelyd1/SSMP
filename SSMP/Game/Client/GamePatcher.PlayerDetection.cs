@@ -255,7 +255,9 @@ internal partial class GamePatcher {
         GameObject? bestPlayer = null;
         var bestDistance = float.PositiveInfinity;
 
-        foreach (var player in PlayerTargetRegistry.GetTrackedPlayers()) {
+        var players = PlayerTargetRegistry.GetTrackedPlayers();
+        for (int i = 0; i < players.Count; i++) {
+            var player = players[i];
             if (player == null) {
                 continue;
             }

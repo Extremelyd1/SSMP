@@ -8,6 +8,7 @@ namespace SSMP.Game.Client;
 /// </summary>
 internal static class PlayerTargetRegistry {
     private static readonly HashSet<GameObject> RemotePlayerObjects = [];
+    private static readonly List<GameObject> TrackedPlayersCache = [];
 
     /// <summary>
     /// Registers a spawned remote player root object for targeting.
@@ -85,46 +86,42 @@ internal static class PlayerTargetRegistry {
     /// <param name="requesterPosition">The position to measure from.</param>
     /// <param name="candidates">The candidate objects to evaluate.</param>
     /// <returns>The nearest tracked player if one exists; otherwise null.</returns>
-    private static GameObject? GetNearestPlayer(Vector3 requesterPosition, IEnumerable<GameObject> candidates) {
+    private static GameObject? GetNearestPlayer(Vector3 requesterPosition, List<GameObject> candidates) {
         GameObject? nearestPlayer = null;
         var nearestDistanceSqr = float.MaxValue;
-        var seenPlayers = new HashSet<GameObject>();
 
-        void Consider(GameObject? playerObject) {
-            playerObject = GetTrackedPlayerRoot(playerObject);
-            if (playerObject == null || !playerObject.activeInHierarchy || !seenPlayers.Add(playerObject)) {
-                return;
+        for (int i = 0; i < candidates.Count; i++) {
+            var playerObject = candidates[i];
+            if (playerObject == null || !playerObject.activeInHierarchy) {
+                continue;
             }
 
             var distanceSqr = (playerObject.transform.position - requesterPosition).sqrMagnitude;
-            if (distanceSqr >= nearestDistanceSqr) {
-                return;
+            if (distanceSqr < nearestDistanceSqr) {
+                nearestPlayer = playerObject;
+                nearestDistanceSqr = distanceSqr;
             }
-
-            nearestPlayer = playerObject;
-            nearestDistanceSqr = distanceSqr;
-        }
-
-        foreach (var playerObject in candidates) {
-            Consider(playerObject);
         }
 
         return nearestPlayer;
     }
 
     /// <summary>
-    /// Enumerates all currently tracked player root objects.
+    /// Gets a list of all currently tracked active player root objects.
     /// </summary>
-    /// <returns>The local hero root and all registered remote player roots.</returns>
-    public static IEnumerable<GameObject> GetTrackedPlayers() {
+    /// <returns>A pre-allocated list containing the local hero root and active registered remote player roots.</returns>
+    public static List<GameObject> GetTrackedPlayers() {
+        TrackedPlayersCache.Clear();
         if (HeroController.instance != null) {
-            yield return HeroController.instance.gameObject;
+            TrackedPlayersCache.Add(HeroController.instance.gameObject);
         }
 
         foreach (var playerObject in RemotePlayerObjects) {
             if (playerObject != null && playerObject.activeInHierarchy) {
-                yield return playerObject;
+                TrackedPlayersCache.Add(playerObject);
             }
         }
+
+        return TrackedPlayersCache;
     }
 }

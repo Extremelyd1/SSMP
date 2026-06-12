@@ -497,7 +497,10 @@ internal partial class GamePatcher {
         ClearTargetCaches();
     }
 
-    private static void OnActiveSceneChanged(UnityEngine.SceneManagement.Scene from, UnityEngine.SceneManagement.Scene to) {
+    private static void OnActiveSceneChanged(
+        UnityEngine.SceneManagement.Scene from,
+        UnityEngine.SceneManagement.Scene to
+    ) {
         ClearTargetCaches();
     }
 
