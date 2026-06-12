@@ -65,8 +65,11 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
         Sequence = packet.ReadUShort();
         Ack = packet.ReadUShort();
 
-        // Initialize the AckField array
-        AckField = new bool[ConnectionManager.AckSize];
+        // Reuse the AckField array if it's already allocated with the correct size.
+        // This avoids allocating a new bool array on every single received packet, greatly reducing GC pressure.
+        if (AckField.Length != ConnectionManager.AckSize) {
+            AckField = new bool[ConnectionManager.AckSize];
+        }
 
         var ackFieldInt = packet.ReadULong();
         ulong currentFieldValue = 1;
