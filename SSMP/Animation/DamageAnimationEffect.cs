@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using SSMP.Internals;
 using SSMP.Util;
@@ -25,6 +26,16 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
     /// replicas to directly apply PvE damage.
     /// </summary>
     private static readonly Dictionary<int, int> RemoteVisualHitHpBefore = new();
+
+    /// <summary>
+    /// Cached delegate to store enemy HP before applying remote visual-only damage.
+    /// </summary>
+    private static readonly Action<HealthManager, HitInstance> WillDamageEnemyOptionsDelegate = StoreHpBeforeRemoteVisualHit;
+
+    /// <summary>
+    /// Cached delegate to restore enemy HP after applying remote visual-only damage.
+    /// </summary>
+    private static readonly Action<HealthManager> DamagedEnemyHealthManagerDelegate = RestoreHpAfterRemoteVisualHit;
 
     /// <inheritdoc/>
     public abstract override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo);
@@ -114,11 +125,11 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
             damageEnemies.deathEventTarget = null;
             damageEnemies.deathEvent = string.Empty;
 
-            damageEnemies.WillDamageEnemyOptions -= StoreHpBeforeRemoteVisualHit;
-            damageEnemies.WillDamageEnemyOptions += StoreHpBeforeRemoteVisualHit;
+            damageEnemies.WillDamageEnemyOptions -= WillDamageEnemyOptionsDelegate;
+            damageEnemies.WillDamageEnemyOptions += WillDamageEnemyOptionsDelegate;
 
-            damageEnemies.DamagedEnemyHealthManager -= RestoreHpAfterRemoteVisualHit;
-            damageEnemies.DamagedEnemyHealthManager += RestoreHpAfterRemoteVisualHit;
+            damageEnemies.DamagedEnemyHealthManager -= DamagedEnemyHealthManagerDelegate;
+            damageEnemies.DamagedEnemyHealthManager += DamagedEnemyHealthManagerDelegate;
         }
     }
 
