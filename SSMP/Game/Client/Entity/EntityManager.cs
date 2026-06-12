@@ -20,8 +20,18 @@ using Object = UnityEngine.Object;
 
 namespace SSMP.Game.Client.Entity;
 
+/// <summary>
+/// Manager class that handles entity creation, updating, networking and destruction.
+/// </summary>
 internal class EntityManager {
+    /// <summary>
+    /// The net client for networking.
+    /// </summary>
     private readonly NetClient _netClient;
+
+    /// <summary>
+    /// Dictionary mapping entity IDs to their respective entity instances.
+    /// </summary>
     private readonly Dictionary<ushort, Entity> _entities;
 
     // Buffered updates waiting on an entity that hasn't registered yet, or on scene-host determination.
@@ -39,10 +49,16 @@ internal class EntityManager {
         _pendingUpdates = new Queue<BaseEntityUpdate>();
     }
 
+    /// <summary>
+    /// Initialize the entity manager by initializing the processor and action hooks.
+    /// </summary>
     public void Initialize() {
         EntityProcessor.Initialize(_entities, _netClient);
     }
 
+    /// <summary>
+    /// Register the hooks for entity-related operations.
+    /// </summary>
     public void RegisterHooks() {
         FsmActionHooks.RegisterHooks();
         MusicComponent.RegisterHooks();
@@ -60,6 +76,9 @@ internal class EntityManager {
         );
     }
 
+    /// <summary>
+    /// Deregister the hooks for entity-related operations.
+    /// </summary>
     public void DeregisterHooks() {
         FsmActionHooks.DeregisterHooks();
         MusicComponent.DeregisterHooks();
@@ -74,6 +93,9 @@ internal class EntityManager {
         ClearEntities();
     }
 
+    /// <summary>
+    /// Initializes the entity manager if we are the scene host.
+    /// </summary>
     public void InitializeSceneHost(uint sceneHostEpoch = 0) {
         Logger.Info($"We are scene host, releasing control of all registered entities (epoch {sceneHostEpoch})");
         IsSceneHost = true;
@@ -82,6 +104,9 @@ internal class EntityManager {
         DrainPendingUpdates();
     }
 
+    /// <summary>
+    /// Initializes the entity manager if we are a scene client.
+    /// </summary>
     public void InitializeSceneClient(uint sceneHostEpoch = 0) {
         Logger.Info($"We are scene client, taking control of all registered entities (epoch {sceneHostEpoch})");
         IsSceneHost = false;
@@ -90,6 +115,9 @@ internal class EntityManager {
         DrainPendingUpdates();
     }
 
+    /// <summary>
+    /// Updates the entity manager if we become the scene host.
+    /// </summary>
     public void BecomeSceneHost(uint sceneHostEpoch = 0) {
         Logger.Info($"Becoming scene host (epoch {sceneHostEpoch})");
         IsSceneHost = true;
@@ -193,6 +221,12 @@ internal class EntityManager {
         return true;
     }
 
+    /// <summary>
+    /// Callback method for when the scene changes. Will clear existing entities and start checking for
+    /// new entities.
+    /// </summary>
+    /// <param name="oldScene">The old scene.</param>
+    /// <param name="newScene">The new scene.</param>
     private void OnSceneChanged(Scene oldScene, Scene newScene) {
         Logger.Info("Scene changed, clearing registered entities");
         ClearEntities();
@@ -204,6 +238,11 @@ internal class EntityManager {
         DrainPendingUpdates();
     }
 
+    /// <summary>
+    /// Callback method for when a scene is loaded.
+    /// </summary>
+    /// <param name="scene">The scene that is loaded.</param>
+    /// <param name="mode">The load scene mode.</param>
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode) {
         var activeScene = SceneManager.GetActiveScene().name;
 
@@ -215,6 +254,11 @@ internal class EntityManager {
         DrainPendingUpdates();
     }
 
+    /// <summary>
+    /// Find entities to register in the given scene.
+    /// </summary>
+    /// <param name="scene">The scene to find entities in.</param>
+    /// <param name="lateLoad">Whether this scene was loaded late.</param>
     private void FindEntitiesInScene(Scene scene, bool lateLoad) {
         var objects = CollectEntityCandidates(scene);
 
@@ -273,6 +317,11 @@ internal class EntityManager {
         return [deathEffects.gameObject, corpse];
     }
 
+    /// <summary>
+    /// Callback method for when a game object is spawned from an existing entity.
+    /// </summary>
+    /// <param name="details">The entity spawn details containing how the entity was spawned.</param>
+    /// <returns>Whether an entity was registered from this spawn.</returns>
     private bool OnGameObjectSpawned(EntitySpawnDetails details) {
         if (_entities.Values.Any(e => e.Object.Host == details.GameObject)) {
             Logger.Debug("Spawned object was already a registered entity");
@@ -334,6 +383,9 @@ internal class EntityManager {
         }
     }
 
+    /// <summary>
+    /// Clears all the registered entities, and resets static components.
+    /// </summary>
     private void ClearEntities() {
         foreach (var entity in _entities.Values) entity.Destroy();
         _entities.Clear();
