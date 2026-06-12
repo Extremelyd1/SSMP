@@ -14,6 +14,12 @@ namespace SSMP.Networking.Packet.Data;
 /// Base entity update class for reliable and non-reliable entity update data.
 /// </summary>
 internal abstract class BaseEntityUpdate : IPacketData {
+    /// <summary>
+    /// The number of distinct update types in the <see cref="EntityUpdateType"/> enumeration.
+    /// Used during packet serialization to avoid Enum.GetNames allocations.
+    /// </summary>
+    protected static readonly int EntityUpdateTypeCount = Util.EnumCache<EntityUpdateType>.Count;
+
     /// <inheritdoc />
     public abstract bool IsReliable { get; }
 
@@ -95,7 +101,7 @@ internal class EntityUpdate : BaseEntityUpdate, IPoolable {
         // Keep track of value of current bit
         byte currentTypeValue = 1;
 
-        for (var i = 0; i < Enum.GetNames(typeof(EntityUpdateType)).Length; i++) {
+        for (var i = 0; i < EntityUpdateTypeCount; i++) {
             // Cast the current index of the loop to a PlayerUpdateType and check if it is
             // contained in the update type list, if so, we add the current bit to the flag
             if (UpdateTypes.Contains((EntityUpdateType) i)) {
@@ -132,7 +138,7 @@ internal class EntityUpdate : BaseEntityUpdate, IPoolable {
         // Keep track of value of current bit
         var currentTypeValue = 1;
 
-        for (var i = 0; i < Enum.GetNames(typeof(EntityUpdateType)).Length; i++) {
+        for (var i = 0; i < EntityUpdateTypeCount; i++) {
             // If this bit was set in our flag, we add the type to the list
             if ((updateTypeFlag & currentTypeValue) != 0) {
                 UpdateTypes.Add((EntityUpdateType) i);
@@ -501,7 +507,7 @@ internal class ReliableEntityUpdate : BaseEntityUpdate, IPoolable {
         // Keep track of value of current bit
         byte currentTypeValue = 1;
 
-        for (var i = 0; i < Enum.GetNames(typeof(EntityUpdateType)).Length; i++) {
+        for (var i = 0; i < EntityUpdateTypeCount; i++) {
             // Cast the current index of the loop to a PlayerUpdateType and check if it is
             // contained in the update type list, if so, we add the current bit to the flag
             if (UpdateTypes.Contains((EntityUpdateType) i)) {
@@ -552,7 +558,7 @@ internal class ReliableEntityUpdate : BaseEntityUpdate, IPoolable {
         // Keep track of value of current bit
         var currentTypeValue = 1;
 
-        for (var i = 0; i < Enum.GetNames(typeof(EntityUpdateType)).Length; i++) {
+        for (var i = 0; i < EntityUpdateTypeCount; i++) {
             // If this bit was set in our flag, we add the type to the list
             if ((updateTypeFlag & currentTypeValue) != 0) {
                 UpdateTypes.Add((EntityUpdateType) i);
@@ -685,6 +691,12 @@ internal class EntityNetworkData : IPoolable {
 /// </summary>
 internal class EntityHostFsmData : IPoolable {
     /// <summary>
+    /// The number of distinct variable types in the <see cref="Type"/> enumeration.
+    /// Used during packet serialization to avoid Enum.GetNames allocations.
+    /// </summary>
+    private static readonly int TypeCount = Util.EnumCache<Type>.Count;
+
+    /// <summary>
     /// The types of content that is in this data class.
     /// </summary>
     public HashSet<Type> Types { get; } = [];
@@ -803,7 +815,7 @@ internal class EntityHostFsmData : IPoolable {
         // Keep track of value of current bit
         byte currentTypeValue = 1;
 
-        for (var i = 0; i < Enum.GetNames(typeof(Type)).Length; i++) {
+        for (var i = 0; i < TypeCount; i++) {
             // Cast the current index of the loop to a PlayerUpdateType and check if it is
             // contained in the update type list, if so, we add the current bit to the flag
             if (Types.Contains((Type) i)) {
@@ -848,7 +860,7 @@ internal class EntityHostFsmData : IPoolable {
         // Keep track of value of current bit
         var currentTypeValue = 1;
 
-        for (var i = 0; i < Enum.GetNames(typeof(Type)).Length; i++) {
+        for (var i = 0; i < TypeCount; i++) {
             // If this bit was set in our flag, we add the type to the list
             if ((updateTypeFlag & currentTypeValue) != 0) {
                 Types.Add((Type) i);
