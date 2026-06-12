@@ -384,7 +384,10 @@ internal class EntityManager {
 
             if (!applied) {
                 // Still not applicable; it was re-enqueued by Handle*..nothing to do.
+                continue;
             }
+
+            ReleaseUpdate(update);
         }
     }
 
@@ -394,6 +397,11 @@ internal class EntityManager {
     private void ClearEntities() {
         foreach (var entity in _entities.Values) entity.Destroy();
         _entities.Clear();
+
+        foreach (var pendingUpdate in _pendingUpdates) {
+            ReleaseUpdate(pendingUpdate);
+        }
+
         _pendingUpdates.Clear();
         MusicComponent.ClearInstance();
     }
@@ -403,6 +411,18 @@ internal class EntityManager {
             ? $"Could not find entity ({id}) to apply update for; storing update for now"
             : "Scene host is not determined yet to apply update; storing update for now";
         Logger.Debug(reason);
+    }
+
+    // Once an update is buffered, the queue owns its lifetime until it is applied or discarded.
+    private static void ReleaseUpdate(BaseEntityUpdate update) {
+        switch (update) {
+            case EntityUpdate entityUpdate:
+                ObjectPool<EntityUpdate>.Return(entityUpdate);
+                break;
+            case ReliableEntityUpdate reliableEntityUpdate:
+                ObjectPool<ReliableEntityUpdate>.Return(reliableEntityUpdate);
+                break;
+        }
     }
 
     // Patch: intercept FindGameObject.OnEnter so that entities the system has made inactive are still findable.

@@ -16,6 +16,7 @@ namespace SSMP.Game.Client.Entity.Component;
 /// This component manages the <see cref="HealthManager"/> component of the entity.
 internal class HealthManagerComponent : EntityComponent {
     private const BindingFlags HookBindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+    private const float ControlledHealCorrectionDelaySeconds = 0.4f;
 
     /// <summary>
     /// Host-client pair of health manager components of the entity.
@@ -43,12 +44,6 @@ internal class HealthManagerComponent : EntityComponent {
     private int _lastHp;
 
     /// <summary>
-    /// The starting HP of the health manager.
-    /// Used to clamp incoming healing from other clients.
-    /// </summary>
-    private readonly int _initialHp;
-
-    /// <summary>
     /// The last value for the "invincibleFromDirection" variable of the health manager.
     /// </summary>
     private int _lastInvincibleFromDirection;
@@ -73,6 +68,16 @@ internal class HealthManagerComponent : EntityComponent {
     /// </summary>
     private readonly System.Collections.Generic.Dictionary<ushort, uint> _lastReceivedHealthUpdateIdBySender = new();
 
+    /// <summary>
+    /// Whether a controlled client-side HP increase should be rolled back to the last authoritative value.
+    /// </summary>
+    private bool _hasPendingControlledHealCorrection;
+
+    /// <summary>
+    /// Unscaled time at which the next controlled heal correction should be applied.
+    /// </summary>
+    private float _pendingControlledHealCorrectionAt;
+
     public HealthManagerComponent(
         NetClient netClient,
         ushort entityId,
@@ -83,7 +88,6 @@ internal class HealthManagerComponent : EntityComponent {
 
         _lastInvincible = healthManager.Host.IsInvincible;
         _lastHp = healthManager.Host.hp;
-        _initialHp = healthManager.Host.hp;
         _lastInvincibleFromDirection = healthManager.Host.InvincibleFromDirection;
 
         var dieMethod = Array.Find(
@@ -175,6 +179,20 @@ internal class HealthManagerComponent : EntityComponent {
 
         var newHp = observedHealthManager.hp;
         if (newHp != _lastHp) {
+            if (IsControlled && newHp > _lastHp) {
+                if (_hasPendingControlledHealCorrection) {
+                    if (Time.unscaledTime >= _pendingControlledHealCorrectionAt) {
+                        _hasPendingControlledHealCorrection = false;
+                        ApplyHp(_lastHp, triggerHostDeath: false);
+                    }
+                } else {
+                    _hasPendingControlledHealCorrection = true;
+                    _pendingControlledHealCorrectionAt = Time.unscaledTime + ControlledHealCorrectionDelaySeconds;
+                }
+                return;
+            }
+
+            _hasPendingControlledHealCorrection = false;
             var previousHp = _lastHp;
             _lastHp = newHp;
             _nextHealthUpdateId++;
@@ -287,6 +305,8 @@ internal class HealthManagerComponent : EntityComponent {
     /// so delayed packets do not overwrite local damage or healing.
     /// </summary>
     private void UpdateHealth(EntityNetworkData data, bool alreadyInSceneUpdate) {
+        _hasPendingControlledHealCorrection = false;
+
         var previousHp = data.Packet.ReadInt();
         var newHp = data.Packet.ReadInt();
         var healthEpoch = data.Packet.ReadUInt();
@@ -315,7 +335,7 @@ internal class HealthManagerComponent : EntityComponent {
 
             _lastReceivedHealthUpdateIdBySender[senderId] = healthUpdateId;
 
-            var currentHp = GetCurrentHp();
+            var currentHp = IsControlled ? _lastHp : GetCurrentHp();
             var damage = System.Math.Max(previousHp - newHp, 0);
             var healing = System.Math.Max(newHp - previousHp, 0);
 
@@ -325,7 +345,7 @@ internal class HealthManagerComponent : EntityComponent {
             }
 
             if (healing > 0) {
-                targetHp = System.Math.Min(targetHp + healing, _initialHp);
+                targetHp += healing;
             }
 
             ApplyHp(targetHp, triggerHostDeath: true);

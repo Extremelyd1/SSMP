@@ -991,16 +991,35 @@ internal abstract class ServerManager : IServerManager {
         }
 
         if (entityUpdate.UpdateTypes.Contains(EntityUpdateType.Data)) {
-            SendDataInSameScene(
-                id,
-                playerData.CurrentScene,
-                otherId => {
-                    _netServer.GetUpdateManagerForClient(otherId)?.AddEntityData(
-                        entityUpdate.Id,
-                        entityUpdate.GenericData
+            var filteredGenericData = new List<EntityNetworkData>(entityUpdate.GenericData.Count);
+
+            foreach (var updateData in entityUpdate.GenericData) {
+                updateData.SenderId = id;
+
+                if (updateData.Type == EntityComponentType.Health &&
+                    !playerData.IsSceneHost &&
+                    IsHealingHealthUpdate(updateData)) {
+                    Logger.Info(
+                        $"Ignoring non-host health increase for entity {entityUpdate.Id} from player {id} in scene '{playerData.CurrentScene}'"
                     );
+                    continue;
                 }
-            );
+
+                filteredGenericData.Add(updateData);
+            }
+
+            if (filteredGenericData.Count > 0) {
+                SendDataInSameScene(
+                    id,
+                    playerData.CurrentScene,
+                    otherId => {
+                        _netServer.GetUpdateManagerForClient(otherId)?.AddEntityData(
+                            entityUpdate.Id,
+                            filteredGenericData
+                        );
+                    }
+                );
+            }
 
             void ReplaceExistingDataWithSameType(EntityNetworkData updateData) {
                 var existingData = entityData.GenericData.Find(d => d.Type == updateData.Type
@@ -1013,11 +1032,19 @@ internal abstract class ServerManager : IServerManager {
                 }
             }
 
-            foreach (var updateData in entityUpdate.GenericData) {
-                updateData.SenderId = id;
-                if (updateData.Type > EntityComponentType.Death) {
-                    ReplaceExistingDataWithSameType(updateData);
+            if (filteredGenericData.Count > 0) {
+                foreach (var updateData in filteredGenericData) {
+                    if (updateData.Type > EntityComponentType.Death) {
+                        ReplaceExistingDataWithSameType(updateData);
+                    }
                 }
+            }
+
+            static bool IsHealingHealthUpdate(EntityNetworkData updateData) {
+                var packet = new Packet(updateData.Packet.ToArray());
+                var previousHp = packet.ReadInt();
+                var newHp = packet.ReadInt();
+                return newHp > previousHp;
             }
         }
 

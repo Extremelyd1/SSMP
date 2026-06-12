@@ -852,14 +852,16 @@ internal class ClientManager : IClientManager {
 
             foreach (var entityUpdate in alreadyInScene.EntityUpdateList) {
                 Logger.Info($"Updating already in scene entity with ID: {entityUpdate.Id}");
-                _entityManager.HandleEntityUpdate(entityUpdate, true);
-                ObjectPool<EntityUpdate>.Return(entityUpdate);
+                if (_entityManager.HandleEntityUpdate(entityUpdate, true)) {
+                    ObjectPool<EntityUpdate>.Return(entityUpdate);
+                }
             }
 
             foreach (var entityUpdate in alreadyInScene.ReliableEntityUpdateList) {
                 Logger.Info($"Updating already in scene reliable entity data with ID: {entityUpdate.Id}");
-                _entityManager.HandleReliableEntityUpdate(entityUpdate, true);
-                ObjectPool<ReliableEntityUpdate>.Return(entityUpdate);
+                if (_entityManager.HandleReliableEntityUpdate(entityUpdate, true)) {
+                    ObjectPool<ReliableEntityUpdate>.Return(entityUpdate);
+                }
             }
 
             // Whether there were players in the scene or not, we have now determined whether
@@ -1005,7 +1007,9 @@ internal class ClientManager : IClientManager {
             return;
         }
 
-        _entityManager.HandleEntityUpdate(entityUpdate);
+        if (_entityManager.HandleEntityUpdate(entityUpdate)) {
+            ObjectPool<EntityUpdate>.Return(entityUpdate);
+        }
     }
 
     /// <summary>
@@ -1022,7 +1026,9 @@ internal class ClientManager : IClientManager {
             return;
         }
 
-        _entityManager.HandleReliableEntityUpdate(entityUpdate);
+        if (_entityManager.HandleReliableEntityUpdate(entityUpdate)) {
+            ObjectPool<ReliableEntityUpdate>.Return(entityUpdate);
+        }
     }
 
     /// <summary>
