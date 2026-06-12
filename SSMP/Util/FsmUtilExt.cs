@@ -52,11 +52,7 @@ public static class FsmUtilExt {
     /// <typeparam name="T">The type of the action that extends FsmStateAction.</typeparam>
     /// <returns>The action from the FSM or null if the action could not be found.</returns>
     public static T GetFirstAction<T>(this PlayMakerFSM fsm, string stateName) where T : FsmStateAction {
-        var state = fsm.GetState(stateName);
-        if (state == null) {
-            throw new ArgumentException($"FSM does not have state with name \"{stateName}\"", nameof(stateName));
-        }
-        return state.Actions.OfType<T>().FirstOrDefault() ??
+        return fsm.GetState(stateName).Actions.OfType<T>().FirstOrDefault() ??
                throw new ArgumentException($"FSM state \"{stateName}\" does not have action of type \"{typeof(T)}\"", nameof(stateName));
     }
 
@@ -65,8 +61,20 @@ public static class FsmUtilExt {
     /// </summary>
     /// <param name="fsm">The FSM instance.</param>
     /// <param name="stateName">The name of the state.</param>
-    /// <returns>The state from the FSM or null, if no such state exists.</returns>
-    public static FsmState? GetState(this PlayMakerFSM fsm, string stateName) {
+    /// <returns>The state from the FSM.</returns>
+    /// <exception cref="ArgumentException">Thrown when the state is not found.</exception>
+    public static FsmState GetState(this PlayMakerFSM fsm, string stateName) {
+        return fsm.FsmStates.FirstOrDefault(t => t.Name == stateName) ??
+               throw new ArgumentException($"FSM does not have state with name \"{stateName}\"", nameof(stateName));
+    }
+
+    /// <summary>
+    /// Safely gets an FSM state by its name without throwing an exception if not found.
+    /// </summary>
+    /// <param name="fsm">The FSM instance.</param>
+    /// <param name="stateName">The name of the state.</param>
+    /// <returns>The state from the FSM or null if not found.</returns>
+    public static FsmState? GetStateOrNull(this PlayMakerFSM fsm, string stateName) {
         return fsm.FsmStates.FirstOrDefault(t => t.Name == stateName);
     }
 

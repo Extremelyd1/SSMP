@@ -1072,7 +1072,7 @@ internal class Entity {
                 continue;
             }
 
-            var state = fsm.GetState(snapshot.CurrentState);
+            var state = fsm.GetStateOrNull(snapshot.CurrentState);
             if (state == null) {
                 //Logger.Debug($"  Not setting FSM state, because state '{snapshot.CurrentState}' was not found");
                 continue;
