@@ -1040,6 +1040,8 @@ internal abstract class ServerManager : IServerManager {
                 }
             }
 
+            // Helper to inspect an entity health packet and check if it represents a health increase.
+            // Returns: True if the update heals the entity; otherwise false.
             static bool IsHealingHealthUpdate(EntityNetworkData updateData) {
                 var packet = new Packet(updateData.Packet.ToArray());
                 var previousHp = packet.ReadInt();

@@ -175,6 +175,8 @@ internal static class GameObjectUtil {
     /// <summary>
     /// Walks up the transform parent hierarchy to find the top-level root transform.
     /// </summary>
+    /// <param name="source">The source game object to walk up from.</param>
+    /// <returns>The root transform, or null if source or its transform is null.</returns>
     public static Transform? GetHitSourceRoot(this GameObject? source) {
         var transform = source?.transform;
         if (transform == null) {

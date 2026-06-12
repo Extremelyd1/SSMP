@@ -34,13 +34,22 @@ internal class EntityManager {
     /// </summary>
     private readonly Dictionary<ushort, Entity> _entities;
 
-    // Buffered updates waiting on an entity that hasn't registered yet, or on scene-host determination.
+    /// <summary>
+    /// Queue of buffered entity updates waiting on entity registration or role assignment.
+    /// </summary>
     private readonly Queue<BaseEntityUpdate> _pendingUpdates;
 
+    /// <summary>
+    /// Detour hook for intercepting FSM queries targeting inactive game objects.
+    /// </summary>
     private Hook? _findGameObjectHook;
 
     // Both flags are set together in InitializeSceneHost / InitializeSceneClient.
     public bool IsSceneHost { get; private set; }
+
+    /// <summary>
+    /// Whether the client's role (host vs client) has been determined for the current scene.
+    /// </summary>
     private bool _sceneRoleDetermined;
 
     /// <summary>
@@ -179,7 +188,6 @@ internal class EntityManager {
         if (IsSceneHost) return true;
 
         if (!_entities.TryGetValue(update.Id, out var entity) || !_sceneRoleDetermined) {
-            LogBufferingReason(update.Id);
             _pendingUpdates.Enqueue(update);
             return false;
         }
@@ -206,7 +214,6 @@ internal class EntityManager {
     /// </summary>
     public bool HandleReliableEntityUpdate(ReliableEntityUpdate update, bool alreadyInSceneUpdate = false) {
         if (!_entities.TryGetValue(update.Id, out var entity) || !_sceneRoleDetermined) {
-            LogBufferingReason(update.Id);
             _pendingUpdates.Enqueue(update);
             return false;
         }
@@ -309,6 +316,11 @@ internal class EntityManager {
     }
 
 
+    /// <summary>
+    /// Pre-instantiates and returns candidate game objects (such as corpse prefabs) associated with death effects.
+    /// </summary>
+    /// <param name="deathEffects">The death effects script instance.</param>
+    /// <returns>An enumerable of candidate game objects.</returns>
     private static IEnumerable<GameObject> ExpandDeathEffects(EnemyDeathEffects deathEffects) {
         try {
             deathEffects.PreInstantiate();
@@ -406,14 +418,11 @@ internal class EntityManager {
         MusicComponent.ClearInstance();
     }
 
-    private void LogBufferingReason(ushort id) {
-        var reason = _sceneRoleDetermined
-            ? $"Could not find entity ({id}) to apply update for; storing update for now"
-            : "Scene host is not determined yet to apply update; storing update for now";
-        Logger.Debug(reason);
-    }
-
     // Once an update is buffered, the queue owns its lifetime until it is applied or discarded.
+    /// <summary>
+    /// Discards and returns the buffered entity update packet to the object pool.
+    /// </summary>
+    /// <param name="update">The update packet to release.</param>
     private static void ReleaseUpdate(BaseEntityUpdate update) {
         switch (update) {
             case EntityUpdate entityUpdate:
@@ -426,6 +435,11 @@ internal class EntityManager {
     }
 
     // Patch: intercept FindGameObject.OnEnter so that entities the system has made inactive are still findable.
+    /// <summary>
+    /// Detour hook for <c>FindGameObject.OnEnter</c>. Resolves inactive entities by matching their name against registered host objects.
+    /// </summary>
+    /// <param name="orig">The original method.</param>
+    /// <param name="self">The action instance.</param>
     private void OnFindGameObject(Action<FindGameObject> orig, FindGameObject self) {
         orig(self);
 

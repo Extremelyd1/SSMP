@@ -241,6 +241,10 @@ internal class HealthManagerComponent : EntityComponent {
         ApplyHp(currentHp, triggerHostDeath: false);
     }
 
+    /// <summary>
+    /// Resets health tracking counters, epochs, and update filters for a new scene-host epoch.
+    /// </summary>
+    /// <param name="sceneHostEpoch">The new scene-host epoch assigned by the server.</param>
     private void ResetHealthOrderingForEpoch(uint sceneHostEpoch) {
         _currentHealthEpoch = sceneHostEpoch;
         _lastReceivedHealthEpoch = sceneHostEpoch;

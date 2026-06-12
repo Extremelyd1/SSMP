@@ -17,9 +17,15 @@ namespace SSMP.Game.Client.Entity;
 /// Thread-safe for concurrent reads after initialization.
 /// </summary>
 internal static class EntityRegistry {
+    /// <summary>
+    /// The file path of the embedded resource file for the entity registry.
+    /// </summary>
     private const string EntityRegistryFilePath = "SSMP.Resource.entity-registry.json";
 
-    // Read-only after static constructor completes. Concurrent reads are safe.
+    /// <summary>
+    /// List of all entity registry entries that are loaded from the embedded file.
+    /// Read-only after static constructor completes. Concurrent reads are safe.
+    /// </summary>
     private static readonly List<EntityRegistryEntry> Entries;
 
     static EntityRegistry() {
@@ -33,6 +39,8 @@ internal static class EntityRegistry {
     /// Filters out entries whose <see cref="EntityRegistryEntry.TypeName"/> has no mapping in
     /// <see cref="EntityType"/>, and recursively validates children.
     /// </summary>
+    /// <param name="entries">The raw loaded entries.</param>
+    /// <returns>A validated list of entries.</returns>
     private static List<EntityRegistryEntry> GetValidEntries(IEnumerable<EntityRegistryEntry> entries) {
         var validEntries = new List<EntityRegistryEntry>();
 
@@ -129,6 +137,9 @@ internal static class EntityRegistry {
     /// Returns true if any FSM in <paramref name="fsms"/> matches the entry's FSM name filter.
     /// Avoids LINQ and closure allocations; uses the entry's pre-built hash set for O(1) lookup.
     /// </summary>
+    /// <param name="fsms">The FSMs on the game object.</param>
+    /// <param name="entry">The registry entry with filter filters.</param>
+    /// <returns>True if a match exists, false otherwise.</returns>
     private static bool HasMatchingFsm(PlayMakerFSM[] fsms, EntityRegistryEntry entry) {
         foreach (var fsm in fsms) {
             if (entry.ContainsFsmName(fsm.Fsm.Name)) return true;
@@ -206,8 +217,9 @@ internal class EntityRegistryEntry {
     [JsonIgnore]
     internal bool HasFsmFilter { get; private set; }
 
-    // Built from FsmNames in OnDeserialized. Null when FsmNames is null or empty.
-    // HashSet gives O(1) lookup vs O(n) for List<string>.Contains.
+    /// <summary>
+    /// Fast-lookup set compiled from FsmNames for O(1) comparison checks.
+    /// </summary>
     private HashSet<string>? _fsmNameSet;
 
     [OnDeserialized]
