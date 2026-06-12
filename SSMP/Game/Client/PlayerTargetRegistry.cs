@@ -11,11 +11,17 @@ internal static class PlayerTargetRegistry {
     private static readonly List<GameObject> TrackedPlayersCache = [];
 
     /// <summary>
+    /// Cached collider arrays per remote player root GameObject to avoid dynamic allocations.
+    /// </summary>
+    private static readonly Dictionary<GameObject, Collider2D[]> PlayerCollidersCache = new();
+
+    /// <summary>
     /// Registers a spawned remote player root object for targeting.
     /// </summary>
     /// <param name="playerObject">The remote player root object.</param>
     public static void RegisterRemotePlayer(GameObject playerObject) {
         RemotePlayerObjects.Add(playerObject);
+        PlayerCollidersCache[playerObject] = playerObject.GetComponentsInChildren<Collider2D>(true);
     }
 
     /// <summary>
@@ -28,6 +34,7 @@ internal static class PlayerTargetRegistry {
         }
 
         RemotePlayerObjects.Remove(playerObject);
+        PlayerCollidersCache.Remove(playerObject);
     }
 
     /// <summary>
@@ -35,6 +42,21 @@ internal static class PlayerTargetRegistry {
     /// </summary>
     public static void ClearRemotePlayers() {
         RemotePlayerObjects.Clear();
+        PlayerCollidersCache.Clear();
+    }
+
+    /// <summary>
+    /// Gets cached colliders for the player GameObject to avoid dynamic GetComponentsInChildren allocations.
+    /// </summary>
+    public static Collider2D[] GetPlayerColliders(GameObject player) {
+        if (PlayerCollidersCache.TryGetValue(player, out var colliders)) {
+            return colliders;
+        }
+
+        // Fallback (e.g. local player or un-cached remote player)
+        colliders = player.GetComponentsInChildren<Collider2D>(true);
+        PlayerCollidersCache[player] = colliders;
+        return colliders;
     }
 
 
@@ -90,8 +112,7 @@ internal static class PlayerTargetRegistry {
         GameObject? nearestPlayer = null;
         var nearestDistanceSqr = float.MaxValue;
 
-        for (int i = 0; i < candidates.Count; i++) {
-            var playerObject = candidates[i];
+        foreach (var playerObject in candidates) {
             if (playerObject == null || !playerObject.activeInHierarchy) {
                 continue;
             }

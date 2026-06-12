@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using HutongGames.PlayMaker;
 using HutongGames.PlayMaker.Actions;
 using Mono.Cecil.Cil;
@@ -72,7 +73,7 @@ internal static class EntityFsmActions {
     /// Dictionary containing queues of objects for a FSM action that has been executed on a host entity.
     /// Used to log the results of random calls to network to clients.
     /// </summary>
-    private static readonly Dictionary<FsmStateAction, Queue<object>> RandomActionValues = new();
+    private static readonly ConditionalWeakTable<FsmStateAction, Queue<object>> RandomActionValues = new();
 
     /// <summary>
     /// List of actions that are executing while in a state and need to be stopped again when the state is exited.
@@ -304,7 +305,7 @@ internal static class EntityFsmActions {
 
                 if (!RandomActionValues.TryGetValue(instance, out var queue)) {
                     queue = new Queue<object>();
-                    RandomActionValues[instance] = queue;
+                    RandomActionValues.Add(instance, queue);
                 }
 
                 queue.Enqueue(value);

@@ -696,14 +696,13 @@ internal partial class GamePatcher {
     /// Refreshes enemy target references that need to follow the approved multiplayer target.
     /// </summary>
     private void OnUpdateRetargetEnemyTransforms() {
-        UpdateTargetedFsmActions();
-
         if (Time.unscaledTime < _nextEnemyRetargetTime) {
             return;
         }
 
         _nextEnemyRetargetTime = Time.unscaledTime + EnemyRetargetIntervalSeconds;
 
+        UpdateTargetedFsmActions();
         UpdateCachedTargetField<WalkerV2>(WalkerV2HeroField);
         UpdateCachedTargetField<ScuttlerControl>(ScuttlerControlHeroField);
     }
@@ -845,6 +844,10 @@ internal partial class GamePatcher {
         }
 
         var currentTarget = fsmGameObject.Value;
+
+        if (currentTarget == approvedTarget && string.IsNullOrEmpty(variableName)) {
+            return;
+        }
 
         if (currentTarget != null &&
             currentTarget != approvedTarget &&
@@ -1092,5 +1095,15 @@ internal partial class GamePatcher {
 
         TargetOwnerCache[instanceId] = resolvedOwner;
         return resolvedOwner;
+    }
+
+    /// <summary>
+    /// Removes cached targeting data for an entity GameObject that is being destroyed.
+    /// </summary>
+    public static void OnEntityDestroyed(GameObject? obj) {
+        if (obj == null) return;
+        var instanceId = obj.GetInstanceID();
+        EnemyApprovedTargets.Remove(instanceId);
+        TargetOwnerCache.Remove(instanceId);
     }
 }

@@ -697,23 +697,33 @@ internal abstract class ServerManager : IServerManager {
         if (playerUpdate.UpdateTypes.Contains(PlayerUpdateType.Position)) {
             playerData.Position = playerUpdate.Position;
 
-            SendDataInSameScene(
-                id,
-                playerData.CurrentScene,
-                otherId => {
-                    _netServer.GetUpdateManagerForClient(otherId)?.UpdatePlayerPosition(id, playerUpdate.Position);
+            foreach (var (otherId, otherPd) in _playerData) {
+                if (otherId == id) {
+                    continue;
                 }
-            );
+
+                if (!string.Equals(otherPd.CurrentScene, playerData.CurrentScene)) {
+                    continue;
+                }
+
+                _netServer.GetUpdateManagerForClient(otherId)?.UpdatePlayerPosition(id, playerUpdate.Position);
+            }
         }
 
         if (playerUpdate.UpdateTypes.Contains(PlayerUpdateType.Scale)) {
             playerData.Scale = playerUpdate.Scale;
 
-            SendDataInSameScene(
-                id,
-                playerData.CurrentScene,
-                otherId => { _netServer.GetUpdateManagerForClient(otherId)?.UpdatePlayerScale(id, playerUpdate.Scale); }
-            );
+            foreach (var (otherId, otherPd) in _playerData) {
+                if (otherId == id) {
+                    continue;
+                }
+
+                if (!string.Equals(otherPd.CurrentScene, playerData.CurrentScene)) {
+                    continue;
+                }
+
+                _netServer.GetUpdateManagerForClient(otherId)?.UpdatePlayerScale(id, playerUpdate.Scale);
+            }
         }
 
         if (playerUpdate.UpdateTypes.Contains(PlayerUpdateType.MapPosition)) {
@@ -753,12 +763,19 @@ internal abstract class ServerManager : IServerManager {
                 }
 
                 // Set the animation data for each player in the same scene
-                SendDataInSameScene(
-                    id,
-                    playerData.CurrentScene,
-                    otherId => {
+                foreach (var (otherId, otherPd) in _playerData) {
+                    if (otherId == id) {
+                        continue;
+                    }
+
+                    if (!string.Equals(otherPd.CurrentScene, playerData.CurrentScene)) {
+                        continue;
+                    }
+
+                    var updateManager = _netServer.GetUpdateManagerForClient(otherId);
+                    if (updateManager != null) {
                         foreach (var animationInfo in animationInfos) {
-                            _netServer.GetUpdateManagerForClient(otherId)?.UpdatePlayerAnimation(
+                            updateManager.UpdatePlayerAnimation(
                                 id,
                                 animationInfo.ClipId,
                                 animationInfo.Frame,
@@ -766,7 +783,7 @@ internal abstract class ServerManager : IServerManager {
                             );
                         }
                     }
-                );
+                }
             }
         }
     }

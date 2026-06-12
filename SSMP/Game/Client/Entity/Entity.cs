@@ -1340,6 +1340,7 @@ internal class Entity {
                     if (fsmIndex >= _fsms.Client.Count) {
                         continue;
                     }
+
                     fsm = _fsms.Client[fsmIndex];
                 } else {
                     // Do a check on the length of the data
@@ -1350,6 +1351,7 @@ internal class Entity {
                     if (_fsms.Client.Count == 0) {
                         continue;
                     }
+
                     fsm = _fsms.Client[0];
                 }
 
@@ -1363,10 +1365,12 @@ internal class Entity {
                 if (stateIndex >= fsm.FsmStates.Length) {
                     continue;
                 }
+
                 var state = fsm.FsmStates[stateIndex];
                 if (state == null || state.Actions == null || actionIndex >= state.Actions.Length) {
                     continue;
                 }
+
                 var action = state.Actions[actionIndex];
 
                 //Logger.Info(
@@ -1417,82 +1421,82 @@ internal class Entity {
                 }
             }
 
-            var fsms = new[] { hostFsm, _fsms.Client[fsmIndex] };
+            var clientFsm = _fsms.Client[fsmIndex];
 
-            foreach (var fsm in fsms) {
-                CondUpdateVars(
-                    EntityHostFsmData.Type.Floats,
-                    data.Floats,
-                    fsm.FsmVariables.FloatVariables,
-                    (index, fsmVar, value) => {
-                        fsmVar.Value = value;
-                        snapshot.Floats[index] = value;
+            if (data.Types.Contains(EntityHostFsmData.Type.Floats)) {
+                foreach (var (index, val) in data.Floats) {
+                    if (index < hostFsm.FsmVariables.FloatVariables.Length) {
+                        hostFsm.FsmVariables.FloatVariables[index].Value = val;
+                        snapshot.Floats[index] = val;
                     }
-                );
-                CondUpdateVars(
-                    EntityHostFsmData.Type.Ints,
-                    data.Ints,
-                    fsm.FsmVariables.IntVariables,
-                    (index, fsmVar, value) => {
-                        fsmVar.Value = value;
-                        snapshot.Ints[index] = value;
+
+                    if (index < clientFsm.FsmVariables.FloatVariables.Length) {
+                        clientFsm.FsmVariables.FloatVariables[index].Value = val;
                     }
-                );
-                CondUpdateVars(
-                    EntityHostFsmData.Type.Bools,
-                    data.Bools,
-                    fsm.FsmVariables.BoolVariables,
-                    (index, fsmVar, value) => {
-                        fsmVar.Value = value;
-                        snapshot.Bools[index] = value;
-                    }
-                );
-                CondUpdateVars(
-                    EntityHostFsmData.Type.Strings,
-                    data.Strings,
-                    fsm.FsmVariables.StringVariables,
-                    (index, fsmVar, value) => {
-                        fsmVar.Value = value;
-                        snapshot.Strings[index] = value;
-                    }
-                );
-                CondUpdateVars(
-                    EntityHostFsmData.Type.Vector2s,
-                    data.Vec2s,
-                    fsm.FsmVariables.Vector2Variables,
-                    (index, fsmVar, value) => {
-                        fsmVar.Value = (Vector2) value;
-                        snapshot.Vector2s[index] = (Vector2) value;
-                    }
-                );
-                CondUpdateVars(
-                    EntityHostFsmData.Type.Vector3s,
-                    data.Vec3s,
-                    fsm.FsmVariables.Vector3Variables,
-                    (index, fsmVar, value) => {
-                        fsmVar.Value = (Vector3) value;
-                        snapshot.Vector3s[index] = (Vector3) value;
-                    }
-                );
+                }
             }
 
-            continue;
+            if (data.Types.Contains(EntityHostFsmData.Type.Ints)) {
+                foreach (var (index, val) in data.Ints) {
+                    if (index < hostFsm.FsmVariables.IntVariables.Length) {
+                        hostFsm.FsmVariables.IntVariables[index].Value = val;
+                        snapshot.Ints[index] = val;
+                    }
 
-            void CondUpdateVars<TFsm, TBase>(
-                EntityHostFsmData.Type type,
-                Dictionary<byte, TBase> dataDict,
-                TFsm[] fsmVarArray,
-                Action<byte, TFsm, TBase> setValueAction
-            ) {
-                if (data.Types.Contains(type)) {
-                    foreach (var pair in dataDict) {
-                        if (fsmVarArray.Length <= pair.Key) {
-                            //Logger.Warn(
-                            //    $"Tried to update host FSM var ({typeof(TBase)}) for unknown index: {pair.Key}"
-                            //);
-                        } else {
-                            setValueAction.Invoke(pair.Key, fsmVarArray[pair.Key], pair.Value);
-                        }
+                    if (index < clientFsm.FsmVariables.IntVariables.Length) {
+                        clientFsm.FsmVariables.IntVariables[index].Value = val;
+                    }
+                }
+            }
+
+            if (data.Types.Contains(EntityHostFsmData.Type.Bools)) {
+                foreach (var (index, val) in data.Bools) {
+                    if (index < hostFsm.FsmVariables.BoolVariables.Length) {
+                        hostFsm.FsmVariables.BoolVariables[index].Value = val;
+                        snapshot.Bools[index] = val;
+                    }
+
+                    if (index < clientFsm.FsmVariables.BoolVariables.Length) {
+                        clientFsm.FsmVariables.BoolVariables[index].Value = val;
+                    }
+                }
+            }
+
+            if (data.Types.Contains(EntityHostFsmData.Type.Strings)) {
+                foreach (var (index, val) in data.Strings) {
+                    if (index < hostFsm.FsmVariables.StringVariables.Length) {
+                        hostFsm.FsmVariables.StringVariables[index].Value = val;
+                        snapshot.Strings[index] = val;
+                    }
+
+                    if (index < clientFsm.FsmVariables.StringVariables.Length) {
+                        clientFsm.FsmVariables.StringVariables[index].Value = val;
+                    }
+                }
+            }
+
+            if (data.Types.Contains(EntityHostFsmData.Type.Vector2s)) {
+                foreach (var (index, val) in data.Vec2s) {
+                    if (index < hostFsm.FsmVariables.Vector2Variables.Length) {
+                        hostFsm.FsmVariables.Vector2Variables[index].Value = (Vector2) val;
+                        snapshot.Vector2s[index] = (Vector2) val;
+                    }
+
+                    if (index < clientFsm.FsmVariables.Vector2Variables.Length) {
+                        clientFsm.FsmVariables.Vector2Variables[index].Value = (Vector2) val;
+                    }
+                }
+            }
+
+            if (data.Types.Contains(EntityHostFsmData.Type.Vector3s)) {
+                foreach (var (index, val) in data.Vec3s) {
+                    if (index < hostFsm.FsmVariables.Vector3Variables.Length) {
+                        hostFsm.FsmVariables.Vector3Variables[index].Value = (Vector3) val;
+                        snapshot.Vector3s[index] = (Vector3) val;
+                    }
+
+                    if (index < clientFsm.FsmVariables.Vector3Variables.Length) {
+                        clientFsm.FsmVariables.Vector3Variables[index].Value = (Vector3) val;
                     }
                 }
             }
@@ -1514,6 +1518,9 @@ internal class Entity {
         foreach (var component in _components.Values.Distinct()) {
             component.Destroy();
         }
+
+        GamePatcher.OnEntityDestroyed(Object.Host);
+        GamePatcher.OnEntityDestroyed(Object.Client);
     }
 
     /// <summary>

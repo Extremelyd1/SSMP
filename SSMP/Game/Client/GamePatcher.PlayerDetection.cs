@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using MonoMod.RuntimeDetour;
 using UnityEngine;
 
@@ -74,6 +75,12 @@ internal partial class GamePatcher {
         "Attack",
         "Hit"
     ];
+
+    /// <summary>
+    /// Cache mapping AlertRange instances to their non-acquiring status to avoid native string name allocations.
+    /// </summary>
+    private static readonly ConditionalWeakTable<AlertRange, BoxedBool> NonAcquiringAlertRanges = new();
+
 
     /// <summary>
     /// Registers detection-specific hooks.
@@ -256,8 +263,7 @@ internal partial class GamePatcher {
         var bestDistance = float.PositiveInfinity;
 
         var players = PlayerTargetRegistry.GetTrackedPlayers();
-        for (int i = 0; i < players.Count; i++) {
-            var player = players[i];
+        foreach (var player in players) {
             if (player == null) {
                 continue;
             }
@@ -323,7 +329,8 @@ internal partial class GamePatcher {
             return false;
         }
 
-        foreach (var playerCollider in player.GetComponentsInChildren<Collider2D>()) {
+        var colliders = PlayerTargetRegistry.GetPlayerColliders(player);
+        foreach (var playerCollider in colliders) {
             if (playerCollider == null || !playerCollider.enabled) {
                 continue;
             }
@@ -363,7 +370,14 @@ internal partial class GamePatcher {
             return false;
         }
 
-        return !IsNonAcquiringAlertRangeName(alertRange.name);
+        if (NonAcquiringAlertRanges.TryGetValue(alertRange, out var boxed)) {
+            return !boxed.Value;
+        }
+
+        var isNonAcquiring = IsNonAcquiringAlertRangeName(alertRange.name);
+        NonAcquiringAlertRanges.Add(alertRange, new BoxedBool { Value = isNonAcquiring });
+
+        return !isNonAcquiring;
     }
 
     /// <summary>
@@ -407,4 +421,14 @@ internal partial class GamePatcher {
         var targetPosition = GetTargetAimPosition(target);
         return !Helper.LineCast2DHit(origin.position, targetPosition, TerrainLayerMask, out _);
     }
+}
+
+/// <summary>
+/// A wrapper class for boolean values to allow storing them in a ConditionalWeakTable.
+/// </summary>
+internal class BoxedBool {
+    /// <summary>
+    /// The wrapped boolean value.
+    /// </summary>
+    public bool Value;
 }

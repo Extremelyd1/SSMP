@@ -613,9 +613,21 @@ internal class EntityNetworkData : IPoolable {
     public ushort SenderId { get; set; } = UnknownSenderId;
 
     /// <summary>
+    /// Private writable packet instance that is reused to prevent GC allocations.
+    /// </summary>
+    private readonly Packet _writablePacket = new();
+
+    /// <summary>
     /// Packet instance containing the data for easy reading and writing of data.
     /// </summary>
-    public Packet Packet { get; set; } = new();
+    public Packet Packet { get; set; }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="EntityNetworkData"/> class, binding it to the local writable packet.
+    /// </summary>
+    public EntityNetworkData() {
+        Packet = _writablePacket;
+    }
 
     /// <summary>
     /// Creates a pooled copy of this entity network data with an independent packet buffer.
@@ -624,7 +636,8 @@ internal class EntityNetworkData : IPoolable {
         var clone = ObjectPool<EntityNetworkData>.Get();
         clone.Type = Type;
         clone.SenderId = SenderId;
-        clone.Packet = new Packet(Packet.ToArray());
+        clone.Packet.Clear();
+        clone.Packet.Write(Packet.ToArray());
         return clone;
     }
 
@@ -632,7 +645,8 @@ internal class EntityNetworkData : IPoolable {
     public void Reset() {
         Type = default;
         SenderId = UnknownSenderId;
-        Packet = new Packet();
+        _writablePacket.Clear();
+        Packet = _writablePacket;
     }
 
     /// <inheritdoc cref="IPacketData.WriteData" />
