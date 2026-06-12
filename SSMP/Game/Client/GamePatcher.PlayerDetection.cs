@@ -80,8 +80,19 @@ internal partial class GamePatcher {
     /// <summary>
     /// Cache mapping AlertRange instances to their non-acquiring status to avoid native string name allocations.
     /// </summary>
-    private static readonly ConditionalWeakTable<AlertRange, BoxedBool> NonAcquiringAlertRanges = new();
+    private static readonly ConditionalWeakTable<AlertRange, BoxedBool> NonAcquiringAlertRanges = [];
 
+    /// <summary>
+    /// Cache mapping AlertRange instances to their CachedCollider to avoid frame-by-frame GetComponent allocations.
+    /// Uses ConditionalWeakTable to prevent memory leaks from keeping alive AlertRange instances that should be GC'ed.
+    /// </summary>
+    private static readonly ConditionalWeakTable<AlertRange, CachedCollider> AlertColliderCache = [];
+
+    /// <summary>
+    /// Cache mapping player GameObjects to their CachedPlayerInfo to avoid frame-by-frame native calls.
+    /// Uses ConditionalWeakTable to prevent memory leaks from keeping alive player GameObjects.
+    /// </summary>
+    private static readonly ConditionalWeakTable<GameObject, CachedPlayerInfo> PlayerInfoCache = [];
 
     /// <summary>
     /// Registers detection-specific hooks.
@@ -300,23 +311,73 @@ internal partial class GamePatcher {
             return true;
         }
 
-        var alertCollider = alertRange.GetComponent<Collider2D>();
+        if (!AlertColliderCache.TryGetValue(alertRange, out var cached)) {
+            cached = new CachedCollider { Collider = alertRange.GetComponent<Collider2D>() };
+            AlertColliderCache.Add(alertRange, cached);
+        }
+
+        var alertCollider = cached.Collider;
         if (alertCollider == null || !alertCollider.enabled) {
             return false;
         }
 
-        var colliders = PlayerTargetRegistry.GetPlayerColliders(player);
-        foreach (var playerCollider in colliders) {
-            if (playerCollider == null || !playerCollider.enabled) {
+        var currentFrame = Time.frameCount;
+
+        // Cache alert collider bounds per frame
+        if (cached.FrameCount != currentFrame) {
+            cached.FrameCount = currentFrame;
+            cached.Bounds = alertCollider.bounds;
+        }
+
+        var alertBounds = cached.Bounds;
+
+        // Retrieve or create cached player info
+        if (!PlayerInfoCache.TryGetValue(player, out var playerInfo)) {
+            playerInfo = new CachedPlayerInfo();
+            PlayerInfoCache.Add(player, playerInfo);
+        }
+
+        // Cache player bounds and position per frame
+        if (playerInfo.FrameCount != currentFrame) {
+            playerInfo.FrameCount = currentFrame;
+            playerInfo.Position = player.transform.position;
+
+            var colliders = PlayerTargetRegistry.GetPlayerColliders(player);
+            if (playerInfo.ColliderBounds.Length != colliders.Length) {
+                playerInfo.ColliderBounds = new Bounds[colliders.Length];
+            }
+
+            for (int i = 0; i < colliders.Length; i++) {
+                var col = colliders[i];
+                if (col != null && col.enabled) {
+                    playerInfo.ColliderBounds[i] = col.bounds;
+                } else {
+                    playerInfo.ColliderBounds[i] = default;
+                }
+            }
+        }
+
+        // Check collider intersections using cached bounds in 2D
+        foreach (var playerBounds in playerInfo.ColliderBounds) {
+            if (playerBounds.extents is { x: 0f, y: 0f }) {
                 continue;
             }
 
-            if (alertCollider.bounds.Intersects(playerCollider.bounds)) {
+            // 2D box intersection check (ignores Z)
+            if (alertBounds.min.x <= playerBounds.max.x && alertBounds.max.x >= playerBounds.min.x &&
+                alertBounds.min.y <= playerBounds.max.y && alertBounds.max.y >= playerBounds.min.y) {
                 return true;
             }
         }
 
-        return alertCollider.OverlapPoint(player.transform.position);
+        // Fallback check (only if player position is inside the alert bounds in 2D)
+        var playerPos = playerInfo.Position;
+        if (playerPos.x >= alertBounds.min.x && playerPos.x <= alertBounds.max.x &&
+            playerPos.y >= alertBounds.min.y && playerPos.y <= alertBounds.max.y) {
+            return alertCollider.OverlapPoint(playerPos);
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -424,4 +485,44 @@ internal class BoxedBool {
     /// The wrapped boolean value.
     /// </summary>
     public bool Value;
+}
+
+/// <summary>
+/// A wrapper class for Collider2D references to allow caching them in a ConditionalWeakTable.
+/// </summary>
+internal class CachedCollider {
+    /// <summary>
+    /// The cached Collider2D reference, which may be null if none is attached.
+    /// </summary>
+    public Collider2D? Collider;
+
+    /// <summary>
+    /// The frame number when the bounds were last updated.
+    /// </summary>
+    public int FrameCount = -1;
+
+    /// <summary>
+    /// The cached bounds of the collider.
+    /// </summary>
+    public Bounds Bounds;
+}
+
+/// <summary>
+/// A cache container for player bounds and position to avoid native property access calls within a frame.
+/// </summary>
+internal class CachedPlayerInfo {
+    /// <summary>
+    /// The frame number when the player info was last cached.
+    /// </summary>
+    public int FrameCount = -1;
+
+    /// <summary>
+    /// The cached bounds of the player's colliders.
+    /// </summary>
+    public Bounds[] ColliderBounds = [];
+
+    /// <summary>
+    /// The cached transform position of the player.
+    /// </summary>
+    public Vector3 Position;
 }
