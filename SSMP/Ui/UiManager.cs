@@ -486,7 +486,7 @@ internal class UiManager : IUiManager {
     private void CreateInGameInterface(ComponentGroup parent) {
         _inGameGroup = new ComponentGroup(parent: parent);
 
-        var infoBoxGroup = new ComponentGroup(parent: _inGameGroup);
+        var infoBoxGroup = new ComponentGroup();
         InternalChatBox = new ChatBox(infoBoxGroup, _modSettings);
         InternalChatBox.ChatInputEvent += input => ChatInputEvent?.Invoke(input);
 
