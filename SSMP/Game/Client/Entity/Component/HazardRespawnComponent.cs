@@ -4,9 +4,11 @@ using SSMP.Networking.Packet.Data;
 using SSMP.Util;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
+
 // ReSharper disable UnusedMember.Local
 #pragma warning disable CS8601 // Possible null reference assignment.
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider
+// adding the 'required' modifier or declaring as nullable.
 
 namespace SSMP.Game.Client.Entity.Component;
 
@@ -18,15 +20,17 @@ internal class HazardRespawnComponent : EntityComponent {
     /// The offset of the climb hazard respawn indices.
     /// </summary>
     private const int ClimbRespawnOffset = 1;
-    
+
     /// <summary>
     /// The Control FSM of the host entity.
     /// </summary>
     private readonly PlayMakerFSM _hostControlFsm;
+
     /// <summary>
     /// The game object that holds the Ascend Respawn objects.
     /// </summary>
     private readonly GameObject _ascendRespawnsObject;
+
     /// <summary>
     /// List of hazard respawn trigger behaviours.
     /// </summary>
@@ -36,11 +40,12 @@ internal class HazardRespawnComponent : EntityComponent {
     /// The last state of 'active' of the Ascend Respawn object.
     /// </summary>
     private bool _lastActiveAscendsRespawns;
+
     /// <summary>
     /// The index of the highest respawn that has been triggered locally or received from the server.
     /// </summary>
     private int _highestRespawn = -1;
-    
+
     public HazardRespawnComponent(
         NetClient netClient,
         ushort entityId,
@@ -52,21 +57,23 @@ internal class HazardRespawnComponent : EntityComponent {
             Logger.Error("Could not find 'Control' FSM on Radiance host object");
             return;
         }
-        
-        _hostControlFsm.InsertMethod("Climb Plats1", 7, () => {
-            Logger.Debug("Climb Plats1 state reached, sending hazard respawn data");
 
-            _highestRespawn = 0;
-            
-            var data = new EntityNetworkData {
-                Type = EntityComponentType.HazardRespawn
-            };
-            
-            data.Packet.Write((byte) 0);
-            data.Packet.Write(_lastActiveAscendsRespawns);
+        _hostControlFsm.InsertMethod(
+            "Climb Plats1", 7, () => {
+                Logger.Debug("Climb Plats1 state reached, sending hazard respawn data");
 
-            SendData(data);
-        });
+                _highestRespawn = 0;
+
+                var data = new EntityNetworkData {
+                    Type = EntityComponentType.HazardRespawn
+                };
+
+                data.Packet.Write((byte) 0);
+                data.Packet.Write(_lastActiveAscendsRespawns);
+
+                SendData(data);
+            }
+        );
 
         _hazardRespawnTriggers = [];
 
@@ -80,19 +87,21 @@ internal class HazardRespawnComponent : EntityComponent {
                     var hazardRespawnTrigger = child.GetComponent<HazardRespawnTrigger>();
                     if (hazardRespawnTrigger) {
                         _hazardRespawnTriggers.Add(hazardRespawnTrigger);
-                        
-                        Logger.Debug($"Added '{hazardRespawnTrigger.gameObject.name}' to list of hazard respawn triggers");
+
+                        Logger.Debug(
+                            $"Added '{hazardRespawnTrigger.gameObject.name}' to list of hazard respawn triggers"
+                        );
                     }
                 }
             }
         }
-        
-        MonoBehaviourUtil.Instance.OnUpdateEvent += OnUpdate;
+
         // On.HazardRespawnTrigger.OnTriggerEnter2D += HazardRespawnTriggerOnTriggerEnter2D;
     }
 
     // /// <summary>
-    // /// Hook for the "OnTriggerEnter2D" method of HazardRespawnTrigger to network that a certain hazard respawn trigger
+    // /// Hook for the "OnTriggerEnter2D" method of HazardRespawnTrigger to network that a certain hazard respawn
+    // trigger
     // /// has been reached.
     // /// </summary>
     // private void HazardRespawnTriggerOnTriggerEnter2D(
@@ -138,25 +147,26 @@ internal class HazardRespawnComponent : EntityComponent {
     //         Logger.Debug("Num respawn is less than or equal to highest respawn");
     //     }
     // }
-    
+
     /// <summary>
     /// Update hook to check for changes in the active state of the Ascend Respawns object and network them.
     /// </summary>
-    private void OnUpdate() {
+    /// <inheritdoc />
+    public override void OnUpdate() {
         if (IsControlled || !_ascendRespawnsObject) {
             return;
         }
-        
+
         var active = _ascendRespawnsObject.activeSelf;
         if (active != _lastActiveAscendsRespawns) {
             _lastActiveAscendsRespawns = active;
-            
+
             Logger.Debug($"Ascends Respawns object changed active: {active}, sending to server");
-            
+
             var data = new EntityNetworkData {
                 Type = EntityComponentType.HazardRespawn
             };
-            
+
             data.Packet.Write((byte) _highestRespawn);
             data.Packet.Write(active);
 
@@ -165,7 +175,7 @@ internal class HazardRespawnComponent : EntityComponent {
     }
 
     /// <inheritdoc />
-    public override void InitializeHost() {
+    protected override void InitializeHost() {
     }
 
     /// <inheritdoc />
@@ -194,7 +204,7 @@ internal class HazardRespawnComponent : EntityComponent {
                 Logger.Error("P2A Hazard variable value is null in host FSM");
                 return;
             }
-            
+
             Logger.Debug("Setting hazard respawn to plats hazard respawn");
             HeroController.instance.SetHazardRespawn(p2AHazard.transform.position, true);
         } else {
@@ -209,19 +219,18 @@ internal class HazardRespawnComponent : EntityComponent {
                 hazardRespawnTrigger = _hazardRespawnTriggers[i - 1];
                 hazardRespawnTrigger.inactive = true;
             }
-            
+
             hazardRespawnTrigger = _hazardRespawnTriggers[numRespawn - 1];
             PlayerData.instance.SetHazardRespawn(hazardRespawnTrigger.respawnMarker);
-            
+
             Logger.Debug($"Setting hazard respawn to climb phase respawn: {hazardRespawnTrigger.gameObject.name}");
         }
-        
+
         _highestRespawn = numRespawn;
     }
 
     /// <inheritdoc />
     public override void Destroy() {
-        MonoBehaviourUtil.Instance.OnUpdateEvent -= OnUpdate;
         // On.HazardRespawnTrigger.OnTriggerEnter2D -= HazardRespawnTriggerOnTriggerEnter2D;
     }
 }

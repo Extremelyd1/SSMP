@@ -185,19 +185,22 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     /// Add player already in scene data to the current packet.
     /// </summary>
     /// <param name="playerEnterSceneList">An enumerable of ClientPlayerEnterScene instances to add.</param>
-    /// <param name="entitySpawnList">An enumerable of EntitySpawn instances to add.</param> 
+    /// <param name="entitySpawnList">An enumerable of EntitySpawn instances to add.</param>
     /// <param name="entityUpdateList">An enumerable of EntityUpdate instances to add.</param>
     /// <param name="reliableEntityUpdateList">An enumerable of ReliableEntityUpdate instances to add.</param>
     /// <param name="sceneHost">Whether the player is the scene host.</param>
+    /// <param name="sceneHostEpoch">The current scene host epoch.</param>
     public void AddPlayerAlreadyInSceneData(
         IEnumerable<ClientPlayerEnterScene> playerEnterSceneList,
         IEnumerable<EntitySpawn> entitySpawnList,
         IEnumerable<EntityUpdate> entityUpdateList,
         IEnumerable<ReliableEntityUpdate> reliableEntityUpdateList,
-        bool sceneHost
+        bool sceneHost,
+        uint sceneHostEpoch
     ) {
         var alreadyInScene = new ClientPlayerAlreadyInScene {
-            SceneHost = sceneHost
+            SceneHost = sceneHost,
+            SceneHostEpoch = sceneHostEpoch
         };
         alreadyInScene.PlayerEnterSceneList.AddRange(playerEnterSceneList);
         alreadyInScene.EntitySpawnList.AddRange(entitySpawnList);
@@ -403,7 +406,10 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
             var entityUpdate =
                 FindOrCreateEntityUpdate<ReliableEntityUpdate>(entityId, ClientUpdatePacketId.ReliableEntityUpdate);
             entityUpdate!.UpdateTypes.Add(EntityUpdateType.Data);
-            entityUpdate.GenericData.AddRange(data);
+
+            foreach (var entityNetworkData in data) {
+                entityUpdate.GenericData.Add(entityNetworkData.Clone());
+            }
         }
     }
 
@@ -422,7 +428,9 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
             if (entityUpdate.HostFsmData.TryGetValue(fsmIndex, out var existingData)) {
                 existingData.MergeData(data);
             } else {
-                entityUpdate.HostFsmData.Add(fsmIndex, data);
+                var pooledData = ObjectPool<EntityHostFsmData>.Get();
+                pooledData.MergeData(data);
+                entityUpdate.HostFsmData.Add(fsmIndex, pooledData);
             }
         }
     }
@@ -431,8 +439,10 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     /// Set that the receiving player should become scene host of their current scene.
     /// </summary>
     /// <param name="sceneName">The name of the scene in which the player becomes scene host.</param>
-    public void SetSceneHostTransfer(string sceneName) {
-        var hostTransfer = new HostTransfer { SceneName = sceneName };
+    /// <param name="sceneHostEpoch">The scene-host epoch assigned by the server.</param>
+    /// <param name="demote">If true, demotes the player from scene host to client.</param>
+    public void SetSceneHostTransfer(string sceneName, uint sceneHostEpoch, bool demote = false) {
+        var hostTransfer = new HostTransfer { SceneName = sceneName, Demote = demote, SceneHostEpoch = sceneHostEpoch };
 
         lock (Lock) {
             CurrentUpdatePacket.SetSendingPacketData(ClientUpdatePacketId.SceneHostTransfer, hostTransfer);
@@ -477,7 +487,6 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
                 playerSettingUpdate.UpdateTypes.Add(PlayerSettingUpdateType.Skin);
                 playerSettingUpdate.SkinId = skinId.Value;
             }
-            
         }
     }
 

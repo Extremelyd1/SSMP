@@ -1,10 +1,9 @@
 using SSMP.Networking.Client;
 using SSMP.Networking.Packet.Data;
-using SSMP.Util;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
 
-namespace SSMP.Game.Client.Entity.Component; 
+namespace SSMP.Game.Client.Entity.Component;
 
 /// <inheritdoc />
 /// This component manages the <see cref="Collider2D"/> unity component of an entity.
@@ -20,20 +19,19 @@ internal class ColliderComponent : EntityComponent {
     private bool? _lastEnabled;
 
     public ColliderComponent(
-        NetClient netClient, 
-        ushort entityId, 
+        NetClient netClient,
+        ushort entityId,
         HostClientPair<GameObject> gameObject,
         HostClientPair<Collider2D> collider
     ) : base(netClient, entityId, gameObject) {
         _collider = collider;
-
-        MonoBehaviourUtil.Instance.OnUpdateEvent += OnUpdateCollider;
     }
 
     /// <summary>
     /// Callback for checking the collider each update.
     /// </summary>
-    private void OnUpdateCollider() {
+    /// <inheritdoc />
+    public override void OnUpdate() {
         if (IsControlled) {
             return;
         }
@@ -57,18 +55,23 @@ internal class ColliderComponent : EntityComponent {
     }
 
     /// <inheritdoc />
-    public override void InitializeHost() {
+    protected override void InitializeHost() {
     }
 
     /// <inheritdoc />
     public override void Update(EntityNetworkData data, bool alreadyInSceneUpdate) {
         Logger.Info($"Received collider update for {GameObject.Client.name}");
-        
+
         if (!IsControlled) {
             Logger.Info("  Entity was not controlled");
             return;
         }
-        
+
+        if (data.Packet.Length < 1) {
+            Logger.Warn($"Received empty collider update for entity {GameObject.Client.name}, ignoring");
+            return;
+        }
+
         var enabled = data.Packet.ReadBool();
         if (_collider.Host != null) {
             _collider.Host.enabled = enabled;
@@ -83,6 +86,5 @@ internal class ColliderComponent : EntityComponent {
 
     /// <inheritdoc />
     public override void Destroy() {
-        MonoBehaviourUtil.Instance.OnUpdateEvent -= OnUpdateCollider;
     }
 }

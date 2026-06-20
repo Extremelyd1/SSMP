@@ -1,6 +1,5 @@
 using SSMP.Networking.Client;
 using SSMP.Networking.Packet.Data;
-using SSMP.Util;
 using UnityEngine;
 
 namespace SSMP.Game.Client.Entity.Component;
@@ -29,14 +28,13 @@ internal class MeshRendererComponent : EntityComponent {
     ) : base(netClient, entityId, gameObject) {
         _meshRenderer = meshRenderer;
         _lastEnabled = meshRenderer.Host.enabled;
-
-        MonoBehaviourUtil.Instance.OnUpdateEvent += OnUpdate;
     }
 
     /// <summary>
     /// Callback method to check for mesh renderer updates.
     /// </summary>
-    private void OnUpdate() {
+    /// <inheritdoc />
+    public override void OnUpdate() {
         if (IsControlled) {
             return;
         }
@@ -48,7 +46,7 @@ internal class MeshRendererComponent : EntityComponent {
         var newEnabled = _meshRenderer.Host.enabled;
         if (newEnabled != _lastEnabled) {
             _lastEnabled = newEnabled;
-            
+
             var data = new EntityNetworkData {
                 Type = EntityComponentType.MeshRenderer
             };
@@ -59,7 +57,7 @@ internal class MeshRendererComponent : EntityComponent {
     }
 
     /// <inheritdoc />
-    public override void InitializeHost() {
+    protected override void InitializeHost() {
     }
 
     /// <inheritdoc />
@@ -77,6 +75,5 @@ internal class MeshRendererComponent : EntityComponent {
 
     /// <inheritdoc />
     public override void Destroy() {
-        MonoBehaviourUtil.Instance.OnUpdateEvent -= OnUpdate;
     }
 }

@@ -3,9 +3,11 @@ using SSMP.Networking.Client;
 using SSMP.Networking.Packet.Data;
 using SSMP.Util;
 using UnityEngine;
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
 
-namespace SSMP.Game.Client.Entity.Component; 
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider
+// adding the 'required' modifier or declaring as nullable.
+
+namespace SSMP.Game.Client.Entity.Component;
 
 /// <inheritdoc />
 /// This component manages the activation of the children of an entity.
@@ -14,10 +16,10 @@ internal class ChildrenActivationComponent : EntityComponent {
     private readonly List<GameObject> _clientChildren;
 
     private bool _lastActive;
-    
+
     public ChildrenActivationComponent(
-        NetClient netClient, 
-        ushort entityId, 
+        NetClient netClient,
+        ushort entityId,
         HostClientPair<GameObject> gameObject
     ) : base(netClient, entityId, gameObject) {
         _hostChildren = gameObject.Host.GetChildren();
@@ -28,14 +30,13 @@ internal class ChildrenActivationComponent : EntityComponent {
         _lastActive = _hostChildren[0].activeSelf;
 
         _clientChildren = gameObject.Client.GetChildren();
-
-        MonoBehaviourUtil.Instance.OnUpdateEvent += OnUpdate;
     }
 
     /// <summary>
     /// Callback for checking the gravity scale each update.
     /// </summary>
-    private void OnUpdate() {
+    /// <inheritdoc />
+    public override void OnUpdate() {
         if (IsControlled) {
             return;
         }
@@ -58,7 +59,7 @@ internal class ChildrenActivationComponent : EntityComponent {
     }
 
     /// <inheritdoc />
-    public override void InitializeHost() {
+    protected override void InitializeHost() {
     }
 
     /// <inheritdoc />
@@ -72,6 +73,7 @@ internal class ChildrenActivationComponent : EntityComponent {
         foreach (var child in _hostChildren) {
             child.SetActive(newActive);
         }
+
         foreach (var child in _clientChildren) {
             child.SetActive(newActive);
         }
@@ -79,6 +81,5 @@ internal class ChildrenActivationComponent : EntityComponent {
 
     /// <inheritdoc />
     public override void Destroy() {
-        MonoBehaviourUtil.Instance.OnUpdateEvent -= OnUpdate;
     }
 }

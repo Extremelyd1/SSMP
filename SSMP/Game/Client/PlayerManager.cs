@@ -186,25 +186,20 @@ internal class PlayerManager : IPlayerManager {
         var collider = playerPrefab.GetComponent<BoxCollider2D>();
         // We're not using the fact that Hornet has a BoxCollider as opposed to any other collider
         var localCollider = localPlayerObject.GetComponent<Collider2D>();
-        var localColliderBounds = localCollider.bounds;
 
-        // Copy collider offset and size
         collider.isTrigger = true;
         collider.offset = localCollider.offset;
-        collider.size = localColliderBounds.size;
+        collider.size = localCollider is BoxCollider2D localBoxCollider
+            ? localBoxCollider.size
+            : localCollider.bounds.size;
         collider.enabled = true;
-
-        // Copy collider bounds
-        var bounds = collider.bounds;
-        var localBounds = localColliderBounds;
-        bounds.min = localBounds.min;
-        bounds.max = localBounds.max;
 
         // Set Rigidbody properties
         var rigidbody = playerPrefab.GetComponent<Rigidbody2D>();
         rigidbody.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
-        rigidbody.gravityScale = 0;
+        rigidbody.gravityScale = 0f;
         rigidbody.bodyType = RigidbodyType2D.Kinematic;
+        rigidbody.simulated = true;
 
         // Set up sprite flash. Must be deactivated beforehand to fill properties in awake
         playerPrefab.SetActive(false);
@@ -340,6 +335,8 @@ internal class PlayerManager : IPlayerManager {
         // Reset the local player's team
         LocalPlayerTeam = Team.None;
 
+        PlayerTargetRegistry.ClearRemotePlayers();
+
         // Clear all players
         RecycleAllPlayers();
 
@@ -368,6 +365,8 @@ internal class PlayerManager : IPlayerManager {
     /// </summary>
     /// <param name="playerData">The player data of the player.</param>
     private void RecyclePlayerByData(ClientPlayerData playerData) {
+        PlayerTargetRegistry.UnregisterRemotePlayer(playerData.PlayerObject);
+
         // First reset the player
         ResetPlayer(playerData);
 
@@ -448,15 +447,13 @@ internal class PlayerManager : IPlayerManager {
         // First recycle the player by player data if they have an active container
         RecyclePlayerByData(playerData);
 
-        GameObject playerContainer;
-
-        if (_inactivePlayers.Count <= 0) {
+        var playerContainer =
             // Create a new player container
-            playerContainer = CreateNewPlayerContainer();
-        } else {
-            // Dequeue a player container from the inactive players
-            playerContainer = _inactivePlayers.Dequeue();
-        }
+            _inactivePlayers.Count <= 0
+                ? CreateNewPlayerContainer()
+                :
+                // Dequeue a player container from the inactive players
+                _inactivePlayers.Dequeue();
 
         playerContainer.name = $"{PlayerContainerName} {playerData.Id}";
 
@@ -483,6 +480,21 @@ internal class PlayerManager : IPlayerManager {
         // Store the player data
         playerData.PlayerContainer = playerContainer;
         playerData.PlayerObject = playerObject;
+
+        // Ignore collisions between local player and remote player
+        if (HeroController.instance != null) {
+            var localColliders = HeroController.instance.GetComponentsInChildren<Collider2D>(true);
+            var remoteColliders = playerContainer.GetComponentsInChildren<Collider2D>(true);
+            foreach (var localCol in localColliders) {
+                foreach (var remoteCol in remoteColliders) {
+                    if (localCol != null && remoteCol != null) {
+                        Physics2D.IgnoreCollision(localCol, remoteCol, true);
+                    }
+                }
+            }
+        }
+
+        PlayerTargetRegistry.RegisterRemotePlayer(playerObject);
     }
 
     /// <summary>
@@ -584,7 +596,7 @@ internal class PlayerManager : IPlayerManager {
             Logger.Debug($"Tried to update team for ID {id} while player data did not exists");
             return;
         }
-        
+
         // Store the old team for invoking the event later
         var oldTeam = playerData.Team;
 
@@ -793,7 +805,8 @@ internal class PlayerManager : IPlayerManager {
         var nameObject = new GameObject(UsernameObjectName) {
             transform = {
                 position = playerContainer.transform.position + Vector3.up * 1.5f
-            }};
+            }
+        };
         nameObject.transform.SetParent(playerContainer.transform);
         nameObject.transform.localScale = new Vector3(0.25f, 0.25f, nameObject.transform.localScale.z);
 

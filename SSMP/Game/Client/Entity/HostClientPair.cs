@@ -9,9 +9,9 @@ internal class HostClientPair<T> {
     /// <summary>
     /// The client object.
     /// </summary>
-    public T Client { get; set; }
+    public T Client { get; init; }
     /// <summary>
     /// The host object.
     /// </summary>
-    public T Host { get; set; }
+    public T Host { get; init; }
 }

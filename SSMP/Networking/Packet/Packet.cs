@@ -112,10 +112,9 @@ internal class Packet : IPacket {
     public void Clear() {
         if (_buffer == null) throw new InvalidOperationException("Cannot clear Read-Only Packet");
         // In write-mode, the default constructor initializes _readableBuffer to an empty array.
-        // If _readableBuffer is non-empty, this packet was created from existing data and should not be cleared.
         if (_readableBuffer.Length != 0)
             throw new InvalidOperationException("Clear() can only be used on write-mode packets created with the default constructor.");
-            
+
         _buffer.Clear();
         // Readable buffer assumes it mirrors _buffer in write mode, but usually _readableBuffer is a copy or view.
         // In Write Mode (constructor Packet()), _readableBuffer is initialized to empty array.
@@ -595,6 +594,17 @@ internal class Packet : IPacket {
         }
 
         return set;
+    }
+
+    /// <inheritdoc />
+    public IPacket ReadPacketView(int length) {
+        if ((_buffer?.Count ?? Length) >= _readPos + length) {
+            var view = new Packet(_readableBuffer, _offset + _readPos, length);
+            _readPos += length;
+            return view;
+        }
+
+        throw new Exception($"Could not read packet view of length {length} (readPos: {_readPos}, length: {Length})");
     }
 
     #endregion
