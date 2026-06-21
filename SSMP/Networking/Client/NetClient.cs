@@ -223,14 +223,12 @@ internal class NetClient : INetClient {
     /// before immediately starting a new one.</param>
     private void InternalDisconnect(bool shouldFireEvent = true) {
         IEncryptedTransport? transportToDisconnect;
-        bool wasConnectedOrConnecting;
 
         lock (_connectionLock) {
             if (ConnectionStatus == ClientConnectionStatus.NotConnected) {
                 return;
             }
 
-            wasConnectedOrConnecting = true;
             ConnectionStatus = ClientConnectionStatus.NotConnected;
             transportToDisconnect = _transport;
             _transport = null;
@@ -258,7 +256,7 @@ internal class NetClient : INetClient {
 
         // Fire DisconnectEvent on main thread for all disconnects (internal or explicit)
         // This provides a consistent notification for observers to clean up resources
-        if (shouldFireEvent && wasConnectedOrConnecting) {
+        if (shouldFireEvent) {
             ThreadUtil.RunActionOnMainThread(() => {
                     try {
                         DisconnectEvent?.Invoke();
@@ -390,11 +388,26 @@ internal class NetClient : INetClient {
         ThreadUtil.RunActionOnMainThread(() => { ConnectFailedEvent?.Invoke(result); });
     }
 
+    /// <summary>
+    /// Configures chunk handling for the pre-authentication phase.
+    /// </summary>
+    /// <remarks>
+    /// Before the server accepts the connection, the client only allows small chunks
+    /// required for the connection handshake. Addon chunk traffic is disabled because
+    /// addon packet IDs are not valid until authentication succeeds.
+    /// </remarks>
     private void EnterPreAuthChunkMode() {
         _chunkReceiver.MaxAllowedChunkSize = ConnectionManager.MaxPreAuthChunkSize;
         _connectionManager.AllowAddonChunks = false;
     }
 
+    /// <summary>
+    /// Configures chunk handling for the post-authentication phase.
+    /// </summary>
+    /// <remarks>
+    /// After the server accepts the connection, normal chunk limits are restored and
+    /// addon chunk traffic is enabled because addon packet IDs have been assigned.
+    /// </remarks>
     private void EnterPostAuthChunkMode() {
         _chunkReceiver.MaxAllowedChunkSize = ConnectionManager.MaxChunkSize;
         _connectionManager.AllowAddonChunks = true;

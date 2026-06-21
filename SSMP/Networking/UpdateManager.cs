@@ -651,7 +651,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     }
 
     /// <summary>
-    /// Sends a slice packet immediately, bypassing the gameplay tick send loop.
+    /// Sends a slice packet immediately, bypassing the gameplay send loop.
     /// </summary>
     protected void SendSlicePacket(TOutgoing slicePacket) {
         var rawPacket = new Packet.Packet();
