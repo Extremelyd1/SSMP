@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using SSMP.Logging;
 using SSMP.Networking.Packet.Data;
 
 namespace SSMP.Networking.Chunk;
@@ -126,24 +127,24 @@ internal sealed class ChunkReceiver {
 
             // Validate slice count and ID bounds
             if (sliceData.NumSlices is < 1 or > ConnectionManager.MaxSlicesPerChunk) {
-                Logging.Logger.Error($"Invalid slice count received: {sliceData.NumSlices}");
+                Logger.Error($"Invalid slice count received: {sliceData.NumSlices}");
                 return;
             }
 
             if (sliceData.SliceId >= sliceData.NumSlices) {
-                Logging.Logger.Error($"Invalid SliceId {sliceData.SliceId} for NumSlices {sliceData.NumSlices}");
+                Logger.Error($"Invalid SliceId {sliceData.SliceId} for NumSlices {sliceData.NumSlices}");
                 return;
             }
 
             if (sliceData.Data.Length > ConnectionManager.MaxSliceSize) {
-                Logging.Logger.Error($"Invalid slice data length: {sliceData.Data.Length}");
+                Logger.Error($"Invalid slice data length: {sliceData.Data.Length}");
                 return;
             }
 
             var maxAllowedSlices = (MaxAllowedChunkSize + ConnectionManager.MaxSliceSize - 1) /
                                    ConnectionManager.MaxSliceSize;
             if (sliceData.NumSlices > maxAllowedSlices) {
-                Logging.Logger.Error(
+                Logger.Error(
                     $"Rejected chunk with {sliceData.NumSlices} slices because it exceeds the allowed limit of {maxAllowedSlices}."
                 );
                 return;
@@ -175,8 +176,7 @@ internal sealed class ChunkReceiver {
                 }
                 default: {
                     // If the received number of slices does not match the number slices we are keeping track of, we
-                    // discard
-                    // the slice altogether as it is likely not correct
+                    // discard the slice altogether as it is likely not correct
                     if (_numSlices != sliceData.NumSlices) {
                         //Logger.Debug("Number of slices in slice packet does not correspond with local number of
                         // slices");
@@ -209,7 +209,7 @@ internal sealed class ChunkReceiver {
                 if (sliceData.SliceId == _numSlices - 1) {
                     _chunkSize = (_numSlices - 1) * ConnectionManager.MaxSliceSize + sliceData.Data.Length;
                     if (_chunkSize > MaxAllowedChunkSize) {
-                        Logging.Logger.Error($"Rejected chunk larger than allowed max size: {_chunkSize}");
+                        Logger.Error($"Rejected chunk larger than allowed max size: {_chunkSize}");
                         SoftReset();
                         _isReceiving = false;
                         _chunkId = null;

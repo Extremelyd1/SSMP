@@ -9,21 +9,21 @@ using SSMP.Networking.Packet.Data;
 namespace SSMP.Networking.Client;
 
 /// <summary>
-///     Client-side manager for handling the initial connection to the server.
+/// Client-side manager for handling the initial connection to the server.
 /// </summary>
 internal class ClientConnectionManager : ConnectionManager {
     /// <summary>
-    ///     The client-side chunk sender used to handle sending chunks.
+    /// The client-side chunk sender used to handle sending chunks.
     /// </summary>
     private readonly ChunkSender _chunkSender;
 
     /// <summary>
-    ///     The client-side chunk received used to receive chunks.
+    /// The client-side chunk received used to receive chunks.
     /// </summary>
     private readonly ChunkReceiver _chunkReceiver;
 
     /// <summary>
-    ///     Event that is called when server info is received from the server we are trying to connect to.
+    /// Event that is called when server info is received from the server we are trying to connect to.
     /// </summary>
     public event Action<ServerInfo>? ServerInfoReceivedEvent;
 
@@ -33,8 +33,8 @@ internal class ClientConnectionManager : ConnectionManager {
     public bool AllowAddonChunks { get; set; }
 
     /// <summary>
-    ///     Construct the connection manager with the given packet manager and chunk sender, and receiver instances.
-    ///     Will register handlers in the packet manager that relate to the connection.
+    /// Construct the connection manager with the given packet manager and chunk sender, and receiver instances.
+    /// Will register handlers in the packet manager that relate to the connection.
     /// </summary>
     public ClientConnectionManager(
         PacketManager packetManager,
@@ -52,12 +52,12 @@ internal class ClientConnectionManager : ConnectionManager {
     }
 
     /// <summary>
-    ///     Start establishing the connection to the server with the given information.
+    /// Start establishing the connection to the server with the given information.
     /// </summary>
     /// <param name="username">The username of the player.</param>
     /// <param name="authKey">The authentication key of the player.</param>
     /// <param name="addonData">
-    ///     List of addon data that represents the enabled networked addons that the client uses.
+    /// List of addon data that represents the enabled networked addons that the client uses.
     /// </param>
     public void StartConnection(
         string username,
@@ -96,7 +96,7 @@ internal class ClientConnectionManager : ConnectionManager {
     }
 
     /// <summary>
-    ///     Callback method for when a new chunk is received from the server.
+    /// Callback method for when a new chunk is received from the server.
     /// </summary>
     /// <param name="packet">The raw packet that contains the data from the chunk.</param>
     private void OnChunkReceived(Packet.Packet packet) {

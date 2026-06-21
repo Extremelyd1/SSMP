@@ -97,7 +97,8 @@ internal sealed class ChunkSender : IDisposable {
     private int _numAckedSlices;
 
     /// <summary>
-    /// The number of packets enqueued for sending. Synchronized under stateLock to prevent unsynchronized concurrent collection warning.
+    /// The number of packets enqueued for sending. Synchronized under stateLock to prevent unsynchronized concurrent
+    /// collection warning.
     /// </summary>
     private int _queuedPacketsCount;
 
@@ -150,7 +151,7 @@ internal sealed class ChunkSender : IDisposable {
 
     /// <summary>
     /// Event that is called when we finish sending data. This is registered internally when the
-    /// <see cref="FinishSendingData"/> method is called and we are waiting for the current chunk to finish sending.
+    /// <see cref="FinishSendingData"/> method is called, and we are waiting for the current chunk to finish sending.
     /// </summary>
     private event Action? FinishSendingDataEvent;
 
@@ -555,7 +556,7 @@ internal sealed class ChunkSender : IDisposable {
             _sliceLastSentTicks?[currentSliceId] = Stopwatch.GetTimestamp();
         }
 
-        _setSliceData(chunkId, (ushort) currentSliceId, (ushort) numSlices, sliceBytes);
+        _setSliceData.Invoke(chunkId, (ushort) currentSliceId, (ushort) numSlices, sliceBytes);
     }
 
     /// <summary>
