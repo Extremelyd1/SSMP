@@ -9,8 +9,12 @@ using SSMP.Networking.Packet.Data;
 namespace SSMP.Networking.Server;
 
 /// <summary>
-/// Server-side manager for handling the initial connection to a new client.
+/// Server-side manager for handling connection-phase traffic for a client.
 /// </summary>
+/// <remarks>
+/// Also handles chunked addon payloads after registration. We deliberately reused the
+/// existing connection-packet chunking path instead of adding a separate bulk-transfer path.
+/// </remarks>
 internal class ServerConnectionManager : ConnectionManager {
     /// <summary>
     /// Server-side chunk sender used to handle sending chunks.
@@ -43,7 +47,7 @@ internal class ServerConnectionManager : ConnectionManager {
     public event Action? ConnectionTimeoutEvent;
 
     /// <summary>
-    /// Whether chunked addon payloads are allowed to be dispatched.
+    /// Whether post-registration chunked addon payloads are allowed to be dispatched.
     /// </summary>
     public bool AllowAddonChunks { get; set; }
 
@@ -133,8 +137,8 @@ internal class ServerConnectionManager : ConnectionManager {
     }
 
     /// <summary>
-    /// Callback method for when a chunk is received. Will construct a connection packet and try to read the chunk
-    /// into it. If successful, will let the packet manager handle the data in it.
+    /// Callback method for when a connection-phase chunk is received.
+    /// This covers both handshake packets and the deliberate reuse of connection packets for chunked addon payloads.
     /// </summary>
     /// <param name="packet">The raw packet that contains the data from the chunk.</param>
     private void OnChunkReceived(Packet.Packet packet) {

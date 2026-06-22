@@ -262,8 +262,9 @@ internal class NetServer : INetServer {
         var id = client.Id;
 
         foreach (var packet in packets) {
-            // Connection packets (ClientInfo) are handled via ChunkReceiver, not here.
-            // All packets here should be ServerUpdatePackets.
+            // Connection-phase packets are handled via ChunkReceiver, not here.
+            // That includes both ClientInfo and the deliberate reuse of connection packets for chunked addon payloads.
+            // All packets here should therefore be ServerUpdatePackets.
             var serverUpdatePacket = new ServerUpdatePacket();
             if (!serverUpdatePacket.ReadPacket(packet)) {
                 if (client.IsRegistered) {
