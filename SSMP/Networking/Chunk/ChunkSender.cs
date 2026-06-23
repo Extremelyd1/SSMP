@@ -1,4 +1,7 @@
+// ReSharper disable InconsistentlySynchronizedField
+
 using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Threading;
@@ -14,35 +17,53 @@ namespace SSMP.Networking.Chunk;
 /// <param name="sliceId">The ID of the slice.</param>
 /// <param name="numSlices">The number of slices in the chunk.</param>
 /// <param name="data">The slice data.</param>
-internal delegate void SetSliceDataDelegate(byte chunkId, byte sliceId, byte numSlices, byte[] data);
+internal delegate void SetSliceDataDelegate(byte chunkId, ushort sliceId, ushort numSlices, byte[] data);
 
 /// <summary>
 /// Class that processes and manages chunks by sending slices of those chunks and receiving acknowledgements for those
 /// slices. Uses delegate injection instead of inheritance for flexibility.
 /// </summary>
-internal sealed class ChunkSender {
-    /// <summary>
-    /// The number of milliseconds to wait between sending slices.
-    /// </summary>
-    private const int WaitMillisBetweenSlices = 20;
+internal sealed class ChunkSender : IDisposable {
     /// <summary>
     /// The number of milliseconds to wait before re-sending a slice.
     /// </summary>
     private const int WaitMillisResendSlice = 100;
-    
+
+    /// <summary>
+    /// The maximum number of slices that may be in-flight for a chunk at once.
+    /// </summary>
+    private const int MaxInFlightSlices = 64;
+
+    /// <summary>
+    /// The maximum number of chunk bytes that may be in-flight at once.
+    /// </summary>
+    private const int MaxInFlightBytes = 64 * 1024;
+
     /// <summary>
     /// Blocking collection of packets that need to be sent as chunks.
     /// </summary>
     private readonly BlockingCollection<Packet.Packet> _toSendPackets;
 
     /// <summary>
-    /// Boolean array where each value indicates whether the slice of the same index was acknowledged.
+    /// Lock object for synchronizing access to shared sender state.
     /// </summary>
-    private readonly bool[] _acked;
+    private readonly object _stateLock = new();
+
     /// <summary>
-    /// Byte array that contains the chunk data that needs to be sent.
+    /// Lock object for synchronizing thread and cancellation token lifecycle (Start/Stop).
     /// </summary>
-    private readonly byte[] _chunkData;
+    private readonly object _lifecycleLock = new();
+
+    /// <summary>
+    /// Boolean array where each value indicates whether the slice of the same index was acknowledged.
+    /// Allocated dynamically for the current chunk.
+    /// </summary>
+    private bool[]? _acked;
+
+    /// <summary>
+    /// Reference to the active chunk's bytes. Stored only during active sending.
+    /// </summary>
+    private byte[]? _currentChunkData;
 
     /// <summary>
     /// Manual reset event that is used for its wait handle to time when to send the next slice.
@@ -54,32 +75,69 @@ internal sealed class ChunkSender {
     /// acknowledgements.
     /// </summary>
     private bool _isSending;
+
     /// <summary>
     /// The ID of the chunk we are currently sending.
     /// </summary>
     private byte _chunkId;
+
     /// <summary>
     /// The size of the chunk we are currently sending.
     /// </summary>
     private int _chunkSize;
+
     /// <summary>
     /// The number of slices of the chunk we are currently sending.
     /// </summary>
     private int _numSlices;
+
     /// <summary>
     /// The number of acknowledged slices in the currently sending chunk.
     /// </summary>
     private int _numAckedSlices;
+
+    /// <summary>
+    /// The number of packets enqueued for sending. Synchronized under stateLock to prevent unsynchronized concurrent
+    /// collection warning.
+    /// </summary>
+    private int _queuedPacketsCount;
+
+    /// <summary>
+    /// Flag indicating whether this chunk sender has been disposed.
+    /// </summary>
+    private bool _isDisposed;
+
     /// <summary>
     /// The ID of the slice we are currently sending.
     /// </summary>
     private int _currentSliceId;
 
     /// <summary>
-    /// Array of stopwatches that keep track of the elapsed time since we have last sent the slice with the same ID.
-    /// If this time is smaller than a certain threshold, we do not send the slice again yet.
+    /// Array of millisecond timestamps (using Environment.TickCount64) representing when the slice of the same index
+    /// was last sent. Used to enforce resend pacing.
+    /// Allocated dynamically for the current chunk.
     /// </summary>
-    private readonly Stopwatch?[] _sliceStopwatches;
+    private long[]? _sliceLastSentTicks;
+
+    /// <summary>
+    /// Boolean array indicating whether a slice is currently in-flight.
+    /// </summary>
+    private bool[]? _sliceInFlight;
+
+    /// <summary>
+    /// Lengths of all slices in the current chunk.
+    /// </summary>
+    private int[]? _sliceLengths;
+
+    /// <summary>
+    /// Number of slices currently in-flight.
+    /// </summary>
+    private int _numInFlightSlices;
+
+    /// <summary>
+    /// Number of bytes currently in-flight.
+    /// </summary>
+    private int _numInFlightBytes;
 
     /// <summary>
     /// Cancellation token source for cancelling the send task.
@@ -87,8 +145,13 @@ internal sealed class ChunkSender {
     private CancellationTokenSource? _sendTaskTokenSource;
 
     /// <summary>
+    /// Reference to the active sender thread.
+    /// </summary>
+    private Thread? _senderThread;
+
+    /// <summary>
     /// Event that is called when we finish sending data. This is registered internally when the
-    /// <see cref="FinishSendingData"/> method is called and we are waiting for the current chunk to finish sending.
+    /// <see cref="FinishSendingData"/> method is called, and we are waiting for the current chunk to finish sending.
     /// </summary>
     private event Action? FinishSendingDataEvent;
 
@@ -103,59 +166,98 @@ internal sealed class ChunkSender {
     /// <param name="setSliceData">Delegate to call when sending slice data.</param>
     public ChunkSender(SetSliceDataDelegate setSliceData) {
         _setSliceData = setSliceData ?? throw new ArgumentNullException(nameof(setSliceData));
-        
-        _toSendPackets = new BlockingCollection<Packet.Packet>();
-        
-        _acked = new bool[ConnectionManager.MaxSlicesPerChunk];
-        _chunkData = new byte[ConnectionManager.MaxChunkSize];
-        _sliceStopwatches = new Stopwatch[ConnectionManager.MaxSlicesPerChunk];
 
+        _toSendPackets = new BlockingCollection<Packet.Packet>();
         _sliceWaitHandle = new ManualResetEventSlim();
     }
 
     /// <summary>
     /// Start the chunk sender by starting the thread that manages the chunk sending.
     /// </summary>
+    /// <exception cref="ObjectDisposedException">Thrown if the ChunkSender has been disposed.</exception>
     public void Start() {
-        _sendTaskTokenSource?.Cancel();
-        _sendTaskTokenSource?.Dispose();
-        _sendTaskTokenSource = new CancellationTokenSource();
-        
-        Reset();
-        
-        new Thread(() => StartSends(_sendTaskTokenSource.Token)).Start();
+        lock (_lifecycleLock) {
+            lock (_stateLock) {
+                if (_isDisposed) {
+                    throw new ObjectDisposedException(
+                        nameof(ChunkSender), "Cannot start a disposed ChunkSender."
+                    );
+                }
+            }
+
+            _sendTaskTokenSource?.Cancel();
+            if (_senderThread is { IsAlive: true } && Thread.CurrentThread != _senderThread) {
+                _senderThread.Join();
+            }
+
+            _sendTaskTokenSource?.Dispose();
+            _sendTaskTokenSource = new CancellationTokenSource();
+
+            Reset();
+
+            var token = _sendTaskTokenSource.Token;
+            _senderThread = new Thread(() => StartSends(token)) {
+                IsBackground = true,
+                Name = "SSMP Chunk Sender Thread"
+            };
+            _senderThread.Start();
+        }
     }
 
     /// <summary>
     /// Stop the chunk sender by cancelling the send task.
     /// </summary>
     public void Stop() {
-        _sendTaskTokenSource?.Cancel();
-        _sendTaskTokenSource?.Dispose();
-        _sendTaskTokenSource = null;
-        
-        // Reset state to ensure clean slate on disconnect/stop
-        Reset();
+        lock (_lifecycleLock) {
+            _sendTaskTokenSource?.Cancel();
+            if (_senderThread is { IsAlive: true } && Thread.CurrentThread != _senderThread) {
+                _senderThread.Join();
+            }
+
+            _sendTaskTokenSource?.Dispose();
+            _sendTaskTokenSource = null;
+
+            // Reset state to ensure clean slate on disconnect/stop
+            Reset();
+        }
     }
-    
+
+    /// <summary>
+    /// Dispose of the chunk sender and its owned disposable resources.
+    /// </summary>
+    public void Dispose() {
+        Stop();
+        lock (_stateLock) {
+            _isDisposed = true;
+        }
+
+        _toSendPackets.Dispose();
+        _sliceWaitHandle.Dispose();
+    }
+
     /// <summary>
     /// Reset the chunk sender variables to their default values.
     /// </summary>
     private void Reset() {
-        _isSending = false;
-        _chunkId = 0;
-        _chunkSize = 0;
-        _numSlices = 0;
-        _numAckedSlices = 0;
-        _currentSliceId = 0;
+        lock (_stateLock) {
+            _isSending = false;
+            _chunkId = 0;
+            _chunkSize = 0;
+            _numSlices = 0;
+            _numAckedSlices = 0;
+            _numInFlightSlices = 0;
+            _numInFlightBytes = 0;
+            _queuedPacketsCount = 0;
+            _currentSliceId = 0;
 
-        for (var i = 0; i < _sliceStopwatches.Length; i++) {
-            _sliceStopwatches[i]?.Stop();
-            _sliceStopwatches[i] = null;
+            ReleaseArrays();
+            _currentChunkData = null;
+            FinishSendingDataEvent = null;
+
+            // Clear the blocking collection under stateLock to prevent concurrent enqueue desynchronization
+            while (_toSendPackets.TryTake(out _)) {
+            }
         }
-        
-        // Clear the blocking collection
-        while (_toSendPackets.TryTake(out _)) { }
     }
 
     /// <summary>
@@ -165,28 +267,52 @@ internal sealed class ChunkSender {
     public void FinishSendingData(Action callback) {
         // If we aren't currently sending and the queue does not contain any packets to send, we immediately invoke
         // the callback and return
-        if (!_isSending && _toSendPackets.Count == 0) {
-            callback.Invoke();
-            return;
+        var executeImmediately = false;
+        lock (_stateLock) {
+            if (!_isSending && _queuedPacketsCount == 0) {
+                executeImmediately = true;
+            } else {
+                // Otherwise, we register the event
+                // We do it like this so we can deregister the event immediately after it is called, so it doesn't
+                // trigger
+                // more than once
+                Action? lambda = null;
+                lambda = () => {
+                    callback.Invoke();
+                    lock (_stateLock) {
+                        FinishSendingDataEvent -= lambda;
+                    }
+                };
+                FinishSendingDataEvent += lambda;
+            }
         }
 
-        // Otherwise, we register the event
-        // We do it like this so we can deregister the event immediately after it is called, so it doesn't trigger
-        // more than once
-        Action? lambda = null;
-        lambda = () => {
+        if (executeImmediately) {
             callback.Invoke();
-            FinishSendingDataEvent -= lambda;
-        };
-        FinishSendingDataEvent += lambda;
+        }
     }
 
     /// <summary>
     /// Enqueue a packet to be sent as a chunk.
     /// </summary>
     /// <param name="packet">The packet to send.</param>
+    /// <exception cref="ArgumentNullException">Thrown if the packet is null.</exception>
+    /// <exception cref="ObjectDisposedException">Thrown if the ChunkSender has been disposed.</exception>
     public void EnqueuePacket(Packet.Packet packet) {
-        _toSendPackets.Add(packet);
+        if (packet == null) {
+            throw new ArgumentNullException(nameof(packet), "Cannot enqueue a null packet.");
+        }
+
+        lock (_stateLock) {
+            if (_isDisposed) {
+                throw new ObjectDisposedException(
+                    nameof(ChunkSender), "Cannot enqueue packets to a disposed ChunkSender."
+                );
+            }
+
+            _queuedPacketsCount++;
+            _toSendPackets.Add(packet);
+        }
     }
 
     /// <summary>
@@ -199,27 +325,45 @@ internal sealed class ChunkSender {
     public void ProcessReceivedData(SliceAckData sliceAckData) {
         //Logger.Debug($"Received slice ack packet: {sliceAckData.ChunkId}, {sliceAckData.NumSlices}");
 
-        if (!_isSending) {
-            //Logger.Debug("Not sending a chunk, ignoring ack packet");
-            return;
-        }
+        lock (_stateLock) {
+            if (!_isSending || _acked == null) {
+                //Logger.Debug("Not sending a chunk, ignoring ack packet");
+                return;
+            }
 
-        if (_chunkId != sliceAckData.ChunkId) {
-            //Logger.Debug("Chunk ID of received ack packet does not correspond with currently sending chunk");
-            return;
-        }
+            if (_chunkId != sliceAckData.ChunkId) {
+                //Logger.Debug("Chunk ID of received ack packet does not correspond with currently sending chunk");
+                return;
+            }
 
-        if (_numSlices != sliceAckData.NumSlices) {
-            //Logger.Debug("Number of slices in ack packet does not correspond with local number of slices");
-            return;
-        }
+            if (_numSlices != sliceAckData.NumSlices) {
+                //Logger.Debug("Number of slices in ack packet does not correspond with local number of slices");
+                return;
+            }
 
-        for (var i = 0; i < _numSlices; i++) {
-            if (sliceAckData.Acked[i] && !_acked[i]) {
+            var newAckProcessed = false;
+            for (var i = 0; i < _numSlices; i++) {
+                if (!sliceAckData.Acked[i] || _acked[i]) {
+                    continue;
+                }
+
                 _acked[i] = true;
                 _numAckedSlices += 1;
-                
+                if (_sliceInFlight != null && _sliceInFlight[i]) {
+                    _sliceInFlight[i] = false;
+                    _numInFlightSlices -= 1;
+                    if (_sliceLengths != null) {
+                        _numInFlightBytes -= _sliceLengths[i];
+                    }
+                }
+
+                newAckProcessed = true;
+
                 //Logger.Debug($"Received acknowledgement for slice {i}, total acked: {_numAckedSlices}");
+            }
+
+            if (newAckProcessed) {
+                _sliceWaitHandle.Set();
             }
         }
     }
@@ -235,88 +379,189 @@ internal sealed class ChunkSender {
     /// </summary>
     /// <param name="cancellationToken">The cancellation token for cancelling the sending process.</param>
     private void StartSends(CancellationToken cancellationToken) {
-        while (!cancellationToken.IsCancellationRequested) {
-            if (_toSendPackets.Count == 0) {
-                FinishSendingDataEvent?.Invoke();
+        try {
+            while (!cancellationToken.IsCancellationRequested) {
+                InvokeFinishCallbackIfIdle();
+
+                if (!TryTakeNextPacket(cancellationToken, out var packet)) {
+                    continue;
+                }
+
+                //Logger.Debug("Successfully taken new packet from blocking collection, starting networking chunk");
+
+                if (!TryPrepareChunkForSending(packet)) {
+                    continue;
+                }
+
+                RunSliceSendLoop(cancellationToken);
+
+                if (cancellationToken.IsCancellationRequested) {
+                    break;
+                }
+
+                AdvanceToNextChunk();
             }
-
-            Packet.Packet packet;
-            try {
-                packet = _toSendPackets.Take(cancellationToken);
-            } catch (OperationCanceledException) {
-                continue;
+        } catch (Exception ex) when (ex is not OperationCanceledException) {
+            Logger.Error($"Fatal error in SSMP Chunk Sender background thread: {ex.Message}\n{ex.StackTrace}");
+        } finally {
+            lock (_stateLock) {
+                ReleaseArrays();
             }
+        }
+    }
 
-            _isSending = true;
+    /// <summary>
+    /// If there are no packets currently queued, captures and invokes the registered
+    /// <see cref="FinishSendingDataEvent"/> so subscribers are notified that the sender has gone idle.
+    /// </summary>
+    private void InvokeFinishCallbackIfIdle() {
+        Action? eventToInvoke = null;
+        lock (_stateLock) {
+            if (_queuedPacketsCount == 0) {
+                eventToInvoke = FinishSendingDataEvent;
+            }
+        }
 
-            //Logger.Debug("Successfully taken new packet from blocking collection, starting networking chunk");
+        eventToInvoke?.Invoke();
+    }
 
-            Array.Clear(_sliceStopwatches, 0, _sliceStopwatches.Length);
-            Array.Clear(_acked, 0, _acked.Length);
-            _numAckedSlices = 0;
+    /// <summary>
+    /// Blocks on <see cref="_toSendPackets"/> until a packet is available or the token is cancelled.
+    /// </summary>
+    /// <param name="cancellationToken">Token to cancel the blocking take.</param>
+    /// <param name="packet">The packet taken from the queue, if successful.</param>
+    /// <returns>False if the take was cancelled before a packet became available.</returns>
+    private bool TryTakeNextPacket(CancellationToken cancellationToken, out Packet.Packet packet) {
+        try {
+            packet = _toSendPackets.Take(cancellationToken);
+            return true;
+        } catch (OperationCanceledException) {
+            packet = null!;
+            return false;
+        }
+    }
 
+    /// <summary>
+    /// Serializes the packet and initializes all per-chunk sending state (slice count, rented pacing/ack arrays,
+    /// slice length table). On any validation failure or exception, cleans up after itself and decrements the
+    /// queued-packet count exactly once.
+    /// </summary>
+    /// <param name="packet">The packet to prepare for chunked sending.</param>
+    /// <returns>True if the chunk is ready to send; false if it was rejected or failed to serialize.</returns>
+    private bool TryPrepareChunkForSending(Packet.Packet packet) {
+        var decremented = false;
+        try {
             var packetBytes = packet.ToArray();
 
-            _chunkSize = packetBytes.Length;
-            _numSlices = _chunkSize / ConnectionManager.MaxSliceSize;
-            if (_chunkSize % ConnectionManager.MaxSliceSize != 0) {
-                _numSlices += 1;
+            switch (packetBytes.Length) {
+                // Skip over chunks that exceed the maximum size that our system can handle
+                case > ConnectionManager.MaxChunkSize: {
+                    Logger.Error($"Could not send packet that exceeds max chunk size: {packetBytes.Length}");
+                    lock (_stateLock) {
+                        _queuedPacketsCount--;
+                        decremented = true;
+                    }
+
+                    return false;
+                }
+                case 0: {
+                    Logger.Error("Cannot send an empty chunk packet.");
+                    lock (_stateLock) {
+                        _queuedPacketsCount--;
+                        decremented = true;
+                    }
+
+                    return false;
+                }
             }
 
-            //Logger.Debug($"ChunkSize: {_chunkSize}, NumSlices: {_numSlices}");
+            lock (_stateLock) {
+                _queuedPacketsCount--;
+                decremented = true;
+                _chunkSize = packetBytes.Length;
+                _numSlices = _chunkSize / ConnectionManager.MaxSliceSize;
+                if (_chunkSize % ConnectionManager.MaxSliceSize != 0) {
+                    _numSlices += 1;
+                }
 
-            // Skip over chunks that exceed the maximum size that our system can handle
-            if (_chunkSize > ConnectionManager.MaxChunkSize) {
-                Logger.Error($"Could not send packet that exceeds max chunk size: {_chunkSize}");
+                _isSending = true;
+                _acked = ArrayPool<bool>.Shared.Rent(_numSlices);
+                _sliceLastSentTicks = ArrayPool<long>.Shared.Rent(_numSlices);
+                _sliceInFlight = ArrayPool<bool>.Shared.Rent(_numSlices);
+                _sliceLengths = ArrayPool<int>.Shared.Rent(_numSlices);
+                Array.Clear(_acked, 0, _numSlices);
+                Array.Clear(_sliceLastSentTicks, 0, _numSlices);
+                Array.Clear(_sliceInFlight, 0, _numSlices);
+                _numAckedSlices = 0;
+                _numInFlightSlices = 0;
+                _numInFlightBytes = 0;
+                _currentSliceId = 0;
+
+                for (var sliceId = 0; sliceId < _numSlices; sliceId++) {
+                    var startIndex = sliceId * ConnectionManager.MaxSliceSize;
+                    _sliceLengths[sliceId] = System.Math.Min(
+                        ConnectionManager.MaxSliceSize,
+                        _chunkSize - startIndex
+                    );
+                }
+
+                // Reference the raw bytes from the packet dynamically
+                _currentChunkData = packetBytes;
+            }
+
+            return true;
+        } catch (Exception ex) {
+            Logger.Error($"Error serializing packet for chunk sending: {ex.Message}");
+            lock (_stateLock) {
+                if (!decremented) {
+                    _queuedPacketsCount--;
+                }
+
+                ReleaseArrays();
+                _currentChunkData = null;
+                _isSending = false;
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Repeatedly sends the next due slice of the chunk currently being prepared, pacing resends and waiting
+    /// between attempts, until every slice has been acknowledged or the token is cancelled.
+    /// </summary>
+    /// <param name="cancellationToken">Token to cancel sending and the inter-slice wait.</param>
+    private void RunSliceSendLoop(CancellationToken cancellationToken) {
+        do {
+            _sliceWaitHandle.Reset();
+
+            if (TryGetNextSliceToSend(out var waitMillisNextSlice, out var completed)) {
+                SendNextSlice();
                 continue;
             }
 
-            // Copy the raw bytes from the packet into the chunk data array
-            Array.Copy(packetBytes, _chunkData, _chunkSize);
+            if (completed) {
+                break;
+            }
 
-            do {
-                //Logger.Debug($"Sending next slice: {_currentSliceId}");
-                SendNextSlice();
+            try {
+                _sliceWaitHandle.Wait(waitMillisNextSlice, cancellationToken);
+            } catch (OperationCanceledException) {
+                break;
+            }
+        } while (!cancellationToken.IsCancellationRequested);
+    }
 
-                // Obtain (or create) the stopwatch for the slice and start it
-                var sliceStopwatch = _sliceStopwatches[_currentSliceId];
-                if (sliceStopwatch == null) {
-                    sliceStopwatch = new Stopwatch();
-                    _sliceStopwatches[_currentSliceId] = sliceStopwatch;
-                }
-
-                sliceStopwatch.Restart();
-
-                if (!TryGetNextSliceToSend()) {
-                    //Logger.Debug($"All slices have been acked ({_numAckedSlices}), stopping sending slices");
-                    break;
-                }
-
-                long waitMillisNextSlice;
-
-                // Get the stopwatch for this slice, and check whether we have already sent this slice not too long ago
-                // If so, we wait longer before resending the slice. Otherwise, we default to the normal send rate.
-                sliceStopwatch = _sliceStopwatches[_currentSliceId];
-                if (sliceStopwatch == null) {
-                    waitMillisNextSlice = WaitMillisBetweenSlices;
-                } else {
-                    waitMillisNextSlice = WaitMillisResendSlice - sliceStopwatch.ElapsedMilliseconds;
-                    if (waitMillisNextSlice < 0) {
-                        waitMillisNextSlice = WaitMillisBetweenSlices;
-                    }
-                }
-
-                //Logger.Debug($"Waiting on handle for next slice: {waitMillisNextSlice}");
-                try {
-                    _sliceWaitHandle.Wait((int) waitMillisNextSlice, cancellationToken);
-                } catch (OperationCanceledException) {
-                    //Logger.Debug("Wait operation was cancelled, breaking");
-                    break;
-                }
-            } while (!cancellationToken.IsCancellationRequested);
-
-            //Logger.Debug($"Incrementing chunk ID to: {_chunkId + 1}");
+    /// <summary>
+    /// Advances to the next chunk ID and releases all per-chunk sending state now that the current chunk has
+    /// finished sending (fully acknowledged). Must only be called when not cancelled.
+    /// </summary>
+    private void AdvanceToNextChunk() {
+        //Logger.Debug($"Incrementing chunk ID to: {_chunkId + 1}");
+        lock (_stateLock) {
             _chunkId += 1;
+            ReleaseArrays();
+            _currentChunkData = null;
             _isSending = false;
         }
     }
@@ -326,23 +571,46 @@ internal sealed class ChunkSender {
     /// data in the array and copy the data into a new array for adding to the update packet.
     /// </summary>
     private void SendNextSlice() {
-        var startIndex = _currentSliceId * ConnectionManager.MaxSliceSize;
-        
-        byte[] sliceBytes;
-        // Figure out if the start index for the next slice would exceed the chunk size. If so, the length of the slice
-        // is less than the maximum slice size, which we need to calculate
-        if ((_currentSliceId + 1) * ConnectionManager.MaxSliceSize > _chunkSize) {
-            var length = _chunkSize - startIndex;
-            sliceBytes = new byte[length];
-            
-            Array.Copy(_chunkData, startIndex, sliceBytes, 0, length);
-        } else {
-            sliceBytes = new byte[ConnectionManager.MaxSliceSize];
-            
-            Array.Copy(_chunkData, startIndex, sliceBytes, 0, sliceBytes.Length);
+        byte[]? currentChunkData;
+        int currentSliceId;
+        int numSlices;
+        byte chunkId;
+        int chunkSize;
+
+        lock (_stateLock) {
+            if (_currentChunkData == null) return;
+            currentChunkData = _currentChunkData;
+            currentSliceId = _currentSliceId;
+            numSlices = _numSlices;
+            chunkId = _chunkId;
+            chunkSize = _chunkSize;
         }
 
-        SetSliceData(_chunkId, (byte) _currentSliceId, (byte) _numSlices, sliceBytes);
+        var startIndex = currentSliceId * ConnectionManager.MaxSliceSize;
+
+        int sliceLength;
+        // Figure out if the start index for the next slice would exceed the chunk size. If so, the length of the slice
+        // is less than the maximum slice size, which we need to calculate
+        if ((currentSliceId + 1) * ConnectionManager.MaxSliceSize > chunkSize) {
+            sliceLength = chunkSize - startIndex;
+        } else {
+            sliceLength = ConnectionManager.MaxSliceSize;
+        }
+
+        var sliceBytes = new byte[sliceLength];
+        Array.Copy(currentChunkData, startIndex, sliceBytes, 0, sliceLength);
+
+        lock (_stateLock) {
+            if (_sliceInFlight != null && !_sliceInFlight[currentSliceId]) {
+                _sliceInFlight[currentSliceId] = true;
+                _numInFlightSlices += 1;
+                _numInFlightBytes += sliceLength;
+            }
+
+            _sliceLastSentTicks?[currentSliceId] = Stopwatch.GetTimestamp();
+        }
+
+        _setSliceData.Invoke(chunkId, (ushort) currentSliceId, (ushort) numSlices, sliceBytes);
     }
 
     /// <summary>
@@ -351,31 +619,93 @@ internal sealed class ChunkSender {
     /// equals the number of slices in the chunk, so we don't end up in an infinite loop.
     /// </summary>
     /// <returns>True if a next slice could be found, false if all slices are acknowledged.</returns>
-    private bool TryGetNextSliceToSend() {
-        do {
-            // We do the check inside the loop to prevent multi-thread issues where another ack is received and
-            // a non-acked slice cannot be found anywhere, resulting in an infinite while loop
-            if (_numAckedSlices == _numSlices) {
+    private bool TryGetNextSliceToSend(out int waitMillis, out bool completed) {
+        lock (_stateLock) {
+            waitMillis = Timeout.Infinite;
+            completed = false;
+
+            if (_acked == null || _sliceLengths == null || _sliceInFlight == null) {
                 return false;
             }
 
-            _currentSliceId += 1;
-            if (_currentSliceId >= _numSlices) {
-                _currentSliceId = 0;
+            if (_numAckedSlices == _numSlices) {
+                completed = true;
+                return false;
             }
-        } while (_acked[_currentSliceId]);
 
-        return true;
+            for (var offset = 1; offset <= _numSlices; offset++) {
+                var candidateSliceId = (_currentSliceId + offset) % _numSlices;
+                if (_acked[candidateSliceId]) {
+                    continue;
+                }
+
+                var sliceLength = _sliceLengths[candidateSliceId];
+                if (_sliceInFlight[candidateSliceId]) {
+                    if (_sliceLastSentTicks == null) {
+                        continue;
+                    }
+
+                    var lastSent = _sliceLastSentTicks[candidateSliceId];
+                    var elapsedMillis = lastSent == 0
+                        ? WaitMillisResendSlice
+                        : (Stopwatch.GetTimestamp() - lastSent) * 1000 / Stopwatch.Frequency;
+                    var remainingMillis = WaitMillisResendSlice - (int) elapsedMillis;
+                    if (remainingMillis <= 0) {
+                        _currentSliceId = candidateSliceId;
+                        return true;
+                    }
+
+                    waitMillis = waitMillis == Timeout.Infinite
+                        ? remainingMillis
+                        : System.Math.Min(waitMillis, remainingMillis);
+                    continue;
+                }
+
+                if (!HasWindowCapacity(sliceLength)) {
+                    continue;
+                }
+
+                _currentSliceId = candidateSliceId;
+                return true;
+            }
+
+            return false;
+        }
     }
 
     /// <summary>
-    /// Send the given slice data using the injected delegate.
+    /// Return the rented ack and pacing arrays to the Shared ArrayPool.
     /// </summary>
-    /// <param name="chunkId">The ID of the chunk for this slice.</param>
-    /// <param name="sliceId">The ID of the slice.</param>
-    /// <param name="numSlices">The number of slices in this chunk.</param>
-    /// <param name="data">The byte array containing the data of the slice.</param>
-    private void SetSliceData(byte chunkId, byte sliceId, byte numSlices, byte[] data) {
-        _setSliceData(chunkId, sliceId, numSlices, data);
+    private void ReleaseArrays() {
+        if (_acked != null) {
+            ArrayPool<bool>.Shared.Return(_acked);
+            _acked = null;
+        }
+
+        if (_sliceLastSentTicks != null) {
+            ArrayPool<long>.Shared.Return(_sliceLastSentTicks);
+            _sliceLastSentTicks = null;
+        }
+
+        if (_sliceInFlight != null) {
+            ArrayPool<bool>.Shared.Return(_sliceInFlight);
+            _sliceInFlight = null;
+        }
+
+        if (_sliceLengths != null) {
+            ArrayPool<int>.Shared.Return(_sliceLengths);
+            _sliceLengths = null;
+        }
+
+        _numInFlightSlices = 0;
+        _numInFlightBytes = 0;
+    }
+
+    /// <summary>
+    /// Checks whether the sender can emit a new slice without exceeding the in-flight window.
+    /// </summary>
+    private bool HasWindowCapacity(int sliceLength) {
+        return _numInFlightSlices < MaxInFlightSlices &&
+               _numInFlightBytes + sliceLength <= MaxInFlightBytes;
     }
 }

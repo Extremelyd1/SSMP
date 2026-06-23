@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Threading;
 using SSMP.Math;
 
 namespace SSMP.Networking.Packet;
@@ -37,6 +38,12 @@ internal class Packet : IPacket {
     /// The length of the packet content.
     /// </summary>
     public int Length { get; private set; }
+
+    /// <summary>
+    /// Thread-local length counting packet for zero-allocation size validation.
+    /// </summary>
+    private static readonly ThreadLocal<LengthCountingPacket> LengthCountingPacket =
+        new(() => new LengthCountingPacket());
 
     /// <summary>
     /// Creates a packet with the given byte array of data.
@@ -83,6 +90,12 @@ internal class Packet : IPacket {
     /// </summary>
     public void WriteLength() {
         if (_buffer == null) throw new InvalidOperationException("Cannot write to Read-Only Packet");
+        if (_buffer.Count > ushort.MaxValue) {
+            throw new InvalidOperationException(
+                $"Packet size ({_buffer.Count} bytes) exceeds the {ushort.MaxValue} bytes limit for normal updates, causing truncation. Please use the SendChunkData API instead."
+            );
+        }
+
         var length = (ushort) _buffer.Count;
         _buffer.Insert(0, (byte) length);
         _buffer.Insert(1, (byte) (length >> 8));
@@ -102,6 +115,22 @@ internal class Packet : IPacket {
     }
 
     /// <summary>
+    /// Validates that the serialized size of the given packet data does not exceed the 64 KiB (65535 bytes) limit,
+    /// throwing an InvalidOperationException if it does.
+    /// </summary>
+    /// <param name="packetData">The packet data to validate.</param>
+    public static void ValidateSize(IPacketData packetData) {
+        var counter = LengthCountingPacket.Value!;
+        counter.Reset();
+        packetData.WriteData(counter);
+        if (counter.Length > ushort.MaxValue) {
+            throw new InvalidOperationException(
+                $"Addon packet data size ({counter.Length} bytes) exceeds the {ushort.MaxValue} bytes limit for normal updates. Please use the SendChunkData API instead."
+            );
+        }
+    }
+
+    /// <summary>
     /// Clears the packet buffer, allowing reuse for write-mode packets.
     /// Resets length and read position to 0.
     /// </summary>
@@ -113,9 +142,12 @@ internal class Packet : IPacket {
         if (_buffer == null) throw new InvalidOperationException("Cannot clear Read-Only Packet");
         // In write-mode, the default constructor initializes _readableBuffer to an empty array.
         // If _readableBuffer is non-empty, this packet was created from existing data and should not be cleared.
-        if (_readableBuffer.Length != 0)
-            throw new InvalidOperationException("Clear() can only be used on write-mode packets created with the default constructor.");
-            
+        if (_readableBuffer.Length != 0) {
+            throw new InvalidOperationException(
+                "Clear() can only be used on write-mode packets created with the default constructor."
+            );
+        }
+
         _buffer.Clear();
         // Readable buffer assumes it mirrors _buffer in write mode, but usually _readableBuffer is a copy or view.
         // In Write Mode (constructor Packet()), _readableBuffer is initialized to empty array.

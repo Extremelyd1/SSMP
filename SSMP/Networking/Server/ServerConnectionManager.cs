@@ -9,13 +9,18 @@ using SSMP.Networking.Packet.Data;
 namespace SSMP.Networking.Server;
 
 /// <summary>
-/// Server-side manager for handling the initial connection to a new client.
+/// Server-side manager for handling connection-phase traffic for a client.
 /// </summary>
+/// <remarks>
+/// Also handles chunked addon payloads after registration. We deliberately reused the
+/// existing connection-packet chunking path instead of adding a separate bulk-transfer path.
+/// </remarks>
 internal class ServerConnectionManager : ConnectionManager {
     /// <summary>
     /// Server-side chunk sender used to handle sending chunks.
     /// </summary>
     private readonly ChunkSender _chunkSender;
+
     /// <summary>
     /// Server-side chunk received used to receive chunks.
     /// </summary>
@@ -35,10 +40,16 @@ internal class ServerConnectionManager : ConnectionManager {
     /// Event that is called when the client has sent the client info, and thus we can check the connection request.
     /// </summary>
     public event Action<ushort, ClientInfo, ServerInfo>? ConnectionRequestEvent;
+
     /// <summary>
     /// Event that is called when the connection times out.
     /// </summary>
     public event Action? ConnectionTimeoutEvent;
+
+    /// <summary>
+    /// Whether post-registration chunked addon payloads are allowed to be dispatched.
+    /// </summary>
+    public bool AllowAddonChunks { get; set; }
 
     public ServerConnectionManager(
         PacketManager packetManager,
@@ -65,7 +76,7 @@ internal class ServerConnectionManager : ConnectionManager {
     /// </summary>
     public void StartAcceptingConnection() {
         Logger.Debug("StartAcceptingConnection");
-        
+
         _timeoutTimer.Start();
     }
 
@@ -74,7 +85,7 @@ internal class ServerConnectionManager : ConnectionManager {
     /// </summary>
     public void StopAcceptingConnection() {
         Logger.Debug("StopAcceptingConnection");
-        
+
         _timeoutTimer.Stop();
     }
 
@@ -108,7 +119,7 @@ internal class ServerConnectionManager : ConnectionManager {
         }
 
         SendServerInfo(serverInfo);
-        
+
         return serverInfo;
     }
 
@@ -126,8 +137,8 @@ internal class ServerConnectionManager : ConnectionManager {
     }
 
     /// <summary>
-    /// Callback method for when a chunk is received. Will construct a connection packet and try to read the chunk
-    /// into it. If successful, will let the packet manager handle the data in it.
+    /// Callback method for when a connection-phase chunk is received.
+    /// This covers both handshake packets and the deliberate reuse of connection packets for chunked addon payloads.
     /// </summary>
     /// <param name="packet">The raw packet that contains the data from the chunk.</param>
     private void OnChunkReceived(Packet.Packet packet) {
@@ -137,6 +148,32 @@ internal class ServerConnectionManager : ConnectionManager {
             return;
         }
 
-        PacketManager.HandleServerConnectionPacket(_clientId, connectionPacket);
+        var packetData = connectionPacket.GetPacketData();
+        if (packetData.ContainsKey(ServerConnectionPacketId.ClientInfo)) {
+            PacketManager.HandleServerConnectionPacket(_clientId, connectionPacket);
+            return;
+        }
+
+        if (!packetData.TryGetValue(ServerConnectionPacketId.ChunkAddonData, out var chunkAddonDataRaw)) {
+            Logger.Debug($"Received unexpected connection chunk packet from client: {_clientId}");
+            return;
+        }
+
+        if (!AllowAddonChunks) {
+            Logger.Warn($"Rejected pre-registration chunked addon payload from client: {_clientId}");
+            return;
+        }
+
+        var chunkAddonData = (ChunkAddonData) chunkAddonDataRaw;
+        if (!ServerConnectionPacket.AddonPacketInfoDict.TryGetValue(chunkAddonData.AddonId, out var addonPacketInfo)) {
+            Logger.Warn($"Received chunked addon payload for unknown addon ID {chunkAddonData.AddonId}");
+            return;
+        }
+
+        var packetDataInstance = addonPacketInfo.PacketDataInstantiator.Invoke(chunkAddonData.PacketId);
+        packetDataInstance.ReadData(new Packet.Packet(chunkAddonData.Payload));
+        PacketManager.HandleServerAddonPacketSingle(
+            _clientId, chunkAddonData.AddonId, chunkAddonData.PacketId, packetDataInstance
+        );
     }
 }

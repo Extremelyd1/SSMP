@@ -114,6 +114,11 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     protected object Lock { get; } = new();
 
     /// <summary>
+    /// Lock object for serializing all transport writes to prevent concurrent/parallel socket writes.
+    /// </summary>
+    private readonly object _transportSendLock = new();
+
+    /// <summary>
     /// Whether the transport requires application-level reliability. Protected for subclass access.
     /// </summary>
     protected bool RequiresReliability { get; private set; } = true;
@@ -183,6 +188,17 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     public event Action? TimeoutEvent;
 
     /// <summary>
+    /// Action to enqueue a packet for chunked sending.
+    /// </summary>
+    public Action<Packet.Packet>? EnqueueChunkPacketAction { get; set; }
+
+    /// <summary>
+    /// Enqueues a packet to be sent reliably as a chunk to the destination.
+    /// </summary>
+    /// <param name="packet">The packet to send.</param>
+    public void SendChunkPacket(Packet.Packet packet) => EnqueueChunkPacketAction?.Invoke(packet);
+
+    /// <summary>
     /// Construct the update manager with a UDP socket.
     /// </summary>
     protected UpdateManager() {
@@ -216,10 +232,19 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         _isUpdating = false;
 
         Logger.Debug("Stopping UDP updates, sending last packet");
+        // TODO: Split "flush final packet" from teardown so disconnect/shutdown does not depend on a synchronous
+        // TODO: transport write on the caller thread.
         CreateAndSendPacket();
         _cancellationTokenSource?.Cancel();
+
+        lock (Lock) {
+            Monitor.PulseAll(Lock);
+        }
+
         // Wait for thread to finish before disposing shared resources
-        _sendThread?.Join();
+        if (Thread.CurrentThread != _sendThread)
+            _sendThread?.Join();
+
         _sendThread = null;
         _cancellationTokenSource?.Dispose();
         _cancellationTokenSource = null;
@@ -287,6 +312,8 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
             if (_requiresSequencing) {
                 CurrentUpdatePacket.Sequence = _localSequence;
                 CurrentUpdatePacket.Ack = _remoteSequence;
+                // TODO: PopulateAckField is called while Lock is already held and still re-locks internally.
+                // TODO: Flatten this re-entrant lock boundary in a dedicated concurrency cleanup pass.
                 PopulateAckField();
             }
 
@@ -301,6 +328,9 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
             // but keep the original instance for reliability data re-sending
             packetToSend = CurrentUpdatePacket;
             CurrentUpdatePacket = new TOutgoing();
+
+            // Pulse to wake up any threads waiting to set new slice data
+            Monitor.PulseAll(Lock);
         }
 
         // Track send time for RTT measurement (all transports)
@@ -433,6 +463,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         if (cts == null) {
             return;
         }
+
         var token = cts.Token;
 
         // Safety constant: how many ms can we fall behind before giving up?
@@ -509,22 +540,24 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         var buffer = packet.ToArray();
         var length = buffer.Length;
 
-        switch (_transportSender) {
-            case IReliableTransport reliableTransport when isReliable:
-                reliableTransport.SendReliable(buffer, 0, length);
-                break;
+        lock (_transportSendLock) {
+            switch (_transportSender) {
+                case IReliableTransport reliableTransport when isReliable:
+                    reliableTransport.SendReliable(buffer, 0, length);
+                    break;
 
-            case IEncryptedTransport transport:
-                transport.Send(buffer, 0, length);
-                break;
+                case IEncryptedTransport transport:
+                    transport.Send(buffer, 0, length);
+                    break;
 
-            case IReliableTransportClient reliableTransportClient when isReliable:
-                reliableTransportClient.SendReliable(buffer, 0, length);
-                break;
+                case IReliableTransportClient reliableTransportClient when isReliable:
+                    reliableTransportClient.SendReliable(buffer, 0, length);
+                    break;
 
-            case IEncryptedTransportClient transportClient:
-                transportClient.Send(buffer, 0, length);
-                break;
+                case IEncryptedTransportClient transportClient:
+                    transportClient.Send(buffer, 0, length);
+                    break;
+            }
         }
     }
 
@@ -542,6 +575,7 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         IPacketData packetData
     ) {
         lock (Lock) {
+            Packet.Packet.ValidateSize(packetData);
             var addonPacketData = GetOrCreateAddonPacketData(addonId, packetIdSize);
             addonPacketData.PacketData[packetId] = packetData;
         }
@@ -564,20 +598,38 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
     ) where TPacketData : IPacketData, new() {
         lock (Lock) {
             var addonPacketData = GetOrCreateAddonPacketData(addonId, packetIdSize);
+            var isNew = false;
 
             if (!addonPacketData.PacketData.TryGetValue(packetId, out var existingPacketData)) {
                 existingPacketData = new PacketDataCollection<TPacketData>();
                 addonPacketData.PacketData[packetId] = existingPacketData;
+                isNew = true;
             }
 
             if (existingPacketData is not RawPacketDataCollection existingDataCollection) {
                 throw new InvalidOperationException("Could not add addon data with existing non-collection data");
             }
 
+            var previousCount = existingDataCollection.DataInstances.Count;
             if (packetData is RawPacketDataCollection packetDataAsCollection) {
                 existingDataCollection.DataInstances.AddRange(packetDataAsCollection.DataInstances);
             } else {
                 existingDataCollection.DataInstances.Add(packetData);
+            }
+
+            try {
+                Packet.Packet.ValidateSize(existingPacketData);
+            } catch {
+                var addedCount = existingDataCollection.DataInstances.Count - previousCount;
+                if (addedCount > 0) {
+                    existingDataCollection.DataInstances.RemoveRange(previousCount, addedCount);
+                }
+
+                if (isNew) {
+                    addonPacketData.PacketData.Remove(packetId);
+                }
+
+                throw;
             }
         }
     }
@@ -596,5 +648,36 @@ internal abstract class UpdateManager<TOutgoing, TPacketId>
         addonPacketData = new AddonPacketData(packetIdSize);
         CurrentUpdatePacket.SetSendingAddonPacketData(addonId, addonPacketData);
         return addonPacketData;
+    }
+
+    /// <summary>
+    /// Sends a slice packet immediately, bypassing the gameplay send loop.
+    /// </summary>
+    protected void SendSlicePacket(TOutgoing slicePacket) {
+        var rawPacket = new Packet.Packet();
+        lock (Lock) {
+            if (_requiresSequencing) {
+                slicePacket.Sequence = _localSequence;
+                slicePacket.Ack = _remoteSequence;
+
+                var ackField = slicePacket.AckField;
+                for (ushort i = 0; i < ConnectionManager.AckSize; i++) {
+                    var pastSequence = (ushort) (_remoteSequence - i - 1);
+                    ackField[i] = _receivedSequences!.Contains(pastSequence);
+                }
+            }
+
+            try {
+                slicePacket.CreatePacket(rawPacket);
+            } catch (Exception e) {
+                Logger.Error($"Failed to create slice packet: {e}");
+                return;
+            }
+
+            if (_requiresSequencing)
+                _localSequence++;
+        }
+
+        SendPacket(rawPacket, slicePacket.ContainsReliableData);
     }
 }

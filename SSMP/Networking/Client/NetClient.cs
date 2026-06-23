@@ -102,7 +102,9 @@ internal class NetClient : INetClient {
         // Create chunk sender/receiver with delegates to the update manager
         _chunkSender = new ChunkSender(UpdateManager.SetSliceData);
         _chunkReceiver = new ChunkReceiver(UpdateManager.SetSliceAckData);
+        UpdateManager.EnqueueChunkPacketAction = _chunkSender.EnqueuePacket;
         _connectionManager = new ClientConnectionManager(_packetManager, _chunkSender, _chunkReceiver);
+        EnterPreAuthChunkMode();
 
         _connectionManager.ServerInfoReceivedEvent += OnServerInfoReceived;
     }
@@ -124,20 +126,36 @@ internal class NetClient : INetClient {
         List<AddonData> addonData,
         IEncryptedTransport transport
     ) {
+        var disconnectExisting = false;
+
         // Prevent multiple simultaneous connection attempts
         lock (_connectionLock) {
-            if (ConnectionStatus == ClientConnectionStatus.Connecting) {
-                Logger.Warn("Connection attempt already in progress, ignoring duplicate request");
-                return;
+            switch (ConnectionStatus) {
+                case ClientConnectionStatus.Connecting:
+                    Logger.Warn("Connection attempt already in progress, ignoring duplicate request");
+                    return;
+                case ClientConnectionStatus.Connected:
+                    disconnectExisting = true;
+                    break;
+                case ClientConnectionStatus.NotConnected:
+                default:
+                    ConnectionStatus = ClientConnectionStatus.Connecting;
+                    break;
             }
+        }
 
-            if (ConnectionStatus == ClientConnectionStatus.Connected) {
-                Logger.Warn("Already connected, disconnecting first");
-                // Don't fire DisconnectEvent when transitioning to a new connection
-                InternalDisconnect(shouldFireEvent: false);
+        if (disconnectExisting) {
+            Logger.Warn("Already connected, disconnecting first");
+            InternalDisconnect(shouldFireEvent: false);
+
+            lock (_connectionLock) {
+                if (ConnectionStatus == ClientConnectionStatus.Connecting) {
+                    Logger.Warn("Connection attempt already in progress, ignoring duplicate request");
+                    return;
+                }
+
+                ConnectionStatus = ClientConnectionStatus.Connecting;
             }
-
-            ConnectionStatus = ClientConnectionStatus.Connecting;
         }
 
         // Start a new thread for establishing the connection, otherwise Unity will hang
@@ -147,15 +165,25 @@ internal class NetClient : INetClient {
                     _transport.DataReceivedEvent += OnReceiveData;
                     _transport.Connect(address, port);
 
-                    UpdateManager.Transport = _transport;
-                    UpdateManager.Reset();
-                    UpdateManager.StartUpdates();
-                    _chunkSender.Start();
+                    lock (_connectionLock) {
+                        if (ConnectionStatus != ClientConnectionStatus.Connecting) {
+                            // Connection attempt was aborted (disconnected or disposed)
+                            _transport.DataReceivedEvent -= OnReceiveData;
+                            _transport.Disconnect();
+                            return;
+                        }
 
-                    // Subscribes all connection methods to timeout events
-                    UpdateManager.TimeoutEvent += OnConnectTimedOut;
+                        UpdateManager.Transport = _transport;
+                        UpdateManager.Reset();
+                        UpdateManager.StartUpdates();
+                        _chunkSender.Start();
+                        EnterPreAuthChunkMode();
 
-                    _connectionManager.StartConnection(username, authKey, addonData);
+                        // Subscribes all connection methods to timeout events
+                        UpdateManager.TimeoutEvent += OnConnectTimedOut;
+
+                        _connectionManager.StartConnection(username, authKey, addonData);
+                    }
                 } catch (TlsTimeoutException) {
                     Logger.Info("DTLS connection timed out");
                     HandleConnectFailed(new ConnectionFailedResult { Reason = ConnectionFailedReason.TimedOut });
@@ -177,23 +205,35 @@ internal class NetClient : INetClient {
     /// <summary>
     /// Disconnect from the current server.
     /// </summary>
-    public void Disconnect() {
-        lock (_connectionLock) {
-            InternalDisconnect();
-        }
+    public void Disconnect() => InternalDisconnect();
+
+    /// <summary>
+    /// Dispose of the network client and its owned disposable resources.
+    /// </summary>
+    public void Dispose() {
+        InternalDisconnect(shouldFireEvent: false);
+        _chunkSender.Dispose();
     }
 
     /// <summary>
-    /// Internal disconnect implementation without locking (assumes caller holds lock).
+    /// Internal disconnect implementation that transitions the connection state first and performs blocking teardown
+    /// outside the connection lock.
     /// </summary>
     /// <param name="shouldFireEvent">Whether to fire DisconnectEvent. Set to false when cleaning up an old connection
     /// before immediately starting a new one.</param>
     private void InternalDisconnect(bool shouldFireEvent = true) {
-        if (ConnectionStatus == ClientConnectionStatus.NotConnected) {
-            return;
-        }
+        IEncryptedTransport? transportToDisconnect;
 
-        var wasConnectedOrConnecting = ConnectionStatus != ClientConnectionStatus.NotConnected;
+        lock (_connectionLock) {
+            if (ConnectionStatus == ClientConnectionStatus.NotConnected) {
+                return;
+            }
+
+            ConnectionStatus = ClientConnectionStatus.NotConnected;
+            transportToDisconnect = _transport;
+            _transport = null;
+            _leftoverData = null;
+        }
 
         try {
             UpdateManager.StopUpdates();
@@ -201,26 +241,22 @@ internal class NetClient : INetClient {
             UpdateManager.TimeoutEvent -= OnUpdateTimedOut;
             _chunkSender.Stop();
             _chunkReceiver.Reset();
+            EnterPreAuthChunkMode();
 
-            if (_transport != null) {
-                _transport.DataReceivedEvent -= OnReceiveData;
-                _transport.Disconnect();
+            if (transportToDisconnect != null) {
+                transportToDisconnect.DataReceivedEvent -= OnReceiveData;
+                transportToDisconnect.Disconnect();
             }
         } catch (Exception e) {
             Logger.Error($"Error in NetClient.InternalDisconnect: {e}");
         }
 
-        ConnectionStatus = ClientConnectionStatus.NotConnected;
-
         // Clear all client addon packet handlers, because their IDs become invalid
         _packetManager.ClearClientAddonUpdatePacketHandlers();
 
-        // Clear leftover data
-        _leftoverData = null;
-
         // Fire DisconnectEvent on main thread for all disconnects (internal or explicit)
         // This provides a consistent notification for observers to clean up resources
-        if (shouldFireEvent && wasConnectedOrConnecting) {
+        if (shouldFireEvent) {
             ThreadUtil.RunActionOnMainThread(() => {
                     try {
                         DisconnectEvent?.Invoke();
@@ -258,7 +294,7 @@ internal class NetClient : INetClient {
                 // Route all transports through UpdateManager for sequence/ACK tracking
                 // UpdateManager will skip UDP-specific logic for Steam transports
                 UpdateManager.OnReceivePacket<ClientUpdatePacket, ClientUpdatePacketId>(clientUpdatePacket);
-                
+
                 // First check for slice or slice ack data and handle it separately by passing it onto either the chunk 
                 // sender or chunk receiver
                 var packetData = clientUpdatePacket.GetPacketData();
@@ -294,6 +330,8 @@ internal class NetClient : INetClient {
                 ConnectionStatus = ClientConnectionStatus.Connected;
             }
 
+            EnterPostAuthChunkMode();
+
             ThreadUtil.RunActionOnMainThread(() => {
                     try {
                         ConnectEvent?.Invoke(serverInfo);
@@ -306,12 +344,12 @@ internal class NetClient : INetClient {
         }
 
         // Connection rejected
-        var result = serverInfo.ConnectionResult == ServerConnectionResult.InvalidAddons
+        ConnectionFailedResult result = serverInfo.ConnectionResult == ServerConnectionResult.InvalidAddons
             ? new ConnectionInvalidAddonsResult {
                 Reason = ConnectionFailedReason.InvalidAddons,
                 AddonData = serverInfo.AddonData
             }
-            : (ConnectionFailedResult) new ConnectionFailedMessageResult {
+            : new ConnectionFailedMessageResult {
                 Reason = ConnectionFailedReason.Other,
                 Message = serverInfo.ConnectionRejectedMessage
             };
@@ -341,10 +379,38 @@ internal class NetClient : INetClient {
     /// <param name="result">The connection failed result containing failure details.</param>
     private void HandleConnectFailed(ConnectionFailedResult result) {
         lock (_connectionLock) {
-            InternalDisconnect();
+            if (ConnectionStatus != ClientConnectionStatus.Connecting) {
+                return;
+            }
         }
 
+        InternalDisconnect();
         ThreadUtil.RunActionOnMainThread(() => { ConnectFailedEvent?.Invoke(result); });
+    }
+
+    /// <summary>
+    /// Configures chunk handling for the pre-authentication phase.
+    /// </summary>
+    /// <remarks>
+    /// Before the server accepts the connection, the client only allows small chunks
+    /// required for the connection handshake. Addon chunk traffic is disabled because
+    /// addon packet IDs are not valid until authentication succeeds.
+    /// </remarks>
+    private void EnterPreAuthChunkMode() {
+        _chunkReceiver.MaxAllowedChunkSize = ConnectionManager.MaxPreAuthChunkSize;
+        _connectionManager.AllowAddonChunks = false;
+    }
+
+    /// <summary>
+    /// Configures chunk handling for the post-authentication phase.
+    /// </summary>
+    /// <remarks>
+    /// After the server accepts the connection, normal chunk limits are restored and
+    /// addon chunk traffic is enabled because addon packet IDs have been assigned.
+    /// </remarks>
+    private void EnterPostAuthChunkMode() {
+        _chunkReceiver.MaxAllowedChunkSize = ConnectionManager.MaxChunkSize;
+        _connectionManager.AllowAddonChunks = true;
     }
 
     /// <inheritdoc />
@@ -355,7 +421,7 @@ internal class NetClient : INetClient {
 
         // Check whether there already is a network sender for the given addon
         if (addon.NetworkSender != null) {
-            if (!(addon.NetworkSender is IClientAddonNetworkSender<TPacketId> addonNetworkSender)) {
+            if (addon.NetworkSender is not IClientAddonNetworkSender<TPacketId> addonNetworkSender) {
                 throw new InvalidOperationException(
                     "Cannot request network senders with differing generic parameters"
                 );

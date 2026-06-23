@@ -19,12 +19,18 @@ internal abstract class ConnectionManager(PacketManager packetManager) {
     /// <summary>
     /// The maximum number of slices in a chunk.
     /// </summary>
-    public const int MaxSlicesPerChunk = 256;
+    public const int MaxSlicesPerChunk = 32768;
 
     /// <summary>
     /// The maximum size of a chunk in bytes.
     /// </summary>
     public const int MaxChunkSize = MaxSliceSize * MaxSlicesPerChunk;
+
+    /// <summary>
+    /// The maximum chunk size accepted before a connection is fully established.
+    /// Keeps handshake traffic well below the full post-auth chunk budget.
+    /// </summary>
+    public const int MaxPreAuthChunkSize = 256 * 1024;
 
     /// <summary>
     /// The number of milliseconds a connection attempt can maximally take before being timed out.
