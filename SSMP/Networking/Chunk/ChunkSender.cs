@@ -297,7 +297,7 @@ internal sealed class ChunkSender : IDisposable {
     /// </summary>
     /// <param name="packet">The packet to send.</param>
     /// <exception cref="ArgumentNullException">Thrown if the packet is null.</exception>
-    /// <exception cref="ObjectDisposedException"> Thrown if the ChunkSender has been disposed. </exception>
+    /// <exception cref="ObjectDisposedException">Thrown if the ChunkSender has been disposed.</exception>
     public void EnqueuePacket(Packet.Packet packet) {
         if (packet == null) {
             throw new ArgumentNullException(nameof(packet), "Cannot enqueue a null packet.");
