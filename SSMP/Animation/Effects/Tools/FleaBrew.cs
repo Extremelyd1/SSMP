@@ -10,7 +10,7 @@ namespace SSMP.Animation.Effects.Tools;
 /// <summary>
 /// Class for the tool effect of Flea Brew (attack buff).
 /// </summary>
-internal class FleaBrew : BaseTool {
+internal class FleaBrew : BaseAttackTool {
     private const string ParticlesName = "Flea Brew Particles";
 
     /// <summary>
@@ -38,7 +38,7 @@ internal class FleaBrew : BaseTool {
     /// <inheritdoc/>
     public override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo) {
         var hc = HeroController.instance;
-        var isPoison = effectInfo is [1];
+        var isPoison = EffectIsPoisoned(effectInfo);
 
         // Play audio
         var fsm = hc.toolsFSM;

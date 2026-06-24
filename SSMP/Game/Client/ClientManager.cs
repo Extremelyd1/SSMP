@@ -804,7 +804,14 @@ internal class ClientManager : IClientManager {
         _mapManager.RemoveEntryForPlayer(id);
 
         // Store a reference of the player data before removing it to pass to the API event
+        // TODO: out var playerData might be null here, check before passing to event (currently, event parameter has
+        // null-forgiving operator
         _playerData.TryGetValue(id, out var playerData);
+        
+        // Tell the animation manager that the player left the scene (because they disconnected)
+        if (playerData != null) {
+            _animationManager.OnPlayerLeaveScene(playerData);
+        }
 
         // Clear the player from the player data mapping
         _playerData.Remove(id);
@@ -816,7 +823,7 @@ internal class ClientManager : IClientManager {
         );
 
         try {
-            PlayerDisconnectEvent?.Invoke(playerData);
+            PlayerDisconnectEvent?.Invoke(playerData!);
         } catch (Exception e) {
             Logger.Warn(
                 $"Exception thrown while invoking PlayerDisconnect event:\n{e}"
@@ -921,6 +928,9 @@ internal class ClientManager : IClientManager {
             Logger.Info($"Player is leaving other scene than we are currently in ({data.SceneName}), ignoring");
             return;
         }
+
+        // Tell the animation manager that the player left the scene
+        _animationManager.OnPlayerLeaveScene(playerData);
 
         // Recycle corresponding player
         _playerManager.RecyclePlayer(id);

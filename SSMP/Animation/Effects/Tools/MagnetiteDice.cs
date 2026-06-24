@@ -10,7 +10,7 @@ namespace SSMP.Animation.Effects.Tools;
 /// <summary>
 /// Class for the tool effect of Magnetite Dice (chance to negate damage).
 /// </summary>
-internal class MagnetiteDice : BaseTool {
+internal class MagnetiteDice : AnimationEffect {
     /// <summary>
     /// Name of the magnetite dice effect object.
     /// </summary>
