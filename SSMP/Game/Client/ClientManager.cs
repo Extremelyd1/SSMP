@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using GlobalEnums;
 using Steamworks;
 using SSMP.Animation;
@@ -143,10 +142,11 @@ internal class ClientManager : IClientManager {
     private Vector3 _lastPosition;
 
     /// <summary>
-    /// Stopwatch to keep track of the last time that the position of the local player object was updated.
-    /// Used to throttle position updates to 60 Hz maximum to avoid having to update the packet every frame.
+    /// Seconds accumulated since the last local player position update, driven by
+    /// <see cref="Time.unscaledDeltaTime"/>. Used to throttle position updates to 60 Hz maximum to avoid
+    /// having to update the packet every frame.
     /// </summary>
-    private readonly Stopwatch _lastPositionStopwatch;
+    private float _timeSinceLastPosition;
 
     /// <summary>
     /// Keeps track of the last updated scale of the local player object.
@@ -167,6 +167,11 @@ internal class ClientManager : IClientManager {
     /// Whether we have already determined whether we are scene host or not for the entity system.
     /// </summary>
     private bool _sceneHostDetermined;
+
+    /// <summary>
+    /// GameObject hosting the <see cref="NetworkTickBehaviour"/> that drives per-frame networking.
+    /// </summary>
+    private GameObject? _networkTickObject;
 
     #endregion
 
@@ -245,8 +250,6 @@ internal class ClientManager : IClientManager {
 
         var clientApi = new ClientApi(this, _commandManager, uiManager, netClient, eventAggregator);
         _addonManager = new ClientAddonManager(clientApi, _modSettings);
-
-        _lastPositionStopwatch = new Stopwatch();
     }
 
     #region Internal client-manager methods
@@ -320,7 +323,10 @@ internal class ClientManager : IClientManager {
         SceneManager.activeSceneChanged += OnSceneChange;
         CustomHooks.HeroControllerStartAction += OnHeroControllerStart;
 
-        EventHooks.HeroControllerUpdate += OnHeroControllerUpdate;
+        // Drive networking from a dedicated MonoBehaviour so it ticks regardless of Time.timeScale.
+        _networkTickObject = new GameObject("SSMP_NetworkTick");
+        Object.DontDestroyOnLoad(_networkTickObject);
+        _networkTickObject.AddComponent<NetworkTickBehaviour>().OnTick = OnNetworkTick;
 
         CustomHooks.AfterEnterSceneHeroTransformed += OnEnterScene;
 
@@ -348,7 +354,11 @@ internal class ClientManager : IClientManager {
         SceneManager.activeSceneChanged -= OnSceneChange;
         CustomHooks.HeroControllerStartAction -= OnHeroControllerStart;
 
-        EventHooks.HeroControllerUpdate -= OnHeroControllerUpdate;
+        // Tear down the network tick driver.
+        if (_networkTickObject != null) {
+            Object.Destroy(_networkTickObject);
+            _networkTickObject = null;
+        }
 
         CustomHooks.AfterEnterSceneHeroTransformed -= OnEnterScene;
 
@@ -1185,45 +1195,42 @@ internal class ClientManager : IClientManager {
     }
 
     /// <summary>
-    /// Callback method on the HeroController#Update method.
+    /// Per-frame network tick. Runs every Unity frame regardless of pause state.
     /// </summary>
-    /// <param name="self">The HeroController instance.</param>
-    private void OnHeroControllerUpdate(HeroController self) {
-        // Ignore player position updates on non-gameplay scenes
-        var currentSceneName = SceneUtil.GetCurrentSceneName();
-        if (SceneUtil.IsNonGameplayScene(currentSceneName)) {
-            return;
-        }
-
+    private void OnNetworkTick() {
         // If we are not connected, there is nothing to send to
         if (!_netClient.IsConnected) {
             return;
         }
 
         // Update all remote player interpolations in one centralized loop.
+        // Uses unscaled delta time so interpolation keeps progressing while the game is paused.
         // We also pass the latest measured RTT so the interpolator can adapt to ping.
-        _playerManager.UpdateInterpolations(Time.deltaTime, _netClient.UpdateManager.AverageRtt);
+        _playerManager.UpdateInterpolations(Time.unscaledDeltaTime, _netClient.UpdateManager.AverageRtt);
+
+        // The remaining work samples the local hero, so skip it when the hero isn't present
+        // (non-gameplay scenes, or before the hero has spawned).
+        if (HeroController.instance == null || SceneUtil.IsNonGameplayScene(SceneUtil.GetCurrentSceneName())) {
+            return;
+        }
 
         var heroTransform = HeroController.instance.transform;
 
-        // For position updating, we use a stopwatch to check whether the latest update wasn't too soon ago.
-        // Because each update of the player position in a packet needs to acquire the packet lock, which without
-        // this rate-limit might happen every frame
-        if (!_lastPositionStopwatch.IsRunning) {
-            _lastPositionStopwatch.Start();
-        }
+        // Accumulate unscaled real time so throttling pauses cleanly when the app is suspended or
+        // backgrounded, instead of bursting an update on resume like a wall-clock stopwatch would.
+        _timeSinceLastPosition += Time.unscaledDeltaTime;
 
         // Update rate of 60 Hz
-        const int updateRate = 1000 / 60;
-        if (_lastPositionStopwatch.ElapsedMilliseconds > updateRate) {
+        const float updateRate = 1f / 60f;
+        // Heartbeat (seconds) so a stationary player is re-broadcast for late-joining peers.
+        const float heartbeat = 0.5f;
+        if (_timeSinceLastPosition > updateRate) {
             var newPosition = heroTransform.position;
 
-            // If the position changed since last check
-            if (newPosition != _lastPosition) {
-                // Update the last position, since it changed
+            // Send if the position changed, or if the heartbeat interval has elapsed
+            if (newPosition != _lastPosition || _timeSinceLastPosition > heartbeat) {
                 _lastPosition = newPosition;
-                // Restart the stopwatch
-                _lastPositionStopwatch.Restart();
+                _timeSinceLastPosition = 0f;
 
                 _netClient.UpdateManager.UpdatePlayerPosition(new Vector2(newPosition.x, newPosition.y));
             }
