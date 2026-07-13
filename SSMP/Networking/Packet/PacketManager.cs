@@ -39,22 +39,26 @@ public delegate void GenericServerPacketHandler<in TPacketData>(ushort id, TPack
 /// Manages packets that are received by the given NetClient.
 /// </summary>
 internal class PacketManager {
-    
     #region Standard Packet Registries
 
     private readonly PacketHandlerRegistry<ClientUpdatePacketId, ClientPacketHandler> _clientUpdateRegistry = new(
         "client update", ClientPacketHandlerRegistryDispatcher.Instance
     );
-    private readonly PacketHandlerRegistry<ClientConnectionPacketId, ClientPacketHandler> _clientConnectionRegistry = new(
-        "client connection", ClientPacketHandlerRegistryDispatcher.Instance
-    );
+
+    private readonly PacketHandlerRegistry<ClientConnectionPacketId, ClientPacketHandler> _clientConnectionRegistry =
+        new(
+            "client connection", ClientPacketHandlerRegistryDispatcher.Instance
+        );
+
     private readonly PacketHandlerRegistry<ServerUpdatePacketId, ServerPacketHandler> _serverUpdateRegistry = new(
         "server update", ServerPacketHandlerRegistryDispatcher.Instance
     );
-    private readonly PacketHandlerRegistry<ServerConnectionPacketId, ServerPacketHandler> _serverConnectionRegistry = new(
-        "server connection", ServerPacketHandlerRegistryDispatcher.Instance
-    );
-    
+
+    private readonly PacketHandlerRegistry<ServerConnectionPacketId, ServerPacketHandler> _serverConnectionRegistry =
+        new(
+            "server connection", ServerPacketHandlerRegistryDispatcher.Instance
+        );
+
     #endregion
 
     #region Addon Packet Registries (Nested Dictionaries)
@@ -66,18 +70,20 @@ internal class PacketManager {
     // This preserves the (addonId, packetId) addressing model while reusing PacketHandlerRegistry
     // for handler management within each addon.
 
-    private readonly Dictionary<byte, PacketHandlerRegistry<byte, ClientPacketHandler>> _clientAddonUpdateRegistries = new();
+    private readonly Dictionary<byte, PacketHandlerRegistry<byte, ClientPacketHandler>> _clientAddonUpdateRegistries =
+        new();
 
     private readonly Dictionary<byte, PacketHandlerRegistry<byte, ClientPacketHandler>>
         _clientAddonConnectionRegistries = new();
 
-    private readonly Dictionary<byte, PacketHandlerRegistry<byte, ServerPacketHandler>> _serverAddonUpdateRegistries = new();
+    private readonly Dictionary<byte, PacketHandlerRegistry<byte, ServerPacketHandler>> _serverAddonUpdateRegistries =
+        new();
 
     private readonly Dictionary<byte, PacketHandlerRegistry<byte, ServerPacketHandler>>
         _serverAddonConnectionRegistries = new();
-    
+
     #endregion
-    
+
 
     #region Packet Unpacking Helper
 
@@ -155,7 +161,10 @@ internal class PacketManager {
         }
     }
 
-    private void RegisterClientConnectionPacketHandler(ClientConnectionPacketId packetId, ClientPacketHandler handler) =>
+    private void RegisterClientConnectionPacketHandler(
+        ClientConnectionPacketId packetId,
+        ClientPacketHandler handler
+    ) =>
         _clientConnectionRegistry.Register(packetId, handler);
 
     public void RegisterClientConnectionPacketHandler(ClientConnectionPacketId packetId, Action handler) =>
@@ -219,7 +228,10 @@ internal class PacketManager {
         }
     }
 
-    private void RegisterServerConnectionPacketHandler(ServerConnectionPacketId packetId, ServerPacketHandler handler) =>
+    private void RegisterServerConnectionPacketHandler(
+        ServerConnectionPacketId packetId,
+        ServerPacketHandler handler
+    ) =>
         _serverConnectionRegistry.Register(packetId, handler);
 
     public void RegisterServerConnectionPacketHandler(
@@ -259,7 +271,22 @@ internal class PacketManager {
         );
     }
 
-    private void RegisterClientAddonHandler(
+    private static void HandleClientAddonPacketSingle(
+        byte addonId,
+        byte packetId,
+        IPacketData packetData,
+        Dictionary<byte, PacketHandlerRegistry<byte, ClientPacketHandler>> registryDict,
+        string registryName
+    ) {
+        if (!registryDict.TryGetValue(addonId, out var registry)) {
+            Logger.Warn($"There is no {registryName} handler registry for addon ID {addonId}");
+            return;
+        }
+
+        registry.Execute(packetId, handler => handler(packetData));
+    }
+
+    private static void RegisterClientAddonHandler(
         byte addonId,
         byte packetId,
         ClientPacketHandler handler,
@@ -276,7 +303,7 @@ internal class PacketManager {
         registry.Register(packetId, handler);
     }
 
-    private void DeregisterClientAddonHandler(
+    private static void DeregisterClientAddonHandler(
         byte addonId,
         byte packetId,
         Dictionary<byte, PacketHandlerRegistry<byte, ClientPacketHandler>> registryDict
@@ -296,7 +323,7 @@ internal class PacketManager {
 
     #region Server Addon Helpers
 
-    private void HandleServerAddonPacket(
+    private static void HandleServerAddonPacket(
         ushort clientId,
         byte addonId,
         Dictionary<byte, IPacketData> packetDataDict,
@@ -314,7 +341,23 @@ internal class PacketManager {
         );
     }
 
-    private void RegisterServerAddonHandler(
+    private static void HandleServerAddonPacketSingle(
+        ushort clientId,
+        byte addonId,
+        byte packetId,
+        IPacketData packetData,
+        Dictionary<byte, PacketHandlerRegistry<byte, ServerPacketHandler>> registryDict,
+        string registryName
+    ) {
+        if (!registryDict.TryGetValue(addonId, out var registry)) {
+            Logger.Warn($"There is no {registryName} handler registry for addon ID {addonId}");
+            return;
+        }
+
+        registry.Execute(packetId, handler => handler(clientId, packetData));
+    }
+
+    private static void RegisterServerAddonHandler(
         byte addonId,
         byte packetId,
         ServerPacketHandler handler,
@@ -331,7 +374,7 @@ internal class PacketManager {
         registry.Register(packetId, handler);
     }
 
-    private void DeregisterServerAddonHandler(
+    private static void DeregisterServerAddonHandler(
         byte addonId,
         byte packetId,
         Dictionary<byte, PacketHandlerRegistry<byte, ServerPacketHandler>> registryDict
@@ -359,6 +402,10 @@ internal class PacketManager {
 
     public void ClearClientAddonUpdatePacketHandlers() => _clientAddonUpdateRegistries.Clear();
 
+    public void HandleClientAddonPacketSingle(byte addonId, byte packetId, IPacketData packetData) =>
+        HandleClientAddonPacketSingle(
+            addonId, packetId, packetData, _clientAddonUpdateRegistries, "client addon update"
+        );
 
     public void RegisterClientAddonConnectionPacketHandler(byte addonId, byte packetId, ClientPacketHandler handler) =>
         RegisterClientAddonHandler(addonId, packetId, handler, _clientAddonConnectionRegistries, "connection");
@@ -377,6 +424,11 @@ internal class PacketManager {
 
     public void DeregisterServerAddonUpdatePacketHandler(byte addonId, byte packetId) =>
         DeregisterServerAddonHandler(addonId, packetId, _serverAddonUpdateRegistries);
+
+    public void HandleServerAddonPacketSingle(ushort clientId, byte addonId, byte packetId, IPacketData packetData) =>
+        HandleServerAddonPacketSingle(
+            clientId, addonId, packetId, packetData, _serverAddonUpdateRegistries, "server addon update"
+        );
 
     public void RegisterServerAddonConnectionPacketHandler(byte addonId, byte packetId, ServerPacketHandler handler) =>
         RegisterServerAddonHandler(addonId, packetId, handler, _serverAddonConnectionRegistries, "connection");
@@ -434,10 +486,14 @@ internal class PacketManager {
             var packetLength = (int) packetLengthValue;
 
             // Sanity check against allocation attacks or corruption.
-            // If the length reads as invalid, we imply that protocol framing is lost (e.g. we are reading garbage as length).
-            // In this case, we cannot safely find the next packet in the stream, so we must discard the rest of the buffer.
+            // If the length reads as invalid, we imply that protocol framing is lost (e.g. we are reading garbage as
+            // length).
+            // In this case, we cannot safely find the next packet in the stream, so we must discard the rest of the
+            // buffer.
             if (packetLength == 0) {
-                Logger.Warn($"Invalid packet length read: {packetLength}. Discarding buffer to prevent processing garbage.");
+                Logger.Warn(
+                    $"Invalid packet length read: {packetLength}. Discarding buffer to prevent processing garbage."
+                );
                 break;
             }
 

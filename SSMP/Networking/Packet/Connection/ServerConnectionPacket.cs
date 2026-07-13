@@ -8,11 +8,10 @@ namespace SSMP.Networking.Packet.Connection;
 internal class ServerConnectionPacket : BasePacket<ServerConnectionPacketId> {
     /// <inheritdoc />
     protected override IPacketData InstantiatePacketDataFromId(ServerConnectionPacketId packetId) {
-        switch (packetId) {
-            case ServerConnectionPacketId.ClientInfo:
-                return new ClientInfo();
-            default:
-                return new EmptyData();
-        }
+        return packetId switch {
+            ServerConnectionPacketId.ClientInfo => new ClientInfo(),
+            ServerConnectionPacketId.ChunkAddonData => new ChunkAddonData(),
+            _ => new EmptyData()
+        };
     }
 }

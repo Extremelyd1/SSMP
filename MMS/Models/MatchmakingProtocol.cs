@@ -7,7 +7,7 @@ internal static class MatchmakingProtocol {
     /// <summary>
     /// The current matchmaking protocol version required for MMS matchmaking operations.
     /// </summary>
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
 
     /// <summary>
     /// Error code returned when a client must update before using matchmaking.

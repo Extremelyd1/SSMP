@@ -6,6 +6,7 @@ using SSMP.Game.Client.Skin;
 using SSMP.Game.Settings;
 using SSMP.Hooks;
 using SSMP.Internals;
+using SSMP.Networking.Client;
 using SSMP.Util;
 using TMProOld;
 using UnityEngine;
@@ -50,6 +51,11 @@ internal class PlayerManager : IPlayerManager {
     private readonly ServerSettings _serverSettings;
 
     /// <summary>
+    /// The net client for accessing average RTT.
+    /// </summary>
+    private readonly NetClient _netClient;
+
+    /// <summary>
     /// The skin manager instance.
     /// </summary>
     private readonly SkinManager _skinManager;
@@ -90,9 +96,11 @@ internal class PlayerManager : IPlayerManager {
 
     public PlayerManager(
         ServerSettings serverSettings,
+        NetClient netClient,
         Dictionary<ushort, ClientPlayerData> playerData
     ) {
         _serverSettings = serverSettings;
+        _netClient = netClient;
 
         _skinManager = new SkinManager();
 
@@ -135,6 +143,7 @@ internal class PlayerManager : IPlayerManager {
         _skinManager.RegisterHooks();
 
         CustomHooks.HeroControllerStartAction += HeroControllerOnStart;
+        MonoBehaviourUtil.Instance.OnUpdateEvent += OnUpdate;
     }
 
     /// <summary>
@@ -144,6 +153,7 @@ internal class PlayerManager : IPlayerManager {
         _skinManager.DeregisterHooks();
 
         CustomHooks.HeroControllerStartAction -= HeroControllerOnStart;
+        MonoBehaviourUtil.Instance.OnUpdateEvent -= OnUpdate;
     }
 
     /// <summary>
@@ -151,6 +161,21 @@ internal class PlayerManager : IPlayerManager {
     /// </summary>
     private void HeroControllerOnStart() {
         TryCreatePlayerPool();
+    }
+
+    /// <summary>
+    /// Called every Unity update for updating interpolations of players.
+    /// </summary>
+    private void OnUpdate() {
+        foreach (var container in _activePlayers.Values) {
+            // Cache component reference if accessed frequently
+            if (container.TryGetComponent<PredictiveInterpolation>(out var interpolation)) {
+                // Tell the interpolator what the current ping is, so it can pick
+                // a smoothing tier (LAN / Excellent / Good / Fair / Poor).
+                interpolation.AdaptToRTT(_netClient.UpdateManager.AverageRtt);
+                interpolation.ManualUpdate(Time.deltaTime);
+            }
+        }
     }
 
     /// <summary>

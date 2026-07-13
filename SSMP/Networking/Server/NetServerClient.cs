@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Concurrent;
 using SSMP.Networking.Chunk;
 using SSMP.Networking.Packet;
@@ -8,7 +9,22 @@ namespace SSMP.Networking.Server;
 /// <summary>
 /// A client managed by the server. This is only used for communication from server to client.
 /// </summary>
-internal class NetServerClient {
+internal class NetServerClient : IDisposable {
+    /// <summary>
+    /// Lock object for atomic static ID generation.
+    /// </summary>
+    private static readonly object IdLock = new();
+
+    /// <summary>
+    /// Lock object for thread-safe disposal.
+    /// </summary>
+    private readonly object _disposeLock = new();
+
+    /// <summary>
+    /// Flag indicating whether this client has been disposed.
+    /// </summary>
+    private bool _isDisposed;
+
     /// <summary>
     /// Concurrent dictionary for the set of IDs that are used. We use a dictionary because there is no
     /// standard implementation for a concurrent set.
@@ -70,14 +86,17 @@ internal class NetServerClient {
         };
         // Create chunk sender/receiver with delegates to the update manager
         ChunkSender = new ChunkSender(UpdateManager.SetSliceData);
-        ChunkReceiver = new ChunkReceiver(UpdateManager.SetSliceAckData);
+        ChunkReceiver = new ChunkReceiver(UpdateManager.SetSliceAckData) {
+            MaxAllowedChunkSize = Networking.ConnectionManager.MaxPreAuthChunkSize
+        };
+        UpdateManager.EnqueueChunkPacketAction = ChunkSender.EnqueuePacket;
         ConnectionManager = new ServerConnectionManager(packetManager, ChunkSender, ChunkReceiver, Id);
     }
 
     /// <summary>
     /// Disconnect the client from the server.
     /// </summary>
-    public void Disconnect() {
+    private void Disconnect() {
         UsedIds.TryRemove(Id, out _);
 
         UpdateManager.StopUpdates();
@@ -88,12 +107,30 @@ internal class NetServerClient {
     }
 
     /// <summary>
+    /// Dispose of the client and its owned disposable resources.
+    /// </summary>
+    public void Dispose() {
+        lock (_disposeLock) {
+            if (_isDisposed) {
+                return;
+            }
+
+            _isDisposed = true;
+        }
+
+        Disconnect();
+        ChunkSender.Dispose();
+    }
+
+    /// <summary>
     /// Resets the static ID counter and used IDs.
     /// Should be called when the server is stopped to ensure the next server session starts with ID 0.
     /// </summary>
     public static void ResetIds() {
-        UsedIds.Clear();
-        _lastId = 0;
+        lock (IdLock) {
+            UsedIds.Clear();
+            _lastId = 0;
+        }
     }
 
     /// <summary>
@@ -101,12 +138,14 @@ internal class NetServerClient {
     /// </summary>
     /// <returns>An unused ID.</returns>
     private static ushort GetId() {
-        ushort newId;
-        do {
-            newId = _lastId++;
-        } while (UsedIds.ContainsKey(newId));
+        lock (IdLock) {
+            ushort newId;
+            do {
+                newId = _lastId++;
+            } while (UsedIds.ContainsKey(newId));
 
-        UsedIds[newId] = 0;
-        return newId;
+            UsedIds[newId] = 0;
+            return newId;
+        }
     }
 }

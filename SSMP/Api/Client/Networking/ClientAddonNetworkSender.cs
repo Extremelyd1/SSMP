@@ -1,4 +1,5 @@
 using System;
+using SSMP.Api.Networking;
 using SSMP.Networking.Client;
 using SSMP.Networking.Packet;
 
@@ -61,7 +62,8 @@ internal class ClientAddonNetworkSender<TPacketId> :
 
         if (!PacketIdLookup.TryGetValue(packetId, out var idValue)) {
             throw new InvalidOperationException(
-                InvalidPacketIdMsg);
+                InvalidPacketIdMsg
+            );
         }
 
         if (!_clientAddon.Id.HasValue) {
@@ -87,7 +89,8 @@ internal class ClientAddonNetworkSender<TPacketId> :
 
         if (!PacketIdLookup.TryGetValue(packetId, out var idValue)) {
             throw new InvalidOperationException(
-                InvalidPacketIdMsg);
+                InvalidPacketIdMsg
+            );
         }
 
         if (!_clientAddon.Id.HasValue) {
@@ -100,5 +103,33 @@ internal class ClientAddonNetworkSender<TPacketId> :
             _packetIdSize,
             packetData
         );
+    }
+
+    /// <inheritdoc/>
+    public void SendChunkData(TPacketId packetId, IPacketData packetData) {
+        var (idValue, addonId) = ValidateCommon(packetId);
+        _netClient.UpdateManager.SendChunkPacket(
+            ChunkAddonPacketBuilder.BuildServerBound(idValue, addonId, packetData)
+        );
+    }
+
+    /// <summary>
+    /// Validates the common client-side preconditions required before sending chunk data.
+    /// </summary>
+    /// <param name="packetId">The addon packet identifier to validate and resolve.</param>
+    /// <returns>
+    /// The resolved packet ID byte value and the current addon ID.
+    /// </returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown if the client is not connected, the addon has no assigned ID, or the packet ID is invalid.
+    /// </exception>
+    private (byte idValue, byte addonId) ValidateCommon(TPacketId packetId) {
+        if (!_netClient.IsConnected) {
+            throw new InvalidOperationException(NotConnectedMsg);
+        }
+
+        return !_clientAddon.Id.HasValue
+            ? throw new InvalidOperationException(NoClientAddonId)
+            : (ResolvePacketId(packetId, InvalidPacketIdMsg), _clientAddon.Id.Value);
     }
 }

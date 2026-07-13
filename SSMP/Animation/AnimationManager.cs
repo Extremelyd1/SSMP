@@ -35,6 +35,8 @@ internal class AnimationManager {
     /// </summary>
     public const float EffectDistanceThreshold = 25f;
 
+    #region Clip Tables
+
     /// <summary>
     /// Animations that are allowed to loop, because they need to transmit the effect.
     /// </summary>
@@ -628,10 +630,14 @@ internal class AnimationManager {
         { "Witch Tentacles!", AnimationClip.WitchTentacles },
         { "Shaman Cancel", AnimationClip.ShamanCancel },
         { "Bind Fail Burst", AnimationClip.BindInterrupt },
-        { "Magnetite Dice", AnimationClip.MagnetiteDice },
-        { "Flea Brew", AnimationClip.FleaBrew },
-        { "Fractured Mask", AnimationClip.FracturedMask },
-        { "Magma Bell", AnimationClip.MagmaBell }
+        { "Tool Magnetite Dice", AnimationClip.ToolMagnetiteDice },
+        { "Tool Flea Brew", AnimationClip.ToolFleaBrew },
+        { "Tool Fractured Mask", AnimationClip.ToolFracturedMask },
+        { "Tool Magma Bell", AnimationClip.ToolMagmaBell },
+        { "Tool Straight Pin ", AnimationClip.ToolStraightPin  },
+        { "Tool Threefold Pin", AnimationClip.ToolThreefoldPin },
+        { "Tool Long Pin", AnimationClip.ToolLongpin },
+        { "Tool Tacks", AnimationClip.ToolTacks }
     };
 
     /// <summary>
@@ -697,11 +703,17 @@ internal class AnimationManager {
         { AnimationClip.SilkBossNeedleFire, new PaleNails() },
 
         // Tools
-        { AnimationClip.MagnetiteDice, new MagnetiteDice() },
-        { AnimationClip.FleaBrew, FleaBrew.Instance },
-        { AnimationClip.FracturedMask, new FracturedMask() },
-        { AnimationClip.MagmaBell, new MagmaBell() }
+        { AnimationClip.ToolMagnetiteDice, new MagnetiteDice() },
+        { AnimationClip.ToolFleaBrew, FleaBrew.Instance },
+        { AnimationClip.ToolFracturedMask, new FracturedMask() },
+        { AnimationClip.ToolMagmaBell, new MagmaBell() },
+        { AnimationClip.ToolStraightPin, new StraightPin() },
+        { AnimationClip.ToolThreefoldPin, new ThreefoldPin() },
+        { AnimationClip.ToolLongpin, new Longpin() },
+        { AnimationClip.ToolTacks, new Tacks() }
     };
+
+    #endregion
 
     /// <summary>
     /// The net client for sending animation updates.
@@ -810,6 +822,8 @@ internal class AnimationManager {
         }
     }
 
+    #region Core Animation Hooks
+
     /// <summary>
     /// Register the game hooks for the animation manager.
     /// </summary>
@@ -864,11 +878,14 @@ internal class AnimationManager {
         EventHooks.HeroControllerDie -= OnDeath;
         EventHooks.UseLavaBell -= OnMagmaBell;
 
+        ToolItemManager.BoundAttackToolUsed -= AttackToolUsed;
+
         // Remove listener for benching
         var eventRegister = HeroController.SilentInstance?.gameObject.GetComponents<EventRegister>().FirstOrDefault(r => r.SubscribedEvent == "BENCHREST START");
         if (eventRegister) {
             eventRegister.ReceivedEvent -= OnBench;
         }
+        
         // On.HeroAnimationController.Play -= HeroAnimationControllerOnPlay;
         // On.HeroAnimationController.PlayFromFrame -= HeroAnimationControllerOnPlayFromFrame;
 
@@ -1029,6 +1046,14 @@ internal class AnimationManager {
     }
 
     /// <summary>
+    /// Callback method when a player leaves the scene. Used to destroy leftover animation effect objects.
+    /// </summary>
+    /// <param name="player">The player that left the scene.</param>
+    public void OnPlayerLeaveScene(ClientPlayerData player) {
+        Tacks.DestroyPlayerTacks(player.PlayerObject);
+    }
+
+    /// <summary>
     /// Callback method when an animation fires in the sprite animator.
     /// </summary>
     /// <param name="clip">The sprite animation clip.</param>
@@ -1158,6 +1183,10 @@ internal class AnimationManager {
         }
     }
 
+    #endregion
+
+    #region Bind Hooks
+
     /// <summary>
     /// Animation subanimation hook for the Witch Tentacles FSM state.
     /// </summary>
@@ -1191,6 +1220,10 @@ internal class AnimationManager {
         };
         OnAnimationEvent(dummyClip);
     }
+
+    #endregion
+
+    #region Silk Skill Hooks
 
     /// <summary>
     /// Creates hooks for silk skills.
@@ -1455,6 +1488,10 @@ internal class AnimationManager {
         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.SilkBossNeedleFire, 0, effectInfo);
     }
 
+    #endregion
+
+    #region Tool Hooks
+
     /// <summary>
     /// Creates hooks for tools.
     /// </summary>
@@ -1475,6 +1512,32 @@ internal class AnimationManager {
             var maskEffect = maskFsm.GetState("Instantiate Effect");
             FsmStateActionInjector.Inject(maskEffect, OnFracturedMaskBreak, 0, "Fractured Mask Break");
         }
+
+        ToolItemManager.BoundAttackToolUsed += AttackToolUsed;
+    }
+
+    /// <summary>
+    /// Callback method for when the local player uses a tool.
+    /// </summary>
+    /// <param name="binding">The AttackToolBinding enum for the used tool.</param>
+    private void AttackToolUsed(AttackToolBinding binding) {
+        var tool = ToolItemManager.GetBoundAttackTool(binding, ToolEquippedReadSource.Active);
+        if (tool == null) {
+            return;
+        }
+
+        // If we are not connected, there is nothing to send to
+        if (!_netClient.IsConnected) {
+            return;
+        }
+
+        // Get proper clip from tool name
+        if (!BaseAttackTool.ToolNameMap.TryGetValue(tool.name, out var toolClip)) {
+            return;
+        }
+
+        var effectInfo = BaseAttackTool.GetToolInfo();
+        _netClient.UpdateManager.UpdatePlayerAnimation(toolClip, 0, effectInfo);
     }
 
     /// <summary>
@@ -1486,7 +1549,7 @@ internal class AnimationManager {
             return;
         }
 
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagnetiteDice);
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.ToolMagnetiteDice);
     }
 
     /// <summary>
@@ -1499,7 +1562,7 @@ internal class AnimationManager {
         }
 
         var effectInfo = FleaBrew.Instance.GetEffectInfo();
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.FleaBrew, 0, effectInfo);
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.ToolFleaBrew, 0, effectInfo);
     }
 
     /// <summary>
@@ -1511,7 +1574,7 @@ internal class AnimationManager {
             return;
         }
 
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.FracturedMask);
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.ToolFracturedMask);
     }
 
     /// <summary>
@@ -1523,7 +1586,7 @@ internal class AnimationManager {
             return;
         }
 
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagmaBell, 0, [0]);
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.ToolMagmaBell, 0, [0]);
     }
 
     /// <summary>
@@ -1535,7 +1598,7 @@ internal class AnimationManager {
             return;
         }
 
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.MagmaBell, 0, [1]);
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.ToolMagmaBell, 0, [1]);
     }
 
     /// <summary>
@@ -1549,6 +1612,8 @@ internal class AnimationManager {
 
         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.Bench);
     }
+
+    #endregion
 
     // /// <summary>
     // /// Callback method on the HeroAnimationController#Play method.

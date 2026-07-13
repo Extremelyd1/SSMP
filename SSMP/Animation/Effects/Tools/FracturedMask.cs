@@ -8,7 +8,7 @@ namespace SSMP.Animation.Effects.Tools;
 /// <summary>
 /// Class for the tool effect of Fractured Mask (extra health point).
 /// </summary>
-internal class FracturedMask : BaseTool {
+internal class FracturedMask : AnimationEffect {
     /// <inheritdoc/>
     public override byte[]? GetEffectInfo() {
         return null;

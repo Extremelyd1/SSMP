@@ -230,7 +230,7 @@ internal class ClientManager : IClientManager {
 
         _playerData = new Dictionary<ushort, ClientPlayerData>();
 
-        _playerManager = new PlayerManager(serverSettings, _playerData);
+        _playerManager = new PlayerManager(serverSettings, netClient, _playerData);
         _animationManager = new AnimationManager(netClient, _playerManager, serverSettings, _playerData);
         _mapManager = new MapManager(netClient, serverSettings);
 
@@ -802,7 +802,14 @@ internal class ClientManager : IClientManager {
         _mapManager.RemoveEntryForPlayer(id);
 
         // Store a reference of the player data before removing it to pass to the API event
+        // TODO: out var playerData might be null here, check before passing to event (currently, event parameter has
+        // null-forgiving operator
         _playerData.TryGetValue(id, out var playerData);
+        
+        // Tell the animation manager that the player left the scene (because they disconnected)
+        if (playerData != null) {
+            _animationManager.OnPlayerLeaveScene(playerData);
+        }
 
         // Clear the player from the player data mapping
         _playerData.Remove(id);
@@ -814,7 +821,7 @@ internal class ClientManager : IClientManager {
         );
 
         try {
-            PlayerDisconnectEvent?.Invoke(playerData);
+            PlayerDisconnectEvent?.Invoke(playerData!);
         } catch (Exception e) {
             Logger.Warn(
                 $"Exception thrown while invoking PlayerDisconnect event:\n{e}"
@@ -921,6 +928,9 @@ internal class ClientManager : IClientManager {
             Logger.Info($"Player is leaving other scene than we are currently in ({data.SceneName}), ignoring");
             return;
         }
+
+        // Tell the animation manager that the player left the scene
+        _animationManager.OnPlayerLeaveScene(playerData);
 
         // Recycle corresponding player
         _playerManager.RecyclePlayer(id);
@@ -1209,10 +1219,6 @@ internal class ClientManager : IClientManager {
         if (!_netClient.IsConnected) {
             return;
         }
-
-        // Update all remote player interpolations in one centralized loop.
-        // We also pass the latest measured RTT so the interpolator can adapt to ping.
-        _playerManager.UpdateInterpolations(Time.deltaTime, _netClient.UpdateManager.AverageRtt);
 
         var heroTransform = HeroController.instance.transform;
 

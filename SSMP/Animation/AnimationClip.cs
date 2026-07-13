@@ -764,13 +764,39 @@ internal enum AnimationClip {
     WallSlideEnd,
     HazardDeath,
 
+    // Tool clip names
+    ToolStraightPin,
+    ToolThreefoldPin,
+    ToolStingShard,
+    ToolTacks,
+    ToolLongpin,
+    ToolCurveclaw,
+    ToolCurvesickle,
+    ToolThrowingRing,
+    ToolPimpillo,
+    ToolConchcutter,
+    ToolCogworkWheel,
+    ToolCogfly,
+    ToolSilkshotOriginal,
+    ToolSilkshotArchitect,
+    ToolSilkshotForge,
+    ToolDelversDrill,
+    ToolRosaryCannon,
+    ToolVoltvesselSpear,
+    ToolVoltvesselBalls,
+    ToolFlintslate,
+    ToolSnareSetter,
+    ToolPlasmiumPhial,
+    ToolNeedlePhial,
+
+    ToolMagnetiteDice,
+    ToolFleaBrew,
+    ToolFracturedMask,
+    ToolMagmaBell,
+
     // Sub-animation names
     WitchTentacles,
     ShamanCancel,
     BindInterrupt,
-    MagnetiteDice,
-    FleaBrew,
-    FracturedMask,
-    MagmaBell,
     Bench
 }

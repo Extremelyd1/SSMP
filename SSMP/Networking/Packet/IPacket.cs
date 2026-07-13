@@ -113,6 +113,12 @@ public interface IPacket {
     /// <typeparam name="TEnum">The enum type that the set also uses.</typeparam>
     void WriteBitFlag<TEnum>(ISet<TEnum> set) where TEnum : Enum;
 
+    /// <summary>
+    /// Write an array of bytes to the packet.
+    /// </summary>
+    /// <param name="values">A byte array of values to write.</param>
+    void Write(byte[] values);
+
     #endregion
 
     #region Reading integral numeric types
@@ -224,6 +230,13 @@ public interface IPacket {
     /// <param name="length">The length of the sub-packet view.</param>
     /// <returns>A read-only packet view.</returns>
     IPacket ReadPacketView(int length);
+
+    /// <summary>
+    /// Read an array of bytes of the given length from the packet.
+    /// </summary>
+    /// <param name="length">The length to read.</param>
+    /// <returns>A byte array of the given length containing the content at the current position in the packet.</returns>
+    byte[] ReadBytes(int length);
 
     #endregion
 }

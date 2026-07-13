@@ -115,4 +115,24 @@ public interface IServerSettings {
     /// The number of masks of damage that a cloud from the poisoned Flea Brew deals.
     /// </summary>
     byte PoisonBrewDamage { get; }
+
+    /// <summary>
+    /// The number of masks of damage that a Straight Pin deals.
+    /// </summary>
+    byte StraightPinDamage { get; }
+
+    /// <summary>
+    /// The number of masks of damage that a Threefold Pin deals.
+    /// </summary>
+    byte ThreefoldPinDamage { get; }
+
+    /// <summary>
+    /// The number of masks of damage that a Longpin deals.
+    /// </summary>
+    byte LongpinDamage { get; }
+    
+    /// <summary>
+    /// The number of masks of damage that Tacks deal.
+    /// </summary>
+    byte TacksDamage { get; }
 }

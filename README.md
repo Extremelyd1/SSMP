@@ -157,6 +157,24 @@ All names for the settings are case-insensitive, but are written in case for cla
 - `ClawMirrorUpgradedDamage`: The number of masks of damage that the upgraded Claw Mirrors deal.
     - Aliases: `clawmirrorupgradeddmg`, `mirror2dmg`
     - Default: 1
+- `SawtoothCircletDamage`: The number of masks of damage that Sawtooth Circlet deals.
+    - Aliases: `sawtoothcircletdmg`, `circletdmg`, `umbrelladmg`
+    - Default: 1
+- `PoisonBrewDamage`: The number of masks of damage that a cloud from the poisoned Flea Brew deals.
+    - Aliases: `poisonbrewdmg`, `brewdmg`, `fleabrewdmg`
+    - Default: 1
+- `StraightPinDamage`: The number of masks of damage that a Straight Pin deals.
+    - Aliases: `straightpindmg`, `pindmg`, `pindamage`
+    - Default: 1
+- `ThreefoldPinDamage`: The number of masks of damage that a Threefold Pin deals.
+    - Aliases: `threefoldpindmg`, `threepindmg`, `threepindamage`
+    - Default: 1
+- `LongpinDamage`: The number of masks of damage that a Longpin deals.
+    - Aliases: `longpindmg`
+    - Default: 1
+- `TacksDamage`: The number of masks of damage that Tacks deal.
+    - Aliases: `tackdmg`, `tacksdmg`, `tackdamage`
+    - Default: 1
 
 ### Skins
 The system for skins is currently not implemented entirely.

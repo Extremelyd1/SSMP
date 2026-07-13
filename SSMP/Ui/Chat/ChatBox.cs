@@ -875,7 +875,7 @@ internal class ChatBox : IChatBox {
         if (gameManager == null) return false;
 
         var invFsm = gameManager.inventoryFSM;
-        if (invFsm == null) return false;
+        if (invFsm == null || !invFsm.Active) return false;
         var stateName = invFsm.ActiveStateName;
         return stateName != "Closed" && stateName != "Can Open Inventory?";
     }

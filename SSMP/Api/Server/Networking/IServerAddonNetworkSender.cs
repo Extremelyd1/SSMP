@@ -78,4 +78,33 @@ public interface IServerAddonNetworkSender<in TPacketId> where TPacketId : Enum 
         TPacketId packetId,
         TPacketData packetData
     ) where TPacketData : IPacketData, new();
+
+    /// <summary>
+    /// Send a single instance of IPacketData with the given packet ID over the network to the player
+    /// with the given ID through the chunk system.
+    /// This should be used for large packets (exceeding 64 KiB).
+    /// </summary>
+    /// <param name="packetId">The packet ID.</param>
+    /// <param name="packetData">An instance of IPacketData to send.</param>
+    /// <param name="playerId">The ID of the player.</param>
+    void SendChunkData(TPacketId packetId, IPacketData packetData, ushort playerId);
+
+    /// <summary>
+    /// Send a single instance of IPacketData with the given packet ID over the network to the players
+    /// with the given IDs through the chunk system.
+    /// This should be used for large packets (exceeding 64 KiB).
+    /// </summary>
+    /// <param name="packetId">The packet ID.</param>
+    /// <param name="packetData">An instance of IPacketData to send.</param>
+    /// <param name="playerIds">The IDs of the players.</param>
+    void SendChunkData(TPacketId packetId, IPacketData packetData, params ushort[] playerIds);
+
+    /// <summary>
+    /// Send a single instance of IPacketData with the given packet ID over the network to all connected
+    /// players through the chunk system.
+    /// This should be used for large packets (exceeding 64 KiB).
+    /// </summary>
+    /// <param name="packetId">The packet ID.</param>
+    /// <param name="packetData">An instance of IPacketData to send.</param>
+    void BroadcastChunkData(TPacketId packetId, IPacketData packetData);
 }

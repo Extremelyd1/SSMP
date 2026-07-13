@@ -270,6 +270,54 @@ public class ServerSettings : IServerSettings, IEquatable<ServerSettings> {
         }
     } = 1;
 
+    /// <inheritdoc />
+    [SettingAlias("straightpindmg", "pindmg", "pindamage")]
+    [ModMenuSetting("Straight Pin Damage", "The number of masks of damage that a Straight Pin deals")]
+    public byte StraightPinDamage {
+        get;
+        init {
+            if (field == value) return;
+            field = value;
+            ChangeEvent?.Invoke(nameof(StraightPinDamage));
+        }
+    } = 1;
+
+    /// <inheritdoc />
+    [SettingAlias("threefoldpindmg", "threepindmg", "threepindamage")]
+    [ModMenuSetting("Threefold Pin Damage", "The number of masks of damage that a Threefold Pin deals")]
+    public byte ThreefoldPinDamage {
+        get;
+        init {
+            if (field == value) return;
+            field = value;
+            ChangeEvent?.Invoke(nameof(ThreefoldPinDamage));
+        }
+    } = 1;
+
+    /// <inheritdoc />
+    [SettingAlias("longpindmg")]
+    [ModMenuSetting("Longpin Damage", "The number of masks of damage that a Longpin deals")]
+    public byte LongpinDamage {
+        get;
+        init {
+            if (field == value) return;
+            field = value;
+            ChangeEvent?.Invoke(nameof(LongpinDamage));
+        }
+    } = 1;
+
+    /// <inheritdoc />
+    [SettingAlias("tackdmg", "tacksdmg", "tackdamage")]
+    [ModMenuSetting("Tacks Damage", "The number of masks of damage that Tacks deal")]
+    public byte TacksDamage {
+        get;
+        init {
+            if (field == value) return;
+            field = value;
+            ChangeEvent?.Invoke(nameof(TacksDamage));
+        }
+    } = 1;
+
     /// <summary>
     /// Set all properties in this <see cref="ServerSettings"/> instance to the values from the given
     /// <see cref="ServerSettings"/> instance.
