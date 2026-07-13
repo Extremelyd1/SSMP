@@ -3,7 +3,7 @@ namespace SSMP.Networking.Matchmaking.Protocol;
 /// <summary>MatchMaking Service (MMS) protocol constants.</summary>
 internal static class MmsProtocol {
     /// <summary>The current version of the matchmaking protocol.</summary>
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
 
     /// <summary>Error code returned by MMS when the client version is too old.</summary>
     public const string UpdateRequiredErrorCode = "update_required";
