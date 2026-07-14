@@ -279,7 +279,8 @@ internal class EntityManager {
                 GameObject = obj,
                 IsSceneHost = IsSceneHost,
                 IsSceneHostDetermined = _sceneRoleDetermined,
-                LateLoad = lateLoad
+                LateLoad = lateLoad,
+                UseStableSceneId = true
             }.Process();
         }
     }

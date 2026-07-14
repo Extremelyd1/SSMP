@@ -58,6 +58,14 @@ internal class MeshRendererComponent : EntityComponent {
 
     /// <inheritdoc />
     protected override void InitializeHost() {
+        var enabled = _meshRenderer.Host.enabled;
+        _lastEnabled = enabled;
+
+        var data = new EntityNetworkData {
+            Type = EntityComponentType.MeshRenderer
+        };
+        data.Packet.Write(enabled);
+        SendData(data);
     }
 
     /// <inheritdoc />
