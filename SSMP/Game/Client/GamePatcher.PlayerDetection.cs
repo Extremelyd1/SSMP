@@ -73,7 +73,6 @@ internal partial class GamePatcher {
     private static readonly string[] NonAcquiringAlertRangeNameParts = [
         "Chomp",
         "Unalert",
-        "Attack",
         "Hit"
     ];
 
