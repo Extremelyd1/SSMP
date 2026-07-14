@@ -520,7 +520,7 @@ internal class Entity {
             //addedComponentsString += " MeshRenderer";
         }
 
-        EntityInitializer.RemoveClientTypes(Object.Client);
+        EntityInitializer.RemoveClientTypes(Object.Client, Type);
 
         // Instantiate all types defined in the entity registry, which are passed to the constructor
         foreach (var type in types) {

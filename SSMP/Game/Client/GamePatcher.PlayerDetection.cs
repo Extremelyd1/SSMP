@@ -173,14 +173,16 @@ internal partial class GamePatcher {
         }
 
         var candidateTarget = GetNearestPlayerInsideAlertRange(self);
+        var approvedTargetIsValid = IsValidTargetForAlertRange(self, approvedTarget);
         if (candidateTarget != null &&
             HasLineOfSightToAlertRangeTarget(self, candidateTarget) &&
-            (approvedTarget == null || ShouldSwitchApprovedTarget(owner, approvedTarget, candidateTarget))) {
+            (approvedTarget == null || !approvedTargetIsValid ||
+             ShouldSwitchApprovedTarget(owner, approvedTarget, candidateTarget))) {
             ApproveEnemyTarget(owner, candidateTarget);
             return true;
         }
 
-        return IsValidTargetForAlertRange(self, approvedTarget);
+        return approvedTargetIsValid;
     }
 
     /// <summary>
@@ -237,19 +239,48 @@ internal partial class GamePatcher {
     }
 
     /// <summary>
-    /// Finds the approved visible tracked player for a line-of-sight detector without acquiring a new target.
+    /// Finds or acquires the visible tracked player for a line-of-sight detector.
     /// </summary>
     /// <param name="detector">The detector requesting a target.</param>
-    /// <returns>The approved target if it is still inside one of the detector's alert ranges; otherwise null.</returns>
+    /// <returns>The approved or newly acquired target if visible; otherwise null.</returns>
     private static GameObject? GetNearestVisiblePlayer(LineOfSightDetector detector) {
         var approvedTarget = GetApprovedEnemyTarget(detector.gameObject);
-        if (approvedTarget == null) {
-            return null;
-        }
 
         if (LineOfSightDetectorAlertRangesField?.GetValue(detector) is not AlertRange[] alertRanges ||
             alertRanges.Length == 0) {
             return approvedTarget;
+        }
+
+        var owner = GetEnemyTargetOwner(detector.gameObject);
+        if (approvedTarget == null) {
+            GameObject? candidateTarget = null;
+            var candidateDistance = float.PositiveInfinity;
+
+            foreach (var alertRange in alertRanges) {
+                if (alertRange == null || !CanAcquireMultiplayerTarget(alertRange)) {
+                    continue;
+                }
+
+                var target = GetNearestPlayerInsideAlertRange(alertRange);
+                if (target == null || !HasLineOfSightToAlertRangeTarget(alertRange, target)) {
+                    continue;
+                }
+
+                var distance = ((Vector2) detector.transform.position - (Vector2) target.transform.position)
+                    .sqrMagnitude;
+                if (distance >= candidateDistance) {
+                    continue;
+                }
+
+                candidateDistance = distance;
+                candidateTarget = target;
+            }
+
+            if (candidateTarget != null && owner != null) {
+                ApproveEnemyTarget(owner, candidateTarget);
+            }
+
+            return candidateTarget;
         }
 
         foreach (var alertRange in alertRanges) {
@@ -257,9 +288,13 @@ internal partial class GamePatcher {
                 continue;
             }
 
-            if (IsPlayerInsideAlertRange(alertRange, approvedTarget)) {
+            if (IsValidTargetForAlertRange(alertRange, approvedTarget)) {
                 return approvedTarget;
             }
+        }
+
+        if (owner != null) {
+            EnemyApprovedTargets.Remove(owner.GetInstanceID());
         }
 
         return null;
@@ -307,6 +342,10 @@ internal partial class GamePatcher {
     /// overlaps the alert range collider; otherwise <see langword="false"/>.
     /// </returns>
     private static bool IsPlayerInsideAlertRange(AlertRange alertRange, GameObject player) {
+        if (player == null || !player.activeInHierarchy) {
+            return false;
+        }
+
         if (alertRange.InsideGameObjects.Contains(player)) {
             return true;
         }

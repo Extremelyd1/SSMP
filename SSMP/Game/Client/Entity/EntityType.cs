@@ -241,5 +241,6 @@ internal enum EntityType {
     Phantom,
     Lace,
     GrandMotherSilk,
-    LostLace
+    LostLace,
+    GrassBall
 }

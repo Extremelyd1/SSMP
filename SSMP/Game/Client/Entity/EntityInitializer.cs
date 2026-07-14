@@ -114,8 +114,13 @@ internal static class EntityInitializer {
     /// Remove all types that should be removed from a client-side entity object.
     /// </summary>
     /// <param name="gameObject">The game object on which to remove the types.</param>
-    public static void RemoveClientTypes(GameObject gameObject) {
+    /// <param name="entityType">The registered entity type.</param>
+    public static void RemoveClientTypes(GameObject gameObject, EntityType entityType) {
         foreach (var type in ToRemoveTypes) {
+            if (type == typeof(Rigidbody2D) && entityType == EntityType.GrassBall) {
+                continue;
+            }
+
             var component = gameObject.GetComponent(type);
             if (component != null) {
                 UnityEngine.Object.Destroy(component);
