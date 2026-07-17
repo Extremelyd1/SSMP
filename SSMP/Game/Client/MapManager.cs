@@ -44,6 +44,12 @@ internal class MapManager : IMapManager {
     private bool _lastSentMapIcon;
 
     /// <summary>
+    /// When true, the next hero update re-sends map icon presence even if the value is unchanged.
+    /// Used when AlwaysShowMapIcons / compass broadcast settings change mid-session.
+    /// </summary>
+    private bool _forceMapIconResend;
+
+    /// <summary>
     /// Whether we should display the map icons. True if the map is opened, false otherwise.
     /// </summary>
     private bool _displayingIcons;
@@ -89,6 +95,16 @@ internal class MapManager : IMapManager {
     }
 
     /// <summary>
+    /// Force the local client to re-evaluate and re-send map icon presence on the next update.
+    /// Call when AlwaysShowMapIcons / OnlyBroadcastMapIconWithCompass change.
+    /// </summary>
+    public void ForceResendMapIconState() {
+        _forceMapIconResend = true;
+        // TEMP debug (#54) — remove after verification
+        Logger.Info("[MapIcon] client: ForceResendMapIconState scheduled");
+    }
+
+    /// <summary>
     /// Callback method for the HeroController#Update method.
     /// </summary>
     private void HeroControllerOnUpdate(HeroController heroController) {
@@ -113,8 +129,17 @@ internal class MapManager : IMapManager {
             }
         }
     
-        if (hasMapIcon != _lastSentMapIcon) {
+        if (hasMapIcon != _lastSentMapIcon || _forceMapIconResend) {
+            // TEMP debug (#54) — remove after verification
+            Logger.Info(
+                $"[MapIcon] client send: HasIcon={hasMapIcon} " +
+                $"(was {_lastSentMapIcon}, force={_forceMapIconResend}, " +
+                $"alwaysShow={_serverSettings.AlwaysShowMapIcons}, " +
+                $"compassOnly={_serverSettings.OnlyBroadcastMapIconWithCompass}, " +
+                $"compassEquipped={Gameplay.CompassTool && Gameplay.CompassTool.IsEquipped})");
+
             _lastSentMapIcon = hasMapIcon;
+            _forceMapIconResend = false;
     
             _netClient.UpdateManager.UpdatePlayerMapIcon(hasMapIcon);
     
@@ -210,13 +235,23 @@ internal class MapManager : IMapManager {
             _mapEntries[id] = mapEntry = new PlayerMapEntry();
         }
 
+        // TEMP debug (#54) — remove after verification
+        Logger.Info(
+            $"[MapIcon] client recv: player={id} HasIcon={hasMapIcon} " +
+            $"(was {mapEntry.HasMapIcon}, go={(mapEntry.GameObject != null)}, " +
+            $"pos={mapEntry.Position}, displaying={_displayingIcons})");
+
         if (mapEntry.HasMapIcon) {
             if (!hasMapIcon) {
                 // If the player had an active map icon, but we receive that they do not anymore
                 // we destroy the map icon object if it exists
                 if (mapEntry.GameObject != null) {
                     Object.Destroy(mapEntry.GameObject);
+                    mapEntry.GameObject = null;
                 }
+            } else if (mapEntry.GameObject == null) {
+                // Re-sync (connect / scene-enter) while HasIcon was already true but create failed earlier
+                CreatePlayerIcon(id, mapEntry.Position);
             }
         } else {
             if (hasMapIcon) {
@@ -251,6 +286,8 @@ internal class MapManager : IMapManager {
         // Check whether the object still exists
         var mapObject = mapEntry.GameObject;
         if (mapObject == null) {
+            // TEMP debug (#54) — remove after verification
+            Logger.Info($"[MapIcon] client: player={id} HasIcon but GO missing — create at {position}");
             CreatePlayerIcon(id, position);
             return;
         }
@@ -261,6 +298,7 @@ internal class MapManager : IMapManager {
         var transform = mapObject.transform;
         if (transform == null) {
             Object.Destroy(mapObject);
+            mapEntry.GameObject = null;
             return;
         }
 
@@ -293,6 +331,7 @@ internal class MapManager : IMapManager {
         // Otherwise, we have opened the map
         _displayingIcons = true;
         UpdateMapIconsActive();
+        RetryDeferredIcons();
     }
 
     /// <summary>
@@ -302,6 +341,20 @@ internal class MapManager : IMapManager {
         foreach (var mapEntry in _mapEntries.Values) {
             if (mapEntry.HasMapIcon && mapEntry.GameObject != null) {
                 mapEntry.GameObject.SetActive(_displayingIcons);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Retry creating map icons for any player that has a map icon but no icon object yet
+    /// (e.g. GameMap / compass prefab was not ready when HasIcon first arrived).
+    /// </summary>
+    private void RetryDeferredIcons() {
+        foreach (var (id, entry) in _mapEntries) {
+            if (entry.HasMapIcon && entry.GameObject == null) {
+                // TEMP debug (#54) — remove after verification
+                Logger.Info($"[MapIcon] client: RetryDeferredIcons create player={id} at {entry.Position}");
+                CreatePlayerIcon(id, entry.Position);
             }
         }
     }
@@ -318,12 +371,16 @@ internal class MapManager : IMapManager {
 
         var gameMap = GetGameMap();
         if (gameMap == null) {
+            // TEMP debug (#54) — remove after verification
+            Logger.Info($"[MapIcon] client: CreatePlayerIcon deferred player={id} (GameMap null)");
             return;
         }
 
         var compassIconPrefab = gameMap.compassIcon;
         if (compassIconPrefab == null) {
             Logger.Warn("CompassIcon prefab is null");
+            // TEMP debug (#54) — remove after verification
+            Logger.Info($"[MapIcon] client: CreatePlayerIcon deferred player={id} (compassIcon null)");
             return;
         }
 
@@ -348,6 +405,11 @@ internal class MapManager : IMapManager {
 
         // Put it in the list
         mapEntry.GameObject = mapIcon;
+
+        // TEMP debug (#54) — remove after verification
+        Logger.Info(
+            $"[MapIcon] client: CreatePlayerIcon OK player={id} at {unityPosition} " +
+            $"active={_displayingIcons}");
     }
 
     /// <summary>
@@ -372,6 +434,7 @@ internal class MapManager : IMapManager {
         foreach (var mapEntry in _mapEntries.Values) {
             if (mapEntry.GameObject != null) {
                 Object.Destroy(mapEntry.GameObject);
+                mapEntry.GameObject = null;
             }
         }
     }
@@ -387,6 +450,7 @@ internal class MapManager : IMapManager {
         // Reset variables to their initial values
         _lastPosition = Vector3.zero;
         _lastSentMapIcon = false;
+        _forceMapIconResend = false;
     }
 
     /// <summary>

@@ -1142,6 +1142,10 @@ internal class ClientManager : IClientManager {
         if (alwaysShowMapChanged || onlyCompassChanged) {
             if (_serverSettings is { AlwaysShowMapIcons: false, OnlyBroadcastMapIconWithCompass: false }) {
                 _mapManager.RemoveAllIcons();
+            } else {
+                // Mid-session setting changes must re-broadcast icon presence; otherwise a client
+                // that was already "off" never sends HasIcon=true when AlwaysShow turns on.
+                _mapManager.ForceResendMapIconState();
             }
         }
 

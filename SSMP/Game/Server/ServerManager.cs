@@ -488,6 +488,12 @@ internal abstract class ServerManager : IServerManager {
 
             var otherPlayerData = idPlayerDataPair.Value;
 
+            // Map icons are global (not scene-scoped). Replay both peers' icon state so late
+            // joiners learn icons that were already active before they connected (host will not
+            // re-send an unchanged HasMapIcon flag).
+            SendPlayerMapIconState(playerData.Id, otherPlayerData.Id, otherPlayerData, "scene-enter");
+            SendPlayerMapIconState(otherPlayerData.Id, playerData.Id, playerData, "scene-enter");
+
             // Send the packet to all clients on the new scene
             // to indicate that this client has entered their scene
             if (otherPlayerData.CurrentScene.Equals(playerData.CurrentScene)) {
@@ -727,6 +733,12 @@ internal abstract class ServerManager : IServerManager {
 
         playerData.HasMapIcon = playerMapUpdate.HasIcon;
 
+        // TEMP debug (#54) — remove after verification
+        Logger.Info(
+            $"[MapIcon] recv from {id}: HasIcon={playerData.HasMapIcon} " +
+            $"pos={(playerData.MapPosition?.ToString() ?? "null")} " +
+            $"→ fan-out to {_playerData.Count - 1} peer(s)");
+
         foreach (var idPlayerDataPair in _playerData) {
             if (idPlayerDataPair.Key == id) {
                 continue;
@@ -740,6 +752,41 @@ internal abstract class ServerManager : IServerManager {
                 _netServer.GetUpdateManagerForClient(idPlayerDataPair.Key)?
                     .UpdatePlayerMapPosition(id, playerData.MapPosition);
             }
+        }
+    }
+
+    /// <summary>
+    /// Send one player's current map-icon state to a single target client.
+    /// </summary>
+    /// <param name="targetClientId">Client that should receive the state.</param>
+    /// <param name="sourcePlayerId">Player whose icon state is being sent.</param>
+    /// <param name="sourcePlayerData">Server data for the source player.</param>
+    /// <param name="reason">Short label for TEMP debug logs (#54).</param>
+    private void SendPlayerMapIconState(
+        ushort targetClientId,
+        ushort sourcePlayerId,
+        ServerPlayerData sourcePlayerData,
+        string reason
+    ) {
+        var updateManager = _netServer.GetUpdateManagerForClient(targetClientId);
+        if (updateManager == null) {
+            // TEMP debug (#54) — remove after verification
+            Logger.Info(
+                $"[MapIcon] sync skip ({reason}): no UpdateManager for target={targetClientId} " +
+                $"source={sourcePlayerId}");
+            return;
+        }
+
+        // TEMP debug (#54) — remove after verification
+        Logger.Info(
+            $"[MapIcon] sync ({reason}): source={sourcePlayerId} HasIcon={sourcePlayerData.HasMapIcon} " +
+            $"pos={(sourcePlayerData.MapPosition?.ToString() ?? "null")} " +
+            $"→ target={targetClientId}");
+
+        updateManager.UpdatePlayerMapIcon(sourcePlayerId, sourcePlayerData.HasMapIcon);
+
+        if (sourcePlayerData.HasMapIcon && sourcePlayerData.MapPosition != null) {
+            updateManager.UpdatePlayerMapPosition(sourcePlayerId, sourcePlayerData.MapPosition);
         }
     }
     
@@ -1479,6 +1526,15 @@ internal abstract class ServerManager : IServerManager {
             _authorizedList
         );
         _playerData[netServerClient.Id] = playerData;
+
+        // Replay existing players' map-icon state to the joiner (icons are global).
+        foreach (var idPlayerDataPair in _playerData) {
+            if (idPlayerDataPair.Key == playerData.Id) {
+                continue;
+            }
+
+            SendPlayerMapIconState(playerData.Id, idPlayerDataPair.Key, idPlayerDataPair.Value, "connect");
+        }
         
         try {
             PlayerConnectEvent?.Invoke(playerData);
