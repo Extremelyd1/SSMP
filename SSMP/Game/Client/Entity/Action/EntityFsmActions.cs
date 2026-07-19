@@ -11,7 +11,6 @@ using MonoMod.RuntimeDetour;
 using SSMP.Networking.Packet.Data;
 using SSMP.Util;
 using UnityEngine;
-using Logger = SSMP.Logging.Logger;
 using Object = UnityEngine.Object;
 using Random = UnityEngine.Random;
 
@@ -2056,20 +2055,15 @@ internal static class EntityFsmActions {
 
     #region ActivateAllChildren
 
-    private static bool GetNetworkDataFromAction(EntityNetworkData data, ActivateAllChildren action) {
-        return true;
-    }
+    private static bool GetNetworkDataFromAction(
+        EntityNetworkData _,
+        HutongGames.PlayMaker.Actions.ActivateAllChildren __
+    ) => true;
 
-    private static void ApplyNetworkDataFromAction(EntityNetworkData data, ActivateAllChildren action) {
-        // var gameObject = action.gameObject;
-        // if (gameObject == null) {
-        //     return;
-        // }
-        //
-        // foreach (UnityEngine.Component component in gameObject.transform) {
-        //     component.gameObject.SetActive(action.activate);
-        // }
-    }
+    private static void ApplyNetworkDataFromAction(
+        EntityNetworkData _,
+        HutongGames.PlayMaker.Actions.ActivateAllChildren action
+    ) => action.OnEnter();
 
     #endregion
 
@@ -2364,6 +2358,7 @@ internal static class EntityFsmActions {
             return false;
         }
 
+        data.Packet.Write(action.active.Value);
         return true;
     }
 
@@ -2378,7 +2373,7 @@ internal static class EntityFsmActions {
             return;
         }
 
-        collider.enabled = action.active.Value;
+        collider.enabled = data == null ? action.active.Value : data.Packet.ReadBool();
     }
 
     #endregion
@@ -3102,7 +3097,12 @@ internal static class EntityFsmActions {
     #region SetCircleCollider
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetCircleCollider action) {
-        return action.gameObject != null;
+        if (action.gameObject == null) {
+            return false;
+        }
+
+        data.Packet.Write(action.active.Value);
+        return true;
     }
 
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, SetCircleCollider action) {
@@ -3113,7 +3113,7 @@ internal static class EntityFsmActions {
 
         var collider = gameObject.GetComponent<CircleCollider2D>();
         if (collider != null) {
-            collider.enabled = action.active.Value;
+            collider.enabled = data == null ? action.active.Value : data.Packet.ReadBool();
         }
     }
 
@@ -3122,7 +3122,12 @@ internal static class EntityFsmActions {
     #region SetPolygonCollider
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetPolygonCollider action) {
-        return action.gameObject != null;
+        if (action.gameObject == null) {
+            return false;
+        }
+
+        data.Packet.Write(action.active.Value);
+        return true;
     }
 
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, SetPolygonCollider action) {
@@ -3133,7 +3138,7 @@ internal static class EntityFsmActions {
 
         var collider = gameObject.GetComponent<PolygonCollider2D>();
         if (collider != null) {
-            collider.enabled = action.active.Value;
+            collider.enabled = data == null ? action.active.Value : data.Packet.ReadBool();
         }
     }
 

@@ -480,21 +480,17 @@ internal class Entity {
             //addedComponentsString += " Collider";
         }
 
-        var hostDamageHero = Object.Host.GetComponent<DamageHero>();
-        var clientDamageHero = Object.Client.GetComponent<DamageHero>();
-        if (hostDamageHero != null && clientDamageHero != null) {
+        var hostDamageHeroes = Object.Host.GetComponentsInChildren<DamageHero>(true);
+        var clientDamageHeroes = Object.Client.GetComponentsInChildren<DamageHero>(true);
+        if (hostDamageHeroes.Length > 0 && clientDamageHeroes.Length > 0) {
             //Logger.Info($"Adding DamageHero component to entity: {Object.Host.name}");
-
-            var damageHero = new HostClientPair<DamageHero> {
-                Host = hostDamageHero,
-                Client = clientDamageHero
-            };
 
             _components[EntityComponentType.DamageHero] = new DamageHeroComponent(
                 _netClient,
                 Id,
                 Object,
-                damageHero
+                hostDamageHeroes,
+                clientDamageHeroes
             );
 
             //addedComponentsString += " DamageHero";
