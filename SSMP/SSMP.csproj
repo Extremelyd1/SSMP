@@ -59,7 +59,7 @@
         <PackageReference Include="UnityEngine.Modules" Version="6000.0.50" IncludeAssets="compile" PrivateAssets="all"/>
         <!--If you're unable resolve this dependency, check that you're using the nuget v3 package feed instead of v2.-->
         <PackageReference Include="Silksong.GameLibs" Version="*-*" PrivateAssets="all"/>
-        <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2" PrivateAssets="all"/>
+        <PackageReference Include="BouncyCastle.Cryptography" Version="2.7.0" PrivateAssets="all"/>
     </ItemGroup>
 
     <Target Name="CopyMod" AfterTargets="PostBuildEvent" Condition="'@(OutputDirectory)' != ''">
