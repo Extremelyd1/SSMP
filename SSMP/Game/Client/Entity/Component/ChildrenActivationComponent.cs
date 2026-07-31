@@ -71,11 +71,11 @@ internal class ChildrenActivationComponent : EntityComponent {
         var newActive = data.Packet.ReadBool();
 
         foreach (var child in _hostChildren) {
-            child.SetActive(newActive);
+            child?.SetActive(newActive);
         }
 
         foreach (var child in _clientChildren) {
-            child.SetActive(newActive);
+            child?.SetActive(newActive);
         }
     }
 

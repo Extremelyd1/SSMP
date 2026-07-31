@@ -32,13 +32,16 @@ internal class DamageHeroComponent : EntityComponent {
         NetClient netClient,
         ushort entityId,
         HostClientPair<GameObject> gameObject,
-        DamageHero[] hostDamageHeroes,
-        DamageHero[] clientDamageHeroes
+        DamageHero[]? hostDamageHeroes,
+        DamageHero[]? clientDamageHeroes
     ) : base(netClient, entityId, gameObject) {
-        _hostDamageHeroes = hostDamageHeroes;
-        _clientDamageHeroes = clientDamageHeroes;
-        _lastDamageDealt = hostDamageHeroes.Select(damageHero => damageHero.damageDealt).ToArray();
-        _lastActive = hostDamageHeroes.Select(damageHero => damageHero.gameObject.activeSelf).ToArray();
+        _hostDamageHeroes = hostDamageHeroes ?? [];
+        _clientDamageHeroes = clientDamageHeroes ?? [];
+        _lastDamageDealt = _hostDamageHeroes.Select(damageHero => damageHero != null ? damageHero.damageDealt : 0)
+                                            .ToArray();
+        _lastActive = _hostDamageHeroes.Select(damageHero =>
+            damageHero != null && damageHero.gameObject != null && damageHero.gameObject.activeSelf
+        ).ToArray();
     }
 
     /// <summary>
@@ -56,9 +59,14 @@ internal class DamageHeroComponent : EntityComponent {
 
         var changed = false;
         for (var i = 0; i < _hostDamageHeroes.Length; i++) {
-            var damageDealt = _hostDamageHeroes[i].damageDealt;
+            var damageHero = _hostDamageHeroes[i];
+            if (damageHero == null || damageHero.gameObject == null) {
+                continue;
+            }
+
+            var damageDealt = damageHero.damageDealt;
             if (damageDealt == _lastDamageDealt[i]) {
-                var active = _hostDamageHeroes[i].gameObject.activeSelf;
+                var active = damageHero.gameObject.activeSelf;
                 if (active == _lastActive[i]) {
                     continue;
                 }
@@ -69,7 +77,7 @@ internal class DamageHeroComponent : EntityComponent {
             }
 
             _lastDamageDealt[i] = damageDealt;
-            _lastActive[i] = _hostDamageHeroes[i].gameObject.activeSelf;
+            _lastActive[i] = damageHero.gameObject.activeSelf;
             changed = true;
         }
 
@@ -82,8 +90,8 @@ internal class DamageHeroComponent : EntityComponent {
         };
         data.Packet.Write((byte) _hostDamageHeroes.Length);
         foreach (var damageHero in _hostDamageHeroes) {
-            data.Packet.Write((byte) damageHero.damageDealt);
-            data.Packet.Write(damageHero.gameObject.activeSelf);
+            data.Packet.Write((byte) (damageHero != null ? damageHero.damageDealt : 0));
+            data.Packet.Write(damageHero != null && damageHero.gameObject != null && damageHero.gameObject.activeSelf);
         }
 
         SendData(data);
@@ -99,12 +107,14 @@ internal class DamageHeroComponent : EntityComponent {
         for (var i = 0; i < length; i++) {
             var damageDealt = data.Packet.ReadByte();
             var active = data.Packet.ReadBool();
-            if (i < _hostDamageHeroes.Length) {
+            if (i < _hostDamageHeroes.Length && _hostDamageHeroes[i] != null &&
+                _hostDamageHeroes[i].gameObject != null) {
                 _hostDamageHeroes[i].damageDealt = damageDealt;
                 _hostDamageHeroes[i].gameObject.SetActive(active);
             }
 
-            if (i < _clientDamageHeroes.Length) {
+            if (i < _clientDamageHeroes.Length && _clientDamageHeroes[i] != null &&
+                _clientDamageHeroes[i].gameObject != null) {
                 _clientDamageHeroes[i].damageDealt = damageDealt;
                 _clientDamageHeroes[i].gameObject.SetActive(active);
             }
