@@ -70,9 +70,29 @@ internal partial class GamePatcher {
     private Hook? _cameraLockAreaIsInApplicableGameStateHook;
 
     /// <summary>
-    /// Hook for guarding <see cref="Crawler.StopCrawling"/> against destruction-time null reference errors.
+    /// The runtime type name for the game-owned SetParticleScale component resolved through reflection.
+    /// </summary>
+    private const string SetParticleScaleTypeName = "SetParticleScale";
+
+    /// <summary>
+    /// The method name of the reflected Unity update method being detoured.
+    /// </summary>
+    private const string SetParticleScaleUpdateMethodName = "OnUpdate";
+
+    /// <summary>
+    /// Hook for guarding <c>SetParticleScale.OnUpdate</c> against destruction-time null reference errors.
     /// </summary>
     private Hook? _crawlerStopCrawlingHook;
+
+    /// <summary>
+    /// Hook for guarding <c>SetParticleScale.OnUpdate</c> against the known destruction-time or missing-component null-reference failure.
+    /// </summary>
+    private Hook? _setParticleScaleOnUpdateHook;
+
+    /// <summary>
+    /// Tracks whether the NullReferenceException in <c>SetParticleScale.OnUpdate</c> has been logged once.
+    /// </summary>
+    private static bool _loggedSetParticleScaleException;
 
     /// <summary>
     /// The NetClient instance to check if we are connected to a server.
@@ -159,7 +179,35 @@ internal partial class GamePatcher {
             OnCrawlerStopCrawling
         );
 
+        RegisterSetParticleScaleHook();
         RegisterAggressionHooks();
+    }
+
+    /// <summary>
+    /// Resolves the game-owned SetParticleScale type and registers a runtime detour
+    /// for its OnUpdate method. Reflection is necessary because SetParticleScale is a
+    /// game-defined type not directly referenced at compile time.
+    /// </summary>
+    private void RegisterSetParticleScaleHook() {
+        var setParticleScaleType = typeof(Crawler).Assembly.GetType(SetParticleScaleTypeName);
+        if (setParticleScaleType == null) {
+            Logger.Error($"Could not find game type '{SetParticleScaleTypeName}'");
+            return;
+        }
+
+        var onUpdateMethod = setParticleScaleType.GetMethod(
+            SetParticleScaleUpdateMethodName,
+            InstancePublicFlags | InstanceNonPublicFlags
+        );
+        if (onUpdateMethod == null) {
+            Logger.Error($"Could not find {SetParticleScaleTypeName}#{SetParticleScaleUpdateMethodName}");
+            return;
+        }
+
+        _setParticleScaleOnUpdateHook = new Hook(
+            onUpdateMethod,
+            OnSetParticleScaleOnUpdate
+        );
     }
 
     /// <summary>
@@ -200,6 +248,9 @@ internal partial class GamePatcher {
 
         _crawlerStopCrawlingHook?.Dispose();
         _crawlerStopCrawlingHook = null;
+
+        _setParticleScaleOnUpdateHook?.Dispose();
+        _setParticleScaleOnUpdateHook = null;
     }
 
     /// <summary>
@@ -240,6 +291,30 @@ internal partial class GamePatcher {
             orig(self);
         } catch (NullReferenceException) {
             Logger.Debug("Safely caught NullReferenceException in Crawler.StopCrawling");
+        }
+    }
+
+    /// <summary>
+    /// Executes SetParticleScale.OnUpdate while suppressing the known
+    /// destruction-time null-reference failure caused by a missing or destroyed
+    /// component.
+    /// </summary>
+    /// <param name="orig">The original SetParticleScale.OnUpdate method.</param>
+    /// <param name="self">The SetParticleScale component instance.</param>
+    private static void OnSetParticleScaleOnUpdate(
+        Action<MonoBehaviour> orig,
+        MonoBehaviour self
+    ) {
+        try {
+            orig(self);
+        } catch (NullReferenceException e) {
+            if (!_loggedSetParticleScaleException) {
+                _loggedSetParticleScaleException = true;
+                Logger.Debug(
+                    $"Safely caught NullReferenceException in " +
+                    $"{SetParticleScaleTypeName}#{SetParticleScaleUpdateMethodName}: {e.Message}"
+                );
+            }
         }
     }
 
