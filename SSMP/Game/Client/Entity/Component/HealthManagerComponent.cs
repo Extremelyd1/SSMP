@@ -89,14 +89,17 @@ internal class HealthManagerComponent : EntityComponent {
         _lastHp = healthManager.Host.hp;
         _lastInvincibleFromDirection = healthManager.Host.InvincibleFromDirection;
 
-        var dieMethod = Array.Find(
-            typeof(HealthManager).GetMethods(HookBindingFlags),
-            method =>
-                method.Name == nameof(HealthManager.Die) &&
-                method.GetParameters() is { Length: 3 } parameters &&
-                parameters[0].ParameterType == typeof(float?) &&
-                parameters[1].ParameterType == typeof(AttackTypes) &&
-                parameters[2].ParameterType == typeof(bool)
+        // Get the largest overload of Die from HealthManager, because that is the method that is getting called by
+        // all other overloads regardless
+        var dieMethod = typeof(HealthManager).GetMethod(
+            nameof(HealthManager.Die),
+            HookBindingFlags,
+            Type.DefaultBinder,
+            [
+                typeof(float?), typeof(AttackTypes), typeof(NailElements), typeof(GameObject),
+                typeof(bool), typeof(float), typeof(bool), typeof(bool)
+            ],
+            null
         );
 
         if (dieMethod == null) {
@@ -113,20 +116,20 @@ internal class HealthManagerComponent : EntityComponent {
     /// <summary>
     /// Callback method for when the health manager dies.
     /// </summary>
-    /// <param name="orig">The original method.</param>
-    /// <param name="self">The health manager instance.</param>
-    /// <param name="attackDirection">The direction of the attack that caused the death.</param>
-    /// <param name="attackType">The type of attack that caused the death.</param>
-    /// <param name="ignoreEvasion">Whether to ignore evasion.</param>
     private void HealthManagerOnDie(
-        Action<HealthManager, float?, AttackTypes, bool> orig,
+        Action<HealthManager, float?, AttackTypes, NailElements, GameObject, bool, float, bool, bool> orig,
         HealthManager self,
         float? attackDirection,
         AttackTypes attackType,
-        bool ignoreEvasion
+        NailElements nailElements,
+        GameObject gameObject,
+        bool ignoreEvasion,
+        float corpseFlingMultiplier,
+        bool overrideSpecialDeath,
+        bool disallowDropFlying
     ) {
         if (self != _healthManager.Host && self != _healthManager.Client) {
-            orig(self, attackDirection, attackType, ignoreEvasion);
+            InvokeOrig();
             return;
         }
 
@@ -136,7 +139,7 @@ internal class HealthManagerComponent : EntityComponent {
             } else {
                 Logger.Info("HealthManager Die was called on client entity, but it is allowed death");
 
-                orig(self, attackDirection, attackType, ignoreEvasion);
+                InvokeOrig();
 
                 _allowDeath = false;
             }
@@ -146,7 +149,7 @@ internal class HealthManagerComponent : EntityComponent {
 
         Logger.Info("HealthManager Die was called on host entity");
 
-        orig(self, attackDirection, attackType, ignoreEvasion);
+        InvokeOrig();
 
         var data = ObjectPool<EntityNetworkData>.Get();
         data.Type = EntityComponentType.Death;
@@ -163,6 +166,12 @@ internal class HealthManagerComponent : EntityComponent {
         data.Packet.Write(ignoreEvasion);
 
         SendData(data);
+        return;
+
+        // Utility method to invoke the original method with all the original arguments
+        void InvokeOrig() {
+            orig(self, attackDirection, attackType, nailElements, gameObject, ignoreEvasion, corpseFlingMultiplier, overrideSpecialDeath, disallowDropFlying);
+        }
     }
 
     /// <summary>
