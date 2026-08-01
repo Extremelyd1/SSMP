@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using HutongGames.PlayMaker.Actions;
 using UnityEngine;
 
 namespace SSMP.Game.Client.Entity; 
@@ -35,6 +36,38 @@ internal static class EntitySpawner {
         GameObject clientObject,
         List<PlayMakerFSM> clientFsms
     ) {
+        if (spawnedType == EntityType.GrassBall) {
+            IEnumerable<PlayMakerFSM> sourceFsms = clientObject != null
+                ? clientObject.GetComponentsInChildren<PlayMakerFSM>(true)
+                : clientFsms;
+
+            foreach (var fsm in sourceFsms) {
+                foreach (var state in fsm.FsmStates) {
+                    foreach (var action in state.Actions) {
+                        var prefab = action switch {
+                            SpawnObjectFromGlobalPool spawnAction => spawnAction.gameObject?.Value,
+                            FlingObjectsFromGlobalPool flingAction => flingAction.gameObject?.Value,
+                            FlingObjectsFromGlobalPoolVel flingAction => flingAction.gameObject?.Value,
+                            FlingObjectsFromGlobalPoolTime flingAction => flingAction.gameObject?.Value,
+                            _ => null
+                        };
+
+                        if (prefab != null && prefab.name.Equals("Grass Ball", StringComparison.OrdinalIgnoreCase)) {
+                            return prefab.Spawn(Vector3.zero, Quaternion.identity);
+                        }
+                    }
+                }
+            }
+
+            foreach (var prefab in Resources.FindObjectsOfTypeAll<GameObject>()) {
+                if (prefab.scene.IsValid() || !prefab.name.Equals("Grass Ball", StringComparison.OrdinalIgnoreCase)) {
+                    continue;
+                }
+
+                return prefab.Spawn(Vector3.zero, Quaternion.identity);
+            }
+        }
+
         // Logger.Info($"Trying to spawn entity game object for: {spawningType}, {spawnedType}");
         //
         // if (spawningType == EntityType.ElderBaldur && spawnedType == EntityType.Baldur) {

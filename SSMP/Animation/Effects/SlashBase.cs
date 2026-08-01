@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using GlobalSettings;
+using SSMP.Fsm;
 using SSMP.Util;
 using SSMP.Internals;
 using SSMP.Networking.Packet;
@@ -129,6 +130,18 @@ internal abstract class SlashBase : ParryableEffect {
         var poly = slashObj.GetComponent<PolygonCollider2D>();
         var mesh = slashObj.GetComponent<MeshRenderer>();
         var anim = slashObj.GetComponent<tk2dSpriteAnimator>();
+        
+        // Figure out the direction of the slash
+        var dir = type switch {
+            SlashType.Dash or SlashType.Normal or SlashType.DashAlt or SlashType.NormalAlt => 
+                playerObject.transform.localScale.x > 0 ? 180f : 0f,
+            SlashType.Wall => playerObject.transform.localScale.x > 0 ? 0f : 180f,
+            SlashType.Down or SlashType.DownAlt or SlashType.DownSpike => 270f,
+            SlashType.Up => 90f,
+            _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
+        };
+
+        ChangeAttackDirection(slashObj, dir);
 
         string animName;
         Vector3 scale;
@@ -146,9 +159,11 @@ internal abstract class SlashBase : ParryableEffect {
             throw new InvalidOperationException("Both NailSlash and Downspike are null components on slash object");
         }
 
-        // For some attacks in crests, down slashes and down spikes, this component exists which will interfere
-        // So we destroy it immediately
+        // For some attacks in crests, down slashes and down spikes, the "HeroDownAttack" component exists which will
+        // interfere with the local player, so we instead put a custom variant on the object and remove the original
         if (heroDownAttack) {
+            slashObj.AddComponent<RemoteHeroDownAttack>();
+
             Object.DestroyImmediate(heroDownAttack);
         }
 
@@ -377,6 +392,9 @@ internal abstract class SlashBase : ParryableEffect {
 
         IEnumerator Play() {
             var travelComp = slashObj.GetComponent<NailSlashTravel>();
+
+            // Remove the callback from the DamageEnemies class, because it causes errors for remote player attacks
+            slashObj.GetComponent<DamageEnemies>().HitResponded -= travelComp.OnDamaged;
 
             travelComp.hasStarted = true;
 

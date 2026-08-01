@@ -6,9 +6,10 @@ using HutongGames.PlayMaker.Actions;
 using SSMP.Game.Client.Entity.Action;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
+
 #pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
 
-namespace SSMP.Game.Client.Entity; 
+namespace SSMP.Game.Client.Entity;
 
 /// <summary>
 /// Class that manages initializing client-side entities to ensure they have correct references within FSM actions
@@ -18,7 +19,7 @@ internal static class EntityInitializer {
     /// <summary>
     /// Array of state names that indicates that it is a initializing state.
     /// </summary>
-    private static readonly string[] InitStateNames = {
+    private static readonly string[] InitStateNames = [
         "init",
         "initiate",
         "initialise",
@@ -28,25 +29,26 @@ internal static class EntityInitializer {
         "init pause",
         "deparents",
         "opened" // For battle gates
-    };
+    ];
 
     /// <summary>
     /// Array of types that should be removed from client-side enemies so it doesn't interfere with remote behaviour.
     /// </summary>
-    private static readonly Type[] ToRemoveTypes = {
+    private static readonly Type[] ToRemoveTypes = [
         typeof(Walker),
-        typeof(Rigidbody2D),
-        typeof(BigCentipede)
-    };
+        typeof(BigCentipede),
+        typeof(Crawler)
+    ];
 
     /// <summary>
     /// Array of types of actions that should be skipped during initialization. 
     /// </summary>
-    private static readonly Type[] ToSkipTypes = {
+    private static readonly Type[] ToSkipTypes = [
         typeof(Tk2dPlayAnimation),
-        typeof(ActivateAllChildren),
-        typeof(SetCollider) // TODO: test whether this has effects on other entities during host transfer (this was added for battle gates)
-    };
+        typeof(HutongGames.PlayMaker.Actions.ActivateAllChildren),
+        typeof(SetCollider) // TODO: test whether this has effects on other entities during host transfer (this was
+        // added for battle gates)
+    ];
 
     /// <summary>
     /// Initialize the FSM of a client entity by finding initialize states and executing the actions in those states.
@@ -111,13 +113,61 @@ internal static class EntityInitializer {
     /// Remove all types that should be removed from a client-side entity object.
     /// </summary>
     /// <param name="gameObject">The game object on which to remove the types.</param>
-    public static void RemoveClientTypes(GameObject gameObject) {
+    /// <param name="entityType">The registered entity type.</param>
+    public static void RemoveClientTypes(GameObject gameObject, EntityType entityType) {
+        // Keep Rigidbody2D components alive. Native death and corpse components cache their bodies during Awake;
+        // destroying one here leaves callbacks such as ActiveCorpse.Update and SetParticleScale.OnUpdate with a
+        // Unity-null reference. Remote controller bodies are still made kinematic so they cannot simulate locally.
+        if (entityType != EntityType.GrassBall) {
+            foreach (var rigidbody in gameObject.GetComponentsInChildren<Rigidbody2D>(true)) {
+                if (rigidbody != null) {
+                    ConfigureClientRigidbody(rigidbody);
+                }
+            }
+        }
+
         foreach (var type in ToRemoveTypes) {
-            var component = gameObject.GetComponent(type);
-            if (component != null) {
+            foreach (var component in gameObject.GetComponentsInChildren(type, true)) {
+                if (component == null) {
+                    continue;
+                }
+
+                if (component is Behaviour behaviour) {
+                    behaviour.enabled = false;
+                }
+
                 UnityEngine.Object.Destroy(component);
             }
         }
+    }
+
+    /// <summary>
+    /// Makes one client-side rigidbody non-authoritative unless it is owned by corpse logic.
+    /// </summary>
+    /// <param name="rigidbody">The client rigidbody to configure.</param>
+    internal static void ConfigureClientRigidbody(Rigidbody2D rigidbody) {
+        if (IsCorpseRigidbody(rigidbody)) {
+            return;
+        }
+
+        rigidbody.bodyType = RigidbodyType2D.Kinematic;
+    }
+
+    /// <summary>
+    /// Checks whether a rigidbody belongs to a corpse hierarchy whose native lifecycle requires the original body.
+    /// </summary>
+    /// <param name="rigidbody">The rigidbody to classify.</param>
+    /// <returns>Whether the rigidbody is owned by corpse logic.</returns>
+    private static bool IsCorpseRigidbody(Rigidbody2D rigidbody) {
+        if (rigidbody.GetComponent<Corpse>() != null ||
+            rigidbody.GetComponent<CorpseItems>() != null ||
+            rigidbody.GetComponentInParent<Corpse>() != null ||
+            rigidbody.GetComponentInParent<CorpseItems>() != null) {
+            return true;
+        }
+
+        // ActiveCorpse caches GetComponent<Rigidbody2D>() on the same object.
+        return rigidbody.GetComponent<ActiveCorpse>() != null;
     }
 
     /// <summary>
@@ -136,7 +186,9 @@ internal static class EntityInitializer {
             var wasPreProcessed = false;
             foreach (var action in state.Actions) {
                 if (action.Fsm == null) {
-                    Logger.Debug($"Reference to FSM in action '{action.GetType()}' in state '{state.Name}' was null, pre-processing FSM...");
+                    Logger.Debug(
+                        $"Reference to FSM in action '{action.GetType()}' in state '{state.Name}' was null, pre-processing FSM..."
+                    );
                     fsm.Preprocess();
                     wasPreProcessed = true;
                     break;

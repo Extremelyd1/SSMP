@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using SSMP.Internals;
 using SSMP.Util;
 using UnityEngine;
@@ -18,6 +20,30 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
     /// Whether this effect should deal damage.
     /// </summary>
     protected bool ShouldDoDamage;
+
+    /// <summary>
+    /// Stores HP values before remote visual-only enemy hits so the hit pipeline can run without allowing remote attack
+    /// replicas to directly apply PvE damage.
+    /// </summary>
+    private static readonly Dictionary<int, int> RemoteVisualHitHpBefore = new();
+
+    /// <summary>
+    /// Cached delegate to store enemy HP before applying remote visual-only damage.
+    /// </summary>
+    private static readonly Action<HealthManager, HitInstance> WillDamageEnemyOptionsDelegate =
+        StoreHpBeforeRemoteVisualHit;
+
+    /// <summary>
+    /// Cached delegate to restore enemy HP after applying remote visual-only damage.
+    /// </summary>
+    private static readonly Action<HealthManager> DamagedEnemyHealthManagerDelegate = RestoreHpAfterRemoteVisualHit;
+
+    /// <summary>
+    /// Initializes static fields of the <see cref="DamageAnimationEffect"/> class and registers scene transition hooks to prevent memory leaks.
+    /// </summary>
+    static DamageAnimationEffect() {
+        UnityEngine.SceneManagement.SceneManager.activeSceneChanged += (_, _) => RemoteVisualHitHpBefore.Clear();
+    }
 
     /// <inheritdoc/>
     public abstract override void Play(GameObject playerObject, CrestType crestType, byte[]? effectInfo);
@@ -89,21 +115,51 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
     }
 
     /// <summary>
-    /// Fixes a remote attack's <see cref="DamageEnemies"/> component by disabling various properties that would
-    /// interfere with the local player.
+    /// Fixes a remote attack's <see cref="DamageEnemies"/> components by allowing visual enemy hit reactions while
+    /// preventing remote attack replicas from directly applying PvE damage or lethal enemy side effects.
     /// </summary>
-    /// <param name="target">The object with the <see cref="DamageEnemies"/> component.</param>
+    /// <param name="target">The object that may contain one or more <see cref="DamageEnemies"/> components.</param>
     protected static void FixDamageEnemies(GameObject target) {
-        // Add if we want to disable enemy damage
-        //if (!ServerSettings.AllowDamageEnemies) {
-        //    target.DestroyComponent<DamageEnemies>();
-        //}
+        var damageEnemiesComponents = target.GetComponentsInChildren<DamageEnemies>(true);
 
-        if (target.TryGetComponent<DamageEnemies>(out var damageEnemies)) {
+        foreach (var damageEnemies in damageEnemiesComponents) {
             damageEnemies.doesNotTink = true;
             damageEnemies.doesNotTinkThroughWalls = true;
             damageEnemies.doesNotParry = true;
             damageEnemies.silkGeneration = HitSilkGeneration.None;
+
+            damageEnemies.nonLethal = true;
+            damageEnemies.deathEndDamage = false;
+            damageEnemies.deathEventTarget = null;
+            damageEnemies.deathEvent = string.Empty;
+
+            damageEnemies.WillDamageEnemyOptions -= WillDamageEnemyOptionsDelegate;
+            damageEnemies.WillDamageEnemyOptions += WillDamageEnemyOptionsDelegate;
+
+            damageEnemies.DamagedEnemyHealthManager -= DamagedEnemyHealthManagerDelegate;
+            damageEnemies.DamagedEnemyHealthManager += DamagedEnemyHealthManagerDelegate;
         }
+    }
+
+    /// <summary>
+    /// Stores the enemy HP before a remote visual-only hit applies damage.
+    /// </summary>
+    /// <param name="healthManager">The health manager that is about to be damaged.</param>
+    /// <param name="hitInstance">The hit instance that is about to be applied.</param>
+    private static void StoreHpBeforeRemoteVisualHit(HealthManager healthManager, HitInstance hitInstance) {
+        RemoteVisualHitHpBefore[healthManager.GetInstanceID()] = healthManager.hp;
+    }
+
+    /// <summary>
+    /// Restores enemy HP after a remote visual-only hit so visual reactions can play without applying PvE damage.
+    /// </summary>
+    /// <param name="healthManager">The health manager that was damaged by the remote visual-only hit.</param>
+    private static void RestoreHpAfterRemoteVisualHit(HealthManager healthManager) {
+        var instanceId = healthManager.GetInstanceID();
+        if (!RemoteVisualHitHpBefore.Remove(instanceId, out var hpBeforeHit)) {
+            return;
+        }
+
+        healthManager.hp = hpBeforeHit;
     }
 }

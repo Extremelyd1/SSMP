@@ -103,7 +103,7 @@ internal class SpawnJarComponent : EntityComponent {
     // }
     
     /// <inheritdoc />
-    public override void InitializeHost() {
+    protected override void InitializeHost() {
         var data = new EntityNetworkData {
             Type = EntityComponentType.SpawnJar
         };
