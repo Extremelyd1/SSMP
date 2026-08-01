@@ -36,7 +36,6 @@ internal static class EntityInitializer {
     /// </summary>
     private static readonly Type[] ToRemoveTypes = [
         typeof(Walker),
-        typeof(Rigidbody2D),
         typeof(BigCentipede),
         typeof(Crawler)
     ];
@@ -116,16 +115,59 @@ internal static class EntityInitializer {
     /// <param name="gameObject">The game object on which to remove the types.</param>
     /// <param name="entityType">The registered entity type.</param>
     public static void RemoveClientTypes(GameObject gameObject, EntityType entityType) {
-        foreach (var type in ToRemoveTypes) {
-            if (type == typeof(Rigidbody2D) && entityType == EntityType.GrassBall) {
-                continue;
+        // Keep Rigidbody2D components alive. Native death and corpse components cache their bodies during Awake;
+        // destroying one here leaves callbacks such as ActiveCorpse.Update and SetParticleScale.OnUpdate with a
+        // Unity-null reference. Remote controller bodies are still made kinematic so they cannot simulate locally.
+        if (entityType != EntityType.GrassBall) {
+            foreach (var rigidbody in gameObject.GetComponentsInChildren<Rigidbody2D>(true)) {
+                if (rigidbody != null) {
+                    ConfigureClientRigidbody(rigidbody);
+                }
             }
+        }
 
-            var component = gameObject.GetComponent(type);
-            if (component != null) {
+        foreach (var type in ToRemoveTypes) {
+            foreach (var component in gameObject.GetComponentsInChildren(type, true)) {
+                if (component == null) {
+                    continue;
+                }
+
+                if (component is Behaviour behaviour) {
+                    behaviour.enabled = false;
+                }
+
                 UnityEngine.Object.Destroy(component);
             }
         }
+    }
+
+    /// <summary>
+    /// Makes one client-side rigidbody non-authoritative unless it is owned by corpse logic.
+    /// </summary>
+    /// <param name="rigidbody">The client rigidbody to configure.</param>
+    internal static void ConfigureClientRigidbody(Rigidbody2D rigidbody) {
+        if (IsCorpseRigidbody(rigidbody)) {
+            return;
+        }
+
+        rigidbody.bodyType = RigidbodyType2D.Kinematic;
+    }
+
+    /// <summary>
+    /// Checks whether a rigidbody belongs to a corpse hierarchy whose native lifecycle requires the original body.
+    /// </summary>
+    /// <param name="rigidbody">The rigidbody to classify.</param>
+    /// <returns>Whether the rigidbody is owned by corpse logic.</returns>
+    private static bool IsCorpseRigidbody(Rigidbody2D rigidbody) {
+        if (rigidbody.GetComponent<Corpse>() != null ||
+            rigidbody.GetComponent<CorpseItems>() != null ||
+            rigidbody.GetComponentInParent<Corpse>() != null ||
+            rigidbody.GetComponentInParent<CorpseItems>() != null) {
+            return true;
+        }
+
+        // ActiveCorpse caches GetComponent<Rigidbody2D>() on the same object.
+        return rigidbody.GetComponent<ActiveCorpse>() != null;
     }
 
     /// <summary>

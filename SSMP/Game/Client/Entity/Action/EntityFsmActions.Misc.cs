@@ -4,6 +4,7 @@ using HutongGames.PlayMaker.Actions;
 using SSMP.Networking.Packet.Data;
 using UnityEngine;
 using Object = UnityEngine.Object;
+using Logger = SSMP.Logging.Logger;
 
 // ReSharper disable UnusedMember.Local
 // ReSharper disable UnusedParameter.Local
@@ -150,6 +151,13 @@ internal static partial class EntityFsmActions {
             return;
         }
 
+        // A client-side controller body can be made kinematic, but destroying it invalidates cached references in
+        // native death/corpse components. Corpse-owned bodies must remain intact for the native death lifecycle.
+        if (component is Rigidbody2D rigidbody) {
+            EntityInitializer.ConfigureClientRigidbody(rigidbody);
+            return;
+        }
+
         Object.Destroy(component);
     }
 
@@ -253,7 +261,7 @@ internal static partial class EntityFsmActions {
             try {
                 obj = methodInfo.Invoke(component, paramArray);
             } catch (Exception e) {
-                //Logger.Error($"Error applying CallMethodProper:\n{e}");
+                Logger.Error($"Error applying CallMethodProper:\n{e}");
                 return;
             }
         }

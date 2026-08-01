@@ -70,29 +70,24 @@ internal partial class GamePatcher {
     private Hook? _cameraLockAreaIsInApplicableGameStateHook;
 
     /// <summary>
-    /// The runtime type name for the game-owned SetParticleScale component resolved through reflection.
-    /// </summary>
-    private const string SetParticleScaleTypeName = "SetParticleScale";
-
-    /// <summary>
-    /// The method name of the reflected Unity update method being detoured.
-    /// </summary>
-    private const string SetParticleScaleUpdateMethodName = "OnUpdate";
-
-    /// <summary>
-    /// Hook for guarding <c>SetParticleScale.OnUpdate</c> against destruction-time null reference errors.
+    /// Hook for guarding <see cref="Crawler.StopCrawling"/> against destruction-time null reference errors.
     /// </summary>
     private Hook? _crawlerStopCrawlingHook;
 
     /// <summary>
-    /// Hook for guarding <c>SetParticleScale.OnUpdate</c> against the known destruction-time or missing-component null-reference failure.
+    /// Hook that repairs SetParticleScale's cached parent state when a death effect is reparented or detached.
     /// </summary>
-    private Hook? _setParticleScaleOnUpdateHook;
+    private Hook? _setParticleScaleParentChangedHook;
 
     /// <summary>
-    /// Tracks whether the NullReferenceException in <c>SetParticleScale.OnUpdate</c> has been logged once.
+    /// Hook for guarding <see cref="WalkerV2.StopWalking"/> against destruction-time null reference errors.
     /// </summary>
-    private static bool _loggedSetParticleScaleException;
+    private Hook? _walkerV2StopWalkingHook;
+
+    /// <summary>
+    /// Hook for guarding <see cref="Walker.Stop"/> against destruction-time null reference errors.
+    /// </summary>
+    private Hook? _walkerStopHook;
 
     /// <summary>
     /// The NetClient instance to check if we are connected to a server.
@@ -113,45 +108,32 @@ internal partial class GamePatcher {
     /// Registers all gameplay hooks owned by this patcher.
     /// </summary>
     public void RegisterHooks() {
-        _tinkEffectOnTriggerEnter2DHook = new ILHook(
-            typeof(TinkEffect).GetMethod(
-                "TryDoTinkReactionNoDamager",
-                BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public,
-                null,
-                [
-                    typeof(GameObject), typeof(bool), typeof(bool), typeof(bool), typeof(Vector2).MakeByRefType()
-                ],
-                null
-            )!,
-            TinkEffectOnTriggerEnter2D
+        _tinkEffectOnTriggerEnter2DHook = TryCreateILHook(
+            typeof(TinkEffect),
+            "TryDoTinkReactionNoDamager",
+            TinkEffectOnTriggerEnter2D,
+            parameterTypes: [
+                typeof(GameObject), typeof(bool), typeof(bool), typeof(bool), typeof(Vector2).MakeByRefType()
+            ]
         );
 
-        _healthManagerInvincibleHook = new ILHook(
-            typeof(HealthManager).GetMethod(
-                "Invincible", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public
-            )!,
-            HealthManagerOnInvincible
+        _healthManagerInvincibleHook = TryCreateILHook(
+            typeof(HealthManager), "Invincible", HealthManagerOnInvincible
         );
 
-        _healthManagerTakeDamageHook = new ILHook(
-            typeof(HealthManager).GetMethod(
-                "TakeDamage", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public
-            )!,
-            HealthManagerOnTakeDamage
+        _healthManagerTakeDamageHook = TryCreateILHook(
+            typeof(HealthManager), "TakeDamage", HealthManagerOnTakeDamage
         );
 
-        _callMethodProperDoMethodCallHook = new Hook(
-            typeof(CallMethodProper).GetMethod(
-                "DoMethodCall", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public
-            )!,
-            CallMethodProperOnDoMethodCall
+        _callMethodProperDoMethodCallHook = TryCreateHook(
+            typeof(CallMethodProper), "DoMethodCall", CallMethodProperOnDoMethodCall
         );
 
-        _cameraLockAreaIsInApplicableGameStateHook = new Hook(
-            typeof(CameraLockArea).GetMethod(
-                "IsInApplicableGameState", StaticNonPublicPublicFlags
-            )!,
-            CameraLockAreaOnIsInApplicableGameState
+        _cameraLockAreaIsInApplicableGameStateHook = TryCreateHook(
+            typeof(CameraLockArea),
+            "IsInApplicableGameState",
+            CameraLockAreaOnIsInApplicableGameState,
+            StaticNonPublicPublicFlags
         );
 
         EventHooks.InteractableBaseAddInsideIL += ILInteractableBaseAddInside;
@@ -162,52 +144,113 @@ internal partial class GamePatcher {
 
         EventHooks.CameraLockAreaAwake += OnCameraLockAreaAwake;
 
-        _chaseObjectDoBuzzHook = new Hook(
-            typeof(ChaseObject).GetMethod("DoBuzz", InstanceNonPublicFlags)!,
-            OnChaseObjectDoBuzz
+        _chaseObjectDoBuzzHook = TryCreateHook(
+            typeof(ChaseObject), "DoBuzz", OnChaseObjectDoBuzz, InstanceNonPublicFlags
         );
 
-        _chaseObjectV2DoChaseHook = new Hook(
-            typeof(ChaseObjectV2).GetMethod("DoChase", InstanceNonPublicFlags)!,
-            OnChaseObjectV2DoChase
+        _chaseObjectV2DoChaseHook = TryCreateHook(
+            typeof(ChaseObjectV2), "DoChase", OnChaseObjectV2DoChase, InstanceNonPublicFlags
         );
 
         RegisterDetectionHooks();
 
-        _crawlerStopCrawlingHook = new Hook(
-            typeof(Crawler).GetMethod("StopCrawling", InstancePublicFlags | InstanceNonPublicFlags)!,
+        _crawlerStopCrawlingHook = TryCreateHook(
+            typeof(Crawler),
+            "StopCrawling",
             OnCrawlerStopCrawling
         );
 
-        RegisterSetParticleScaleHook();
+        _setParticleScaleParentChangedHook = TryCreateHook(
+            typeof(EnemyDeathEffects).Assembly.GetType("SetParticleScale"),
+            "OnTransformParentChanged",
+            OnSetParticleScaleParentChanged
+        );
+
+        _walkerV2StopWalkingHook = TryCreateHook(
+            typeof(WalkerV2),
+            "StopWalking",
+            OnWalkerV2StopWalking
+        );
+
+        _walkerStopHook = TryCreateHook(
+            typeof(Walker),
+            "Stop",
+            OnWalkerStop,
+            parameterTypes: typeof(Walker.StopReasons)
+        );
+
         RegisterAggressionHooks();
     }
 
     /// <summary>
-    /// Resolves the game-owned SetParticleScale type and registers a runtime detour
-    /// for its OnUpdate method. Reflection is necessary because SetParticleScale is a
-    /// game-defined type not directly referenced at compile time.
+    /// Creates a runtime detour for an instance or static method when that method exists in the current game version.
     /// </summary>
-    private void RegisterSetParticleScaleHook() {
-        var setParticleScaleType = typeof(Crawler).Assembly.GetType(SetParticleScaleTypeName);
-        if (setParticleScaleType == null) {
-            Logger.Error($"Could not find game type '{SetParticleScaleTypeName}'");
-            return;
+    /// <param name="type">The type that declares the target method.</param>
+    /// <param name="methodName">The name of the target method.</param>
+    /// <param name="detour">The delegate that replaces the target method.</param>
+    /// <param name="flags">Binding flags used to resolve the target method.</param>
+    /// <param name="parameterTypes">The target method's parameter types when overload resolution is required.</param>
+    /// <returns>The registered hook, or <see langword="null"/> when registration fails.</returns>
+    private static Hook? TryCreateHook(
+        Type? type,
+        string methodName,
+        Delegate detour,
+        BindingFlags flags = InstancePublicFlags | InstanceNonPublicFlags,
+        params Type[] parameterTypes
+    ) {
+        if (type == null) {
+            Logger.Error($"Could not find type for #{methodName}; hook was not registered");
+            return null;
         }
 
-        var onUpdateMethod = setParticleScaleType.GetMethod(
-            SetParticleScaleUpdateMethodName,
-            InstancePublicFlags | InstanceNonPublicFlags
-        );
-        if (onUpdateMethod == null) {
-            Logger.Error($"Could not find {SetParticleScaleTypeName}#{SetParticleScaleUpdateMethodName}");
-            return;
+        var method = parameterTypes.Length == 0
+            ? type.GetMethod(methodName, flags)
+            : type.GetMethod(methodName, flags, null, parameterTypes, null);
+
+        if (method == null) {
+            Logger.Error($"Could not find {type.FullName}#{methodName}; hook was not registered");
+            return null;
         }
 
-        _setParticleScaleOnUpdateHook = new Hook(
-            onUpdateMethod,
-            OnSetParticleScaleOnUpdate
-        );
+        try {
+            return new Hook(method, detour);
+        } catch (Exception e) {
+            Logger.Error($"Could not hook {type.FullName}#{methodName}:\n{e}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Creates a runtime IL detour for an instance or static method when that method exists in the current game version.
+    /// </summary>
+    /// <param name="type">The type that declares the target method.</param>
+    /// <param name="methodName">The name of the target method.</param>
+    /// <param name="manipulator">The IL manipulator that patches the target method body.</param>
+    /// <param name="flags">Binding flags used to resolve the target method.</param>
+    /// <param name="parameterTypes">The target method's parameter types when overload resolution is required.</param>
+    /// <returns>The registered IL hook, or <see langword="null"/> when registration fails.</returns>
+    private static ILHook? TryCreateILHook(
+        Type type,
+        string methodName,
+        ILContext.Manipulator manipulator,
+        BindingFlags flags = InstancePublicFlags | InstanceNonPublicFlags,
+        params Type[] parameterTypes
+    ) {
+        var method = parameterTypes.Length == 0
+            ? type.GetMethod(methodName, flags)
+            : type.GetMethod(methodName, flags, null, parameterTypes, null);
+
+        if (method == null) {
+            Logger.Error($"Could not find {type.FullName}#{methodName}; hook was not registered");
+            return null;
+        }
+
+        try {
+            return new ILHook(method, manipulator);
+        } catch (Exception e) {
+            Logger.Error($"Could not hook {type.FullName}#{methodName}:\n{e}");
+            return null;
+        }
     }
 
     /// <summary>
@@ -249,8 +292,14 @@ internal partial class GamePatcher {
         _crawlerStopCrawlingHook?.Dispose();
         _crawlerStopCrawlingHook = null;
 
-        _setParticleScaleOnUpdateHook?.Dispose();
-        _setParticleScaleOnUpdateHook = null;
+        _setParticleScaleParentChangedHook?.Dispose();
+        _setParticleScaleParentChangedHook = null;
+
+        _walkerV2StopWalkingHook?.Dispose();
+        _walkerV2StopWalkingHook = null;
+
+        _walkerStopHook?.Dispose();
+        _walkerStopHook = null;
     }
 
     /// <summary>
@@ -284,8 +333,10 @@ internal partial class GamePatcher {
     }
 
     /// <summary>
-    /// Guards <see cref="Crawler.StopCrawling"/> against NullReferenceExceptions during destruction/disable.
+    /// Guards <see cref="Crawler.StopCrawling"/> against null-reference failures during destruction or disable.
     /// </summary>
+    /// <param name="orig">The original <see cref="Crawler.StopCrawling"/> method.</param>
+    /// <param name="self">The crawler instance.</param>
     private static void OnCrawlerStopCrawling(Action<Crawler> orig, Crawler self) {
         try {
             orig(self);
@@ -295,26 +346,68 @@ internal partial class GamePatcher {
     }
 
     /// <summary>
-    /// Executes SetParticleScale.OnUpdate while suppressing the known
-    /// destruction-time null-reference failure caused by a missing or destroyed
-    /// component.
+    /// Clears SetParticleScale's stale body cache after a death effect is detached.
+    /// The native method leaves <c>hasParentBody</c> true, so the global callback dereferences the destroyed body.
     /// </summary>
-    /// <param name="orig">The original SetParticleScale.OnUpdate method.</param>
+    /// <param name="orig">The original SetParticleScale parent-change method.</param>
     /// <param name="self">The SetParticleScale component instance.</param>
-    private static void OnSetParticleScaleOnUpdate(
-        Action<MonoBehaviour> orig,
-        MonoBehaviour self
-    ) {
+    private static void OnSetParticleScaleParentChanged(Action<MonoBehaviour> orig, MonoBehaviour self) {
+        orig(self);
+
+        if (self.transform.parent != null) {
+            return;
+        }
+
+        SetSetParticleScaleField(self, "parent", null);
+        SetSetParticleScaleField(self, "hasParent", false);
+        SetSetParticleScaleField(self, "parentBody", null);
+        SetSetParticleScaleField(self, "hasParentBody", false);
+        SetSetParticleScaleField(self, "unparented", true);
+        SetSetParticleScaleField(self, "updated", false);
+    }
+
+    /// <summary>
+    /// Writes one SetParticleScale lifecycle field when it exists in the current game version.
+    /// </summary>
+    /// <param name="component">The SetParticleScale instance.</param>
+    /// <param name="fieldName">The private field name.</param>
+    /// <param name="value">The replacement field value.</param>
+    private static void SetSetParticleScaleField(MonoBehaviour component, string fieldName, object? value) {
+        var field = component.GetType().GetField(
+            fieldName,
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic
+        );
+        field?.SetValue(component, value);
+    }
+
+    /// <summary>
+    /// Guards <c>WalkerV2.StopWalking</c> against null-reference failures during destruction or disable.
+    /// </summary>
+    /// <param name="orig">The original <c>WalkerV2.StopWalking</c> method.</param>
+    /// <param name="self">The walker instance.</param>
+    private static void OnWalkerV2StopWalking(Action<WalkerV2> orig, WalkerV2 self) {
         try {
             orig(self);
-        } catch (NullReferenceException e) {
-            if (!_loggedSetParticleScaleException) {
-                _loggedSetParticleScaleException = true;
-                Logger.Debug(
-                    $"Safely caught NullReferenceException in " +
-                    $"{SetParticleScaleTypeName}#{SetParticleScaleUpdateMethodName}: {e.Message}"
-                );
-            }
+        } catch (NullReferenceException) {
+            Logger.Debug("Safely caught NullReferenceException in WalkerV2.StopWalking");
+        }
+    }
+
+    /// <summary>
+    /// Guards <see cref="Walker.Stop"/> against null-reference failures during destruction or disable.
+    /// </summary>
+    /// <param name="orig">The original <see cref="Walker.Stop"/> method.</param>
+    /// <param name="self">The walker instance.</param>
+    /// <param name="reason">The reason movement is being stopped.</param>
+    private static void OnWalkerStop(
+        Action<Walker, Walker.StopReasons> orig,
+        Walker self,
+        Walker.StopReasons reason
+    ) {
+        try {
+            orig(self, reason);
+        } catch (NullReferenceException) {
+            Logger.Debug("Safely caught NullReferenceException in Walker.Stop");
         }
     }
 

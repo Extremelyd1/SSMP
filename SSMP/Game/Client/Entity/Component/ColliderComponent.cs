@@ -42,7 +42,8 @@ internal class ColliderComponent : EntityComponent {
 
         var newEnabled = _collider.Host.enabled;
         if (!_lastEnabled.HasValue || newEnabled != _lastEnabled.Value) {
-            Logger.Info($"Collider of {GameObject.Host.name} enabled changed to: {newEnabled}");
+            var hostName = GameObject?.Host != null ? GameObject.Host.name : "Unknown";
+            Logger.Info($"Collider of {hostName} enabled changed to: {newEnabled}");
             _lastEnabled = newEnabled;
 
             var data = new EntityNetworkData {
@@ -60,7 +61,8 @@ internal class ColliderComponent : EntityComponent {
 
     /// <inheritdoc />
     public override void Update(EntityNetworkData data, bool alreadyInSceneUpdate) {
-        Logger.Info($"Received collider update for {GameObject.Client.name}");
+        var clientName = GameObject?.Client != null ? GameObject.Client.name : "Unknown";
+        Logger.Info($"Received collider update for {clientName}");
 
         if (!IsControlled) {
             Logger.Info("  Entity was not controlled");
@@ -68,7 +70,7 @@ internal class ColliderComponent : EntityComponent {
         }
 
         if (data.Packet.Length < 1) {
-            Logger.Warn($"Received empty collider update for entity {GameObject.Client.name}, ignoring");
+            Logger.Warn($"Received empty collider update for entity {clientName}, ignoring");
             return;
         }
 
