@@ -129,6 +129,18 @@ internal abstract class SlashBase : ParryableEffect {
         var poly = slashObj.GetComponent<PolygonCollider2D>();
         var mesh = slashObj.GetComponent<MeshRenderer>();
         var anim = slashObj.GetComponent<tk2dSpriteAnimator>();
+        
+        // Figure out the direction of the slash
+        var dir = type switch {
+            SlashType.Dash or SlashType.Normal or SlashType.DashAlt or SlashType.NormalAlt => 
+                playerObject.transform.localScale.x > 0 ? 180f : 0f,
+            SlashType.Wall => playerObject.transform.localScale.x > 0 ? 0f : 180f,
+            SlashType.Down or SlashType.DownAlt or SlashType.DownSpike => 270f,
+            SlashType.Up => 90f,
+            _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
+        };
+
+        ChangeAttackDirection(slashObj, dir);
 
         string animName;
         Vector3 scale;

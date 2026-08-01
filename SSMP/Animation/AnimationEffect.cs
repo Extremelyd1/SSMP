@@ -33,13 +33,16 @@ internal abstract class AnimationEffect : IAnimationEffect {
     /// <param name="direction">The direction in float that the damage is coming from.</param>
     protected static void ChangeAttackDirection(GameObject targetObject, float direction) {
         var damageFsm = targetObject.LocateMyFSM("damages_enemy");
-        if (damageFsm == null) {
-            return;
+        if (damageFsm != null) {
+            // Find the variable that controls the slash direction for damaging enemies
+            var directionVar = damageFsm.FsmVariables.GetFsmFloat("direction");
+            directionVar.Value = direction;
         }
-        
-        // Find the variable that controls the slash direction for damaging enemies
-        var directionVar = damageFsm.FsmVariables.GetFsmFloat("direction");
-        directionVar.Value = direction;
+
+        var damageEnemies = targetObject.GetComponent<DamageEnemies>();
+        if (damageEnemies != null) {
+            damageEnemies.SetDirection(direction);
+        }
     }
 
     /// <summary>
