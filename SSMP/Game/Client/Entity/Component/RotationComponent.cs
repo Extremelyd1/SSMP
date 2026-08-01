@@ -59,6 +59,9 @@ internal class RotationComponent : EntityComponent {
         SetRotation(GameObject.Client);
         
         void SetRotation(GameObject obj) {
+            if (obj == null) {
+                return;
+            }
             var transform = obj.transform;
             var eulerAngles = transform.eulerAngles;
             transform.eulerAngles = new Vector3(

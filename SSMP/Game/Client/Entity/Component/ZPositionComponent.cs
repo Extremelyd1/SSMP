@@ -17,7 +17,7 @@ internal class ZPositionComponent : EntityComponent {
         ushort entityId,
         HostClientPair<GameObject> gameObject
     ) : base(netClient, entityId, gameObject) {
-        _lastZ = gameObject.Host.transform.position.z;
+        _lastZ = gameObject.Host != null ? gameObject.Host.transform.position.z : 0f;
     }
 
     /// <summary>
@@ -64,6 +64,9 @@ internal class ZPositionComponent : EntityComponent {
         return;
 
         void SetZ(GameObject gameObject) {
+            if (gameObject == null) {
+                return;
+            }
             var position = gameObject.transform.position;
             gameObject.transform.position = new Vector3(
                 position.x,
