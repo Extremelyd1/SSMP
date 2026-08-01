@@ -82,7 +82,10 @@ internal class AddonCommand : IClientCommand, ICommandWithDescription {
             for (var i = 2; i < arguments.Length; i++) {
                 var addonName = arguments[i];
 
-                if (_addonManager.TryEnableAddon(addonName)) {
+                var result = _addonManager.TryEnableAddon(addonName);
+                if (!result.HasValue) {
+                    UiManager.InternalChatBox.AddMessage($"Could not enable addon '{addonName}' because the server has disabled it");
+                } else if (result.Value) {
                     UiManager.InternalChatBox.AddMessage($"Successfully enabled '{addonName}'");
                 } else {
                     UiManager.InternalChatBox.AddMessage($"Could not enable addon '{addonName}'");

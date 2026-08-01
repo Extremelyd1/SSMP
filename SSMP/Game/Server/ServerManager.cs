@@ -1390,17 +1390,10 @@ internal abstract class ServerManager : IServerManager {
         var addonStringList = string.Join(", ", addonData.Select(addon => $"{addon.Identifier} v{addon.Version}"));
         Logger.Info($"  Client tries to connect with following addons: {addonStringList}");
 
-        // If there is a mismatch between the number of networked addons of the client and the server,
-        // we can immediately invalidate the request
-        if (addonData.Count != AddonManager.GetNetworkedAddonData().Count) {
-            Logger.Debug("  Client addons are invalid, rejected connection");
-            
-            HandleInvalidLoginAddons(serverInfo);
-            return;
-        }
-
         // Create a byte list denoting the order of the addons on the server
         var addonOrder = new List<byte>();
+
+        var disabledAddons = new List<string>();
 
         foreach (var addon in addonData) {
             // Check and retrieve the server addon with the same name and version
@@ -1409,6 +1402,10 @@ internal abstract class ServerManager : IServerManager {
                     addon.Version,
                     out var correspondingServerAddon
                 )) {
+                if (addon.CanBeDisabled) {
+                    disabledAddons.Add(addon.Identifier);
+                    continue;
+                }
                 Logger.Debug("  Client addons are invalid, rejected connection");
                 
                 // There was no corresponding server addon, so we send a login response with an invalid status
@@ -1430,6 +1427,7 @@ internal abstract class ServerManager : IServerManager {
         // Finally after all the checks, the client is accepted, and we note that in the server info
         serverInfo.ConnectionResult = ServerConnectionResult.Accepted;
         serverInfo.AddonOrder = addonOrder.ToArray();
+        serverInfo.AddonsToDisable = disabledAddons.ToArray();
 
         serverInfo.ServerSettingsUpdate = new ServerSettingsUpdate {
             ServerSettings = InternalServerSettings

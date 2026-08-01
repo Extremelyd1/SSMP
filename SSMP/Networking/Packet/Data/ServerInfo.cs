@@ -37,6 +37,11 @@ internal class ServerInfo : IPacketData {
     public byte[] AddonOrder { get; set; } = null!;
 
     /// <summary>
+    /// Addons that need to be disabled in order to connect to the server.
+    /// </summary>
+    public string[] AddonsToDisable { get; set; } = null!;
+
+    /// <summary>
     /// The server settings for the server. Packaged as a <see cref="Data.ServerSettingsUpdate"/> to allow serialization
     /// to packet data.
     /// </summary>
@@ -66,6 +71,12 @@ internal class ServerInfo : IPacketData {
 
             foreach (var addonOrderByte in AddonOrder) {
                 packet.Write(addonOrderByte);
+            }
+
+            packet.Write((byte) AddonsToDisable.Length);
+
+            foreach (var disabledAddon in AddonsToDisable) {
+                packet.Write(disabledAddon);
             }
 
             ServerSettingsUpdate.WriteData(packet);
@@ -111,6 +122,13 @@ internal class ServerInfo : IPacketData {
                 AddonOrder[i] = packet.ReadByte();
             }
 
+            var disabledAddonsLength = packet.ReadByte();
+            AddonsToDisable = new string[disabledAddonsLength];
+
+            for (var i = 0; i < disabledAddonsLength; i++) {
+                AddonsToDisable[i] = packet.ReadString();
+            }
+
             ServerSettingsUpdate = new ServerSettingsUpdate();
             ServerSettingsUpdate.ReadData(packet);
 
@@ -142,7 +160,7 @@ internal class ServerInfo : IPacketData {
                     throw new ArgumentException("Identifier or version of addon exceeds max length");
                 }
 
-                AddonData.Add(new AddonData(id, version));
+                AddonData.Add(new AddonData(id, version, false));
             }
 
             return;

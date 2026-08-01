@@ -81,7 +81,7 @@ internal class LoginResponse : IPacketData {
                     throw new ArgumentException("Identifier or version of addon exceeds max length");
                 }
 
-                AddonData.Add(new AddonData(id, version));
+                AddonData.Add(new AddonData(id, version, false));
             }
         }
     }
