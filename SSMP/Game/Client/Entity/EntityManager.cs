@@ -287,8 +287,8 @@ internal class EntityManager {
 
     /// <summary>
     /// Gathers all GameObjects in the scene that are candidates for entity registration.
-    /// Handles EnemyDeathEffects corpse pre-instantiation and several component-driven
-    /// object types (Climber, Walker, BigCentipede, CameraLockArea, DreamPlatform).
+    /// Handles EnemyDeathEffects owners and several component-driven object types
+    /// (Climber, Walker, BigCentipede, CameraLockArea, DreamPlatform).
     /// </summary>
     private static IEnumerable<GameObject> CollectEntityCandidates(Scene scene) {
         var fromDeathEffects = Object.FindObjectsOfType<EnemyDeathEffects>()
@@ -310,29 +310,33 @@ internal class EntityManager {
         return fromDeathEffects
                // Expand each object to itself and all children
                .Concat(fromFsms)
-               .SelectMany(obj => obj == null ? Array.Empty<GameObject>() : obj.GetChildren().Prepend(obj))
+               .SelectMany(obj => obj == null ? [] : obj.GetChildren().Prepend(obj))
                .Concat(fromComponents)
-               .Where(obj => obj.scene == scene)
+               .Where(obj => obj.scene == scene && !IsCorpseObject(obj))
                .Distinct();
     }
 
+    private static bool IsCorpseObject(GameObject gameObject) {
+        return gameObject.name.StartsWith("corpse", StringComparison.OrdinalIgnoreCase) ||
+               gameObject.GetComponent<Corpse>()               != null ||
+               gameObject.GetComponent<ActiveCorpse>()         != null ||
+               gameObject.GetComponent<CorpseItems>()          != null ||
+               gameObject.GetComponentInParent<Corpse>()       != null ||
+               gameObject.GetComponentInParent<ActiveCorpse>() != null ||
+               gameObject.GetComponentInParent<CorpseItems>()  != null;
+    }
 
     /// <summary>
-    /// Pre-instantiates and returns candidate game objects (such as corpse prefabs) associated with death effects.
+    /// Pre-instantiates death effects and returns only their owning game object as an entity candidate.
     /// </summary>
-    /// <param name="deathEffects">The death effects script instance.</param>
-    /// <returns>An enumerable of candidate game objects.</returns>
     private static IEnumerable<GameObject> ExpandDeathEffects(EnemyDeathEffects deathEffects) {
         try {
             deathEffects.PreInstantiate();
         } catch (Exception) {
-            // PersonalObjectPool objects can't be pre-instantiated this early; fall back to the root only.
-            return [deathEffects.gameObject];
+            // PersonalObjectPool objects cannot be pre-instantiated this early.
         }
 
-        // TODO: CorpsePrefab is a prefab reference, may not be compatible with original code.
-        var corpse = deathEffects.CorpsePrefab;
-        return [deathEffects.gameObject, corpse];
+        return [deathEffects.gameObject];
     }
 
     /// <summary>

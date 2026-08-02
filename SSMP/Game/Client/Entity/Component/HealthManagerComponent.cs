@@ -23,6 +23,26 @@ internal class HealthManagerComponent : EntityComponent {
     private readonly HostClientPair<HealthManager> _healthManager;
 
     /// <summary>
+    /// Host death effects used to capture the emitted corpse snapshot.
+    /// </summary>
+    private readonly EnemyDeathEffects? _hostDeathEffects;
+
+    /// <summary>
+    /// Client death effects used to enable local physics on emitted corpses.
+    /// </summary>
+    private readonly EnemyDeathEffects? _clientDeathEffects;
+
+    /// <summary>
+    /// The host corpse emitted by the current death call.
+    /// </summary>
+    private GameObject? _hostCorpse;
+
+    /// <summary>
+    /// The client corpse emitted by the current death call.
+    /// </summary>
+    private GameObject? _clientCorpse;
+
+    /// <summary>
     /// Boolean indicating whether the health manager of the client entity is allowed to die.
     /// </summary>
     private bool _allowDeath;
@@ -75,6 +95,16 @@ internal class HealthManagerComponent : EntityComponent {
     ) : base(netClient, entityId, gameObject) {
         _healthManager = healthManager;
 
+        _hostDeathEffects = gameObject.Host.GetComponent<EnemyDeathEffects>();
+        if (_hostDeathEffects != null) {
+            _hostDeathEffects.CorpseEmitted += OnHostCorpseEmitted;
+        }
+
+        _clientDeathEffects = gameObject.Client.GetComponent<EnemyDeathEffects>();
+        if (_clientDeathEffects != null) {
+            _clientDeathEffects.CorpseEmitted += OnClientCorpseEmitted;
+        }
+
         _lastInvincible = healthManager.Host.IsInvincible;
         _lastHp = healthManager.Host.hp;
         _lastInvincibleFromDirection = healthManager.Host.InvincibleFromDirection;
@@ -101,6 +131,75 @@ internal class HealthManagerComponent : EntityComponent {
 
         _healthManagerDieHook = new Hook(dieMethod, HealthManagerOnDie);
         MonoBehaviourUtil.Instance.OnUpdateEvent += OnUpdate;
+    }
+
+    /// <summary>
+    /// Captures the corpse emitted by the host death lifecycle.
+    /// </summary>
+    private void OnHostCorpseEmitted(GameObject corpse) {
+        _hostCorpse = corpse;
+    }
+
+    /// <summary>
+    /// Enables local physics for a remote corpse and all of its body parts.
+    /// </summary>
+    private void OnClientCorpseEmitted(GameObject corpse) {
+        if (corpse == null) {
+            return;
+        }
+
+        _clientCorpse = corpse;
+        RestoreCorpsePhysics(corpse);
+    }
+
+    /// <summary>
+    /// Restores dynamic simulation for a corpse and all of its body parts on the local client.
+    /// </summary>
+    /// <param name="corpse">The emitted corpse to make physics-driven.</param>
+    private static void RestoreCorpsePhysics(GameObject corpse) {
+        if (corpse == null) {
+            return;
+        }
+
+        foreach (var rigidbody in corpse.GetComponentsInChildren<Rigidbody2D>(true)) {
+            if (rigidbody == null) {
+                continue;
+            }
+
+            rigidbody.simulated = true;
+            rigidbody.bodyType = RigidbodyType2D.Dynamic;
+        }
+    }
+
+    /// <summary>
+    /// Applies the host corpse's initial transform and velocity to the local corpse.
+    /// </summary>
+    /// <param name="corpse">The local corpse receiving the snapshot.</param>
+    /// <param name="position">The host corpse's world position.</param>
+    /// <param name="rotation">The host corpse's world rotation around the z-axis.</param>
+    /// <param name="velocity">The host corpse's initial linear velocity.</param>
+    private static void ApplyCorpseSnapshot(
+        GameObject corpse,
+        Vector2 position,
+        float rotation,
+        Vector2 velocity
+    ) {
+        if (corpse == null) {
+            return;
+        }
+
+        var transform = corpse.transform;
+        transform.position = new Vector3(position.x, position.y, transform.position.z);
+        transform.rotation = Quaternion.Euler(0f, 0f, rotation);
+
+        var rigidbody = corpse.GetComponent<Rigidbody2D>();
+        if (rigidbody == null) {
+            return;
+        }
+
+        rigidbody.position = position;
+        rigidbody.rotation = rotation;
+        rigidbody.linearVelocity = velocity;
     }
 
     /// <summary>
@@ -139,6 +238,7 @@ internal class HealthManagerComponent : EntityComponent {
 
         Logger.Info("HealthManager Die was called on host entity");
 
+        _hostCorpse = null;
         InvokeOrig();
 
         var data = ObjectPool<EntityNetworkData>.Get();
@@ -155,12 +255,29 @@ internal class HealthManagerComponent : EntityComponent {
 
         data.Packet.Write(ignoreEvasion);
 
+        data.Packet.Write(_hostCorpse != null);
+        if (_hostCorpse != null) {
+            var corpsePosition = _hostCorpse.transform.position;
+            var corpseRigidbody = _hostCorpse.GetComponent<Rigidbody2D>();
+
+            data.Packet.Write(corpsePosition.x);
+            data.Packet.Write(corpsePosition.y);
+            data.Packet.Write(_hostCorpse.transform.eulerAngles.z);
+            data.Packet.Write(corpseRigidbody?.linearVelocity.x ?? 0f);
+            data.Packet.Write(corpseRigidbody?.linearVelocity.y ?? 0f);
+        }
+
+        _hostCorpse = null;
+
         SendData(data);
         return;
 
         // Utility method to invoke the original method with all the original arguments
         void InvokeOrig() {
-            orig(self, attackDirection, attackType, nailElements, gameObject, ignoreEvasion, corpseFlingMultiplier, overrideSpecialDeath, disallowDropFlying);
+            orig(
+                self, attackDirection, attackType, nailElements, gameObject, ignoreEvasion, corpseFlingMultiplier,
+                overrideSpecialDeath, disallowDropFlying
+            );
         }
     }
 
@@ -256,35 +373,58 @@ internal class HealthManagerComponent : EntityComponent {
             return;
         }
 
-        if (data.Type == EntityComponentType.Death) {
-            var attackDirection = new float?();
-            if (data.Packet.ReadBool()) {
-                attackDirection = data.Packet.ReadFloat();
+        switch (data.Type) {
+            case EntityComponentType.Death: {
+                var attackDirection = new float?();
+                if (data.Packet.ReadBool()) {
+                    attackDirection = data.Packet.ReadFloat();
+                }
+
+                var attackType = (AttackTypes) data.Packet.ReadByte();
+                var ignoreEvasion = data.Packet.ReadBool();
+
+                var hasCorpseSnapshot = data.Packet.ReadBool();
+                var corpsePosition = Vector2.zero;
+                var corpseRotation = 0f;
+                var corpseVelocity = Vector2.zero;
+
+                if (hasCorpseSnapshot) {
+                    corpsePosition = new Vector2(data.Packet.ReadFloat(), data.Packet.ReadFloat());
+                    corpseRotation = data.Packet.ReadFloat();
+                    corpseVelocity = new Vector2(data.Packet.ReadFloat(), data.Packet.ReadFloat());
+                }
+
+                // Set a boolean to indicate that the client health manager is allowed to execute the Die method
+                _allowDeath = true;
+                _clientCorpse = null;
+                _healthManager.Client.Die(attackDirection, attackType, ignoreEvasion);
+
+                if (hasCorpseSnapshot && _clientCorpse != null) {
+                    ApplyCorpseSnapshot(_clientCorpse, corpsePosition, corpseRotation, corpseVelocity);
+                }
+
+                break;
             }
+            case EntityComponentType.Health:
+                UpdateHealth(data, alreadyInSceneUpdate);
+                break;
+            case EntityComponentType.Invincibility: {
+                var newInvincible = data.Packet.ReadBool();
+                var newInvincibleFromDir = data.Packet.ReadByte();
 
-            var attackType = (AttackTypes) data.Packet.ReadByte();
-            var ignoreEvasion = data.Packet.ReadBool();
+                if (_healthManager.Host != null) {
+                    _healthManager.Host.IsInvincible = newInvincible;
+                    _healthManager.Host.InvincibleFromDirection = newInvincibleFromDir;
+                }
 
-            // Set a boolean to indicate that the client health manager is allowed to execute the Die method
-            _allowDeath = true;
-            _healthManager.Client.Die(attackDirection, attackType, ignoreEvasion);
-        } else if (data.Type == EntityComponentType.Health) {
-            UpdateHealth(data, alreadyInSceneUpdate);
-        } else if (data.Type == EntityComponentType.Invincibility) {
-            var newInvincible = data.Packet.ReadBool();
-            var newInvincibleFromDir = data.Packet.ReadByte();
+                if (_healthManager.Client == null) {
+                    return;
+                }
 
-            if (_healthManager.Host != null) {
-                _healthManager.Host.IsInvincible = newInvincible;
-                _healthManager.Host.InvincibleFromDirection = newInvincibleFromDir;
+                _healthManager.Client.IsInvincible = newInvincible;
+                _healthManager.Client.InvincibleFromDirection = newInvincibleFromDir;
+                break;
             }
-
-            if (_healthManager.Client == null) {
-                return;
-            }
-
-            _healthManager.Client.IsInvincible = newInvincible;
-            _healthManager.Client.InvincibleFromDirection = newInvincibleFromDir;
         }
     }
 
@@ -305,18 +445,21 @@ internal class HealthManagerComponent : EntityComponent {
             ResetHealthOrderingForEpoch(healthEpoch);
             ApplyHp(newHp, triggerHostDeath: false);
         } else {
+            // Cache once; avoids re-evaluating the IsControlled check twice below on every packet
+            var isControlled = IsControlled;
+
             if (healthEpoch < _lastReceivedHealthEpoch) {
                 return;
             }
 
             if (healthEpoch > _lastReceivedHealthEpoch) {
                 _lastReceivedHealthEpoch = healthEpoch;
-                if (IsControlled) {
+                if (isControlled) {
                     _currentHealthEpoch = healthEpoch;
                 }
             }
 
-            var currentHp = IsControlled ? _lastHp : GetCurrentHp();
+            var currentHp = isControlled ? _lastHp : GetCurrentHp();
             var damage = System.Math.Max(previousHp - newHp, 0);
             var healing = System.Math.Max(newHp - previousHp, 0);
 
@@ -367,6 +510,14 @@ internal class HealthManagerComponent : EntityComponent {
 
     /// <inheritdoc />
     public override void Destroy() {
+        if (_hostDeathEffects != null) {
+            _hostDeathEffects.CorpseEmitted -= OnHostCorpseEmitted;
+        }
+
+        if (_clientDeathEffects != null) {
+            _clientDeathEffects.CorpseEmitted -= OnClientCorpseEmitted;
+        }
+
         _healthManagerDieHook?.Dispose();
         _healthManagerDieHook = null;
         MonoBehaviourUtil.Instance.OnUpdateEvent -= OnUpdate;
