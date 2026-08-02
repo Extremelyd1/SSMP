@@ -168,6 +168,44 @@ internal static partial class EntityFsmActions {
 
     #endregion
 
+    #region PlayParticleEmitterInState
+
+    /// <summary>Builds network data from the FSM action.</summary>
+    private static bool GetNetworkDataFromAction(EntityNetworkData data, PlayParticleEmitterInState action) {
+        return true;
+    }
+
+    /// <summary>Applies network data to the FSM action.</summary>
+    private static void ApplyNetworkDataFromAction(EntityNetworkData data, PlayParticleEmitterInState action) {
+        if (action.gameObject == null) {
+            return;
+        }
+
+        var gameObject = action.Fsm.GetOwnerDefaultTarget(action.gameObject);
+        if (gameObject == null) {
+            return;
+        }
+
+        var particleSystem = gameObject.GetComponent<ParticleSystem>();
+        if (particleSystem == null) {
+            return;
+        }
+
+        particleSystem.Play();
+
+        new ActionInState {
+            Fsm = action.Fsm,
+            StateName = action.State.Name,
+            ExitAction = () => {
+                if (particleSystem.isPlaying) {
+                    particleSystem.Stop();
+                }
+            }
+        }.Register();
+    }
+
+    #endregion
+
     #region StopParticleEmitter
 
     /// <summary>Builds network data from the FSM action.</summary>

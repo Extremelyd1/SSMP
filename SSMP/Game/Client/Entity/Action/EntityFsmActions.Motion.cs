@@ -1,18 +1,8 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
-using System.Reflection;
-using System.Runtime.CompilerServices;
-using HutongGames.PlayMaker;
 using HutongGames.PlayMaker.Actions;
-using Mono.Cecil.Cil;
-using MonoMod.Cil;
-using MonoMod.RuntimeDetour;
 using SSMP.Networking.Packet.Data;
-using SSMP.Util;
 using UnityEngine;
-using Object = UnityEngine.Object;
-using Random = UnityEngine.Random;
 
 // ReSharper disable UnusedMember.Local
 // ReSharper disable UnusedParameter.Local
@@ -153,11 +143,6 @@ internal static partial class EntityFsmActions {
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetPosition action) {
         var gameObject = action.Fsm.GetOwnerDefaultTarget(action.gameObject);
         if (gameObject == null) {
-            return false;
-        }
-
-        if (IsObjectInRegistry(gameObject)) {
-            //Logger.Debug("Tried getting SetPosition network data, but entity is in registry");
             return false;
         }
 
@@ -441,7 +426,7 @@ internal static partial class EntityFsmActions {
                 "axis",
                 action.axis == iTweenFsmAction.AxisRestriction.none
                     ? ""
-                    : (object) Enum.GetName(typeof(iTweenFsmAction.AxisRestriction), action.axis)
+                    : Enum.GetName(typeof(iTweenFsmAction.AxisRestriction), action.axis) ?? ""
             }
         };
 

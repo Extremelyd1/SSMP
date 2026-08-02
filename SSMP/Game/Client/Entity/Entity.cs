@@ -1421,7 +1421,7 @@ internal class Entity {
                 }
 
                 var state = fsm.FsmStates[stateIndex];
-                if (state == null || state.Actions == null || actionIndex >= state.Actions.Length) {
+                if (state?.Actions == null || actionIndex >= state.Actions.Length) {
                     continue;
                 }
 

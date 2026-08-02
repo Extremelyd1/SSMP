@@ -13,6 +13,7 @@ using UnityEngine;
 using Random = UnityEngine.Random;
 using Logger = SSMP.Logging.Logger;
 
+// ReSharper disable NotAccessedField.Local
 // ReSharper disable CollectionNeverUpdated.Local
 // ReSharper disable AssignNullToNotNullAttribute
 // ReSharper disable ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
@@ -486,7 +487,6 @@ internal static partial class EntityFsmActions {
             }
         }
     }
-
 
 
     /// <summary>
