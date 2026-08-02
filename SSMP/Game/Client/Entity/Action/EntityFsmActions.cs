@@ -7,7 +7,6 @@ using HutongGames.PlayMaker.Actions;
 using Mono.Cecil.Cil;
 using MonoMod.Cil;
 using MonoMod.RuntimeDetour;
-using SSMP.Game.Client.Entity.Sync;
 using SSMP.Networking.Packet.Data;
 using SSMP.Util;
 using UnityEngine;
@@ -198,15 +197,10 @@ internal static partial class EntityFsmActions {
     /// </summary>
     /// <param name="data">The instance to put the data into.</param>
     /// <param name="action">The action to transform.</param>
-    /// <param name="sync">Optional entity-specific synchronization adapter.</param>
     /// <returns>Whether from this action network-able data was made.</returns>
     /// <exception cref="InvalidOperationException">Thrown if there is no suitable method for the action and thus
     /// no network data is written.</exception>
-    public static bool GetNetworkDataFromAction(
-        EntityNetworkData data,
-        FsmStateAction action,
-        IEntityFsmSync? sync = null
-    ) {
+    public static bool GetNetworkDataFromAction(EntityNetworkData data, FsmStateAction action) {
         var actionType = action.GetType();
         if (!TypeGetMethodInfos.TryGetValue(actionType, out var methodInfo)) {
             throw new InvalidOperationException(
@@ -223,12 +217,7 @@ internal static partial class EntityFsmActions {
         );
 
         // Return whether the return object is a bool and has the value 'true'
-        var hasNetworkData = returnObject is true;
-        if (hasNetworkData) {
-            sync?.AddNetworkData(data, action);
-        }
-
-        return hasNetworkData;
+        return returnObject is true;
     }
 
     /// <summary>
@@ -236,14 +225,9 @@ internal static partial class EntityFsmActions {
     /// </summary>
     /// <param name="data">The instance from which to get the data.</param>
     /// <param name="action">The FSM action to mimic execution for.</param>
-    /// <param name="sync">Optional entity-specific synchronization adapter.</param>
     /// <exception cref="InvalidOperationException">Thrown if there is no suitable method for the action and thus
     /// no FSM action will be mimicked.</exception>
-    public static void ApplyNetworkDataFromAction(
-        EntityNetworkData? data,
-        FsmStateAction action,
-        IEntityFsmSync? sync = null
-    ) {
+    public static void ApplyNetworkDataFromAction(EntityNetworkData data, FsmStateAction action) {
         var actionType = action.GetType();
         if (!TypeApplyMethodInfos.TryGetValue(actionType, out var methodInfo)) {
             throw new InvalidOperationException(
@@ -268,12 +252,6 @@ internal static partial class EntityFsmActions {
 
                 e = e.InnerException;
             }
-
-            return;
-        }
-
-        if (data != null) {
-            sync?.ApplyNetworkData(data, action);
         }
     }
 

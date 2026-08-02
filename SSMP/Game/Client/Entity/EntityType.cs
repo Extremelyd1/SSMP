@@ -8,6 +8,7 @@ internal enum EntityType {
     MassiveMossgrub,
     Mossmir,
     MossMother,
+    MossboneStalactite,
     Aknid,
     SkullScuttler,
     Skullwing,

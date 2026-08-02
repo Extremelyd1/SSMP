@@ -130,6 +130,21 @@ internal static partial class EntityFsmActions {
 
     #endregion
 
+    #region RandomFloat
+
+    /// <summary>Builds network data from the FSM action.</summary>
+    private static bool GetNetworkDataFromAction(EntityNetworkData data, RandomFloat action) {
+        data.Packet.Write(action.storeResult.Value);
+        return true;
+    }
+
+    /// <summary>Applies network data to the FSM action.</summary>
+    private static void ApplyNetworkDataFromAction(EntityNetworkData data, RandomFloat action) {
+        action.storeResult.Value = data.Packet.ReadFloat();
+    }
+
+    #endregion
+
     #region SetFsmString
 
     /// <summary>Builds network data from the FSM action.</summary>

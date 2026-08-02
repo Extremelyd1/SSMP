@@ -1496,6 +1496,14 @@
     ]
   },
   {
+    "base_object_name": "Mossbone Stalactite",
+    "type": "MossboneStalactite",
+    "parent_name": "Stals",
+    "fsm_names": [
+      "Control"
+    ]
+  },
+  {
     "base_object_name": "Pilgrim 01 Song",
     "type": "ChoirPouncer",
     "parent_name": null,
