@@ -126,7 +126,7 @@ internal class ClientManager : IClientManager {
     /// This is used to determine whether to apply save data from the server to the client and warp them to a bench.
     /// </summary>
     private bool _autoConnect;
-    
+
     /// <summary>
     /// Stores the fallback address (IP:Port) of the last connection attempt for automatic retries.
     /// </summary>
@@ -177,7 +177,7 @@ internal class ClientManager : IClientManager {
 
     /// <inheritdoc />
     public IMapManager MapManager => _mapManager;
-    
+
     /// <inheritdoc />
     public IServerSettings ServerSettings => _serverSettings;
 
@@ -185,7 +185,9 @@ internal class ClientManager : IClientManager {
     public IModSettings ModSettings => _modSettings;
 
     /// <inheritdoc />
-    public string Username => !_netClient.IsConnected ? throw new Exception("Client is not connected, username is undefined") : _username!;
+    public string Username => !_netClient.IsConnected
+        ? throw new Exception("Client is not connected, username is undefined")
+        : _username!;
 
     /// <inheritdoc />
     public IReadOnlyCollection<IClientPlayer> Players => _playerData.Values;
@@ -260,8 +262,8 @@ internal class ClientManager : IClientManager {
         _animationManager.Initialize(_serverSettings);
         _mapManager.Initialize();
 
-        // _entityManager.Initialize();
-        // _saveManager.Initialize();
+        //_entityManager.Initialize();
+        _saveManager.Initialize();
 
         RegisterCommands();
 
@@ -294,9 +296,7 @@ internal class ClientManager : IClientManager {
         _netClient.ConnectEvent += OnClientConnect;
         _netClient.TimeoutEvent += OnTimeout;
 
-        EventHooks.GameManagerQuitGame += () => {
-            _modSettings.Save();
-        };
+        EventHooks.GameManagerQuitGame += () => { _modSettings.Save(); };
     }
 
     /// <summary>
@@ -311,10 +311,10 @@ internal class ClientManager : IClientManager {
         _gamePatcher.RegisterHooks();
         _fsmPatcher.RegisterHooks();
 
-        // if (_fullSynchronisation) {
-        //     _entityManager.RegisterHooks();
-        //     _saveManager.RegisterHooks();
-        // }
+        if (_fullSynchronisation) {
+            //_entityManager.RegisterHooks();
+            _saveManager.RegisterHooks();
+        }
 
         // Register handlers for various things
         SceneManager.activeSceneChanged += OnSceneChange;
@@ -339,10 +339,10 @@ internal class ClientManager : IClientManager {
         _gamePatcher.DeregisterHooks();
         _fsmPatcher.DeregisterHooks();
 
-        // if (_fullSynchronisation) {
-        //     _entityManager.DeregisterHooks();
-        //     _saveManager.DeregisterHooks();
-        // }
+        if (_fullSynchronisation) {
+            //_entityManager.DeregisterHooks();
+            _saveManager.DeregisterHooks();
+        }
 
         // Deregister handlers for various things
         SceneManager.activeSceneChanged -= OnSceneChange;
@@ -590,43 +590,45 @@ internal class ClientManager : IClientManager {
     private void OnConnectFailed(ConnectionFailedResult result) {
         _uiManager.OnFailedConnect(result, _lastFallbackAddress);
 
-        if (result.Reason == ConnectionFailedReason.InvalidAddons) {
-            // Inform the user of the correct addons that the server needs
-            UiManager.InternalChatBox.AddMessage("Server requires the following addons:");
+        if (result.Reason != ConnectionFailedReason.InvalidAddons) {
+            return;
+        }
 
-            // Keep track of addons that the client has that the server does not, by removing all addons
-            // that the server reports to have
-            var clientAddonData = _addonManager.GetNetworkedAddonData();
-            var serverAddonData = ((ConnectionInvalidAddonsResult) result).AddonData;
+        // Inform the user of the correct addons that the server needs
+        UiManager.InternalChatBox.AddMessage("Server requires the following addons:");
 
-            // First check for each of the addons that the server has, whether the client has them or not
-            foreach (var addonData in serverAddonData) {
-                var addonName = addonData.Identifier;
-                var addonVersion = addonData.Version;
-                var message = $"  {addonName} v{addonVersion}";
+        // Keep track of addons that the client has that the server does not, by removing all addons
+        // that the server reports to have
+        var clientAddonData = _addonManager.GetNetworkedAddonData();
+        var serverAddonData = ((ConnectionInvalidAddonsResult) result).AddonData;
 
-                if (_addonManager.TryGetNetworkedAddon(addonName, addonVersion, out var addon)) {
-                    if (addon is TogglableClientAddon { Disabled: true }) {
-                        message += " (disabled)";
-                    } else {
-                        message += " (installed)";
-                    }
+        // First check for each of the addons that the server has, whether the client has them or not
+        foreach (var addonData in serverAddonData) {
+            var addonName = addonData.Identifier;
+            var addonVersion = addonData.Version;
+            var message = $"  {addonName} v{addonVersion}";
+
+            if (_addonManager.TryGetNetworkedAddon(addonName, addonVersion, out var addon)) {
+                if (addon is TogglableClientAddon { Disabled: true }) {
+                    message += " (disabled)";
                 } else {
-                    message += " (missing)";
+                    message += " (installed)";
                 }
-
-                UiManager.InternalChatBox.AddMessage(message);
-
-                clientAddonData.Remove(addonData);
+            } else {
+                message += " (missing)";
             }
 
-            // If the client has additional addons that the server does not, we list these as well
-            if (clientAddonData.Count > 0) {
-                UiManager.InternalChatBox.AddMessage("Incompatible client addons:");
+            UiManager.InternalChatBox.AddMessage(message);
 
-                foreach (var addonData in clientAddonData) {
-                    UiManager.InternalChatBox.AddMessage($"  {addonData.Identifier} v{addonData.Version}");
-                }
+            clientAddonData.Remove(addonData);
+        }
+
+        // If the client has additional addons that the server does not, we list these as well
+        if (clientAddonData.Count > 0) {
+            UiManager.InternalChatBox.AddMessage("Incompatible client addons:");
+
+            foreach (var addonData in clientAddonData) {
+                UiManager.InternalChatBox.AddMessage($"  {addonData.Identifier} v{addonData.Version}");
             }
         }
     }
@@ -673,8 +675,8 @@ internal class ClientManager : IClientManager {
                 // This was not an auto-connect and full synchronisation is enabled, so we set save data.
                 // Otherwise, with hosting we already have the save data, or with no full synchronisation, we don't
                 // need it.
-                // _saveManager.SetSaveWithData(serverInfo.CurrentSave);
-                // _uiManager.EnterGameFromMultiplayerMenu(serverInfo.CurrentSave.NewForPlayer);
+                _saveManager.SetSaveWithData(serverInfo.CurrentSave);
+                _uiManager.EnterGameFromMultiplayerMenu(serverInfo.CurrentSave.NewForPlayer);
             } else {
                 // This was not an auto-connect and full synchronisation is disabled, so we need to prompt the user
                 // with a local save file that they want to use
@@ -702,7 +704,7 @@ internal class ClientManager : IClientManager {
         // Fill the player data dictionary with the info from the packet
         foreach (var playerInfo in serverInfo.PlayerInfos) {
             _playerData[playerInfo.Id] = new ClientPlayerData {
-                Id = playerInfo.Id, 
+                Id = playerInfo.Id,
                 Username = playerInfo.Username,
                 Team = playerInfo.Team,
                 SkinId = playerInfo.SkinId,
@@ -749,12 +751,23 @@ internal class ClientManager : IClientManager {
     private void OnDisconnect(ServerClientDisconnect disconnect) {
         Logger.Info($"Received ServerClientDisconnect, reason: {disconnect.Reason}");
 
-        if (disconnect.Reason == DisconnectReason.Banned) {
-            UiManager.InternalChatBox.AddMessage("You are banned from the server");
-        } else if (disconnect.Reason == DisconnectReason.Kicked) {
-            UiManager.InternalChatBox.AddMessage("You are kicked from the server");
-        } else if (disconnect.Reason == DisconnectReason.Shutdown) {
-            UiManager.InternalChatBox.AddMessage("You are disconnected from the server (server is shutting down)");
+        switch (disconnect.Reason) {
+            case DisconnectReason.Banned:
+                UiManager.InternalChatBox.AddMessage("You are banned from the server");
+                break;
+            case DisconnectReason.Kicked:
+                UiManager.InternalChatBox.AddMessage("You are kicked from the server");
+                break;
+            case DisconnectReason.Shutdown:
+                UiManager.InternalChatBox.AddMessage("You are disconnected from the server (server is shutting down)");
+                break;
+            case DisconnectReason.SaveCopy:
+                UiManager.InternalChatBox.AddMessage(
+                    "Disconnected from the server (save data copied, please reconnect)"
+                );
+                break;
+            default:
+                throw new ArgumentOutOfRangeException();
         }
 
         _uiManager.ReturnToMainMenuFromGame();

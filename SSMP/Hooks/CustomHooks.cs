@@ -21,8 +21,10 @@ public static class CustomHooks {
     /// <summary>
     /// The binding flags for obtaining certain types for hooking.
     /// </summary>
-    private const BindingFlags BindingFlags = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
-    
+    private const BindingFlags BindingFlags = System.Reflection.BindingFlags.Public |
+                                              System.Reflection.BindingFlags.NonPublic |
+                                              System.Reflection.BindingFlags.Instance;
+
     /// <summary>
     /// The instruction match set for matching the instructions below. This is the call to
     /// HeroController.SendHeroInPosition.
@@ -56,7 +58,7 @@ public static class CustomHooks {
     /// Internal event for <see cref="HeroControllerStartAction"/>.
     /// </summary>
     private static event Action? HeroControllerStartActionInternal;
-    
+
     /// <summary>
     /// Event that executes when the HeroController starts or executes its subscriber immediately if the HeroController
     /// is already active.
@@ -66,7 +68,7 @@ public static class CustomHooks {
             if (HeroController.UnsafeInstance) {
                 value.Invoke();
             }
-            
+
             HeroControllerStartActionInternal += value;
         }
 
@@ -84,25 +86,33 @@ public static class CustomHooks {
         );
 
         new ILHook(
-            typeof(HeroController).GetMethod(nameof(HeroController.EnterScene)).GetStateMachineTarget(), 
+            typeof(HeroController).GetMethod(nameof(HeroController.EnterScene)).GetStateMachineTarget(),
             HeroControllerOnEnterScene
         );
 
         new ILHook(
-            typeof(HeroController).GetMethod(nameof(HeroController.EnterHeroSubHorizontal), BindingFlags).GetStateMachineTarget(),
+            typeof(HeroController).GetMethod(nameof(HeroController.EnterHeroSubHorizontal), BindingFlags)
+                                  .GetStateMachineTarget(),
             HeroControllerOnEnterHeroSubHorizontal
         );
 
         new ILHook(
-            typeof(HeroController).GetMethod(nameof(HeroController.Respawn)).GetStateMachineTarget(), 
+            typeof(HeroController).GetMethod(nameof(HeroController.Respawn)).GetStateMachineTarget(),
             HeroControllerOnRespawn
         );
 
-        // IL.HutongGames.PlayMaker.Actions.ApplyMusicCue.OnEnter += ApplyMusicCueOnEnter;
-        // IL.HutongGames.PlayMaker.Actions.TransitionToAudioSnapshot.OnEnter += TransitionToAudioSnapshotOnEnter;
+        new ILHook(
+            typeof(ApplyMusicCue).GetMethod("OnEnter", BindingFlags),
+            ApplyMusicCueOnEnter
+        );
+
+        new ILHook(
+            typeof(TransitionToAudioSnapshot).GetMethod("OnEnter", BindingFlags),
+            TransitionToAudioSnapshotOnEnter
+        );
 
         new Hook(
-            typeof(HeroController).GetMethod(nameof(HeroController.Start), BindingFlags), 
+            typeof(HeroController).GetMethod(nameof(HeroController.Start), BindingFlags),
             HeroControllerOnStart
         );
     }
@@ -136,7 +146,7 @@ public static class CustomHooks {
             Logger.Error($"Could not change HeroController#EnterScene IL: \n{e}");
         }
     }
-    
+
     /// <summary>
     /// IL Hook for the HeroController EnterHeroSubHorizontal method. Calls an event multiple times within the method.
     /// </summary>
@@ -149,13 +159,13 @@ public static class CustomHooks {
                 MoveType.After,
                 HeroInPositionInstructions
             );
-            
+
             // IL_0634: ldloc.1      // V_1
             // IL_0635: callvirt     instance void HeroController::FaceRight()
             Func<Instruction, bool>[] faceDirectionInstructions = [
                 i => i.MatchLdloc(1),
-                i => 
-                    i.MatchCall(typeof(HeroController), "FaceRight") || 
+                i =>
+                    i.MatchCall(typeof(HeroController), "FaceRight") ||
                     i.MatchCall(typeof(HeroController), "FaceLeft")
             ];
 
@@ -164,7 +174,7 @@ public static class CustomHooks {
                     MoveType.After,
                     faceDirectionInstructions
                 );
-                
+
                 c.EmitDelegate(() => { AfterEnterSceneHeroTransformed?.Invoke(); });
             }
         } catch (Exception e) {
@@ -201,7 +211,7 @@ public static class CustomHooks {
 
         c.EmitDelegate(() => { AfterEnterSceneHeroTransformed?.Invoke(); });
     }
-    
+
     /// <summary>
     /// IL Hook for the ApplyMusicCue OnEnter method. Calls an event in the method after the ApplyMusicCue call is
     /// made.
@@ -229,7 +239,7 @@ public static class CustomHooks {
             Logger.Error($"Could not change ApplyMusicCueOnEnter IL: \n{e}");
         }
     }
-    
+
     /// <summary>
     /// IL Hook for the TransitionToAudioSnapshot OnEnter method. Calls an event in the method after the TransitionTo
     /// call is made.
@@ -241,7 +251,8 @@ public static class CustomHooks {
             var c = new ILCursor(il);
 
             // IL_0021: callvirt     instance float32 [PlayMaker]HutongGames.PlayMaker.FsmFloat::get_Value()
-            // IL_0026: callvirt     instance void [UnityEngine.AudioModule]UnityEngine.Audio.AudioMixerSnapshot::TransitionTo(float32)
+            // IL_0026: callvirt     instance void
+            // [UnityEngine.AudioModule]UnityEngine.Audio.AudioMixerSnapshot::TransitionTo(float32)
             c.GotoNext(
                 MoveType.After,
                 i => i.MatchCallvirt(typeof(FsmFloat), "get_Value"),
@@ -252,7 +263,10 @@ public static class CustomHooks {
             c.Emit(OpCodes.Ldarg_0);
 
             // Emit a delegate for firing the event with the TransitionToAudioSnapshot instance
-            c.EmitDelegate<Action<TransitionToAudioSnapshot>>(action => { TransitionToAudioSnapshotFromFsmAction?.Invoke(action); });
+            c.EmitDelegate<Action<TransitionToAudioSnapshot>>(action => {
+                    TransitionToAudioSnapshotFromFsmAction?.Invoke(action);
+                }
+            );
         } catch (Exception e) {
             Logger.Error($"Could not change TransitionToAudioSnapshotOnEnter IL: \n{e}");
         }

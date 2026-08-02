@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using HutongGames.PlayMaker.Actions;
+using MonoMod.RuntimeDetour;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
 using SSMP.Hooks;
 using SSMP.Networking.Client;
 using SSMP.Networking.Packet.Data;
@@ -10,156 +11,143 @@ using SSMP.Util;
 using UnityEngine;
 using UnityEngine.Audio;
 using Logger = SSMP.Logging.Logger;
+
 // ReSharper disable ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
 // ReSharper disable UnusedMember.Local
 // ReSharper disable UnusedAutoPropertyAccessor.Local
 // ReSharper disable InconsistentNaming
-#pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
+#pragma warning disable CS8625
+#pragma warning disable CS8618
 
 namespace SSMP.Game.Client.Entity.Component;
 
 /// <inheritdoc />
-/// This component manages the music that plays for boss fights.
+/// <summary>
+/// Manages boss fight music synchronisation across the network.
+/// Note: This component relies heavily on PlayMakerFSM internals (via reflection on OnEnable)
+/// and is fragile; it may break if game updates change PlayMaker structures or method signatures.
+/// </summary>
+/// <remarks>Manages boss fight music synchronisation across the network.</remarks>
 internal class MusicComponent : EntityComponent {
+    #region Constants
+
     /// <summary>
     /// The file path of the embedded resource file for music data.
     /// </summary>
     private const string MusicDataFilePath = "SSMP.Resource.music-data.json";
-    
+
     /// <summary>
-    /// Static list of MusicCueData instances that is loaded from an embedded JSON file.
-    /// Used for coupling IDs to music cues that can then be used for bidirectional lookups.
+    /// The file name for storing captured music references during gameplay.
     /// </summary>
-    private static readonly List<MusicCueData> MusicCueDataList;
+    private const string CapturedMusicFileName = "captured-music-references.json";
+
+    #endregion
+
+    #region Static data
+
     /// <summary>
-    /// Static list of AudioMixerSnapshotData instances that is loaded from an embedded JSON file.
-    /// Used for coupling IDs to audio snapshots that can then be used for bidirectional lookups.
+    /// Maps music cue names to their corresponding data structures for fast lookup.
     /// </summary>
-    private static readonly List<AudioMixerSnapshotData> SnapshotDataList;
+    private static readonly Dictionary<string, MusicCueData> MusicCueDataByName;
+
+    /// <summary>
+    /// Maps audio mixer snapshot names to their corresponding data structures for fast lookup.
+    /// </summary>
+    private static readonly Dictionary<string, AudioMixerSnapshotData> SnapshotDataByName;
+
+    /// <summary>
+    /// Maps network indices to their corresponding music cue data structures.
+    /// </summary>
+    private static readonly Dictionary<byte, MusicCueData> MusicCueDataByIndex;
+
+    /// <summary>
+    /// Maps network indices to their corresponding audio mixer snapshot data structures.
+    /// </summary>
+    private static readonly Dictionary<byte, AudioMixerSnapshotData> SnapshotDataByIndex;
+
+    /// <summary>
+    /// Stores unique music cue names encountered during capture.
+    /// </summary>
+    private static readonly HashSet<string> SeenMusicCues = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Stores unique audio mixer snapshot names encountered during capture.
+    /// </summary>
+    private static readonly HashSet<string> SeenSnapshots = new(StringComparer.Ordinal);
+
+    #endregion
+
+    #region Static lifecycle state
 
     /// <summary>
     /// The singleton instance of MusicComponent to ensure we only have one MusicComponent responsible for
     /// synchronising music in a scene.
     /// </summary>
-    private static MusicComponent _instance;
+    private static MusicComponent? _instance;
+
+    /// <summary>
+    /// Hook for intercepting PlayMakerFSM.OnEnable to resolve music cue and snapshot references.
+    /// </summary>
+    private static Hook? _fsmEnableHook;
+
+    #endregion
+
+    #region Instance state
 
     /// <summary>
     /// The index of the last played music cue, so we don't restart them unnecessarily.
     /// </summary>
     private byte _lastMusicCueIndex;
+
     /// <summary>
     /// The index of the last played audio snapshot, so we don't restart them unnecessarily.
     /// </summary>
     private byte _lastSnapshotIndex;
 
+    #endregion
+
+    #region Static construction
+
     /// <summary>
     /// Static constructor responsible for loading data from the JSON and registering static hooks.
     /// </summary>
     static MusicComponent() {
-        var dataPair = FileUtil.LoadObjectFromEmbeddedJson<
+        var (cues, snapshots) = FileUtil.LoadObjectFromEmbeddedJson<
             (List<MusicCueData>, List<AudioMixerSnapshotData>)
         >(MusicDataFilePath);
-        
-        MusicCueDataList = dataPair.Item1;
-        SnapshotDataList = dataPair.Item2;
 
+        MusicCueDataByName = new Dictionary<string, MusicCueData>(StringComparer.Ordinal);
+        SnapshotDataByName = new Dictionary<string, AudioMixerSnapshotData>(StringComparer.Ordinal);
+        MusicCueDataByIndex = new Dictionary<byte, MusicCueData>();
+        SnapshotDataByIndex = new Dictionary<byte, AudioMixerSnapshotData>();
+
+        // Indices start at 1; 0 is reserved as "none".
         byte index = 1;
-        foreach (var data in MusicCueDataList) {
+
+        foreach (var data in cues) {
             data.Index = index++;
+            MusicCueDataByName[data.Name] = data;
+            MusicCueDataByIndex[data.Index] = data;
         }
 
-        foreach (var data in SnapshotDataList) {
+        foreach (var data in snapshots) {
             data.Index = index++;
+            SnapshotDataByName[data.Name] = data;
+            SnapshotDataByIndex[data.Index] = data;
         }
     }
 
-    /// <summary>
-    /// Try to create a new instance of MusicComponent if it doesn't exist yet. This will prevent the creation of
-    /// more instances by keeping track of a singleton instance.
-    /// </summary>
-    /// <param name="netClient">The NetClient instance for networking data.</param>
-    /// <param name="entityId">The entity ID that this component is attached to.</param>
-    /// <param name="gameObject">The host-client pair of game objects of the entity.</param>
-    /// <param name="musicComponent">The created instance of MusicComponent if successful, otherwise null.</param>
-    /// <returns>True if a new component could be created, false if a component already existed.</returns>
-    public static bool CreateInstance(
-        NetClient netClient,
-        ushort entityId,
-        HostClientPair<GameObject> gameObject,
-        out MusicComponent musicComponent
-    ) {
-        if (_instance == null) {
-            _instance = new MusicComponent(netClient, entityId, gameObject);
-            musicComponent = _instance;
-            return true;
-        }
+    #endregion
 
-        musicComponent = null;
-        return false;
-    }
+    #region Instance construction
 
     /// <summary>
-    /// Register hooks for music-related operations.
+    /// Initializes a new instance of the <see cref="MusicComponent"/> class.
+    /// Registers event handlers for FSM audio actions.
     /// </summary>
-    public static void RegisterHooks() {
-        // On.PlayMakerFSM.OnEnable += OnFsmEnable;
-    }
-
-    /// <summary>
-    /// Deregister hooks for music-related operations.
-    /// </summary>
-    public static void DeregisterHooks() {
-        // On.PlayMakerFSM.OnEnable -= OnFsmEnable;
-    }
-
-    /// <summary>
-    /// Clear the current singleton instance of the component.
-    /// </summary>
-    public static void ClearInstance() {
-        _instance = null;
-    }
-    
-    /// <summary>
-    /// Get the MusicCueData instance from the list for which the given predicate holds.
-    /// </summary>
-    /// <param name="predicate">The predicate function that should return true for the MusicCueData that is
-    /// requested.</param>
-    /// <param name="musicCueData">The MusicCueData for which the predicate holds, or null if no such instance could
-    /// be found.</param>
-    /// <returns>True if the MusicCueData was found, false otherwise.</returns>
-    private static bool GetMusicCueData(Func<MusicCueData, bool> predicate, out MusicCueData musicCueData) {
-        foreach (var data in MusicCueDataList) {
-            if (predicate.Invoke(data)) {
-                musicCueData = data;
-                return true;
-            }
-        }
-
-        musicCueData = null;
-        return false;
-    }
-    
-    /// <summary>
-    /// Get the AudioMixerSnapshotData instance from the list for which the given predicate holds.
-    /// </summary>
-    /// <param name="predicate">The predicate function that should return true for the AudioMixerSnapshotData that is
-    /// requested.</param>
-    /// <param name="snapshotData">The AudioMixerSnapshotData for which the predicate holds, or null if no such
-    /// instance could be found.</param>
-    /// <returns>True if the AudioMixerSnapshotData was found, false otherwise.</returns>
-    private static bool GetAudioMixerSnapshotData(Func<AudioMixerSnapshotData, bool> predicate, out AudioMixerSnapshotData snapshotData) {
-        foreach (var data in SnapshotDataList) {
-            if (predicate.Invoke(data)) {
-                snapshotData = data;
-                return true;
-            }
-        }
-
-        snapshotData = null;
-        return false;
-    }
-
+    /// <param name="netClient">The net client used for synchronization.</param>
+    /// <param name="entityId">The ID of the entity.</param>
+    /// <param name="gameObject">The GameObject associated with this component.</param>
     private MusicComponent(
         NetClient netClient,
         ushort entityId,
@@ -169,6 +157,92 @@ internal class MusicComponent : EntityComponent {
         CustomHooks.TransitionToAudioSnapshotFromFsmAction += OnTransitionToAudioSnapshot;
     }
 
+    #endregion
+
+    #region Singleton management
+
+    /// <summary>
+    /// Creates the singleton instance. Returns false and sets <paramref name="component" /> to null
+    /// if one already exists.
+    /// </summary>
+    /// <param name="netClient">The NetClient instance for networking data.</param>
+    /// <param name="entityId">The entity ID that this component is attached to.</param>
+    /// <param name="gameObject">The host-client pair of game objects of the entity.</param>
+    /// <param name="component">The created instance of MusicComponent if successful, otherwise null.</param>
+    /// <returns>True if a new component could be created, false if a component already existed.</returns>
+    public static bool TryCreateInstance(
+        NetClient netClient,
+        ushort entityId,
+        HostClientPair<GameObject> gameObject,
+        out MusicComponent? component
+    ) {
+        if (_instance != null) {
+            component = null;
+            return false;
+        }
+
+        _instance = new MusicComponent(netClient, entityId, gameObject);
+        component = _instance;
+        return true;
+    }
+
+    /// <summary>
+    /// Clear the current singleton instance of the component.
+    /// </summary>
+    public static void ClearInstance() => _instance = null;
+
+    #endregion
+
+    #region Hook registration
+
+    /// <summary>
+    /// Register hooks for music-related operations.
+    /// </summary>
+    public static void RegisterHooks() {
+        var method = typeof(PlayMakerFSM).GetMethod(
+            "OnEnable",
+            System.Reflection.BindingFlags.Public |
+            System.Reflection.BindingFlags.NonPublic |
+            System.Reflection.BindingFlags.Instance
+        );
+
+        if (method != null) {
+            _fsmEnableHook = new Hook(method, OnFsmEnable);
+        } else {
+            Logger.Error("Could not find PlayMakerFSM.OnEnable method info.");
+        }
+    }
+
+    /// <summary>
+    /// Deregister hooks for music-related operations.
+    /// </summary>
+    public static void DeregisterHooks() {
+        _fsmEnableHook?.Dispose();
+        _fsmEnableHook = null;
+    }
+
+    #endregion
+
+    #region Component lifecycle
+
+    /// <summary>
+    /// Initializes the host-side logic for the component.
+    /// </summary>
+    public override void InitializeHost() {
+    }
+
+    /// <summary>
+    /// Destroys the component and unregisters FSM action events.
+    /// </summary>
+    public override void Destroy() {
+        CustomHooks.ApplyMusicCueFromFsmAction -= OnApplyMusicCue;
+        CustomHooks.TransitionToAudioSnapshotFromFsmAction -= OnTransitionToAudioSnapshot;
+    }
+
+    #endregion
+
+    #region Host-side music capture
+
     /// <summary>
     /// Hook that is called when the AudioManager.ApplyMusicCue is called from an ApplyMusicCue FSM action.
     /// Used to network the starting of a music cue for the scene host.
@@ -177,246 +251,341 @@ internal class MusicComponent : EntityComponent {
     private void OnApplyMusicCue(ApplyMusicCue action) {
         Logger.Debug($"OnApplyMusicCue: {action.Fsm.GameObject.gameObject.name}, {action.Fsm.Name}");
 
-        if (IsControlled) {
+        if (IsControlled) return;
+
+        if (action.musicCue.Value is not MusicCue musicCue) return;
+
+        if (!MusicCueDataByName.TryGetValue(musicCue.name, out var cueData)) {
+            Logger.Debug($"  Music cue '{musicCue.name}' not in music-data.json");
             return;
         }
-        
-        var musicCue = action.musicCue.Value;
-        if (musicCue == null) {
-            return;
-        }
-        
-        foreach (var musicCueData in MusicCueDataList) {
-            if (musicCueData.MusicCue == musicCue || musicCueData.Name == musicCue.name) {
-                Logger.Debug($"  Sending data, index: {musicCueData.Index}");
-                
-                var networkData = new EntityNetworkData {
-                    Type = EntityComponentType.Music
-                };
-                networkData.Packet.Write(musicCueData.Index);
-                networkData.Packet.Write(_lastSnapshotIndex);
 
-                SendData(networkData);
+        Logger.Debug($"  Sending index: {cueData.Index}");
 
-                _lastMusicCueIndex = musicCueData.Index;
-
-                return;
-            }
-        }
+        SendMusicPacket(cueData.Index, _lastSnapshotIndex);
+        _lastMusicCueIndex = cueData.Index;
     }
-    
+
     /// <summary>
-    /// Hook that is called when the AudioMixerSnapshot.TransitionTo is called from an TransitionToAudioSnapshot FSM
-    /// action. Used to network the starting of a audio snapshot for the scene host.
+    /// Hook that is called when the AudioMixerSnapshot.TransitionTo is called from a TransitionToAudioSnapshot FSM
+    /// action. Used to network the starting of an audio snapshot for the scene host.
     /// </summary>
     /// <param name="action">The TransitionToAudioSnapshot FSM action responsible for the call.</param>
     private void OnTransitionToAudioSnapshot(TransitionToAudioSnapshot action) {
         Logger.Debug($"OnTransitionToAudioSnapshot: {action.Fsm.GameObject.gameObject.name}, {action.Fsm.Name}");
 
+        // Door Control FSMs trigger snapshots independently of boss music; let them through.
         if (action.Fsm.Name.Equals("Door Control")) {
-            Logger.Debug("  Was door control, allowing");
+            Logger.Debug("  Door Control FSM, skipping");
             return;
         }
 
-        if (IsControlled) {
+        if (IsControlled) return;
+
+        if (action.snapshot.Value is not AudioMixerSnapshot snapshot) return;
+
+        if (!SnapshotDataByName.TryGetValue(snapshot.name, out var snapshotData)) {
+            Logger.Debug($"  Audio mixer snapshot '{snapshot.name}' not in music-data.json");
             return;
         }
-        
-        var snapshot = action.snapshot.Value;
-        if (snapshot == null) {
-            return;
-        }
-        
-        foreach (var snapshotData in SnapshotDataList) {
-            if (snapshotData.Snapshot == snapshot || snapshotData.Name == snapshot.name) {
-                Logger.Debug($"  Sending data, index: {snapshotData.Index}");
-                
-                var networkData = new EntityNetworkData {
-                    Type = EntityComponentType.Music
-                };
-                networkData.Packet.Write(_lastMusicCueIndex);
-                networkData.Packet.Write(snapshotData.Index);
 
-                SendData(networkData);
+        Logger.Debug($"  Sending index: {snapshotData.Index}");
 
-                _lastSnapshotIndex = snapshotData.Index;
-                
-                return;
-            }
-        }
+        SendMusicPacket(_lastMusicCueIndex, snapshotData.Index);
+        _lastSnapshotIndex = snapshotData.Index;
     }
 
-    /// <inheritdoc />
-    public override void InitializeHost() {
+    /// <summary>
+    /// Sends a network packet containing the updated music cue and audio snapshot indices.
+    /// </summary>
+    /// <param name="cueIndex">The network index of the music cue.</param>
+    /// <param name="snapshotIndex">The network index of the audio snapshot.</param>
+    private void SendMusicPacket(byte cueIndex, byte snapshotIndex) {
+        var networkData = new EntityNetworkData { Type = EntityComponentType.Music };
+        networkData.Packet.Write(cueIndex);
+        networkData.Packet.Write(snapshotIndex);
+
+        SendData(networkData);
     }
 
-    /// <inheritdoc />
+    #endregion
+
+    #region Controlled-client music application
+
+    /// <summary>
+    /// Updates the music component with received network data.
+    /// </summary>
+    /// <param name="data">The network data containing new audio indices.</param>
+    /// <param name="alreadyInSceneUpdate">Indicates if this update is already within a scene update cycle.</param>
     public override void Update(EntityNetworkData data, bool alreadyInSceneUpdate) {
         Logger.Debug("Update MusicComponent");
-        
+
         if (!IsControlled) {
             Logger.Debug("  Not controlled, skipping");
             return;
         }
 
-        var musicCueIndex = data.Packet.ReadByte();
+        var cueIndex = data.Packet.ReadByte();
         var snapshotIndex = data.Packet.ReadByte();
-        
-        Logger.Debug($"Applying entity network data for music component with indices: {musicCueIndex}, {snapshotIndex}");
 
-        if (musicCueIndex != _lastMusicCueIndex) {
-            ApplyIndex(musicCueIndex);
-            _lastMusicCueIndex = musicCueIndex;
+        Logger.Debug($"  Received indices - cue: {cueIndex}, snapshot: {snapshotIndex}");
+
+        if (cueIndex != _lastMusicCueIndex) {
+            ApplyIndex(cueIndex);
+            _lastMusicCueIndex = cueIndex;
         }
 
         if (snapshotIndex != _lastSnapshotIndex) {
             ApplyIndex(snapshotIndex);
             _lastSnapshotIndex = snapshotIndex;
         }
+    }
 
-        void ApplyIndex(byte index) {
-            foreach (var musicCueData in MusicCueDataList) {
-                if (musicCueData.Index != index) {
-                    continue;
-                }
-
-                if (musicCueData.MusicCue == null) {
-                    continue;
-                }
-
-                Logger.Debug($"  Found music cue ({musicCueData.Name}, {musicCueData.Type}), applying it");
-
-                var gm = global::GameManager.instance;
-                gm.AudioManager.ApplyMusicCue(musicCueData.MusicCue, 0f, 0f, false);
+    /// <summary>
+    /// Resolves and applies either a music cue or an audio snapshot matching the given network index.
+    /// </summary>
+    /// <param name="index">The network index to apply.</param>
+    private static void ApplyIndex(byte index) {
+        if (MusicCueDataByIndex.TryGetValue(index, out var cueData)) {
+            if (cueData.MusicCue == null) {
+                Logger.Debug($"  Music cue '{cueData.Name}' indexed but not resolved in-scene");
                 return;
             }
 
-            foreach (var snapshotData in SnapshotDataList) {
-                if (snapshotData.Index != index) {
-                    continue;
-                }
+            Logger.Debug($"  Applying music cue ({cueData.Name}, {cueData.Type})");
+            global::GameManager.instance.AudioManager.ApplyMusicCue(cueData.MusicCue, 0f, 0f, false);
+            return;
+        }
 
-                if (snapshotData.Snapshot == null) {
-                    continue;
-                }
-
-                Logger.Debug("  Found audio mixer snapshot, transitioning to it");
-                snapshotData.Snapshot.TransitionTo(0f);
+        if (SnapshotDataByIndex.TryGetValue(index, out var snapshotData)) {
+            if (snapshotData.Snapshot == null) {
+                Logger.Debug($"  Audio snapshot '{snapshotData.Name}' indexed but not resolved in-scene");
                 return;
             }
 
-            Logger.Debug("  Could not find music cue or audio mixer snapshot matching ID");
+            Logger.Debug($"  Transitioning to audio snapshot ({snapshotData.Name})");
+            snapshotData.Snapshot.TransitionTo(0f);
+            return;
+        }
+
+        Logger.Debug($"  No cue or snapshot found for index {index}");
+    }
+
+    #endregion
+
+    #region FSM reference resolution
+
+    /// <summary>
+    /// Hook for when an FSM becomes enabled. Used to check for ApplyMusicCue or TransitionToAudioSnapshot actions
+    /// such that their audio data can be resolved.
+    /// </summary>
+    /// <param name="orig">The original method delegate.</param>
+    /// <param name="self">The PlayMakerFSM instance being enabled.</param>
+    private static void OnFsmEnable(Action<PlayMakerFSM> orig, PlayMakerFSM self) {
+        orig(self);
+
+        foreach (var state in self.FsmStates) {
+            foreach (var action in state.Actions) {
+                switch (action) {
+                    case ApplyMusicCue applyMusicCue: {
+                        if (applyMusicCue.musicCue.Value is not MusicCue musicCue) continue;
+
+                        Logger.Debug($"Found music cue '{musicCue.name}' in FSM '{self.Fsm.Name}' / '{state.Name}'");
+
+                        if (MusicCueDataByName.TryGetValue(musicCue.name, out var cueData)) {
+                            Logger.Debug($"  Resolved - type: {cueData.Type}");
+                            cueData.MusicCue = musicCue;
+                        }
+
+                        break;
+                    }
+
+                    case TransitionToAudioSnapshot snapshotAction: {
+                        if (snapshotAction.snapshot.Value is not AudioMixerSnapshot snapshot) continue;
+
+                        Logger.Debug(
+                            $"Found audio snapshot '{snapshot.name}' in FSM '{self.Fsm.Name}' / '{state.Name}'"
+                        );
+
+                        if (SnapshotDataByName.TryGetValue(snapshot.name, out var snapshotData)) {
+                            Logger.Debug($"  Resolved - type: {snapshotData.Type}");
+                            snapshotData.Snapshot = snapshot;
+                        }
+
+                        break;
+                    }
+                }
+            }
         }
     }
 
-    /// <inheritdoc />
-    public override void Destroy() {
-        CustomHooks.ApplyMusicCueFromFsmAction -= OnApplyMusicCue;
-        CustomHooks.TransitionToAudioSnapshotFromFsmAction -= OnTransitionToAudioSnapshot;
-    }
+    #endregion
 
-    // /// <summary>
-    // /// Hook for when an FSM becomes enabled. Used to check for ApplyMusicCue or TransitionToAudioSnapshot actions
-    // /// such that their audio data can be added to the lists of data.
-    // /// </summary>
-    // private static void OnFsmEnable(On.PlayMakerFSM.orig_OnEnable orig, PlayMakerFSM self) {
-    //     orig(self);
-    //     
-    //     foreach (var state in self.FsmStates) {
-    //         foreach (var action in state.Actions) {
-    //             if (action is ApplyMusicCue applyMusicCue) {
-    //                 var musicCue = applyMusicCue.musicCue.Value as MusicCue;
-    //                 if (musicCue == null) {
-    //                     continue;
-    //                 }
-    //                 
-    //                 Logger.Debug($"Found music cue '{musicCue.name}' in FSM '{self.Fsm.Name}', '{state.Name}'");
-    //
-    //                 if (GetMusicCueData(
-    //                     data => data.Name.Equals(musicCue.name), 
-    //                     out var musicCueData
-    //                 )) {
-    //                     Logger.Debug($"  Adding to data with type: {musicCueData.Type}");
-    //                     musicCueData.MusicCue = musicCue;
-    //                 }
-    //             } else if (action is TransitionToAudioSnapshot snapshotAction) {
-    //                 var snapshot = snapshotAction.snapshot.Value as AudioMixerSnapshot;
-    //                 if (snapshot == null) {
-    //                     continue;
-    //                 }
-    //
-    //                 Logger.Debug($"Found audio mixer snapshot '{snapshot.name}' in FSM '{self.Fsm.Name}', '{state.Name}'");
-    //
-    //                 if (GetAudioMixerSnapshotData(
-    //                     data => data.Name.Equals(snapshot.name),
-    //                     out var snapshotData
-    //                 )) {
-    //                     Logger.Debug($"  Adding to data with type: {snapshotData.Type}");
-    //                     snapshotData.Snapshot = snapshot;
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
+    #region Capture tooling lifecycle
 
     /// <summary>
-    /// Data for music cues, used for looking up the index or the music cue from index for networking purposes.
+    /// Initializes the music capture system, loading previously captured music references.
     /// </summary>
-    private class MusicCueData {
-        public MusicCueType Type { get; set; }
-        public string Name { get; set; }
-        [JsonIgnore]
-        public byte Index { get; set; }
-        [JsonIgnore]
-        public MusicCue MusicCue { get; set; }
+    // TODO: Call this method during development/debugging to capture and dump music cues and snapshots to a file.
+    public static void InitializeCapture() {
+        /*
+        try {
+            var filePath = Path.Combine(FileUtil.GetConfigPath(), CapturedMusicFileName);
+
+            if (File.Exists(filePath)) {
+                var container = FileUtil.LoadObjectFromJsonFile<CapturedMusicContainer>(filePath);
+
+                if (container != null) {
+                    lock (SeenMusicCues) {
+                        foreach (var name in container.MusicCues) {
+                            SeenMusicCues.Add(name);
+                        }
+                    }
+
+                    lock (SeenSnapshots) {
+                        foreach (var name in container.Snapshots) {
+                            SeenSnapshots.Add(name);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Logger.Error($"Failed to load captured music data: {e}");
+        }
+
+        CustomHooks.ApplyMusicCueFromFsmAction += OnCapturedApplyMusicCue;
+        CustomHooks.TransitionToAudioSnapshotFromFsmAction += OnCapturedTransitionToAudioSnapshot;
+        */
     }
 
     /// <summary>
-    /// Data for audio snapshots, used for looking up the index or the audio snapshot from index for networking
-    /// purposes.
+    /// Deinitializes the music capture system, unregistering event handlers.
     /// </summary>
-    private class AudioMixerSnapshotData {
-        public AudioMixerSnapshotType Type { get; set; }
-        public string Name { get; set; }
-        [JsonIgnore]
-        public byte Index { get; set; }
-        [JsonIgnore]
-        public AudioMixerSnapshot Snapshot { get; set; }
+    public static void DeinitializeCapture() {
+        //CustomHooks.ApplyMusicCueFromFsmAction -= OnCapturedApplyMusicCue;
+        //CustomHooks.TransitionToAudioSnapshotFromFsmAction -= OnCapturedTransitionToAudioSnapshot;
+    }
+
+    #endregion
+
+    #region Capture tooling handlers
+
+    /// <summary>
+    /// Intercepts music cue application to record and save the cue name.
+    /// </summary>
+    /// <param name="action">The music cue action being intercepted.</param>
+    private static void OnCapturedApplyMusicCue(ApplyMusicCue action) {
+        if (action.musicCue.Value is not MusicCue musicCue) return;
+
+        lock (SeenMusicCues) {
+            if (!SeenMusicCues.Add(musicCue.name)) return;
+        }
+
+        Logger.Info($"[Capture] New MusicCue: {musicCue.name}");
+        SaveCapturedData();
     }
 
     /// <summary>
-    /// Enum for music cue types.
+    /// Intercepts audio snapshot transitions to record and save the snapshot name.
     /// </summary>
-    [JsonConverter(typeof(StringEnumConverter))]
-    private enum MusicCueType {
-        None,
-        FalseKnight,
-        Hornet,
-        GGHornet,
-        MantisLords,
-        SoulMaster,
-        SoulMaster2,
-        GGHeavy,
-        EnemyBattle,
-        DreamFight,
-        Hive,
-        HiveKnight,
-        DungDefender,
-        BrokenVessel,
-        Nosk,
-        TheHollowKnight,
-        Greenpath,
-        Waterways
+    /// <param name="action">The transition action being intercepted.</param>
+    private static void OnCapturedTransitionToAudioSnapshot(TransitionToAudioSnapshot action) {
+        if (action.snapshot.Value is not AudioMixerSnapshot snapshot) return;
+
+        lock (SeenSnapshots) {
+            if (!SeenSnapshots.Add(snapshot.name)) return;
+        }
+
+        Logger.Info($"[Capture] New AudioMixerSnapshot: {snapshot.name}");
+        SaveCapturedData();
     }
 
     /// <summary>
-    /// Enum for audio snapshot types.
+    /// Saves the captured music cues and audio snapshots to the JSON configuration file.
     /// </summary>
-    [JsonConverter(typeof(StringEnumConverter))]
-    private enum AudioMixerSnapshotType {
-        Silent,
-        None,
-        Off,
-        Normal
+    private static void SaveCapturedData() {
+        try {
+            var configPath = FileUtil.GetConfigPath();
+            Directory.CreateDirectory(configPath);
+
+            List<string> cues;
+            List<string> snapshots;
+
+            lock (SeenMusicCues) {
+                cues = new List<string>(SeenMusicCues);
+                cues.Sort();
+            }
+
+            lock (SeenSnapshots) {
+                snapshots = new List<string>(SeenSnapshots);
+                snapshots.Sort();
+            }
+
+            FileUtil.WriteObjectToJsonFile(
+                new CapturedMusicContainer { MusicCues = cues, Snapshots = snapshots },
+                Path.Combine(configPath, CapturedMusicFileName)
+            );
+        } catch (Exception e) {
+            Logger.Error($"Failed to save captured music data: {e}");
+        }
     }
+
+    #endregion
 }
+
+#region Data containers
+
+// ReSharper disable ClassNeverInstantiated.Global
+/// <summary>
+/// Data for music cues, used for looking up the index or the music cue from index for networking purposes.
+/// </summary>
+internal class MusicCueData {
+    public string Type { get; }
+    public string Name { get; }
+
+    [JsonConstructor]
+    public MusicCueData(string type, string name) {
+        Type = type;
+        Name = name;
+    }
+
+    [JsonIgnore] public byte Index { get; set; }
+
+    [JsonIgnore] public MusicCue? MusicCue { get; set; }
+}
+
+// ReSharper disable ClassNeverInstantiated.Global
+/// <summary>
+/// Data for audio snapshots, used for looking up the index or the audio snapshot from index for networking purposes.
+/// </summary>
+internal class AudioMixerSnapshotData {
+    public string Type { get; }
+    public string Name { get; }
+
+    [JsonConstructor]
+    public AudioMixerSnapshotData(string type, string name) {
+        Type = type;
+        Name = name;
+    }
+
+    [JsonIgnore] public byte Index { get; set; }
+
+    [JsonIgnore] public AudioMixerSnapshot? Snapshot { get; set; }
+}
+
+/// <summary>
+/// Container for storing collections of captured music cues and audio snapshots.
+/// </summary>
+internal class CapturedMusicContainer {
+    /// <summary>
+    /// Gets the list of captured music cue names.
+    /// </summary>
+    public List<string> MusicCues { get; init; } = [];
+
+    /// <summary>
+    /// Gets the list of captured audio snapshot names.
+    /// </summary>
+    public List<string> Snapshots { get; init; } = [];
+}
+
+#endregion

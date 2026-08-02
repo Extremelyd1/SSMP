@@ -15,8 +15,10 @@ using UnityEngine.SceneManagement;
 using Logger = SSMP.Logging.Logger;
 using MapZone = GlobalEnums.MapZone;
 using Object = UnityEngine.Object;
+
 // ReSharper disable AssignNullToNotNullAttribute
-#pragma warning disable CS8620 // Argument cannot be used for parameter due to differences in the nullability of reference types.
+#pragma warning disable CS8620 // Argument cannot be used for parameter due to differences in the nullability of
+// reference types.
 #pragma warning disable CS8602 // Dereference of a possibly null reference.
 #pragma warning disable CS8604 // Possible null reference argument.
 #pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
@@ -61,7 +63,7 @@ internal class SaveManager {
     /// Dictionary of BossStatue.Completion structs in the PlayerData for comparing changes against.
     /// </summary>
     private readonly Dictionary<string?, BossStatue.Completion> _bsCompHashes;
-    
+
     /// <summary>
     /// Dictionary of hash codes for list variables in the PlayerData for comparing changes against.
     /// </summary>
@@ -86,11 +88,21 @@ internal class SaveManager {
     private PlayerData? _lastPlayerData;
 
     /// <summary>
+    /// List of HashSet variables in PlayerData.
+    /// </summary>
+    private static readonly List<string> HashSetVariables = [
+        "scenesEncounteredBench",
+        "scenesEncounteredCocoon",
+        "scenesMapped",
+        "scenesVisited"
+    ];
+
+    /// <summary>
     /// Whether the player is hosting the server, which means that player specific save data is not networked
     /// to the server.
     /// </summary>
     public bool IsHostingServer { get; set; }
-    
+
     public SaveManager(NetClient netClient, EntityManager entityManager) {
         _netClient = netClient;
         _entityManager = entityManager;
@@ -108,22 +120,23 @@ internal class SaveManager {
     /// Initializes the save manager by loading the save data json.
     /// </summary>
     public void Initialize() {
-        _netClient.ConnectEvent += serverInfo => OnConnect(serverInfo);
+        _netClient.ConnectEvent += OnConnect;
 
         foreach (var field in typeof(PlayerData).GetFields()) {
             var fieldName = field.Name;
 
-            if (!SaveDataMapping.PlayerDataVarProperties.TryGetValue(fieldName, out var varProps) 
+            if (!SaveDataMapping.PlayerDataVarProperties.TryGetValue(fieldName, out var varProps)
                 || !varProps.Sync
-            ) {
+               ) {
                 continue;
             }
-            
+
             var compoundField = SaveDataMapping.StringListVariables.Contains(fieldName) ||
                                 SaveDataMapping.BossSequenceDoorCompletionVariables.Contains(fieldName) ||
                                 SaveDataMapping.BossStatueCompletionVariables.Contains(fieldName) ||
                                 SaveDataMapping.VectorListVariables.Contains(fieldName) ||
-                                SaveDataMapping.IntListVariables.Contains(fieldName);
+                                SaveDataMapping.IntListVariables.Contains(fieldName) ||
+                                HashSetVariables.Contains(fieldName);
 
             if (compoundField) {
                 _playerDataCompoundSyncFields.Add(field);
@@ -181,7 +194,7 @@ internal class SaveManager {
             Logger.Error("Could not find protected constructor of PlayerData");
             return;
         }
-        
+
         _lastPlayerData = (PlayerData) pdConstructor.Invoke([]);
 
         foreach (var field in _playerDataSimpleSyncFields) {
@@ -194,7 +207,7 @@ internal class SaveManager {
             field.SetValue(_lastPlayerData, GetCompoundCopy(value));
         }
     }
-    
+
     /// <summary>
     /// Update hook to check for changes in the PlayerData instance.
     /// </summary>
@@ -217,7 +230,7 @@ internal class SaveManager {
             var currentValue = field.GetValue(pd);
             var lastValue = field.GetValue(_lastPlayerData);
 
-            if (currentValue.Equals(lastValue)) {
+            if (Equals(currentValue, lastValue)) {
                 continue;
             }
 
@@ -227,15 +240,15 @@ internal class SaveManager {
 
             if (field.FieldType == typeof(int)) {
                 CheckSendSaveUpdate(
-                    field.Name, 
-                    () => EncodeSaveDataValue(currentValue), 
+                    field.Name,
+                    () => EncodeSaveDataValue(field.Name, currentValue),
                     () => {
                         var delta = (int) currentValue - (int) lastValue;
-                        return EncodeSaveDataValue(delta);
+                        return EncodeSaveDataValue(field.Name, delta);
                     }
                 );
             } else {
-                CheckSendSaveUpdate(field.Name, () => EncodeSaveDataValue(currentValue));
+                CheckSendSaveUpdate(field.Name, () => EncodeSaveDataValue(field.Name, currentValue));
             }
         }
     }
@@ -322,7 +335,7 @@ internal class SaveManager {
                 getCurrentBoolFunc = () => dreamPlant.completed;
                 setCurrentBoolAction = value => dreamPlant.completed = value;
             }
-            
+
             var dreamPlantOrb = itemObject.GetComponent<DreamPlantOrb>();
             if (dreamPlantOrb) {
                 getCurrentBoolFunc = () => dreamPlantOrb.pickedUp;
@@ -332,7 +345,7 @@ internal class SaveManager {
             if (getCurrentBoolFunc == null || setCurrentBoolAction == null) {
                 continue;
             }
-            
+
             var persistentFsmData = new PersistentFsmData {
                 PersistentItemKey = persistentItemData,
                 GetCurrentBool = getCurrentBoolFunc,
@@ -389,7 +402,7 @@ internal class SaveManager {
         if (!_netClient.IsConnected || PlayerData.instance.GetInt("permadeathMode") == 2) {
             return;
         }
-        
+
         if (!SaveDataMapping.PlayerDataVarProperties.TryGetValue(name, out var varProps)) {
             Logger.Info($"Not in save data values, not sending save update ({name})");
             return;
@@ -399,7 +412,7 @@ internal class SaveManager {
             Logger.Info($"Value should not sync, not sending save update ({name})");
             return;
         }
-        
+
         // If we should do the scene host check and the player is not scene host, skip sending
         if (!varProps.IgnoreSceneHost && !_entityManager.IsSceneHost) {
             Logger.Info($"Not scene host, but required, not sending save update ({name})");
@@ -414,11 +427,11 @@ internal class SaveManager {
         Func<byte[]> toUseEncodeFunc;
         if (varProps.Additive && deltaEncodeFunc != null) {
             toUseEncodeFunc = deltaEncodeFunc;
-            
+
             Logger.Debug($"Sending \"{name}\" as save update (additive)");
         } else {
             toUseEncodeFunc = encodeFunc;
-            
+
             Logger.Debug($"Sending \"{name}\" as save update");
         }
 
@@ -459,13 +472,15 @@ internal class SaveManager {
                 if (SaveDataMapping.GeoRockBools.TryGetValue(itemData, out var shouldSync) && shouldSync) {
                     if (!_entityManager.IsSceneHost) {
                         Logger.Info(
-                            $"Not scene host, not sending geo rock save update ({itemData.Id}, {itemData.SceneName})");
+                            $"Not scene host, not sending geo rock save update ({itemData.Id}, {itemData.SceneName})"
+                        );
                         continue;
                     }
-                    
+
                     if (!SaveDataMapping.GeoRockIndices.TryGetValue(itemData, out var index)) {
                         Logger.Info(
-                            $"Cannot find geo rock save data index, not sending save update ({itemData.Id}, {itemData.SceneName})");
+                            $"Cannot find geo rock save data index, not sending save update ({itemData.Id}, {itemData.SceneName})"
+                        );
                         continue;
                     }
 
@@ -476,19 +491,21 @@ internal class SaveManager {
                         [(byte) value]
                     );
                 } else if (
-                    SaveDataMapping.PersistentIntVarProperties.TryGetValue(itemData, out var varProps) && 
+                    SaveDataMapping.PersistentIntVarProperties.TryGetValue(itemData, out var varProps) &&
                     varProps.Sync
                 ) {
                     // If we should do the scene host check and the player is not scene host, skip sending
                     if (!varProps.IgnoreSceneHost && !_entityManager.IsSceneHost) {
                         Logger.Info(
-                            $"Not scene host, not sending persistent int save update ({itemData.Id}, {itemData.SceneName})");
+                            $"Not scene host, not sending persistent int save update ({itemData.Id}, {itemData.SceneName})"
+                        );
                         continue;
                     }
 
                     if (!SaveDataMapping.PersistentIntIndices.TryGetValue(itemData, out var index)) {
                         Logger.Info(
-                            $"Cannot find persistent int save data index, not sending save update ({itemData.Id}, {itemData.SceneName})");
+                            $"Cannot find persistent int save data index, not sending save update ({itemData.Id}, {itemData.SceneName})"
+                        );
                         continue;
                     }
 
@@ -512,7 +529,7 @@ internal class SaveManager {
                 var itemData = persistentFsmData.PersistentItemKey;
 
                 Logger.Info($"Value for {itemData} changed to: {value}");
-                
+
                 if (!_netClient.IsConnected) {
                     continue;
                 }
@@ -520,20 +537,23 @@ internal class SaveManager {
                 if (!SaveDataMapping.PersistentBoolVarProperties.TryGetValue(itemData, out var varProps) ||
                     !varProps.Sync) {
                     Logger.Info(
-                        $"Not in persistent bool save data values or false in sync props, not sending save update ({itemData.Id}, {itemData.SceneName})");
+                        $"Not in persistent bool save data values or false in sync props, not sending save update ({itemData.Id}, {itemData.SceneName})"
+                    );
                     continue;
                 }
-                
+
                 // If we should do the scene host check and the player is not scene host, skip sending
                 if (!varProps.IgnoreSceneHost && !_entityManager.IsSceneHost) {
                     Logger.Info(
-                        $"Not scene host, not sending persistent bool save update ({itemData.Id}, {itemData.SceneName})");
+                        $"Not scene host, not sending persistent bool save update ({itemData.Id}, {itemData.SceneName})"
+                    );
                     continue;
                 }
 
                 if (!SaveDataMapping.PersistentBoolIndices.TryGetValue(itemData, out var index)) {
                     Logger.Info(
-                        $"Cannot find persistent bool save data index, not sending save update ({itemData.Id}, {itemData.SceneName})");
+                        $"Cannot find persistent bool save data index, not sending save update ({itemData.Id}, {itemData.SceneName})"
+                    );
                     continue;
                 }
 
@@ -583,13 +603,13 @@ internal class SaveManager {
                 checkDict[varName] = currentCheckValue;
 
                 if (deltaEncodeFunc == null) {
-                    CheckSendSaveUpdate(varName, () => EncodeSaveDataValue(currentValue));
+                    CheckSendSaveUpdate(varName, () => EncodeSaveDataValue(varName, currentValue));
                 } else {
                     var lastValue = _lastPlayerData.GetVariable<TVar>(varName);
 
                     CheckSendSaveUpdate(
                         varName,
-                        () => EncodeSaveDataValue(currentValue),
+                        () => EncodeSaveDataValue(varName, currentValue),
                         () => deltaEncodeFunc.Invoke(currentValue, lastValue)
                     );
 
@@ -606,16 +626,18 @@ internal class SaveManager {
             GetListHashCode,
             (hash1, hash2) => hash1 != hash2,
             (currentValue, lastValue) => {
-                var currentList = currentValue as List<string>;
-                var lastList = lastValue as List<string>;
+                var currentList = currentValue as List<string> ?? [];
+                var lastList = lastValue as List<string> ?? [];
 
                 // TODO: also allow for negative updates, where something is deleted from the list
                 // this also holds for the other two lambdas below
-                var deltaList = currentList!.Except(lastList!).ToList();
-                
-                Logger.Debug($"String list var updated, currentList: {string.Join(", ", currentList)}, lastList: {string.Join(", ", lastList)}, deltaList: {string.Join(", ", deltaList)}");
+                var deltaList = currentList.Except(lastList).ToList();
 
-                return EncodeSaveDataValue(deltaList);
+                Logger.Debug(
+                    $"String list var updated, currentList: {string.Join(", ", currentList)}, lastList: {string.Join(", ", lastList)}, deltaList: {string.Join(", ", deltaList)}"
+                );
+
+                return EncodeSaveDataValue(null, deltaList);
             }
         );
 
@@ -648,38 +670,61 @@ internal class SaveManager {
                 b1.seenTier3Unlock != b2.seenTier3Unlock ||
                 b1.usingAltVersion != b2.usingAltVersion
         );
-        
+
         CheckUpdates<List<Vector3>, int>(
             SaveDataMapping.VectorListVariables,
             _listHashes,
             GetListHashCode,
             (hash1, hash2) => hash1 != hash2,
             (currentValue, lastValue) => {
-                var currentList = currentValue as List<Vector3>;
-                var lastList = lastValue as List<Vector3>;
+                var currentList = currentValue as List<Vector3> ?? [];
+                var lastList = lastValue as List<Vector3> ?? [];
 
-                var deltaList = currentList!.Except(lastList!).ToList();
-                
-                Logger.Debug($"Vector3 list var updated, currentList: {string.Join(", ", currentList)}, lastList: {string.Join(", ", lastList)}, deltaList: {string.Join(", ", deltaList)}");
+                var deltaList = currentList.Except(lastList).ToList();
 
-                return EncodeSaveDataValue(deltaList);
+                Logger.Debug(
+                    $"Vector3 list var updated, currentList: {string.Join(", ", currentList)}, lastList: {string.Join(", ", lastList)}, deltaList: {string.Join(", ", deltaList)}"
+                );
+
+                return EncodeSaveDataValue(null, deltaList);
             }
         );
-        
+
         CheckUpdates<List<int>, int>(
             SaveDataMapping.IntListVariables,
             _listHashes,
             GetListHashCode,
             (hash1, hash2) => hash1 != hash2,
             (currentValue, lastValue) => {
-                var currentList = currentValue as List<int>;
-                var lastList = lastValue as List<int>;
+                var currentList = currentValue as List<int> ?? [];
+                var lastList = lastValue as List<int> ?? [];
 
-                var deltaList = currentList!.Except(lastList!).ToList();
-                
-                Logger.Debug($"Integer list var updated, currentList: {string.Join(", ", currentList)}, lastList: {string.Join(", ", lastList)}, deltaList: {string.Join(", ", deltaList)}");
+                var deltaList = currentList.Except(lastList).ToList();
 
-                return EncodeSaveDataValue(deltaList);
+                Logger.Debug(
+                    $"Integer list var updated, currentList: {string.Join(", ", currentList)}, lastList: {string.Join(", ", lastList)}, deltaList: {string.Join(", ", deltaList)}"
+                );
+
+                return EncodeSaveDataValue(null, deltaList);
+            }
+        );
+
+        CheckUpdates<HashSet<string>, int>(
+            HashSetVariables,
+            _listHashes,
+            hashSet => GetListHashCode(hashSet?.ToList()),
+            (hash1, hash2) => hash1 != hash2,
+            (currentValue, lastValue) => {
+                var currentSet = currentValue as HashSet<string> ?? [];
+                var lastSet = lastValue as HashSet<string> ?? [];
+
+                var deltaList = currentSet.Except(lastSet).ToList();
+
+                Logger.Debug(
+                    $"HashSet string var updated, currentSet: {string.Join(", ", currentSet)}, lastSet: {string.Join(", ", lastSet)}, deltaList: {string.Join(", ", deltaList)}"
+                );
+
+                return EncodeSaveDataValue(null, deltaList);
             }
         );
     }
@@ -706,13 +751,10 @@ internal class SaveManager {
             Logger.Info("Received current save, but player is hosting, not updating");
             return;
         }
-        
+
         Logger.Info("Received current save, updating...");
 
-        foreach (var keyValuePair in currentSave.SaveData) {
-            var index = keyValuePair.Key;
-            var value = keyValuePair.Value;
-
+        foreach (var (index, value) in currentSave.SaveData) {
             UpdateSaveWithData(index, value);
         }
     }
@@ -737,55 +779,119 @@ internal class SaveManager {
 
             var decodedObject = DecodeSaveDataValue(name, encodedValue);
 
-            if (decodedObject is bool decodedBool) {
-                _lastPlayerData?.SetBool(name, decodedBool);
-                pd.SetBool(name, decodedBool);
-            } else if (decodedObject is float decodedFloat) {
-                _lastPlayerData?.SetFloat(name, decodedFloat);
-                pd.SetFloat(name, decodedFloat);
-            } else if (decodedObject is int decodedInt) {
-                _lastPlayerData?.SetInt(name, decodedInt);
-                pd.SetInt(name, decodedInt);
-            } else if (decodedObject is string decodedString) {
-                _lastPlayerData?.SetString(name, decodedString);
-                pd.SetString(name, decodedString);
-            } else if (decodedObject is Vector3 decodedVec3) {
-                _lastPlayerData?.SetVector3(name, decodedVec3);
-                pd.SetVector3(name, decodedVec3);
-            } else if (decodedObject is List<string> decodedStringList) {
-                // First set the new string list hash, so we don't trigger an update and subsequently a feedback loop
-                _listHashes[name] = GetListHashCode(decodedStringList);
-                _lastPlayerData?.SetVariable(name, (List<string>) GetCompoundCopy(decodedStringList));
-                pd.SetVariable(name, decodedStringList);
-            } else if (decodedObject is BossSequenceDoor.Completion decodedBsdComp) {
-                // First set the new bsdComp obj in the dict, so we don't trigger an update and subsequently a
-                // feedback loop
-                _bsdCompHashes[name] = decodedBsdComp;
-                _lastPlayerData?.SetVariable(name, (BossSequenceDoor.Completion) GetCompoundCopy(decodedBsdComp));
-                pd.SetVariable(name, decodedBsdComp);
-            } else if (decodedObject is BossStatue.Completion decodedBsComp) {
-                // First set the new bsComp obj in the dict, so we don't trigger an update and subsequently a
-                // feedback loop
-                _bsCompHashes[name] = decodedBsComp;
-                _lastPlayerData?.SetVariable(name, (BossStatue.Completion) GetCompoundCopy(decodedBsComp));
-                pd.SetVariable(name, decodedBsComp);
-            } else if (decodedObject is List<Vector3> decodedVec3List) {
-                // First set the new string list hash, so we don't trigger an update and subsequently a feedback loop
-                _listHashes[name] = GetListHashCode(decodedVec3List);
-                _lastPlayerData?.SetVariable(name, (List<Vector3>) GetCompoundCopy(decodedVec3List));
-                pd.SetVariable(name, decodedVec3List);
-            } else if (decodedObject is MapZone decodedMapZone) {
-                _lastPlayerData?.SetVariable(name, decodedMapZone);
-                pd.SetVariable(name, decodedMapZone);
-            } else if (decodedObject is List<int> decodedIntList) {
-                // First set the new string list hash, so we don't trigger an update and subsequently a feedback loop
-                _listHashes[name] = GetListHashCode(decodedIntList);
-                _lastPlayerData?.SetVariable(name, (List<int>) GetCompoundCopy(decodedIntList));
-                pd.SetVariable(name, decodedIntList);
-            } else {
-                throw new ArgumentException($"Could not decode type: {decodedObject.GetType()}");
+            switch (decodedObject) {
+                case bool decodedBool:
+                    _lastPlayerData?.SetBool(name, decodedBool);
+                    pd.SetBool(name, decodedBool);
+                    break;
+                case float decodedFloat:
+                    _lastPlayerData?.SetFloat(name, decodedFloat);
+                    pd.SetFloat(name, decodedFloat);
+                    break;
+                case int decodedInt:
+                    _lastPlayerData?.SetInt(name, decodedInt);
+                    pd.SetInt(name, decodedInt);
+                    break;
+                case long decodedLong:
+                    _lastPlayerData?.SetVariable(name, decodedLong);
+                    pd.SetVariable(name, decodedLong);
+                    break;
+                case ulong decodedULong:
+                    _lastPlayerData?.SetVariable(name, decodedULong);
+                    pd.SetVariable(name, decodedULong);
+                    break;
+                case uint decodedUInt:
+                    _lastPlayerData?.SetVariable(name, decodedUInt);
+                    pd.SetVariable(name, decodedUInt);
+                    break;
+                case short decodedShort:
+                    _lastPlayerData?.SetVariable(name, decodedShort);
+                    pd.SetVariable(name, decodedShort);
+                    break;
+                case ushort decodedUShort:
+                    _lastPlayerData?.SetVariable(name, decodedUShort);
+                    pd.SetVariable(name, decodedUShort);
+                    break;
+                case double decodedDouble:
+                    _lastPlayerData?.SetVariable(name, decodedDouble);
+                    pd.SetVariable(name, decodedDouble);
+                    break;
+                case string decodedString:
+                    _lastPlayerData?.SetString(name, decodedString);
+                    pd.SetString(name, decodedString);
+                    break;
+                case Vector2 decodedVec2:
+                    _lastPlayerData?.SetVariable(name, decodedVec2);
+                    pd.SetVariable(name, decodedVec2);
+                    break;
+                case Vector3 decodedVec3:
+                    _lastPlayerData?.SetVector3(name, decodedVec3);
+                    pd.SetVector3(name, decodedVec3);
+                    break;
+                case List<string> decodedStringList:
+                    // First set the new string list hash, so we don't trigger an update and subsequently a feedback
+                    // loop
+                    _listHashes[name] = GetListHashCode(decodedStringList);
+                    _lastPlayerData?.SetVariable(name, (List<string>) GetCompoundCopy(decodedStringList));
+                    pd.SetVariable(name, decodedStringList);
+                    break;
+                case BossSequenceDoor.Completion decodedBsdComp:
+                    // First set the new bsdComp obj in the dict, so we don't trigger an update and subsequently a
+                    // feedback loop
+                    _bsdCompHashes[name] = decodedBsdComp;
+                    _lastPlayerData?.SetVariable(name, (BossSequenceDoor.Completion) GetCompoundCopy(decodedBsdComp));
+                    pd.SetVariable(name, decodedBsdComp);
+                    break;
+                case BossStatue.Completion decodedBsComp:
+                    // First set the new bsComp obj in the dict, so we don't trigger an update and subsequently a
+                    // feedback loop
+                    _bsCompHashes[name] = decodedBsComp;
+                    _lastPlayerData?.SetVariable(name, (BossStatue.Completion) GetCompoundCopy(decodedBsComp));
+                    pd.SetVariable(name, decodedBsComp);
+                    break;
+                case List<Vector3> decodedVec3List:
+                    // First set the new string list hash, so we don't trigger an update and subsequently a feedback
+                    // loop
+                    _listHashes[name] = GetListHashCode(decodedVec3List);
+                    _lastPlayerData?.SetVariable(name, (List<Vector3>) GetCompoundCopy(decodedVec3List));
+                    pd.SetVariable(name, decodedVec3List);
+                    break;
+                case MapZone decodedMapZone:
+                    _lastPlayerData?.SetVariable(name, decodedMapZone);
+                    pd.SetVariable(name, decodedMapZone);
+                    break;
+                case List<int> decodedIntList:
+                    // First set the new string list hash, so we don't trigger an update and subsequently a feedback
+                    // loop
+                    _listHashes[name] = GetListHashCode(decodedIntList);
+                    _lastPlayerData?.SetVariable(name, (List<int>) GetCompoundCopy(decodedIntList));
+                    pd.SetVariable(name, decodedIntList);
+                    break;
+                case byte[] decodedBytes: {
+                    var copy = decodedBytes.ToArray();
+                    _lastPlayerData?.SetVariable(name, copy.ToArray());
+                    pd.SetVariable(name, copy);
+                    break;
+                }
+                case HashSet<string> decodedHashSet: {
+                    var listRepresentation = decodedHashSet.ToList();
+                    _listHashes[name] = GetListHashCode(listRepresentation);
+                    _lastPlayerData?.SetVariable(name, (HashSet<string>) GetCompoundCopy(decodedHashSet));
+                    pd.SetVariable(name, decodedHashSet);
+                    break;
+                }
+                default: {
+                    if (decodedObject.GetType().IsEnum) {
+                        _lastPlayerData?.SetVariable(name, decodedObject);
+                        pd.SetVariable(name, decodedObject);
+                    } else {
+                        throw new ArgumentException($"Could not decode type: {decodedObject.GetType()}");
+                    }
+
+                    break;
+                }
             }
-            
+
             _saveChanges.ApplyPlayerDataSaveChange(name);
         }
 
@@ -803,11 +909,13 @@ internal class SaveManager {
                 }
             }
 
-            sceneData.SaveMyState(new GeoRockData {
-                id = itemData.Id,
-                sceneName = itemData.SceneName,
-                hitsLeft = value
-            });
+            sceneData.SaveMyState(
+                new GeoRockData {
+                    id = itemData.Id,
+                    sceneName = itemData.SceneName,
+                    hitsLeft = value
+                }
+            );
         } else if (SaveDataMapping.PersistentBoolIndices.TryGetValue(index, out itemData)) {
             if (CheckPlayerSpecificHosting(SaveDataMapping.PersistentBoolVarProperties, itemData)) {
                 return;
@@ -827,7 +935,7 @@ internal class SaveManager {
                 }
             }
 
-            
+
             // sceneData.SaveMyState(new GeoRockData {
             //     id = itemData.Id,
             //     sceneName = itemData.SceneName,
@@ -863,7 +971,7 @@ internal class SaveManager {
             //     sceneName = itemData.SceneName,
             //     value = value
             // });
-            
+
             _saveChanges.ApplyPersistentValueSaveChange(itemData);
         }
 
@@ -890,25 +998,24 @@ internal class SaveManager {
     /// <summary>
     /// Encode a save data value by first recasting HK/Unity internal types to SSMP types and then using the EncodeUtil.
     /// </summary>
+    /// <param name="name">The name of the save data variable.</param>
     /// <param name="value">The object to encode, which should be part of save data.</param>
     /// <returns>A byte array containing the encoded data.</returns>
-    private static byte[] EncodeSaveDataValue(object? value) {
+    private static byte[] EncodeSaveDataValue(string? name, object? value) {
         // First cast HK or Unity internal types to SSMP types, this is to make sure we can use our internal
         // EncodeUtil to encode all types. This util is also used on the server side, where (in the case of the
         // standalone server) we have no reference of HK or Unity internal types
-        if (value is Vector3 vector3) {
-            value = (Math.Vector3) vector3;
-        } else if (value is MapZone mapZone) {
-            value = (Serialization.MapZone) mapZone;
-        } else if (value is BossStatue.Completion bsCompletion) {
-            value = (BossStatueCompletion) bsCompletion;
-        } else if (value is BossSequenceDoor.Completion bsdCompletion) {
-            value = (BossSequenceDoorCompletion) bsdCompletion;
-        } else if (value is List<Vector3> vector3List) {
-            value = vector3List.Select(v => (Math.Vector3) v).ToList();
-        }
+        var casted = value switch {
+            Vector2 v => (Math.Vector2) v,
+            Vector3 v => (Math.Vector3) v,
+            MapZone m => (Serialization.MapZone) m,
+            BossStatue.Completion c => (BossStatueCompletion) c,
+            BossSequenceDoor.Completion c => (BossSequenceDoorCompletion) c,
+            List<Vector3> l => l.Select(v => (Math.Vector3) v).ToList(),
+            _ => value
+        };
 
-        return EncodeUtil.EncodeSaveDataValue(value);
+        return EncodeUtil.EncodeSaveDataValue(casted, name);
     }
 
     /// <summary>
@@ -918,24 +1025,22 @@ internal class SaveManager {
     /// <param name="encodedValue">A byte array containing the encoded data.</param>
     /// <returns>The decoded object.</returns>
     private static object? DecodeSaveDataValue(string? name, byte[] encodedValue) {
-        var decodedValue = EncodeUtil.DecodeSaveDataValue(name, encodedValue);
-        
+        var val = EncodeUtil.DecodeSaveDataValue(name, encodedValue);
+
         // Now we cast SSMP types to SS or Unity internal types, this is to make sure we can use our internal
         // EncodeUtil to decode all types. This util is also used on the server side, where (in the case of the
         // standalone server) we have no reference of SS or Unity internal types
-        if (decodedValue is Math.Vector3 vector3) {
-            decodedValue = (Vector3) vector3;
-        } else if (decodedValue is Serialization.MapZone mapZone) {
-            decodedValue = (MapZone) mapZone;
-        } else if (decodedValue is BossStatueCompletion bsCompletion) {
-            decodedValue = (BossStatue.Completion) bsCompletion;
-        } else if (decodedValue is BossSequenceDoorCompletion bsdCompletion) {
-            decodedValue = (BossSequenceDoor.Completion) bsdCompletion;
-        } else if (decodedValue is List<Math.Vector3> vector3List) {
-            decodedValue = vector3List.Select(v => (Vector3) v).ToList();
-        }
-
-        return decodedValue;
+        return val switch {
+            Math.Vector2 v => (Vector2) v,
+            Math.Vector3 v => (Vector3) v,
+            Serialization.MapZone m => (MapZone) m,
+            BossStatueCompletion c => (BossStatue.Completion) c,
+            BossSequenceDoorCompletion c => (BossSequenceDoor.Completion) c,
+            List<Math.Vector3> l => l.Select(v => (Vector3) v).ToList(),
+            int i when name != null && typeof(PlayerData).GetField(name)?.FieldType is { IsEnum: true } t => Enum
+                .ToObject(t, i),
+            _ => val
+        };
     }
 
     /// <summary>
@@ -992,7 +1097,7 @@ internal class SaveManager {
 
                 var value = valueFunc.Invoke(collectionValue);
 
-                saveData.Add(index, EncodeSaveDataValue(value));
+                saveData.Add(index, EncodeSaveDataValue(key as string, value));
             }
         }
 
@@ -1036,7 +1141,7 @@ internal class SaveManager {
         //     SaveDataMapping.PersistentIntIndices,
         //     intData => intData.value
         // );
-        
+
         return saveData;
     }
 
@@ -1044,16 +1149,16 @@ internal class SaveManager {
     /// Get the hash code of the combined values in a list.
     /// </summary>
     /// <param name="list">The list to calculate the hash code for.</param>
-    /// <returns>0 if the list is empty, otherwise a hash code matching the specific order of values in the list.
+    /// <returns>0 if the list is empty or null, otherwise a hash code matching the specific order of values in the list.
     /// </returns>
-    private static int GetListHashCode<T>(List<T> list) {
-        if (list.Count == 0) {
+    private static int GetListHashCode<T>(List<T>? list) {
+        if (list == null || list.Count == 0) {
             return 0;
         }
 
         return list
-            .Select(item => item.GetHashCode())
-            .Aggregate((total, nextCode) => total ^ nextCode);
+               .Select(item => item?.GetHashCode() ?? 0)
+               .Aggregate((total, nextCode) => total ^ nextCode);
     }
 
     /// <summary>
@@ -1065,51 +1170,44 @@ internal class SaveManager {
     /// <exception cref="ArgumentException">Thrown when a copy cannot be made, due to the given value being null or
     /// of a non-compound or non-PlayerData type.</exception>
     private static object GetCompoundCopy(object value) {
-        if (value == null) {
-            throw new ArgumentException("Cannot get copy of null");
+        switch (value) {
+            case null:
+                throw new ArgumentException("Cannot get copy of null");
+            case List<string> stringListValue:
+                return new List<string>(stringListValue);
+            case List<int> intListValue:
+                return new List<int>(intListValue);
+            case List<Vector3> vecListValue:
+                return new List<Vector3>(vecListValue);
+            case BossSequenceDoor.Completion bsdComp:
+                return new BossSequenceDoor.Completion {
+                    canUnlock = bsdComp.canUnlock,
+                    unlocked = bsdComp.unlocked,
+                    completed = bsdComp.completed,
+                    allBindings = bsdComp.allBindings,
+                    noHits = bsdComp.noHits,
+                    boundNail = bsdComp.boundNail,
+                    boundShell = bsdComp.boundShell,
+                    boundCharms = bsdComp.boundCharms,
+                    boundSoul = bsdComp.boundSoul,
+                    viewedBossSceneCompletions = bsdComp.viewedBossSceneCompletions == null
+                        ? []
+                        : [..bsdComp.viewedBossSceneCompletions]
+                };
+            case BossStatue.Completion bsComp:
+                return new BossStatue.Completion {
+                    hasBeenSeen = bsComp.hasBeenSeen,
+                    isUnlocked = bsComp.isUnlocked,
+                    completedTier1 = bsComp.completedTier1,
+                    completedTier2 = bsComp.completedTier2,
+                    completedTier3 = bsComp.completedTier3,
+                    seenTier3Unlock = bsComp.seenTier3Unlock,
+                    usingAltVersion = bsComp.usingAltVersion
+                };
+            case HashSet<string> hashSetStringValue:
+                return new HashSet<string>(hashSetStringValue);
+            default:
+                throw new ArgumentException($"Cannot get copy of value with type: {value.GetType()}");
         }
-        
-        if (value is List<string> stringListValue) {
-            return new List<string>(stringListValue);
-        }
-
-        if (value is List<int> intListValue) {
-            return new List<int>(intListValue);
-        }
-        
-        if (value is List<Vector3> vecListValue) {
-            return new List<Vector3>(vecListValue);
-        }
-
-        if (value is BossSequenceDoor.Completion bsdComp) {
-            return new BossSequenceDoor.Completion {
-                canUnlock = bsdComp.canUnlock,
-                unlocked = bsdComp.unlocked,
-                completed = bsdComp.completed,
-                allBindings = bsdComp.allBindings,
-                noHits = bsdComp.noHits,
-                boundNail = bsdComp.boundNail,
-                boundShell = bsdComp.boundShell,
-                boundCharms = bsdComp.boundCharms,
-                boundSoul = bsdComp.boundSoul,
-                viewedBossSceneCompletions = bsdComp.viewedBossSceneCompletions == null 
-                    ? [] 
-                    : [..bsdComp.viewedBossSceneCompletions]
-            };
-        }
-
-        if (value is BossStatue.Completion bsComp) {
-            return new BossStatue.Completion {
-                hasBeenSeen = bsComp.hasBeenSeen,
-                isUnlocked = bsComp.isUnlocked,
-                completedTier1 = bsComp.completedTier1,
-                completedTier2 = bsComp.completedTier2,
-                completedTier3 = bsComp.completedTier3,
-                seenTier3Unlock = bsComp.seenTier3Unlock,
-                usingAltVersion = bsComp.usingAltVersion
-            };
-        }
-
-        throw new ArgumentException($"Cannot get copy of value with type: {value.GetType()}");
     }
 }
