@@ -10,6 +10,7 @@ using SSMP.Collection;
 using SSMP.Fsm;
 using SSMP.Game.Client.Entity.Action;
 using SSMP.Game.Client.Entity.Component;
+using SSMP.Game.Client.Entity.Sync;
 using SSMP.Networking.Client;
 using SSMP.Networking.Packet.Data;
 using SSMP.Util;
@@ -104,6 +105,11 @@ internal class Entity {
     private readonly Dictionary<EntityComponentType, EntityComponent> _components;
 
     /// <summary>
+    /// Optional entity-specific FSM synchronization adapter.
+    /// </summary>
+    private readonly IEntityFsmSync? _fsmSync;
+
+    /// <summary>
     /// Unique list of components that require periodic update calls on the host.
     /// </summary>
     private readonly List<EntityComponent> _updatableComponents;
@@ -171,6 +177,8 @@ internal class Entity {
         Id = id;
 
         Type = type;
+
+        _fsmSync = EntityFsmSyncFactory.Create(type);
 
         _isControlled = true;
 
@@ -614,7 +622,7 @@ internal class Entity {
 
         // Only if the GetNetworkDataFromAction method returns true do we add the entity data
         // for sending
-        if (EntityFsmActions.GetNetworkDataFromAction(networkData, self)) {
+        if (EntityFsmActions.GetNetworkDataFromAction(networkData, self, _fsmSync)) {
             _netClient.UpdateManager.AddEntityData(Id, networkData);
         }
     }
@@ -1421,7 +1429,7 @@ internal class Entity {
                 }
 
                 var state = fsm.FsmStates[stateIndex];
-                if (state == null || state.Actions == null || actionIndex >= state.Actions.Length) {
+                if (state?.Actions == null || actionIndex >= state.Actions.Length) {
                     continue;
                 }
 
@@ -1431,8 +1439,7 @@ internal class Entity {
                 //    $"Received entity network data for FSM: {fsm.Fsm.Name}, {state.Name}, {actionIndex} ({action.GetType()})"
                 //);
 
-                EntityFsmActions.ApplyNetworkDataFromAction(data, action);
-
+                EntityFsmActions.ApplyNetworkDataFromAction(data, action, _fsmSync);
                 continue;
             }
 
