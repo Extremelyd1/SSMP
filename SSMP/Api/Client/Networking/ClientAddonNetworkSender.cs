@@ -75,7 +75,7 @@ internal class ClientAddonNetworkSender<TPacketId> :
             throw new InvalidOperationException(NoClientAddonId);
         }
 
-        if (_clientAddon is OptionalClientAddon { Disabled: true }) {
+        if (_clientAddon is TogglableClientAddon { Disabled: true }) {
             throw new InvalidOperationException(DisabledMsg);
         }
 
@@ -106,7 +106,7 @@ internal class ClientAddonNetworkSender<TPacketId> :
             throw new InvalidOperationException(NoClientAddonId);
         }
 
-        if (_clientAddon is OptionalClientAddon { Disabled: true }) {
+        if (_clientAddon is TogglableClientAddon { Disabled: true }) {
             throw new InvalidOperationException(DisabledMsg);
         }
 
@@ -142,7 +142,7 @@ internal class ClientAddonNetworkSender<TPacketId> :
             throw new InvalidOperationException(NotConnectedMsg);
         }
 
-        if (_clientAddon is OptionalClientAddon { Disabled: true }) {
+        if (_clientAddon is TogglableClientAddon { Disabled: true }) {
             throw new InvalidOperationException(DisabledMsg);
         }
 

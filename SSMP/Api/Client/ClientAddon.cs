@@ -15,7 +15,7 @@ public abstract class ClientAddon : Addon.Addon {
     /// <inheritdoc cref="_clientApi" />
     protected IClientApi? ClientApi {
         get {
-            if (this is OptionalClientAddon { Disabled: true }) {
+            if (this is TogglableClientAddon { Disabled: true }) {
                 throw new InvalidOperationException("Addon is disabled, cannot use Client API in this state");
             }
 

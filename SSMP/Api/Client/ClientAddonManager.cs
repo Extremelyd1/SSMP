@@ -113,7 +113,7 @@ internal class ClientAddonManager {
                 addon is TogglableClientAddon togglableAddon &&
                 _modSettings.DisabledAddons.Contains(addon.GetName())
             ) {
-                togglableAddon.SetClientDisabled(true);
+                togglableAddon.Disabled = true;
             }
 
             _addons.Add(addon);
@@ -145,11 +145,11 @@ internal class ClientAddonManager {
         var addonData = new List<AddonData>();
 
         foreach (var addon in _networkedAddons.Values) {
-            if (addon is TogglableClientAddon { DisabledByClient: true }) {
+            if (addon is TogglableClientAddon { Disabled: true }) {
                 continue;
             }
 
-            addonData.Add(new AddonData(addon.GetName(), addon.GetVersion(), addon is OptionalClientAddon));
+            addonData.Add(new AddonData(addon.GetName(), addon.GetVersion(), addon is TogglableClientAddon));
         }
 
         return addonData;
@@ -172,7 +172,7 @@ internal class ClientAddonManager {
         // between connection and obtaining the addon order from the server
         foreach (var addon in _networkedAddons.Values) {
             // Skip addons that are disabled
-            if (addon is OptionalClientAddon { Disabled: true }) {
+            if (addon is TogglableClientAddon { Disabled: true }) {
                 continue;
             }
 
@@ -210,23 +210,17 @@ internal class ClientAddonManager {
     /// </summary>
     /// <param name="addonName">The name of the addon to enable.</param>
     /// <returns>True if the addon with the given name was enabled, null if it was enabled locally but is disabled by the server, otherwise false.</returns>
-    public bool? TryEnableAddon(string addonName) {
+    public bool TryEnableAddon(string addonName) {
         foreach (var addon in _addons) {
             if (addon.GetName() == addonName) {
                 if (addon is not TogglableClientAddon togglableAddon) {
                     return false;
                 }
 
-                if (togglableAddon.DisabledByClient) {
-                    togglableAddon.SetClientDisabled(false);
+                togglableAddon.Disabled = false;
 
-                    _modSettings.DisabledAddons.Remove(addon.GetName());
-                    _modSettings.Save();
-                }
-
-                if (togglableAddon.DisabledByServer) return null;
-
-                return true;
+                _modSettings.DisabledAddons.Remove(addon.GetName());
+                _modSettings.Save();
             }
         }
 
@@ -245,8 +239,7 @@ internal class ClientAddonManager {
                     return false;
                 }
 
-                if (togglableAddon.DisabledByClient) return true;
-                togglableAddon.SetClientDisabled(true);
+                togglableAddon.Disabled = true;
 
                 _modSettings.DisabledAddons.Add(addon.GetName());
                 _modSettings.Save();
@@ -268,8 +261,8 @@ internal class ClientAddonManager {
         foreach (var addon in RegisteredAddons) {
             var isDisabled = addons.Contains(addon.GetName());
 
-            if (addon is OptionalClientAddon optionalAddon) {
-                optionalAddon.SetServerDisabled(isDisabled);
+            if (addon is TogglableClientAddon optionalAddon) {
+                optionalAddon.Disabled = isDisabled;
             }
         }
     }

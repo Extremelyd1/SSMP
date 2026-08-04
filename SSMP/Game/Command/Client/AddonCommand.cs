@@ -55,7 +55,7 @@ internal class AddonCommand : IClientCommand, ICommandWithDescription {
                     ", ",
                     addons.Select(addon => {
                         var msg = $"{addon.GetName()} {addon.GetVersion()}";
-                        if (addon is TogglableClientAddon { Disabled: true }) {
+                        if (addon is TogglableClientAddon { Disabled: true } && _netClient.ConnectionStatus != ClientConnectionStatus.NotConnected) {
                             msg += " (disabled)";
                         }
 
@@ -82,10 +82,7 @@ internal class AddonCommand : IClientCommand, ICommandWithDescription {
             for (var i = 2; i < arguments.Length; i++) {
                 var addonName = arguments[i];
 
-                var result = _addonManager.TryEnableAddon(addonName);
-                if (!result.HasValue) {
-                    UiManager.InternalChatBox.AddMessage($"Could not enable addon '{addonName}' because the server has disabled it");
-                } else if (result.Value) {
+                if (_addonManager.TryEnableAddon(addonName)) {
                     UiManager.InternalChatBox.AddMessage($"Successfully enabled '{addonName}'");
                 } else {
                     UiManager.InternalChatBox.AddMessage($"Could not enable addon '{addonName}'");
