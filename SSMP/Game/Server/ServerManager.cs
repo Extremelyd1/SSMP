@@ -542,6 +542,8 @@ internal abstract class ServerManager : IServerManager {
         var entitySpawnList = new List<EntitySpawn>();
         var entityUpdateList = new List<EntityUpdate>();
         var reliableEntityUpdateList = new List<ReliableEntityUpdate>();
+        var makeEnteringPlayerHost = false;
+        var sceneHostEpoch = 0u;
 
         if (_fullSynchronisation) {
             foreach (var (entityKey, entityData) in _entityData) {
@@ -618,7 +620,7 @@ internal abstract class ServerManager : IServerManager {
 
             var isReturningPreviousHost = playerData.LastHostedScene == playerData.CurrentScene;
             var shouldDemoteCurrentHost = alreadyPlayersInScene && isReturningPreviousHost;
-            var makeEnteringPlayerHost = !alreadyPlayersInScene || isReturningPreviousHost;
+            makeEnteringPlayerHost = !alreadyPlayersInScene || isReturningPreviousHost;
 
             if (shouldDemoteCurrentHost) {
                 var epoch = GetNextSceneHostEpoch(playerData.CurrentScene);
@@ -650,17 +652,17 @@ internal abstract class ServerManager : IServerManager {
             }
 
             playerData.LastHostedScene = null;
-            var sceneHostEpoch = _sceneHostEpochs.GetOrAdd(playerData.CurrentScene, 0u);
-
-            _netServer.GetUpdateManagerForClient(playerData.Id)?.AddPlayerAlreadyInSceneData(
-                enterSceneList,
-                entitySpawnList,
-                entityUpdateList,
-                reliableEntityUpdateList,
-                _fullSynchronisation && makeEnteringPlayerHost,
-                sceneHostEpoch
-            );
+            sceneHostEpoch = _sceneHostEpochs.GetOrAdd(playerData.CurrentScene, 0u);
         }
+
+        _netServer.GetUpdateManagerForClient(playerData.Id)?.AddPlayerAlreadyInSceneData(
+            enterSceneList,
+            entitySpawnList,
+            entityUpdateList,
+            reliableEntityUpdateList,
+            _fullSynchronisation && makeEnteringPlayerHost,
+            sceneHostEpoch
+        );
     }
 
     /// <summary>
