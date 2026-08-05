@@ -676,54 +676,59 @@ internal class Entity {
 
         var transform = Object.Host.transform;
 
-        var newPosition = _hasParent ? transform.localPosition : transform.position;
-        if (newPosition != _lastPosition) {
-            _lastPosition = newPosition;
+        // Unity already tracks transform mutations; avoid re-reading and comparing position/scale on quiet frames.
+        if (transform.hasChanged) {
+            var newPosition = _hasParent ? transform.localPosition : transform.position;
+            if (newPosition != _lastPosition) {
+                _lastPosition = newPosition;
 
-            _netClient.UpdateManager.UpdateEntityPosition(
-                Id,
-                new Math_Vector2(newPosition.x, newPosition.y)
-            );
-        }
-
-        const float epsilon = 0.0001f;
-
-        var newScale = _hasParent ? transform.localScale : transform.lossyScale;
-        if (newScale != _lastScale) {
-            var scaleData = new EntityUpdate.ScaleData {
-                origin = true
-            };
-
-            if (newScale.x != _lastScale.x) {
-                scaleData.x = true;
-                scaleData.xScale = newScale.x;
-
-                if (System.Math.Abs(newScale.x - _lastScale.x * -1) < epsilon) {
-                    scaleData.xFlipped = true;
-                }
+                _netClient.UpdateManager.UpdateEntityPosition(
+                    Id,
+                    new Math_Vector2(newPosition.x, newPosition.y)
+                );
             }
 
-            if (newScale.y != _lastScale.y) {
-                scaleData.y = true;
-                scaleData.yScale = newScale.y;
+            const float epsilon = 0.0001f;
 
-                if (System.Math.Abs(newScale.y - _lastScale.y * -1) < epsilon) {
-                    scaleData.yFlipped = true;
+            var newScale = _hasParent ? transform.localScale : transform.lossyScale;
+            if (newScale != _lastScale) {
+                var scaleData = new EntityUpdate.ScaleData {
+                    origin = true
+                };
+
+                if (newScale.x != _lastScale.x) {
+                    scaleData.x = true;
+                    scaleData.xScale = newScale.x;
+
+                    if (System.Math.Abs(newScale.x - _lastScale.x * -1) < epsilon) {
+                        scaleData.xFlipped = true;
+                    }
                 }
+
+                if (newScale.y != _lastScale.y) {
+                    scaleData.y = true;
+                    scaleData.yScale = newScale.y;
+
+                    if (System.Math.Abs(newScale.y - _lastScale.y * -1) < epsilon) {
+                        scaleData.yFlipped = true;
+                    }
+                }
+
+                if (newScale.z != _lastScale.z) {
+                    scaleData.z = true;
+                    scaleData.zScale = newScale.z;
+
+                    if (System.Math.Abs(newScale.z - _lastScale.z * -1) < epsilon) {
+                        scaleData.zFlipped = true;
+                    }
+                }
+
+                _netClient.UpdateManager.UpdateEntityScale(Id, scaleData);
+
+                _lastScale = newScale;
             }
 
-            if (newScale.z != _lastScale.z) {
-                scaleData.z = true;
-                scaleData.zScale = newScale.z;
-
-                if (System.Math.Abs(newScale.z - _lastScale.z * -1) < epsilon) {
-                    scaleData.zFlipped = true;
-                }
-            }
-
-            _netClient.UpdateManager.UpdateEntityScale(Id, scaleData);
-
-            _lastScale = newScale;
+            transform.hasChanged = false;
         }
 
         var newActive = _hasParent ? Object.Host.activeSelf : Object.Host.activeInHierarchy;
