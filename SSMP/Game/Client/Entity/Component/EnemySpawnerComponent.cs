@@ -55,6 +55,7 @@ internal class EnemySpawnerComponent : EntityComponent {
         EntityFsmActions.CallEntitySpawnEvent(
             new EntitySpawnDetails {
                 Type = EntitySpawnType.EnemySpawnerComponent,
+                SpawningGameObject = GameObject.Host,
                 GameObject = obj
             }
         );

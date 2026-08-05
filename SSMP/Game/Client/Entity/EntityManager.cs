@@ -364,19 +364,25 @@ internal class EntityManager {
             return false;
         }
 
-        if (details.Type != EntitySpawnType.FsmAction) {
-            Logger.Error($"Invalid EntitySpawnDetails type: {details.Type}");
+        var spawningGameObject = details.Type switch {
+            EntitySpawnType.FsmAction => details.Action?.Fsm?.GameObject,
+            EntitySpawnType.EnemySpawnerComponent or EntitySpawnType.SpawnJarComponent => details.SpawningGameObject,
+            _ => null
+        };
+
+        if (spawningGameObject == null) {
+            Logger.Error($"Invalid EntitySpawnDetails for type: {details.Type}");
             return false;
         }
 
-        if (!EntityRegistry.TryGetEntry(details.Action.Fsm.GameObject, out var entry)) {
+        if (!EntityRegistry.TryGetEntry(spawningGameObject, out var entry)) {
             Logger.Warn("Could not find registry entry for spawning type of object");
             return false;
         }
 
         var topLevel = processor.Entities[0];
         Logger.Info(
-            $"Notifying server of entity ({details.Action.Fsm.GameObject.name}, {entry.Type}) spawning entity ({details.GameObject.name}, {topLevel.Type}) with ID {topLevel.Id}"
+            $"Notifying server of entity ({spawningGameObject.name}, {entry.Type}) spawning entity ({details.GameObject.name}, {topLevel.Type}) with ID {topLevel.Id}"
         );
         _netClient.UpdateManager.SetEntitySpawn(topLevel.Id, entry.Type, topLevel.Type);
 

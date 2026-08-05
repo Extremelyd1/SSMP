@@ -14,9 +14,14 @@ internal class EntitySpawnDetails {
     public EntitySpawnType Type { get; init; }
     
     /// <summary>
-    /// The FSM action responsible for spawning the entity.
+    /// The FSM action responsible for spawning the entity, when the spawn came from an FSM action.
     /// </summary>
-    public FsmStateAction Action { get; init; }
+    public FsmStateAction? Action { get; init; }
+
+    /// <summary>
+    /// The game object responsible for spawning the entity, when the spawn came from an entity component.
+    /// </summary>
+    public GameObject? SpawningGameObject { get; init; }
     
     /// <summary>
     /// The game object that was spawned.
