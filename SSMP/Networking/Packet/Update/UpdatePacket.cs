@@ -208,10 +208,50 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
         var lostPacketData = lostPacket.GetPacketData();
 
         // Finally, put the packet data dictionary in the resend dictionary keyed by its sequence number
-        _resendPacketData[lostPacket.Sequence] = CopyReliableDataDict(
+        var reliablePacketData = CopyReliableDataDict(
             lostPacketData,
             t => NormalPacketData.ContainsKey(t)
         );
+
+        foreach (var (packetId, lostData) in lostPacketData) {
+            if (lostData is not PacketDataCollection<ReliableEntityUpdate> lostEntityUpdates
+                || !NormalPacketData.TryGetValue(packetId, out var currentData)
+                || currentData is not PacketDataCollection<ReliableEntityUpdate> currentEntityUpdates) {
+                continue;
+            }
+
+            var resendEntityUpdates = new PacketDataCollection<ReliableEntityUpdate>();
+            var currentHostFsmDataByEntity = new Dictionary<ushort, IReadOnlyDictionary<byte, EntityHostFsmData>>();
+
+            foreach (var currentEntityUpdate in currentEntityUpdates.DataInstances) {
+                var reliableEntityUpdate = (ReliableEntityUpdate) currentEntityUpdate;
+                if (reliableEntityUpdate.UpdateTypes.Contains(EntityUpdateType.HostFsm)) {
+                    currentHostFsmDataByEntity[reliableEntityUpdate.Id] = reliableEntityUpdate.HostFsmData;
+                }
+            }
+
+            foreach (var lostEntityUpdate in lostEntityUpdates.DataInstances) {
+                var reliableEntityUpdate = (ReliableEntityUpdate) lostEntityUpdate;
+                if (!currentHostFsmDataByEntity.TryGetValue(reliableEntityUpdate.Id, out var newerHostFsmData)
+                    || !reliableEntityUpdate.UpdateTypes.Contains(EntityUpdateType.HostFsm)) {
+                    resendEntityUpdates.DataInstances.Add(reliableEntityUpdate);
+                    continue;
+                }
+
+                var reliableCopy = reliableEntityUpdate.CloneWithoutSupersededHostFsm(newerHostFsmData);
+                if (reliableCopy != null) {
+                    resendEntityUpdates.DataInstances.Add(reliableCopy);
+                }
+            }
+
+            if (resendEntityUpdates.DataInstances.Count > 0) {
+                reliablePacketData[packetId] = resendEntityUpdates;
+            } else {
+                reliablePacketData.Remove(packetId);
+            }
+        }
+
+        _resendPacketData[lostPacket.Sequence] = reliablePacketData;
 
         // Retrieve the lost addon data
         var lostAddonData = lostPacket.GetAddonPacketData();

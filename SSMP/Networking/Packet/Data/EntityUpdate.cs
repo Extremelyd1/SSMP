@@ -478,6 +478,57 @@ internal class ReliableEntityUpdate : BaseEntityUpdate, IPoolable {
         HostFsmData = new Dictionary<byte, EntityHostFsmData>();
     }
 
+    /// <summary>
+    /// Creates a resend copy with only the host FSM fields not superseded by a newer update.
+    /// </summary>
+    /// <param name="newerHostFsmData">Newer host FSM data grouped by FSM index.</param>
+    /// <returns>A pooled copy, or null when all data in this update was superseded.</returns>
+    public ReliableEntityUpdate? CloneWithoutSupersededHostFsm(
+        IReadOnlyDictionary<byte, EntityHostFsmData> newerHostFsmData
+    ) {
+        var clone = ObjectPool<ReliableEntityUpdate>.Get();
+        clone.Id = Id;
+
+        if (UpdateTypes.Contains(EntityUpdateType.Active)) {
+            clone.UpdateTypes.Add(EntityUpdateType.Active);
+            clone.IsActive = IsActive;
+        }
+
+        if (UpdateTypes.Contains(EntityUpdateType.Data)) {
+            clone.UpdateTypes.Add(EntityUpdateType.Data);
+            foreach (var data in GenericData) {
+                clone.GenericData.Add(data.Clone());
+            }
+        }
+
+        if (UpdateTypes.Contains(EntityUpdateType.HostFsm)) {
+            foreach (var (fsmIndex, data) in HostFsmData) {
+                if (!newerHostFsmData.TryGetValue(fsmIndex, out var newerData)) {
+                    var dataCopy = ObjectPool<EntityHostFsmData>.Get();
+                    dataCopy.MergeData(data);
+                    clone.HostFsmData[fsmIndex] = dataCopy;
+                    continue;
+                }
+
+                var filteredData = data.CloneWithoutSupersededData(newerData);
+                if (filteredData != null) {
+                    clone.HostFsmData[fsmIndex] = filteredData;
+                }
+            }
+
+            if (clone.HostFsmData.Count > 0) {
+                clone.UpdateTypes.Add(EntityUpdateType.HostFsm);
+            }
+        }
+
+        if (clone.UpdateTypes.Count == 0) {
+            ObjectPool<ReliableEntityUpdate>.Return(clone);
+            return null;
+        }
+
+        return clone;
+    }
+
     /// <inheritdoc />
     public void Reset() {
         Id = 0;
@@ -746,6 +797,65 @@ internal class EntityHostFsmData : IPoolable {
         Strings.Clear();
         Vec2s.Clear();
         Vec3s.Clear();
+    }
+
+    /// <summary>
+    /// Copies only fields that are not present in a newer delta for the same FSM.
+    /// </summary>
+    /// <param name="newerData">A newer delta for this FSM.</param>
+    /// <returns>A pooled copy, or null when every field was superseded.</returns>
+    public EntityHostFsmData? CloneWithoutSupersededData(EntityHostFsmData newerData) {
+        var clone = ObjectPool<EntityHostFsmData>.Get();
+
+        if (Types.Contains(Type.State) && !newerData.Types.Contains(Type.State)) {
+            clone.Types.Add(Type.State);
+            clone.CurrentState = CurrentState;
+        }
+
+        CopyNonSuperseded(Type.Floats, Types, Floats, newerData.Floats, clone.Floats, clone.Types);
+        CopyNonSuperseded(Type.Ints, Types, Ints, newerData.Ints, clone.Ints, clone.Types);
+        CopyNonSuperseded(Type.Bools, Types, Bools, newerData.Bools, clone.Bools, clone.Types);
+        CopyNonSuperseded(Type.Strings, Types, Strings, newerData.Strings, clone.Strings, clone.Types);
+        CopyNonSuperseded(Type.Vector2s, Types, Vec2s, newerData.Vec2s, clone.Vec2s, clone.Types);
+        CopyNonSuperseded(Type.Vector3s, Types, Vec3s, newerData.Vec3s, clone.Vec3s, clone.Types);
+
+        if (clone.Types.Count == 0) {
+            ObjectPool<EntityHostFsmData>.Return(clone);
+            return null;
+        }
+
+        return clone;
+    }
+
+    /// <summary>
+    /// Copies only delta entries whose variable index is absent from the newer update.
+    /// </summary>
+    /// <typeparam name="T">The value type of the FSM variable dictionary.</typeparam>
+    /// <param name="type">The FSM variable category being copied.</param>
+    /// <param name="sourceTypes">Categories present in the older delta.</param>
+    /// <param name="source">Variable entries from the older delta.</param>
+    /// <param name="newer">Variable entries from the newer delta.</param>
+    /// <param name="destination">Destination for entries not superseded.</param>
+    /// <param name="destinationTypes">Categories present in the destination delta.</param>
+    private static void CopyNonSuperseded<T>(
+        Type type,
+        HashSet<Type> sourceTypes,
+        Dictionary<byte, T> source,
+        Dictionary<byte, T> newer,
+        Dictionary<byte, T> destination,
+        HashSet<Type> destinationTypes
+    ) {
+        if (!sourceTypes.Contains(type)) {
+            return;
+        }
+
+        foreach (var (index, value) in source) {
+            if (!newer.ContainsKey(index)) destination[index] = value;
+        }
+
+        if (destination.Count > 0) {
+            destinationTypes.Add(type);
+        }
     }
 
     /// <summary>
