@@ -94,6 +94,10 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
     /// </summary>
     /// <param name="target">The object with the <see cref="DamageEnemies"/> component.</param>
     protected static void FixDamageEnemies(GameObject target) {
+        // Mark the attack as belonging to a remote player, so that GamePatcher can keep interactable objects from
+        // knocking back the local player when a remote player hits them
+        target.AddComponentIfNotPresent<RemoteAttackComponent>();
+
         // Add if we want to disable enemy damage
         //if (!ServerSettings.AllowDamageEnemies) {
         //    target.DestroyComponent<DamageEnemies>();
