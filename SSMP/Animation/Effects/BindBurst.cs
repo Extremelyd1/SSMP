@@ -148,7 +148,7 @@ internal class BindBurst : Bind {
             var damageComponent = AddDamageHeroComponent(damager, damage);
             damageComponent.hazardType = GlobalEnums.HazardType.EXPLOSION;
 
-            FixDamageEnemies(damager);
+            FixRemoteAttack(damager);
         }
     }
 
@@ -227,7 +227,7 @@ internal class BindBurst : Bind {
 
             // Add or remove damage component from Damager object
             SetDamageHeroState(child.gameObject);
-            FixDamageEnemies(child.gameObject);
+            FixRemoteAttack(child.gameObject);
         }
     }
 
