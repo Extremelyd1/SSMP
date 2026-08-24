@@ -1,9 +1,13 @@
 using System;
+using System.Collections.Generic;
+using System.Reflection;
 using GlobalEnums;
 using Mono.Cecil.Cil;
 using MonoMod.Cil;
+using MonoMod.RuntimeDetour;
 using SSMP.Hooks;
 using SSMP.Networking.Client;
+using SSMP.Util;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
 // ReSharper disable UnusedMember.Local
@@ -15,15 +19,28 @@ namespace SSMP.Game.Client;
 /// correctly.
 /// </summary>
 internal class GamePatcher {
-    // /// <summary>
-    // /// The binding flags for obtaining certain types for hooking.
-    // /// </summary>
-    // private const BindingFlags BindingFlags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+    /// <summary>
+    /// The binding flags for obtaining certain types for hooking.
+    /// </summary>
+    private const BindingFlags BindingFlags = System.Reflection.BindingFlags.Public |
+                                              System.Reflection.BindingFlags.NonPublic |
+                                              System.Reflection.BindingFlags.Instance;
 
     /// <summary>
     /// The NetClient instance to check if we are connected to a server.
     /// </summary>
     private readonly NetClient _netClient;
+
+    /// <summary>
+    /// The hooks that are registered while connected to a server.
+    /// </summary>
+    private readonly List<Hook> _hooks = [];
+
+    /// <summary>
+    /// Whether knockback of the local player is currently suppressed because a remote player's attack is being
+    /// processed. See <see cref="DamageEnemiesOnLateFixedUpdate"/>.
+    /// </summary>
+    private bool _suppressHeroKnockback;
 
     public GamePatcher(NetClient netClient) {
         _netClient = netClient;
@@ -57,6 +74,17 @@ internal class GamePatcher {
         EventHooks.TransitionPointOnTriggerStay2DIL += ILTransitionPointOnTrigger2D;
         
         EventHooks.CameraLockAreaAwake += OnCameraLockAreaAwake;
+
+        AddHook(typeof(DamageEnemies), nameof(DamageEnemies.LateFixedUpdate), DamageEnemiesOnLateFixedUpdate);
+        AddHook(typeof(HeroController), nameof(HeroController.CanRecoil), HeroControllerOnCanRecoil);
+        AddHook(typeof(HeroController), nameof(HeroController.RecoilDown), HeroControllerOnRecoilDown);
+        AddHook(typeof(BouncePod), nameof(BouncePod.Hit), IgnoreRemoteHit<BouncePod>);
+        AddHook(typeof(BounceBalloon), nameof(BounceBalloon.Hit), IgnoreRemoteHit<BounceBalloon>);
+        AddHook(
+            typeof(NailSlashTerrainThunk),
+            nameof(NailSlashTerrainThunk.OnCollisionEnter2D),
+            NailSlashTerrainThunkOnCollisionEnter2D
+        );
     }
 
     /// <summary>
@@ -82,6 +110,30 @@ internal class GamePatcher {
         
         EventHooks.TransitionPointOnTriggerEnter2DIL -= ILTransitionPointOnTrigger2D;
         EventHooks.TransitionPointOnTriggerStay2DIL -= ILTransitionPointOnTrigger2D;
+
+        foreach (var hook in _hooks) {
+            hook.Dispose();
+        }
+
+        _hooks.Clear();
+        _suppressHeroKnockback = false;
+    }
+
+    /// <summary>
+    /// Create a hook for the method with the given name on the given type and store it, so it can be disposed when
+    /// de-registering the hooks.
+    /// </summary>
+    /// <param name="type">The type that declares the method to hook.</param>
+    /// <param name="methodName">The name of the method to hook.</param>
+    /// <param name="detour">The delegate that replaces the method.</param>
+    private void AddHook(Type type, string methodName, Delegate detour) {
+        var method = type.GetMethod(methodName, BindingFlags);
+        if (method == null) {
+            Logger.Error($"Could not hook {type.Name}#{methodName}: method does not exist");
+            return;
+        }
+
+        _hooks.Add(new Hook(method, detour));
     }
 
     /// <summary>
@@ -550,5 +602,98 @@ internal class GamePatcher {
     private void OnCameraLockAreaAwake(CameraLockArea cameraLockArea) {
         cameraLockArea.tagIncludeList ??= [];
         cameraLockArea.tagIncludeList.Add("Player");
+    }
+
+    /// <summary>
+    /// Hook for <see cref="DamageEnemies"/>.<see cref="DamageEnemies.LateFixedUpdate"/>, which is where a damager
+    /// evaluates its collisions and calls <see cref="IHitResponder.Hit"/> on everything it hit.
+    /// <para>
+    /// Interactable objects that knock the player back when hit (such as the bounce pods in Greymoor, levers and
+    /// anything with a <see cref="TinkEffect"/>) do so by calling into <see cref="HeroController.instance"/>
+    /// directly, because in a single player game the only thing that can hit them is the local player. Remote
+    /// players' attacks are replicated locally, so without this patch a remote player hitting such an object knocks
+    /// the local player back as well. While a remote player's damager is being processed, we therefore suppress the
+    /// knockback that would be applied to the local player.
+    /// </para>
+    /// </summary>
+    private void DamageEnemiesOnLateFixedUpdate(Action<DamageEnemies> orig, DamageEnemies self) {
+        if (!RemoteAttackComponent.IsRemoteAttack(self.gameObject)) {
+            orig(self);
+            return;
+        }
+
+        // Store the previous value instead of resetting to false, since damagers can be processed nested
+        var lastSuppress = _suppressHeroKnockback;
+        _suppressHeroKnockback = true;
+
+        try {
+            orig(self);
+        } finally {
+            _suppressHeroKnockback = lastSuppress;
+        }
+    }
+
+    /// <summary>
+    /// Hook for <see cref="HeroController"/>.<see cref="HeroController.CanRecoil"/> to prevent the local player from
+    /// recoiling horizontally while a remote player's attack is being processed. This is the single check that all
+    /// horizontal recoil methods of <see cref="HeroController"/> go through, so patching it here also prevents the
+    /// side effects of those methods, such as cancelling the local player's attack.
+    /// </summary>
+    private bool HeroControllerOnCanRecoil(Func<HeroController, bool> orig, HeroController self) {
+        if (_suppressHeroKnockback) {
+            return false;
+        }
+
+        return orig(self);
+    }
+
+    /// <summary>
+    /// Hook for <see cref="HeroController"/>.<see cref="HeroController.RecoilDown"/> to prevent the local player from
+    /// being pushed down while a remote player's attack is being processed. Downwards recoil does not go through
+    /// <see cref="HeroController.CanRecoil"/>, so it needs its own patch.
+    /// </summary>
+    private void HeroControllerOnRecoilDown(Action<HeroController> orig, HeroController self) {
+        if (_suppressHeroKnockback) {
+            return;
+        }
+
+        orig(self);
+    }
+
+    /// <summary>
+    /// Hook for the <see cref="IHitResponder.Hit"/> implementation of <see cref="BouncePod"/> and
+    /// <see cref="BounceBalloon"/> to ignore hits from remote players entirely. Both of these fling the local player
+    /// away from a downwards hit after a delay: the pod through a static queue that is handled in a later frame and
+    /// the balloon through a coroutine. That happens outside the scope in which
+    /// <see cref="DamageEnemiesOnLateFixedUpdate"/> suppresses knockback, so it has to be prevented here instead.
+    /// </summary>
+    private IHitResponder.HitResponse IgnoreRemoteHit<T>(
+        Func<T, HitInstance, IHitResponder.HitResponse> orig,
+        T self,
+        HitInstance damageInstance
+    ) where T : IHitResponder {
+        if (RemoteAttackComponent.IsRemoteAttack(damageInstance.Source)) {
+            return IHitResponder.Response.None;
+        }
+
+        return orig(self, damageInstance);
+    }
+
+    /// <summary>
+    /// Hook for <see cref="NailSlashTerrainThunk"/>.<see cref="NailSlashTerrainThunk.OnCollisionEnter2D"/> to ignore
+    /// terrain collisions of remote players' nail slashes. The terrain thunk recoils the local player when a slash
+    /// hits a wall with a <see cref="TinkEffect"/>. It also dereferences the <see cref="HeroController"/> of the
+    /// player that the slash belongs to, which does not exist for a remote player.
+    /// </summary>
+    private void NailSlashTerrainThunkOnCollisionEnter2D(
+        Action<NailSlashTerrainThunk, Collision2D> orig,
+        NailSlashTerrainThunk self,
+        Collision2D collision
+    ) {
+        if (RemoteAttackComponent.IsRemoteAttack(self.gameObject)) {
+            return;
+        }
+
+        orig(self, collision);
     }
 }

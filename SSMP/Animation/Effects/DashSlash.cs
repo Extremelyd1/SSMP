@@ -112,7 +112,7 @@ internal class DashSlash : SlashBase {
                 AddDamageHeroComponent(slashObj, ServerSettings.NeedleDamage);
             }
 
-            FixDamageEnemies(slashObj);
+            FixRemoteAttack(slashObj);
 
             // TODO: Nail imbuement (see OnPlaySlash in NailAttackBase.cs)
             

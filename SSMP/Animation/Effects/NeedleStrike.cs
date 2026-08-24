@@ -396,7 +396,7 @@ internal class NeedleStrike : DamageAnimationEffect {
 
         Object.DestroyImmediate(gameObject.GetComponent<NailSlashTerrainThunk>());
 
-        FixDamageEnemies(gameObject);
+        FixRemoteAttack(gameObject);
 
         if (damage.HasValue) {
             AddDamageHeroComponent(gameObject, damage.Value);
