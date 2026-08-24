@@ -3,7 +3,7 @@ using System;
 namespace SSMP.Api.Client;
 
 /// <summary>
-/// Abstract class for a client addon that can be toggled. Extends <see cref="ClientAddon"/>.
+/// Abstract class for a client addon that can be disabled by the server. Extends <see cref="ClientAddon"/>.
 /// </summary>
 public abstract class TogglableClientAddon : ClientAddon {
     /// <summary>

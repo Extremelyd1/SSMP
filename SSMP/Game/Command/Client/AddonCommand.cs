@@ -55,7 +55,7 @@ internal class AddonCommand : IClientCommand, ICommandWithDescription {
                     ", ",
                     addons.Select(addon => {
                         var msg = $"{addon.GetName()} {addon.GetVersion()}";
-                        if (addon is TogglableClientAddon { Disabled: true }) {
+                        if (addon is TogglableClientAddon { Disabled: true } && _netClient.ConnectionStatus != ClientConnectionStatus.NotConnected) {
                             msg += " (disabled)";
                         }
 

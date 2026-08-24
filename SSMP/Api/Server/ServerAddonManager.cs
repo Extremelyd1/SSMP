@@ -123,7 +123,7 @@ internal class ServerAddonManager {
         var addonData = new List<AddonData>();
 
         foreach (var addon in _networkedAddons.Values) {
-            addonData.Add(new AddonData(addon.GetName(), addon.GetVersion()));
+            addonData.Add(new AddonData(addon.GetName(), addon.GetVersion(), false));
         }
 
         return addonData;

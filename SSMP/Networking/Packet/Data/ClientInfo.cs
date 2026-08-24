@@ -43,6 +43,7 @@ internal class ClientInfo : IPacketData {
         for (var i = 0; i < addonDataLength; i++) {
             packet.Write(AddonData[i].Identifier);
             packet.Write(AddonData[i].Version);
+            packet.Write(AddonData[i].CanBeDisabled);
         }
     }
 
@@ -58,12 +59,13 @@ internal class ClientInfo : IPacketData {
         for (var i = 0; i < addonDataLength; i++) {
             var id = packet.ReadString();
             var version = packet.ReadString();
+            var canBeDisabled = packet.ReadBool();
 
             if (id.Length > Addon.MaxNameLength || version.Length > Addon.MaxVersionLength) {
                 throw new ArgumentException("Identifier or version of addon exceeds max length");
             }
 
-            AddonData.Add(new AddonData(id, version));
+            AddonData.Add(new AddonData(id, version, canBeDisabled));
         }
     }
 }
@@ -82,9 +84,15 @@ internal class AddonData : IEquatable<AddonData> {
     /// </summary>
     public string Version { get; }
 
-    public AddonData(string identifier, string version) {
+    /// <summary>
+    /// If the addon can be disabled by the server.
+    /// </summary>
+    public bool CanBeDisabled { get; }
+
+    public AddonData(string identifier, string version, bool canBeDisabled) {
         Identifier = identifier;
         Version = version;
+        CanBeDisabled = canBeDisabled;
     }
 
     /// <inheritdoc/>

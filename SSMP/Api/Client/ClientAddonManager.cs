@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using SSMP.Api.Client.Networking;
 using SSMP.Game.Settings;
 using SSMP.Logging;
@@ -148,7 +149,7 @@ internal class ClientAddonManager {
                 continue;
             }
 
-            addonData.Add(new AddonData(addon.GetName(), addon.GetVersion()));
+            addonData.Add(new AddonData(addon.GetName(), addon.GetVersion(), addon is TogglableClientAddon));
         }
 
         return addonData;
@@ -208,7 +209,7 @@ internal class ClientAddonManager {
     /// Try to enable the addon with the given name.
     /// </summary>
     /// <param name="addonName">The name of the addon to enable.</param>
-    /// <returns>True if the addon with the given name was enabled; otherwise false.</returns>
+    /// <returns>True if the addon with the given name was enabled, null if it was enabled locally but is disabled by the server, otherwise false.</returns>
     public bool TryEnableAddon(string addonName) {
         foreach (var addon in _addons) {
             if (addon.GetName() == addonName) {
@@ -220,8 +221,6 @@ internal class ClientAddonManager {
 
                 _modSettings.DisabledAddons.Remove(addon.GetName());
                 _modSettings.Save();
-
-                return true;
             }
         }
 
@@ -250,6 +249,22 @@ internal class ClientAddonManager {
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Disables all addons not allowed by the server.
+    /// </summary>
+    /// <param name="addonsToDisable">The names of addons to disable.</param>
+    public void ToggleServerAllowedAddons(string[] addonsToDisable) {
+        var addons = addonsToDisable.ToHashSet();
+
+        foreach (var addon in RegisteredAddons) {
+            var isDisabled = addons.Contains(addon.GetName());
+
+            if (addon is TogglableClientAddon optionalAddon) {
+                optionalAddon.Disabled = isDisabled;
+            }
+        }
     }
 
     /// <summary>

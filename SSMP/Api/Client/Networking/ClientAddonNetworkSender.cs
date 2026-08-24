@@ -30,6 +30,11 @@ internal class ClientAddonNetworkSender<TPacketId> :
     private const string NoClientAddonId = "Cannot send data when client addon has no ID";
 
     /// <summary>
+    /// Message for the exception when the client addon is disabled.
+    /// </summary>
+    private const string DisabledMsg = "Cannot send data when client addon is disabled";
+
+    /// <summary>
     /// The net client used to send data.
     /// </summary>
     private readonly NetClient _netClient;
@@ -70,6 +75,10 @@ internal class ClientAddonNetworkSender<TPacketId> :
             throw new InvalidOperationException(NoClientAddonId);
         }
 
+        if (_clientAddon is TogglableClientAddon { Disabled: true }) {
+            throw new InvalidOperationException(DisabledMsg);
+        }
+
         _netClient.UpdateManager.SetAddonData(
             _clientAddon.Id.Value,
             idValue,
@@ -96,6 +105,11 @@ internal class ClientAddonNetworkSender<TPacketId> :
         if (!_clientAddon.Id.HasValue) {
             throw new InvalidOperationException(NoClientAddonId);
         }
+
+        if (_clientAddon is TogglableClientAddon { Disabled: true }) {
+            throw new InvalidOperationException(DisabledMsg);
+        }
+
 
         _netClient.UpdateManager.SetAddonDataAsCollection(
             _clientAddon.Id.Value,
@@ -126,6 +140,10 @@ internal class ClientAddonNetworkSender<TPacketId> :
     private (byte idValue, byte addonId) ValidateCommon(TPacketId packetId) {
         if (!_netClient.IsConnected) {
             throw new InvalidOperationException(NotConnectedMsg);
+        }
+
+        if (_clientAddon is TogglableClientAddon { Disabled: true }) {
+            throw new InvalidOperationException(DisabledMsg);
         }
 
         return !_clientAddon.Id.HasValue

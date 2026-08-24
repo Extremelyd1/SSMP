@@ -625,7 +625,9 @@ internal class ClientManager : IClientManager {
                 UiManager.InternalChatBox.AddMessage("Incompatible client addons:");
 
                 foreach (var addonData in clientAddonData) {
-                    UiManager.InternalChatBox.AddMessage($"  {addonData.Identifier} v{addonData.Version}");
+                    if (!addonData.CanBeDisabled) {
+                        UiManager.InternalChatBox.AddMessage($"  {addonData.Identifier} v{addonData.Version}");
+                    }
                 }
             }
         }
@@ -664,6 +666,16 @@ internal class ClientManager : IClientManager {
         // Register hooks and packet handlers before we load into the game
         RegisterHooks();
         RegisterPacketHandlers();
+
+        // Disable addons the server says to disable
+        _addonManager.ToggleServerAllowedAddons(serverInfo.AddonsToDisable);
+
+        if (serverInfo.AddonsToDisable.Length > 0) {
+            UiManager.InternalChatBox.AddMessage($"Disabled {serverInfo.AddonsToDisable.Length} incompatable addons:");
+            foreach (var addon in serverInfo.AddonsToDisable) {
+                UiManager.InternalChatBox.AddMessage($"  {addon}");
+            }
+        }
 
         // Relay the addon order from the server info to the addon manager
         _addonManager.UpdateNetworkedAddonOrder(serverInfo.AddonOrder);
