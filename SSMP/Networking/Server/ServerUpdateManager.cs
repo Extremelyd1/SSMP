@@ -16,6 +16,17 @@ namespace SSMP.Networking.Server;
 /// Specialization of <see cref="UpdateManager{TOutgoing,TPacketId}"/> for server to client packet sending.
 /// </summary>
 internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpdatePacketId> {
+    /// <summary>
+    /// The outgoing packet currently indexed by <see cref="_entityUpdatesById"/>.
+    /// </summary>
+    private ClientUpdatePacket? _entityUpdateIndexPacket;
+
+    /// <summary>
+    /// Entity updates in the indexed packet, keyed by packet and entity identifiers.
+    /// </summary>
+    private readonly Dictionary<(ClientUpdatePacketId PacketId, ushort EntityId), BaseEntityUpdate>
+        _entityUpdatesById = new();
+
     /// <inheritdoc />
     public override void ResendReliableData(ClientUpdatePacket lostPacket) {
         // Transports with built-in reliability (e.g., Steam P2P) don't need app-level resending
@@ -324,18 +335,25 @@ internal class ServerUpdateManager : UpdateManager<ClientUpdatePacket, ClientUpd
     /// <returns>An instance of the entity update in the packet.</returns>
     private T? FindOrCreateEntityUpdate<T>(ushort entityId, ClientUpdatePacketId packetId)
         where T : BaseEntityUpdate, new() {
-        var entityUpdateCollection = GetOrCreateCollection<T>(packetId);
-
-        // Search for existing entity update
-        var dataInstances = entityUpdateCollection.DataInstances;
-        foreach (var existingUpdate in
-                 dataInstances.Cast<T?>().Where(existingUpdate => existingUpdate!.Id == entityId)) {
-            return existingUpdate;
+        // Start a fresh index per packet.
+        if (!ReferenceEquals(_entityUpdateIndexPacket, CurrentUpdatePacket)) {
+            _entityUpdateIndexPacket = CurrentUpdatePacket;
+            _entityUpdatesById.Clear();
         }
+
+        var key = (packetId, entityId);
+        // Reuse the update already queued.
+        if (_entityUpdatesById.TryGetValue(key, out var existingUpdate)) {
+            return (T) existingUpdate;
+        }
+
+        var entityUpdateCollection = GetOrCreateCollection<T>(packetId);
 
         // Create new entity update
         var entityUpdate = new T { Id = entityId };
         entityUpdateCollection.DataInstances.Add(entityUpdate);
+        // Index the newly queued update.
+        _entityUpdatesById.Add(key, entityUpdate);
         return entityUpdate;
     }
 
