@@ -1,5 +1,6 @@
 using HutongGames.PlayMaker.Actions;
 using SSMP.Networking.Packet.Data;
+using Logger = SSMP.Logging.Logger;
 using UnityEngine;
 using Object = UnityEngine.Object;
 using Random = UnityEngine.Random;
@@ -342,7 +343,30 @@ internal static partial class EntityFsmActions {
 
     /// <summary>Applies network data to the FSM action.</summary>
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, FindAlertRange action) {
-        action.storeResult.Value = AlertRange.Find(action.target.GetSafe(action), action.childName);
+        var fsmOwner = action.Fsm.GameObject;
+        var target = action.target.GetSafe(action);
+
+        // FindAlertRange stores a live component reference in an FSM object variable. Do not allow
+        // a reference from another enemy (or a detached pooled object) to survive initialization or
+        // network replay. The vanilla action is expected to search within the current FSM hierarchy.
+        if (fsmOwner == null || target == null ||
+            (target != fsmOwner && !target.transform.IsChildOf(fsmOwner.transform))) {
+            action.storeResult.Value = null;
+            return;
+        }
+
+        var resolvedRange = AlertRange.Find(target, action.childName);
+        if (resolvedRange != null &&
+            resolvedRange.gameObject != fsmOwner &&
+            !resolvedRange.transform.IsChildOf(fsmOwner.transform)) {
+            Logger.Warn(
+                $"Rejected cross-instance FindAlertRange result '{resolvedRange.name}' " +
+                $"for FSM '{action.Fsm.Name}' on '{fsmOwner.name}'."
+            );
+            resolvedRange = null;
+        }
+
+        action.storeResult.Value = resolvedRange;
     }
 
     #endregion

@@ -748,7 +748,7 @@ internal partial class GamePatcher {
             return cachedOwner;
         }
 
-        GameObject resolvedOwner;
+        GameObject? resolvedOwner;
         var healthManager = obj.GetComponentInParent<HealthManager>();
         if (healthManager != null) {
             resolvedOwner = healthManager.gameObject;
@@ -762,12 +762,18 @@ internal partial class GamePatcher {
                     resolvedOwner = walkerV2.gameObject;
                 } else {
                     var fsm = obj.GetComponentInParent<PlayMakerFSM>();
-                    resolvedOwner = fsm != null ? fsm.gameObject : obj;
+                    // An object with no enemy hierarchy or FSM is detached from the entity. Do not
+                    // treat the detached object itself as an enemy owner; doing so creates a target
+                    // dictionary key that can never match the owning mob.
+                    resolvedOwner = fsm != null ? fsm.gameObject : null;
                 }
             }
         }
 
-        TargetOwnerCache[instanceId] = resolvedOwner;
+        if (resolvedOwner != null) {
+            TargetOwnerCache[instanceId] = resolvedOwner;
+        }
+
         return resolvedOwner;
     }
 

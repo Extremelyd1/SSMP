@@ -162,7 +162,15 @@ internal partial class GamePatcher {
     private static bool OnAlertRangeIsHeroInRange(AlertRange self) {
         var owner = GetEnemyTargetOwner(self.gameObject);
         if (owner == null) {
-            return false;
+            // A detached/stale AlertRange can survive after its enemy hierarchy is rebuilt. Resolve
+            // the tracked player's actual overlap directly; the native hero flag may belong to a
+            // different scene instance or may not be updated for this detached range.
+            var detachedRangeTarget = GetNearestPlayerInsideAlertRange(self);
+            if (detachedRangeTarget != null && HasLineOfSightToAlertRangeTarget(self, detachedRangeTarget)) {
+                return true;
+            }
+
+            return self.isHeroInRange;
         }
 
         var approvedTarget = GetApprovedEnemyTarget(owner);
