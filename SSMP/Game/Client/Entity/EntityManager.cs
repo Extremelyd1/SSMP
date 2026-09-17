@@ -366,7 +366,7 @@ internal class EntityManager {
 
         var spawningGameObject = details.Type switch {
             EntitySpawnType.FsmAction => details.Action?.Fsm?.GameObject,
-            EntitySpawnType.EnemySpawnerComponent or EntitySpawnType.SpawnJarComponent => details.SpawningGameObject,
+            EntitySpawnType.EnemySpawnerComponent => details.SpawningGameObject,
             _ => null
         };
 

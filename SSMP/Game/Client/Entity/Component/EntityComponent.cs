@@ -114,7 +114,6 @@ internal enum EntityComponentType : ushort {
     Climber,
     EnemySpawner,
     ChildrenActivation,
-    SpawnJar,
     SpriteRenderer,
     ChallengePrompt,
     Music,
