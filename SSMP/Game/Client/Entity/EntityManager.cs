@@ -35,9 +35,19 @@ internal class EntityManager {
     private readonly Dictionary<ushort, Entity> _entities;
 
     /// <summary>
-    /// Queue of buffered entity updates waiting on entity registration or role assignment.
+    /// Latest buffered unreliable update for each entity, waiting on entity registration or role assignment.
     /// </summary>
-    private readonly Queue<BaseEntityUpdate> _pendingUpdates;
+    private readonly Dictionary<ushort, EntityUpdate> _pendingEntityUpdates;
+
+    /// <summary>
+    /// Buffered reliable updates waiting on entity registration or role assignment.
+    /// </summary>
+    private readonly Queue<ReliableEntityUpdate> _pendingReliableUpdates;
+
+    /// <summary>
+    /// Maximum reliable updates that can be buffered because packet collections encode their item count as a ushort.
+    /// </summary>
+    private const int MaxPendingReliableUpdates = ushort.MaxValue;
 
     /// <summary>
     /// Detour hook for intercepting FSM queries targeting inactive game objects.
@@ -60,7 +70,8 @@ internal class EntityManager {
     public EntityManager(NetClient netClient) {
         _netClient = netClient;
         _entities = new Dictionary<ushort, Entity>();
-        _pendingUpdates = new Queue<BaseEntityUpdate>();
+        _pendingEntityUpdates = new Dictionary<ushort, EntityUpdate>();
+        _pendingReliableUpdates = new Queue<ReliableEntityUpdate>();
     }
 
     /// <summary>
@@ -188,22 +199,25 @@ internal class EntityManager {
         if (IsSceneHost) return true;
 
         if (!_entities.TryGetValue(update.Id, out var entity) || !_sceneRoleDetermined) {
-            _pendingUpdates.Enqueue(update);
+            BufferEntityUpdate(update);
             return false;
         }
 
-        if (update.UpdateTypes.Contains(EntityUpdateType.Position))
+        if (update.UpdateTypes.Contains(EntityUpdateType.Position)) {
             entity.UpdatePosition(update.Position);
+        }
 
-        if (update.UpdateTypes.Contains(EntityUpdateType.Scale))
+        if (update.UpdateTypes.Contains(EntityUpdateType.Scale)) {
             entity.UpdateScale(update.Scale);
+        }
 
-        if (update.UpdateTypes.Contains(EntityUpdateType.Animation))
+        if (update.UpdateTypes.Contains(EntityUpdateType.Animation)) {
             entity.UpdateAnimation(
                 update.AnimationId,
                 (tk2dSpriteAnimationClip.WrapMode) update.AnimationWrapMode,
                 alreadyInSceneUpdate
             );
+        }
 
         return true;
     }
@@ -214,7 +228,15 @@ internal class EntityManager {
     /// </summary>
     public bool HandleReliableEntityUpdate(ReliableEntityUpdate update, bool alreadyInSceneUpdate = false) {
         if (!_entities.TryGetValue(update.Id, out var entity) || !_sceneRoleDetermined) {
-            _pendingUpdates.Enqueue(update);
+            if (_pendingReliableUpdates.Count >= MaxPendingReliableUpdates) {
+                Logger.Error(
+                    $"Could not buffer reliable entity update for unknown or undetermined entity {update.Id}: " +
+                    $"pending limit of {MaxPendingReliableUpdates} reached; rejecting update"
+                );
+                return true;
+            }
+
+            _pendingReliableUpdates.Enqueue(update);
             return false;
         }
 
@@ -318,12 +340,12 @@ internal class EntityManager {
 
     private static bool IsCorpseObject(GameObject gameObject) {
         return gameObject.name.StartsWith("corpse", StringComparison.OrdinalIgnoreCase) ||
-               gameObject.GetComponent<Corpse>()               != null ||
-               gameObject.GetComponent<ActiveCorpse>()         != null ||
-               gameObject.GetComponent<CorpseItems>()          != null ||
-               gameObject.GetComponentInParent<Corpse>()       != null ||
+               gameObject.GetComponent<Corpse>() != null ||
+               gameObject.GetComponent<ActiveCorpse>() != null ||
+               gameObject.GetComponent<CorpseItems>() != null ||
+               gameObject.GetComponentInParent<Corpse>() != null ||
                gameObject.GetComponentInParent<ActiveCorpse>() != null ||
-               gameObject.GetComponentInParent<CorpseItems>()  != null;
+               gameObject.GetComponentInParent<CorpseItems>() != null;
     }
 
     /// <summary>
@@ -391,25 +413,22 @@ internal class EntityManager {
 
     /// <summary>
     /// Replays buffered updates for entities that are now registered and whose scene role is known.
-    /// Updates that still can't be applied are left in the queue.
+    /// Updates that still can't be applied remain owned by their respective pending store.
     /// </summary>
     private void DrainPendingUpdates() {
-        // Iterate a snapshot count; newly buffered updates (HandleEntityUpdate returning false) stay in the queue.
-        var count = _pendingUpdates.Count;
+        var pendingEntityUpdates = _pendingEntityUpdates.Values.ToArray();
+        _pendingEntityUpdates.Clear();
+
+        foreach (var update in pendingEntityUpdates) {
+            if (!HandleEntityUpdate(update)) continue;
+            ReleaseUpdate(update);
+        }
+
+        // Iterate a snapshot count; newly buffered reliable updates stay in the queue.
+        var count = _pendingReliableUpdates.Count;
         for (var i = 0; i < count; i++) {
-            var update = _pendingUpdates.Dequeue();
-
-            var applied = update switch {
-                EntityUpdate eu => HandleEntityUpdate(eu),
-                ReliableEntityUpdate r => HandleReliableEntityUpdate(r),
-                _ => true
-            };
-
-            if (!applied) {
-                // Still not applicable; it was re-enqueued by Handle*..nothing to do.
-                continue;
-            }
-
+            var update = _pendingReliableUpdates.Dequeue();
+            if (!HandleReliableEntityUpdate(update)) continue;
             ReleaseUpdate(update);
         }
     }
@@ -421,15 +440,49 @@ internal class EntityManager {
         foreach (var entity in _entities.Values) entity.Destroy();
         _entities.Clear();
 
-        foreach (var pendingUpdate in _pendingUpdates) {
+        foreach (var pendingUpdate in _pendingEntityUpdates.Values) {
             ReleaseUpdate(pendingUpdate);
         }
 
-        _pendingUpdates.Clear();
+        _pendingEntityUpdates.Clear();
+
+        foreach (var pendingUpdate in _pendingReliableUpdates) {
+            ReleaseUpdate(pendingUpdate);
+        }
+
+        _pendingReliableUpdates.Clear();
         MusicComponent.ClearInstance();
     }
 
-    // Once an update is buffered, the queue owns its lifetime until it is applied or discarded.
+    /// <summary>
+    /// Buffers an unreliable update, retaining only the latest value for each update type of an entity.
+    /// </summary>
+    private void BufferEntityUpdate(EntityUpdate update) {
+        if (!_pendingEntityUpdates.TryGetValue(update.Id, out var pending)) {
+            _pendingEntityUpdates.Add(update.Id, update);
+            return;
+        }
+
+        if (update.UpdateTypes.Contains(EntityUpdateType.Position)) {
+            pending.UpdateTypes.Add(EntityUpdateType.Position);
+            pending.Position = update.Position;
+        }
+
+        if (update.UpdateTypes.Contains(EntityUpdateType.Scale)) {
+            pending.UpdateTypes.Add(EntityUpdateType.Scale);
+            pending.Scale.Merge(update.Scale);
+        }
+
+        if (update.UpdateTypes.Contains(EntityUpdateType.Animation)) {
+            pending.UpdateTypes.Add(EntityUpdateType.Animation);
+            pending.AnimationId = update.AnimationId;
+            pending.AnimationWrapMode = update.AnimationWrapMode;
+        }
+
+        ReleaseUpdate(update);
+    }
+
+    // Once an update is buffered, the pending store owns its lifetime until it is applied or discarded.
     /// <summary>
     /// Discards and returns the buffered entity update packet to the object pool.
     /// </summary>
