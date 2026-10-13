@@ -206,7 +206,7 @@ internal abstract class SlashBase : ParryableEffect {
             AddDamageHeroComponent(slashObj, ServerSettings.NeedleDamage);
         }
 
-        FixDamageEnemies(slashObj);
+        FixRemoteAttack(slashObj);
 
         // TODO: nail imbued from NailAttackBase
     }

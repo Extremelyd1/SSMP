@@ -115,11 +115,15 @@ internal abstract class DamageAnimationEffect : AnimationEffect {
     }
 
     /// <summary>
-    /// Fixes a remote attack's <see cref="DamageEnemies"/> components by allowing visual enemy hit reactions while
-    /// preventing remote attack replicas from directly applying PvE damage or lethal enemy side effects.
+    /// Fixes a remote attack by marking it as remote and by letting its <see cref="DamageEnemies"/> components play
+    /// visual enemy hit reactions without directly applying PvE damage or lethal enemy side effects.
     /// </summary>
     /// <param name="target">The object that may contain one or more <see cref="DamageEnemies"/> components.</param>
-    protected static void FixDamageEnemies(GameObject target) {
+    protected static void FixRemoteAttack(GameObject target) {
+        // Mark the attack as belonging to a remote player, so that GamePatcher can keep interactable objects from
+        // knocking back the local player when a remote player hits them
+        target.AddComponentIfNotPresent<RemoteAttackComponent>();
+
         var damageEnemiesComponents = target.GetComponentsInChildren<DamageEnemies>(true);
 
         foreach (var damageEnemies in damageEnemiesComponents) {
