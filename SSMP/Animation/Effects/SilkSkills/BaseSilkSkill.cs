@@ -159,7 +159,7 @@ internal abstract class BaseSilkSkill : DamageAnimationEffect {
         }
 
         damager.layer = AttackLayer;
-        FixDamageEnemies(damager);
+        FixRemoteAttack(damager);
 
         return SetDamageHeroState(damager, (int) damage);
     }
