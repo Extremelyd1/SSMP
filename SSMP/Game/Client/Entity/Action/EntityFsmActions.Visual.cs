@@ -511,4 +511,48 @@ internal static partial class EntityFsmActions {
     }
 
     #endregion
+
+    #region SetAnimatorTrigger
+
+    /// <summary>Builds network data from the FSM action.</summary>
+    private static bool GetNetworkDataFromAction(EntityNetworkData data, SetAnimatorTrigger action) {
+        data.Packet.Write(action.trigger.Value);
+        return true;
+    }
+
+    /// <summary>Applies network data to the FSM action.</summary>
+    private static void ApplyNetworkDataFromAction(EntityNetworkData data, SetAnimatorTrigger action) {
+        var trigger = data.Packet.ReadString();
+        var animator = GetAnimator(action.Fsm, action.gameObject);
+        if (animator != null) {
+            animator.SetTrigger(trigger);
+        }
+    }
+
+    #endregion
+
+    #region ResetAnimatorTrigger
+
+    /// <summary>Builds network data from the FSM action.</summary>
+    private static bool GetNetworkDataFromAction(EntityNetworkData data, ResetAnimatorTrigger action) {
+        data.Packet.Write(action.trigger.Value);
+        return true;
+    }
+
+    /// <summary>Applies network data to the FSM action.</summary>
+    private static void ApplyNetworkDataFromAction(EntityNetworkData data, ResetAnimatorTrigger action) {
+        var trigger = data.Packet.ReadString();
+        var animator = GetAnimator(action.Fsm, action.gameObject);
+        if (animator != null) {
+            animator.ResetTrigger(trigger);
+        }
+    }
+
+    #endregion
+
+    /// <summary>Gets the Animator on the action's target object, or null if it has none.</summary>
+    private static Animator? GetAnimator(HutongGames.PlayMaker.Fsm? fsm, HutongGames.PlayMaker.FsmOwnerDefault target) {
+        var gameObject = fsm?.GetOwnerDefaultTarget(target);
+        return gameObject == null ? null : gameObject.GetComponent<Animator>();
+    }
 }

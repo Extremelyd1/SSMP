@@ -1129,6 +1129,7 @@ internal class Entity {
 
         //Logger.Debug("  Restoring FSM states from snapshots");
 
+        var restartOnEnable = _fsms.Host.Select(fsm => fsm.Fsm.RestartOnEnable).ToArray();
         for (var fsmIndex = 0; fsmIndex < _fsms.Host.Count; fsmIndex++) {
             var fsm = _fsms.Host[fsmIndex];
             var snapshot = _fsmSnapshots[fsmIndex];
@@ -1160,6 +1161,12 @@ internal class Entity {
             state.Actions = newActions;
             fsm.SetState(snapshot.CurrentState);
             state.Actions = oldActions;
+
+            // Enabling the host object below would otherwise reset the FSM to its start state (OnEnable with
+            // RestartOnEnable) and re-enter the state with all actions (PlayMakerFSM.Start when not Started),
+            // replaying boss intros mid-fight
+            fsm.Fsm.RestartOnEnable = false;
+            fsm.Fsm.Started = true;
         }
 
         // We need to set the isKinematic property of rigid bodies to ensure physics work again after enabling
@@ -1193,6 +1200,15 @@ internal class Entity {
         var clientActive = Object.Client.activeSelf;
         Object.Client.SetActive(false);
         Object.Host.SetActive(clientActive);
+
+        // shortcut: FSMs still inactive here keep RestartOnEnable off, so a later re-enable by the game won't reset
+        // them; restore it on their enable if an enemy ever relies on that reset
+        for (var fsmIndex = 0; fsmIndex < _fsms.Host.Count; fsmIndex++) {
+            var fsm = _fsms.Host[fsmIndex];
+            if (fsm.gameObject.activeInHierarchy) {
+                fsm.Fsm.RestartOnEnable = restartOnEnable[fsmIndex];
+            }
+        }
 
         //Logger.Debug($"  Set Active of host object to: {clientActive}, disabling client object");
 
