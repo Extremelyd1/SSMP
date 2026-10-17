@@ -184,18 +184,7 @@ internal class SaveManager {
     private void ResetLastPlayerData() {
         var pd = PlayerData.instance;
 
-        var pdConstructor = typeof(PlayerData).GetConstructor(
-            BindingFlags.NonPublic | BindingFlags.CreateInstance | BindingFlags.Instance,
-            null,
-            [],
-            null
-        );
-        if (pdConstructor == null) {
-            Logger.Error("Could not find protected constructor of PlayerData");
-            return;
-        }
-
-        _lastPlayerData = (PlayerData) pdConstructor.Invoke([]);
+        _lastPlayerData = new PlayerData();
 
         foreach (var field in _playerDataSimpleSyncFields) {
             var value = field.GetValue(pd);
@@ -1167,12 +1156,13 @@ internal class SaveManager {
     /// </summary>
     /// <param name="value">The object value to get a copy from.</param>
     /// <returns>The copy of the given value.</returns>
-    /// <exception cref="ArgumentException">Thrown when a copy cannot be made, due to the given value being null or
-    /// of a non-compound or non-PlayerData type.</exception>
-    private static object GetCompoundCopy(object value) {
+    /// <exception cref="ArgumentException">Thrown when a copy cannot be made, due to the given value being of a
+    /// non-compound or non-PlayerData type.</exception>
+    private static object? GetCompoundCopy(object? value) {
         switch (value) {
+            // Unset compound fields (e.g. on a fresh PlayerData) stay unset
             case null:
-                throw new ArgumentException("Cannot get copy of null");
+                return null;
             case List<string> stringListValue:
                 return new List<string>(stringListValue);
             case List<int> intListValue:
