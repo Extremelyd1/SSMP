@@ -129,5 +129,8 @@ public sealed class LengthCountingPacket : IPacket {
     public ISet<TEnum> ReadBitFlag<TEnum>() where TEnum : Enum => throw new NotSupportedException();
 
     /// <inheritdoc />
+    public IPacket ReadPacketView(int length) => throw new NotSupportedException();
+
+    /// <inheritdoc />
     public byte[] ReadBytes(int length) => throw new NotSupportedException();
 }

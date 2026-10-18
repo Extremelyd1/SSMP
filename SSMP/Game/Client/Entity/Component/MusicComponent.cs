@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using HutongGames.PlayMaker.Actions;
 using MonoMod.RuntimeDetour;
 using Newtonsoft.Json;
@@ -36,11 +35,6 @@ internal class MusicComponent : EntityComponent {
     /// </summary>
     private const string MusicDataFilePath = "SSMP.Resource.music-data.json";
 
-    /// <summary>
-    /// The file name for storing captured music references during gameplay.
-    /// </summary>
-    private const string CapturedMusicFileName = "captured-music-references.json";
-
     #endregion
 
     #region Static data
@@ -64,16 +58,6 @@ internal class MusicComponent : EntityComponent {
     /// Maps network indices to their corresponding audio mixer snapshot data structures.
     /// </summary>
     private static readonly Dictionary<byte, AudioMixerSnapshotData> SnapshotDataByIndex;
-
-    /// <summary>
-    /// Stores unique music cue names encountered during capture.
-    /// </summary>
-    private static readonly HashSet<string> SeenMusicCues = new(StringComparer.Ordinal);
-
-    /// <summary>
-    /// Stores unique audio mixer snapshot names encountered during capture.
-    /// </summary>
-    private static readonly HashSet<string> SeenSnapshots = new(StringComparer.Ordinal);
 
     #endregion
 
@@ -225,15 +209,11 @@ internal class MusicComponent : EntityComponent {
 
     #region Component lifecycle
 
-    /// <summary>
-    /// Initializes the host-side logic for the component.
-    /// </summary>
-    public override void InitializeHost() {
+    /// <inheritdoc />
+    protected override void InitializeHost() {
     }
 
-    /// <summary>
-    /// Destroys the component and unregisters FSM action events.
-    /// </summary>
+    /// <inheritdoc />
     public override void Destroy() {
         CustomHooks.ApplyMusicCueFromFsmAction -= OnApplyMusicCue;
         CustomHooks.TransitionToAudioSnapshotFromFsmAction -= OnTransitionToAudioSnapshot;
@@ -312,11 +292,7 @@ internal class MusicComponent : EntityComponent {
 
     #region Controlled-client music application
 
-    /// <summary>
-    /// Updates the music component with received network data.
-    /// </summary>
-    /// <param name="data">The network data containing new audio indices.</param>
-    /// <param name="alreadyInSceneUpdate">Indicates if this update is already within a scene update cycle.</param>
+    /// <inheritdoc />
     public override void Update(EntityNetworkData data, bool alreadyInSceneUpdate) {
         Logger.Debug("Update MusicComponent");
 
@@ -420,117 +396,6 @@ internal class MusicComponent : EntityComponent {
     }
 
     #endregion
-
-    #region Capture tooling lifecycle
-
-    /// <summary>
-    /// Initializes the music capture system, loading previously captured music references.
-    /// </summary>
-    // TODO: Call this method during development/debugging to capture and dump music cues and snapshots to a file.
-    public static void InitializeCapture() {
-        /*
-        try {
-            var filePath = Path.Combine(FileUtil.GetConfigPath(), CapturedMusicFileName);
-
-            if (File.Exists(filePath)) {
-                var container = FileUtil.LoadObjectFromJsonFile<CapturedMusicContainer>(filePath);
-
-                if (container != null) {
-                    lock (SeenMusicCues) {
-                        foreach (var name in container.MusicCues) {
-                            SeenMusicCues.Add(name);
-                        }
-                    }
-
-                    lock (SeenSnapshots) {
-                        foreach (var name in container.Snapshots) {
-                            SeenSnapshots.Add(name);
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            Logger.Error($"Failed to load captured music data: {e}");
-        }
-
-        CustomHooks.ApplyMusicCueFromFsmAction += OnCapturedApplyMusicCue;
-        CustomHooks.TransitionToAudioSnapshotFromFsmAction += OnCapturedTransitionToAudioSnapshot;
-        */
-    }
-
-    /// <summary>
-    /// Deinitializes the music capture system, unregistering event handlers.
-    /// </summary>
-    public static void DeinitializeCapture() {
-        //CustomHooks.ApplyMusicCueFromFsmAction -= OnCapturedApplyMusicCue;
-        //CustomHooks.TransitionToAudioSnapshotFromFsmAction -= OnCapturedTransitionToAudioSnapshot;
-    }
-
-    #endregion
-
-    #region Capture tooling handlers
-
-    /// <summary>
-    /// Intercepts music cue application to record and save the cue name.
-    /// </summary>
-    /// <param name="action">The music cue action being intercepted.</param>
-    private static void OnCapturedApplyMusicCue(ApplyMusicCue action) {
-        if (action.musicCue.Value is not MusicCue musicCue) return;
-
-        lock (SeenMusicCues) {
-            if (!SeenMusicCues.Add(musicCue.name)) return;
-        }
-
-        Logger.Info($"[Capture] New MusicCue: {musicCue.name}");
-        SaveCapturedData();
-    }
-
-    /// <summary>
-    /// Intercepts audio snapshot transitions to record and save the snapshot name.
-    /// </summary>
-    /// <param name="action">The transition action being intercepted.</param>
-    private static void OnCapturedTransitionToAudioSnapshot(TransitionToAudioSnapshot action) {
-        if (action.snapshot.Value is not AudioMixerSnapshot snapshot) return;
-
-        lock (SeenSnapshots) {
-            if (!SeenSnapshots.Add(snapshot.name)) return;
-        }
-
-        Logger.Info($"[Capture] New AudioMixerSnapshot: {snapshot.name}");
-        SaveCapturedData();
-    }
-
-    /// <summary>
-    /// Saves the captured music cues and audio snapshots to the JSON configuration file.
-    /// </summary>
-    private static void SaveCapturedData() {
-        try {
-            var configPath = FileUtil.GetConfigPath();
-            Directory.CreateDirectory(configPath);
-
-            List<string> cues;
-            List<string> snapshots;
-
-            lock (SeenMusicCues) {
-                cues = new List<string>(SeenMusicCues);
-                cues.Sort();
-            }
-
-            lock (SeenSnapshots) {
-                snapshots = new List<string>(SeenSnapshots);
-                snapshots.Sort();
-            }
-
-            FileUtil.WriteObjectToJsonFile(
-                new CapturedMusicContainer { MusicCues = cues, Snapshots = snapshots },
-                Path.Combine(configPath, CapturedMusicFileName)
-            );
-        } catch (Exception e) {
-            Logger.Error($"Failed to save captured music data: {e}");
-        }
-    }
-
-    #endregion
 }
 
 #region Data containers
@@ -571,21 +436,6 @@ internal class AudioMixerSnapshotData {
     [JsonIgnore] public byte Index { get; set; }
 
     [JsonIgnore] public AudioMixerSnapshot? Snapshot { get; set; }
-}
-
-/// <summary>
-/// Container for storing collections of captured music cues and audio snapshots.
-/// </summary>
-internal class CapturedMusicContainer {
-    /// <summary>
-    /// Gets the list of captured music cue names.
-    /// </summary>
-    public List<string> MusicCues { get; init; } = [];
-
-    /// <summary>
-    /// Gets the list of captured audio snapshot names.
-    /// </summary>
-    public List<string> Snapshots { get; init; } = [];
 }
 
 #endregion

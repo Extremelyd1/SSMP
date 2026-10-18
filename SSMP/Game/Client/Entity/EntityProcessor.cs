@@ -1,15 +1,18 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using SSMP.Networking.Client;
 using SSMP.Util;
 using UnityEngine;
 using Logger = SSMP.Logging.Logger;
+
 // ReSharper disable ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
 // ReSharper disable NullCoalescingConditionIsAlwaysNotNullAccordingToAPIContract
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider
+// adding the 'required' modifier or declaring as nullable.
 #pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
 
-namespace SSMP.Game.Client.Entity; 
+namespace SSMP.Game.Client.Entity;
 
 /// <summary>
 /// Data processing class that receives a set of parameters and processing a given game object into an entity if
@@ -21,6 +24,7 @@ internal class EntityProcessor {
     /// Reference to the dictionary of entities from the entity manager.
     /// </summary>
     private static Dictionary<ushort, Entity> _entities;
+
     /// <summary>
     /// The net client used to pass onto constructed entities.
     /// </summary>
@@ -30,24 +34,33 @@ internal class EntityProcessor {
     /// The last used entity ID.
     /// </summary>
     private static ushort _lastId;
-    
+
     /// <summary>
     /// The game object to process.
     /// </summary>
     public GameObject GameObject { get; init; }
+
     /// <summary>
     /// Whether the local client is the scene host.
     /// </summary>
     public bool IsSceneHost { get; init; }
+
     /// <summary>
     /// Whether the scene host is determined for this scene locally.
     /// </summary>
     public bool IsSceneHostDetermined { get; init; }
+
     /// <summary>
     /// Whether the processing of this entity should happen under the assumption that was a late load of the
     /// game object.
     /// </summary>
     public bool LateLoad { get; init; }
+
+    /// <summary>
+    /// Whether IDs should be derived from stable scene object data instead of discovery order.
+    /// </summary>
+    public bool UseStableSceneId { get; init; }
+
     /// <summary>
     /// Whether the game object was spawned and should have the designated ID.
     /// </summary>
@@ -57,6 +70,7 @@ internal class EntityProcessor {
     /// The list of entities that were created during the processing.
     /// </summary>
     public List<Entity> Entities { get; } = new();
+
     /// <summary>
     /// Whether the processing of the entity was a success.
     /// </summary>
@@ -71,9 +85,7 @@ internal class EntityProcessor {
         _entities = entities;
         _netClient = netClient;
 
-        UnityEngine.SceneManagement.SceneManager.activeSceneChanged += (_, _) => {
-            _lastId = 0;
-        };
+        UnityEngine.SceneManagement.SceneManager.activeSceneChanged += (_, _) => { _lastId = 0; };
     }
 
     /// <summary>
@@ -95,7 +107,7 @@ internal class EntityProcessor {
     /// <param name="parentClientObject">The client object of the parent entity for this entity or null if no such
     /// parent exists.</param>
     private void Process(
-        GameObject gameObject, 
+        GameObject gameObject,
         IEnumerable<EntityRegistryEntry> entries = null,
         GameObject parentClientObject = null
     ) {
@@ -114,14 +126,28 @@ internal class EntityProcessor {
         }
 
         ushort id;
-        
+
         // If a spawned ID is defined we check whether an entity with the given ID already exists
         // Otherwise we find a new ID that isn't used yet
-        if (SpawnedId.HasValue) {
+        if (SpawnedId.HasValue && gameObject == GameObject) {
             id = SpawnedId.Value;
-            
+
             if (_entities.ContainsKey(id)) {
-                Logger.Warn($"Tried registering entity with forced ID ({id}), but an entity with the ID already exists");
+                Logger.Warn(
+                    $"Tried registering entity with forced ID ({id}), but an entity with the ID already exists"
+                );
+                return;
+            }
+        } else if (UseStableSceneId) {
+            id = GetStableSceneId(gameObject);
+
+            if (_entities.TryGetValue(id, out var existingEntity)) {
+                if (existingEntity.Object.Host != gameObject) {
+                    Logger.Error(
+                        $"Stable entity ID collision ({id}) between '{existingEntity.Object.Host.name}' and '{gameObject.name}'"
+                    );
+                }
+
                 return;
             }
         } else {
@@ -141,7 +167,7 @@ internal class EntityProcessor {
 
         // Get the array of component types for the entity or create an empty one if it is null
         var componentTypes = foundEntry.ComponentTypes ?? [];
-        
+
         // Depending on whether a parent object was given we create the entity with this parent object
         Entity entity;
         if (parentClientObject == null) {
@@ -155,23 +181,30 @@ internal class EntityProcessor {
                 types: componentTypes
             );
         } else {
-            Logger.Info($"Registering entity ({foundEntry.Type}) '{gameObject.name}' with ID '{id}' with parent: {parentClientObject.name}");
-            
+            Logger.Info(
+                $"Registering entity ({foundEntry.Type}) '{gameObject.name}' with ID '{id}' with parent: {parentClientObject.name}"
+            );
+
             // Find the correct child of the client object of the parent entity
             var clientObject = parentClientObject.GetChildren()
-                .FirstOrDefault(c => {
-                    if (Entities.Any(processedEntity => processedEntity.Object.Client == c)) {
-                        return false;
-                    }
+                                                 .FirstOrDefault(c => {
+                                                         if (Entities.Any(processedEntity =>
+                                                                 processedEntity.Object.Client == c
+                                                             )) {
+                                                             return false;
+                                                         }
 
-                    return c.name.Contains(foundEntry.BaseObjectName);
-                });
+                                                         return c.name.Contains(foundEntry.BaseObjectName);
+                                                     }
+                                                 );
             if (clientObject == null) {
                 Logger.Warn("Could not find child of client object of parent entity");
                 return;
             }
-            
-            Logger.Debug($"Found child of client object of parent entity: {clientObject.name}, {clientObject.GetInstanceID()}");
+
+            Logger.Debug(
+                $"Found child of client object of parent entity: {clientObject.name}, {clientObject.GetInstanceID()}"
+            );
 
             entity = new Entity(
                 _netClient,
@@ -193,7 +226,7 @@ internal class EntityProcessor {
                 Process(childObj, foundEntry.Children, entity.Object.Client);
             }
         }
-        
+
         if (LateLoad && IsSceneHostDetermined) {
             if (IsSceneHost) {
                 // Since this is a late load it needs to be initialized as host if we are the scene host
@@ -201,6 +234,47 @@ internal class EntityProcessor {
             } else {
                 // Since this is a late load we need to update the 'active' state of the entity
                 entity.UpdateIsActive(true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Creates the same ID for a static scene object even when another client has a different set or discovery order.
+    /// </summary>
+    private static ushort GetStableSceneId(GameObject gameObject) {
+        const uint offset = 2166136261;
+        const uint prime = 16777619;
+        var hash = offset;
+        var hierarchy = new Stack<Transform>();
+
+        for (var current = gameObject.transform; current != null; current = current.parent) {
+            hierarchy.Push(current);
+        }
+
+        AddString(gameObject.scene.name);
+        while (hierarchy.Count > 0) {
+            var current = hierarchy.Pop();
+            AddString(current.name);
+            var position = current.localPosition;
+            AddInt(BitConverter.SingleToInt32Bits(position.x));
+            AddInt(BitConverter.SingleToInt32Bits(position.y));
+            AddInt(BitConverter.SingleToInt32Bits(position.z));
+        }
+
+        return (ushort) (hash ^ hash >> 16);
+
+        void AddString(string value) {
+            foreach (var character in value) {
+                hash = (hash ^ character) * prime;
+            }
+        }
+
+        void AddInt(int value) {
+            unchecked {
+                hash = (hash ^ (byte) value) * prime;
+                hash = (hash ^ (byte) (value >> 8)) * prime;
+                hash = (hash ^ (byte) (value >> 16)) * prime;
+                hash = (hash ^ (byte) (value >> 24)) * prime;
             }
         }
     }

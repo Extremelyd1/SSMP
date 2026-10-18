@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using HutongGames.PlayMaker.Actions;
 using UnityEngine;
 
 namespace SSMP.Game.Client.Entity; 
@@ -8,19 +9,6 @@ namespace SSMP.Game.Client.Entity;
 /// Static class that has implementations for spawning entities that are usually spawned by other entities in-game.
 /// </summary>
 internal static class EntitySpawner {
-    // /// <summary>
-    // /// Prefab for the Vengefly that can be summoned from a jar in The Collector boss fight.
-    // /// </summary>
-    // private static GameObject _collectorVengeflyPrefab;
-    // /// <summary>
-    // /// Prefab for the Aspid Hunter that can be summoned from a jar in The Collector boss fight.
-    // /// </summary>
-    // private static GameObject _collectorAspidPrefab;
-    // /// <summary>
-    // /// Prefab for the Baldur that can be summoned from a jar in The Collector boss fight.
-    // /// </summary>
-    // private static GameObject _collectorBaldurPrefab;
-
     /// <summary>
     /// Spawn the game object for an entity with the given type that is spawned from the other given type.
     /// </summary>
@@ -35,6 +23,38 @@ internal static class EntitySpawner {
         GameObject clientObject,
         List<PlayMakerFSM> clientFsms
     ) {
+        if (spawnedType == EntityType.GrassBall) {
+            IEnumerable<PlayMakerFSM> sourceFsms = clientObject != null
+                ? clientObject.GetComponentsInChildren<PlayMakerFSM>(true)
+                : clientFsms;
+
+            foreach (var fsm in sourceFsms) {
+                foreach (var state in fsm.FsmStates) {
+                    foreach (var action in state.Actions) {
+                        var prefab = action switch {
+                            SpawnObjectFromGlobalPool spawnAction => spawnAction.gameObject?.Value,
+                            FlingObjectsFromGlobalPool flingAction => flingAction.gameObject?.Value,
+                            FlingObjectsFromGlobalPoolVel flingAction => flingAction.gameObject?.Value,
+                            FlingObjectsFromGlobalPoolTime flingAction => flingAction.gameObject?.Value,
+                            _ => null
+                        };
+
+                        if (prefab != null && prefab.name.Equals("Grass Ball", StringComparison.OrdinalIgnoreCase)) {
+                            return prefab.Spawn(Vector3.zero, Quaternion.identity);
+                        }
+                    }
+                }
+            }
+
+            foreach (var prefab in Resources.FindObjectsOfTypeAll<GameObject>()) {
+                if (prefab.scene.IsValid() || !prefab.name.Equals("Grass Ball", StringComparison.OrdinalIgnoreCase)) {
+                    continue;
+                }
+
+                return prefab.Spawn(Vector3.zero, Quaternion.identity);
+            }
+        }
+
         // Logger.Info($"Trying to spawn entity game object for: {spawningType}, {spawnedType}");
         //
         // if (spawningType == EntityType.ElderBaldur && spawnedType == EntityType.Baldur) {
@@ -80,14 +100,6 @@ internal static class EntitySpawner {
         //     if (spawningType is EntityType.SoulMasterPhase2 or EntityType.SoulTyrantPhase2) {
         //         return SpawnSoulMaster2OrbObject(clientFsms[0]);
         //     }
-        // }
-        //
-        // if (spawningType == EntityType.TheCollector && spawnedType == EntityType.CollectorJar) {
-        //     return SpawnCollectorJarObject(clientFsms[0]);
-        // }
-        //
-        // if (spawningType == EntityType.CollectorJar) {
-        //     return SpawnCollectorJarContents(clientObject, spawnedType);
         // }
         //
         // if (spawningType == EntityType.DungDefender) {
@@ -397,59 +409,6 @@ internal static class EntitySpawner {
     //     var gameObject = spawnAction.gameObject.Value;
     //
     //     return SpawnFromGlobalPool(spawnAction, gameObject);
-    // }
-    //
-    // private static GameObject SpawnCollectorJarObject(PlayMakerFSM fsm) {
-    //     var setContents = fsm.GetFirstAction<SetSpawnJarContents>("Buzzer");
-    //     _collectorVengeflyPrefab = setContents.enemyPrefab.Value;
-    //     setContents = fsm.GetFirstAction<SetSpawnJarContents>("Spitter");
-    //     _collectorAspidPrefab = setContents.enemyPrefab.Value;
-    //     setContents = fsm.GetFirstAction<SetSpawnJarContents>("Roller");
-    //     _collectorBaldurPrefab = setContents.enemyPrefab.Value;
-    //     
-    //     var spawnAction = fsm.GetFirstAction<SpawnObjectFromGlobalPool>("Spawn");
-    //     var gameObject = spawnAction.gameObject.Value;
-    //
-    //     return SpawnFromGlobalPool(spawnAction, gameObject);
-    // }
-    //
-    // private static GameObject SpawnCollectorJarContents(GameObject spawningObject, EntityType spawnedType) {
-    //     var spawnJarControl = spawningObject.GetComponent<SpawnJarControl>();
-    //     if (spawnJarControl == null) {
-    //         Logger.Error("Could not find SpawnJarControl behaviour on spawning object");
-    //         return null;
-    //     }
-    //
-    //     GameObject gameObject;
-    //     int health;
-    //     var position = spawnJarControl.transform.position;
-    //     
-    //     switch (spawnedType) {
-    //         case EntityType.Vengefly:
-    //             gameObject = _collectorVengeflyPrefab.Spawn(position);
-    //             health = 8;
-    //             break;
-    //         case EntityType.AspidHunter:
-    //             gameObject = _collectorAspidPrefab.Spawn(position);
-    //             health = 15;
-    //             break;
-    //         case EntityType.Baldur:
-    //             gameObject = _collectorBaldurPrefab.Spawn(position);
-    //             health = 15;
-    //             break;
-    //         default:
-    //             Logger.Error($"Could not spawn object from collector jar: {spawnedType}");
-    //             return null;
-    //     }
-    //
-    //     var healthManager = gameObject.GetComponent<HealthManager>();
-    //     if (healthManager != null) {
-    //         healthManager.hp = health;
-    //     }
-    //
-    //     gameObject.tag = "Boss";
-    //
-    //     return gameObject;
     // }
     //
     // private static GameObject SpawnDungBallObject(PlayMakerFSM fsm, EntityType spawnedType) {

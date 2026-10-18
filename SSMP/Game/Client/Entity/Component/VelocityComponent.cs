@@ -1,7 +1,7 @@
 using SSMP.Networking.Client;
 using SSMP.Networking.Packet.Data;
-using SSMP.Util;
 using UnityEngine;
+
 #pragma warning disable CS0618 // Type or member is obsolete
 
 namespace SSMP.Game.Client.Entity.Component;
@@ -33,14 +33,13 @@ internal class VelocityComponent : EntityComponent {
     ) : base(netClient, entityId, gameObject) {
         _rigidbody = rigidbody;
         _lastVelocity = rigidbody.velocity;
-
-        MonoBehaviourUtil.Instance.OnUpdateEvent += OnUpdate;
     }
 
     /// <summary>
     /// Callback method to check for updates.
     /// </summary>
-    private void OnUpdate() {
+    /// <inheritdoc />
+    public override void OnUpdate() {
         if (IsControlled) {
             return;
         }
@@ -57,7 +56,7 @@ internal class VelocityComponent : EntityComponent {
         var newVelocity = _rigidbody.velocity;
         if (newVelocity != _lastVelocity) {
             _lastVelocity = newVelocity;
-            
+
             var data = new EntityNetworkData {
                 Type = EntityComponentType.Velocity
             };
@@ -69,7 +68,7 @@ internal class VelocityComponent : EntityComponent {
     }
 
     /// <inheritdoc />
-    public override void InitializeHost() {
+    protected override void InitializeHost() {
     }
 
     /// <inheritdoc />
@@ -77,7 +76,7 @@ internal class VelocityComponent : EntityComponent {
         if (!IsControlled) {
             return;
         }
-        
+
         var velocity = new Vector2(
             data.Packet.ReadFloat(),
             data.Packet.ReadFloat()
@@ -87,6 +86,5 @@ internal class VelocityComponent : EntityComponent {
 
     /// <inheritdoc />
     public override void Destroy() {
-        MonoBehaviourUtil.Instance.OnUpdateEvent -= OnUpdate;
     }
 }

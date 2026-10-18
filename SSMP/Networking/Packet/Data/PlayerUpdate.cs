@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using SSMP.Math;
 
@@ -8,6 +7,12 @@ namespace SSMP.Networking.Packet.Data;
 /// Packet data for the player update data.
 /// </summary>
 internal class PlayerUpdate : GenericClientData {
+    /// <summary>
+    /// The number of distinct update types in the <see cref="PlayerUpdateType"/> enumeration.
+    /// Used during packet serialization to avoid Enum.GetNames allocations.
+    /// </summary>
+    private static readonly int PlayerUpdateTypeCount = Util.EnumCache<PlayerUpdateType>.Count;
+
     /// <summary>
     /// Set containing the update types that this packet contains.
     /// </summary>
@@ -54,7 +59,7 @@ internal class PlayerUpdate : GenericClientData {
         // Keep track of value of current bit
         byte currentTypeValue = 1;
 
-        for (var i = 0; i < Enum.GetNames(typeof(PlayerUpdateType)).Length; i++) {
+        for (var i = 0; i < PlayerUpdateTypeCount; i++) {
             // Cast the current index of the loop to a PlayerUpdateType and check if it is
             // contained in the update type list, if so, we add the current bit to the flag
             if (UpdateTypes.Contains((PlayerUpdateType) i)) {
@@ -119,7 +124,7 @@ internal class PlayerUpdate : GenericClientData {
         // Keep track of value of current bit
         var currentTypeValue = 1;
 
-        for (var i = 0; i < Enum.GetNames(typeof(PlayerUpdateType)).Length; i++) {
+        for (var i = 0; i < PlayerUpdateTypeCount; i++) {
             // If this bit was set in our flag, we add the type to the list
             if ((updateTypeFlag & currentTypeValue) != 0) {
                 UpdateTypes.Add((PlayerUpdateType) i);
@@ -191,12 +196,12 @@ internal class AnimationInfo {
     /// <summary>
     /// The ID of the animation clip.
     /// </summary>
-    public ushort ClipId { get; set; }
+    public ushort ClipId { get; init; }
 
     /// <summary>
     /// The frame of the animation to start at.
     /// </summary>
-    public byte Frame { get; set; }
+    public byte Frame { get; init; }
 
     /// <summary>
     /// Byte array containing additional effect info.

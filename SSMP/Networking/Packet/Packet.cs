@@ -629,6 +629,17 @@ internal class Packet : IPacket {
         return set;
     }
 
+    /// <inheritdoc />
+    public IPacket ReadPacketView(int length) {
+        if ((_buffer?.Count ?? Length) >= _readPos + length) {
+            var view = new Packet(_readableBuffer, _offset + _readPos, length);
+            _readPos += length;
+            return view;
+        }
+
+        throw new Exception($"Could not read packet view of length {length} (readPos: {_readPos}, length: {Length})");
+    }
+
     #endregion
 
     #endregion

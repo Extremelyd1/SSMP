@@ -239,7 +239,7 @@ internal class ClientManager : IClientManager {
         _saveManager = new SaveManager(netClient, _entityManager);
 
         _pauseManager = new PauseManager(netClient);
-        _gamePatcher = new GamePatcher(netClient);
+        _gamePatcher = new GamePatcher(netClient, _entityManager);
         _fsmPatcher = new FsmPatcher();
 
         _commandManager = new ClientCommandManager();
@@ -262,7 +262,7 @@ internal class ClientManager : IClientManager {
         _animationManager.Initialize(_serverSettings);
         _mapManager.Initialize();
 
-        //_entityManager.Initialize();
+        _entityManager.Initialize();
         _saveManager.Initialize();
 
         RegisterCommands();
@@ -312,7 +312,7 @@ internal class ClientManager : IClientManager {
         _fsmPatcher.RegisterHooks();
 
         if (_fullSynchronisation) {
-            //_entityManager.RegisterHooks();
+            _entityManager.RegisterHooks();
             _saveManager.RegisterHooks();
         }
 
@@ -340,7 +340,7 @@ internal class ClientManager : IClientManager {
         _fsmPatcher.DeregisterHooks();
 
         if (_fullSynchronisation) {
-            //_entityManager.DeregisterHooks();
+            _entityManager.DeregisterHooks();
             _saveManager.DeregisterHooks();
         }
 
@@ -859,10 +859,10 @@ internal class ClientManager : IClientManager {
         if (_fullSynchronisation) {
             if (alreadyInScene.SceneHost) {
                 // Notify the entity manager that we are scene host
-                _entityManager.InitializeSceneHost();
+                _entityManager.InitializeSceneHost(alreadyInScene.SceneHostEpoch);
             } else {
                 // Notify the entity manager that we are scene client (non-host)
-                _entityManager.InitializeSceneClient();
+                _entityManager.InitializeSceneClient(alreadyInScene.SceneHostEpoch);
             }
 
             foreach (var entitySpawn in alreadyInScene.EntitySpawnList) {
@@ -874,14 +874,16 @@ internal class ClientManager : IClientManager {
 
             foreach (var entityUpdate in alreadyInScene.EntityUpdateList) {
                 Logger.Info($"Updating already in scene entity with ID: {entityUpdate.Id}");
-                _entityManager.HandleEntityUpdate(entityUpdate, true);
-                ObjectPool<EntityUpdate>.Return(entityUpdate);
+                if (_entityManager.HandleEntityUpdate(entityUpdate, true)) {
+                    ObjectPool<EntityUpdate>.Return(entityUpdate);
+                }
             }
 
             foreach (var entityUpdate in alreadyInScene.ReliableEntityUpdateList) {
                 Logger.Info($"Updating already in scene reliable entity data with ID: {entityUpdate.Id}");
-                _entityManager.HandleReliableEntityUpdate(entityUpdate, true);
-                ObjectPool<ReliableEntityUpdate>.Return(entityUpdate);
+                if (_entityManager.HandleReliableEntityUpdate(entityUpdate, true)) {
+                    ObjectPool<ReliableEntityUpdate>.Return(entityUpdate);
+                }
             }
 
             // Whether there were players in the scene or not, we have now determined whether
@@ -1030,7 +1032,9 @@ internal class ClientManager : IClientManager {
             return;
         }
 
-        _entityManager.HandleEntityUpdate(entityUpdate);
+        if (_entityManager.HandleEntityUpdate(entityUpdate)) {
+            ObjectPool<EntityUpdate>.Return(entityUpdate);
+        }
     }
 
     /// <summary>
@@ -1047,7 +1051,9 @@ internal class ClientManager : IClientManager {
             return;
         }
 
-        _entityManager.HandleReliableEntityUpdate(entityUpdate);
+        if (_entityManager.HandleReliableEntityUpdate(entityUpdate)) {
+            ObjectPool<ReliableEntityUpdate>.Return(entityUpdate);
+        }
     }
 
     /// <summary>
@@ -1059,7 +1065,9 @@ internal class ClientManager : IClientManager {
             return;
         }
 
-        Logger.Info($"Received scene host transfer for scene: {hostTransfer.SceneName}");
+        Logger.Info(
+            $"Received scene host transfer for scene: {hostTransfer.SceneName} (demote: {hostTransfer.Demote})"
+        );
 
         var currentScene = SceneManager.GetActiveScene().name;
         if (currentScene != hostTransfer.SceneName) {
@@ -1067,7 +1075,11 @@ internal class ClientManager : IClientManager {
             return;
         }
 
-        _entityManager.BecomeSceneHost();
+        if (hostTransfer.Demote) {
+            _entityManager.InitializeSceneClient(hostTransfer.SceneHostEpoch);
+        } else {
+            _entityManager.BecomeSceneHost(hostTransfer.SceneHostEpoch);
+        }
     }
 
     /// <summary>

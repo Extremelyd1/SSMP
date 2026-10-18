@@ -16,7 +16,7 @@ public static class FsmUtilExt {
     /// <param name="stateName">The name of the state.</param>
     /// <param name="index">The index of the action within that state.</param>
     /// <returns>The FsmStateAction from the FSM or null if the action could not be found.</returns>
-    public static FsmStateAction? GetAction(this PlayMakerFSM fsm, string stateName, int index) {
+    private static FsmStateAction? GetAction(this PlayMakerFSM fsm, string stateName, int index) {
         foreach (var t in fsm.FsmStates) {
             if (t.Name != stateName) {
                 continue;
@@ -61,12 +61,21 @@ public static class FsmUtilExt {
     /// </summary>
     /// <param name="fsm">The FSM instance.</param>
     /// <param name="stateName">The name of the state.</param>
-    /// <returns>The state from the FSM or null, if no such state exists.</returns>
+    /// <returns>The state from the FSM.</returns>
+    /// <exception cref="ArgumentException">Thrown when the state is not found.</exception>
     public static FsmState GetState(this PlayMakerFSM fsm, string stateName) {
-        return fsm.FsmStates.Where(t => t.Name == stateName)
-            .Select(t => new { t, actions = t.Actions })
-            .Select(t1 => t1.t)
-            .FirstOrDefault() ?? throw new ArgumentException($"FSM does not have state with name \"{stateName}\"", nameof(stateName));
+        return fsm.FsmStates.FirstOrDefault(t => t.Name == stateName) ??
+               throw new ArgumentException($"FSM does not have state with name \"{stateName}\"", nameof(stateName));
+    }
+
+    /// <summary>
+    /// Safely gets an FSM state by its name without throwing an exception if not found.
+    /// </summary>
+    /// <param name="fsm">The FSM instance.</param>
+    /// <param name="stateName">The name of the state.</param>
+    /// <returns>The state from the FSM or null if not found.</returns>
+    public static FsmState? GetStateOrNull(this PlayMakerFSM fsm, string stateName) {
+        return fsm.FsmStates.FirstOrDefault(t => t.Name == stateName);
     }
 
     /// <summary>

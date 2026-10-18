@@ -62,7 +62,15 @@ internal abstract class ServerManager : IServerManager {
     /// </summary>
     private readonly ConcurrentDictionary<ushort, ServerPlayerData> _playerData;
 
+    /// <summary>
+    /// Dictionary mapping entity keys to their server entity data instances.
+    /// </summary>
     private readonly ConcurrentDictionary<ServerEntityKey, ServerEntityData> _entityData;
+
+    /// <summary>
+    /// Dictionary mapping scene names to their current scene host epochs.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, uint> _sceneHostEpochs;
 
     /// <summary>
     /// The white-list for managing player logins.
@@ -213,6 +221,7 @@ internal abstract class ServerManager : IServerManager {
         InternalServerSettings = serverSettings;
         _playerData = new ConcurrentDictionary<ushort, ServerPlayerData>();
         _entityData = new ConcurrentDictionary<ServerEntityKey, ServerEntityData>();
+        _sceneHostEpochs = new ConcurrentDictionary<string, uint>();
 
         CommandManager = new ServerCommandManager();
         var eventAggregator = new EventAggregator();
@@ -237,6 +246,15 @@ internal abstract class ServerManager : IServerManager {
         _skinCommand = new SkinCommand(this);
         _helpCommand = new HelpCommand(this);
         _copySaveCommand = new CopySaveCommand(this, ServerSaveData);
+    }
+
+    /// <summary>
+    /// Gets the next scene host epoch for the given scene name, incrementing it if it already exists.
+    /// </summary>
+    /// <param name="sceneName">The name of the scene.</param>
+    /// <returns>The next scene host epoch.</returns>
+    private uint GetNextSceneHostEpoch(string sceneName) {
+        return _sceneHostEpochs.AddOrUpdate(sceneName, 1, (_, current) => current + 1);
     }
 
     #region Internal server manager methods
@@ -490,27 +508,25 @@ internal abstract class ServerManager : IServerManager {
         var enterSceneList = new List<ClientPlayerEnterScene>();
         var alreadyPlayersInScene = false;
 
-        foreach (var idPlayerDataPair in _playerData) {
+        foreach (var (key, otherPlayerData) in _playerData) {
             // Skip source player
-            if (idPlayerDataPair.Key == playerData.Id) {
+            if (key == playerData.Id) {
                 continue;
             }
-
-            var otherPlayerData = idPlayerDataPair.Value;
 
             // Send the packet to all clients on the new scene
             // to indicate that this client has entered their scene
             if (otherPlayerData.CurrentScene.Equals(playerData.CurrentScene)) {
-                Logger.Debug($"Sending EnterScene data to {idPlayerDataPair.Key}");
+                Logger.Debug($"Sending EnterScene data to {key}");
 
-                _netServer.GetUpdateManagerForClient(idPlayerDataPair.Key)?.AddPlayerEnterSceneData(
+                _netServer.GetUpdateManagerForClient(key)?.AddPlayerEnterSceneData(
                     playerData.Id,
                     playerData.Position ?? Vector2.Zero,
                     playerData.Scale,
                     playerData.AnimationId
                 );
 
-                Logger.Debug($"Sending that {idPlayerDataPair.Key} is already in scene to {playerData.Id}");
+                Logger.Debug($"Sending that {key} is already in scene to {playerData.Id}");
 
                 alreadyPlayersInScene = true;
 
@@ -518,7 +534,7 @@ internal abstract class ServerManager : IServerManager {
                 // notifying that these players are already in this new scene.
                 enterSceneList.Add(
                     new ClientPlayerEnterScene {
-                        Id = idPlayerDataPair.Key,
+                        Id = key,
                         Position = otherPlayerData.Position ?? Vector2.Zero,
                         Scale = otherPlayerData.Scale,
                         AnimationClipId = otherPlayerData.AnimationId
@@ -530,17 +546,16 @@ internal abstract class ServerManager : IServerManager {
         var entitySpawnList = new List<EntitySpawn>();
         var entityUpdateList = new List<EntityUpdate>();
         var reliableEntityUpdateList = new List<ReliableEntityUpdate>();
+        var makeEnteringPlayerHost = false;
+        var sceneHostEpoch = 0u;
 
         if (FullSynchronisation) {
-            foreach (var keyDataPair in _entityData) {
-                var entityKey = keyDataPair.Key;
-
+            foreach (var (entityKey, entityData) in _entityData) {
                 // Check which entities are actually in the scene that the player is entering
                 if (!entityKey.Scene.Equals(playerData.CurrentScene)) {
                     continue;
                 }
 
-                var entityData = keyDataPair.Value;
                 if (entityData.Spawned) {
                     Logger.Info(
                         $"Sending that entity '{entityKey.EntityId}' has spawned in the scene to '{playerData.Id}'"
@@ -589,7 +604,10 @@ internal abstract class ServerManager : IServerManager {
 
                 if (entityData.GenericData.Count > 0) {
                     reliableEntityUpdate.UpdateTypes.Add(EntityUpdateType.Data);
-                    reliableEntityUpdate.GenericData.AddRange(entityData.GenericData);
+
+                    foreach (var genericData in entityData.GenericData) {
+                        reliableEntityUpdate.GenericData.Add(genericData.Clone());
+                    }
                 }
 
                 if (entityData.HostFsmData.Count > 0) {
@@ -604,10 +622,41 @@ internal abstract class ServerManager : IServerManager {
                 reliableEntityUpdateList.Add(reliableEntityUpdate);
             }
 
-            if (!alreadyPlayersInScene) {
-                Logger.Debug($"No players already in scene, making {playerData.Id} the scene host");
+            var isReturningPreviousHost = playerData.LastHostedScene == playerData.CurrentScene;
+            var shouldDemoteCurrentHost = alreadyPlayersInScene && isReturningPreviousHost;
+            makeEnteringPlayerHost = !alreadyPlayersInScene || isReturningPreviousHost;
+
+            if (shouldDemoteCurrentHost) {
+                var epoch = GetNextSceneHostEpoch(playerData.CurrentScene);
+                foreach (var (key, otherPlayerData) in _playerData) {
+                    if (key == playerData.Id) continue;
+                    if (otherPlayerData.CurrentScene != playerData.CurrentScene) continue;
+
+                    if (otherPlayerData.IsSceneHost) {
+                        otherPlayerData.IsSceneHost = false;
+
+                        _netServer
+                            .GetUpdateManagerForClient(key)
+                            ?.SetSceneHostTransfer(playerData.CurrentScene, epoch, demote: true);
+
+                        Logger.Info(
+                            $"Demoted player {key} ({otherPlayerData.Username}) in scene {playerData.CurrentScene} since the previous host {playerData.Id} ({playerData.Username}) re-entered (epoch {epoch})"
+                        );
+                    } else {
+                        _netServer
+                            .GetUpdateManagerForClient(key)
+                            ?.SetSceneHostTransfer(playerData.CurrentScene, epoch, demote: true);
+                    }
+                }
+            }
+
+            if (makeEnteringPlayerHost) {
+                Logger.Debug($"Making {playerData.Id} the scene host");
                 playerData.IsSceneHost = true;
             }
+
+            playerData.LastHostedScene = null;
+            sceneHostEpoch = _sceneHostEpochs.GetOrAdd(playerData.CurrentScene, 0u);
         }
 
         _netServer.GetUpdateManagerForClient(playerData.Id)?.AddPlayerAlreadyInSceneData(
@@ -615,7 +664,8 @@ internal abstract class ServerManager : IServerManager {
             entitySpawnList,
             entityUpdateList,
             reliableEntityUpdateList,
-            FullSynchronisation && !alreadyPlayersInScene
+            FullSynchronisation && makeEnteringPlayerHost,
+            sceneHostEpoch
         );
     }
 
@@ -653,23 +703,33 @@ internal abstract class ServerManager : IServerManager {
         if (playerUpdate.UpdateTypes.Contains(PlayerUpdateType.Position)) {
             playerData.Position = playerUpdate.Position;
 
-            SendDataInSameScene(
-                id,
-                playerData.CurrentScene,
-                otherId => {
-                    _netServer.GetUpdateManagerForClient(otherId)?.UpdatePlayerPosition(id, playerUpdate.Position);
+            foreach (var (otherId, otherPd) in _playerData) {
+                if (otherId == id) {
+                    continue;
                 }
-            );
+
+                if (!string.Equals(otherPd.CurrentScene, playerData.CurrentScene)) {
+                    continue;
+                }
+
+                _netServer.GetUpdateManagerForClient(otherId)?.UpdatePlayerPosition(id, playerUpdate.Position);
+            }
         }
 
         if (playerUpdate.UpdateTypes.Contains(PlayerUpdateType.Scale)) {
             playerData.Scale = playerUpdate.Scale;
 
-            SendDataInSameScene(
-                id,
-                playerData.CurrentScene,
-                otherId => { _netServer.GetUpdateManagerForClient(otherId)?.UpdatePlayerScale(id, playerUpdate.Scale); }
-            );
+            foreach (var (otherId, otherPd) in _playerData) {
+                if (otherId == id) {
+                    continue;
+                }
+
+                if (!string.Equals(otherPd.CurrentScene, playerData.CurrentScene)) {
+                    continue;
+                }
+
+                _netServer.GetUpdateManagerForClient(otherId)?.UpdatePlayerScale(id, playerUpdate.Scale);
+            }
         }
 
         if (playerUpdate.UpdateTypes.Contains(PlayerUpdateType.MapPosition)) {
@@ -709,12 +769,19 @@ internal abstract class ServerManager : IServerManager {
                 }
 
                 // Set the animation data for each player in the same scene
-                SendDataInSameScene(
-                    id,
-                    playerData.CurrentScene,
-                    otherId => {
+                foreach (var (otherId, otherPd) in _playerData) {
+                    if (otherId == id) {
+                        continue;
+                    }
+
+                    if (!string.Equals(otherPd.CurrentScene, playerData.CurrentScene)) {
+                        continue;
+                    }
+
+                    var updateManager = _netServer.GetUpdateManagerForClient(otherId);
+                    if (updateManager != null) {
                         foreach (var animationInfo in animationInfos) {
-                            _netServer.GetUpdateManagerForClient(otherId)?.UpdatePlayerAnimation(
+                            updateManager.UpdatePlayerAnimation(
                                 id,
                                 animationInfo.ClipId,
                                 animationInfo.Frame,
@@ -722,7 +789,7 @@ internal abstract class ServerManager : IServerManager {
                             );
                         }
                     }
-                );
+                }
             }
         }
     }
@@ -930,44 +997,67 @@ internal abstract class ServerManager : IServerManager {
         }
 
         if (entityUpdate.UpdateTypes.Contains(EntityUpdateType.Data)) {
-            SendDataInSameScene(
-                id,
-                playerData.CurrentScene,
-                otherId => {
-                    _netServer.GetUpdateManagerForClient(otherId)?.AddEntityData(
-                        entityUpdate.Id,
-                        entityUpdate.GenericData
-                    );
-                }
-            );
+            var filteredGenericData = new List<EntityNetworkData>(entityUpdate.GenericData.Count);
 
-            void ReplaceExistingDataWithSameType(EntityComponentType type, Packet data) {
-                var existingData = entityData.GenericData.Find(d => d.Type == type
+            foreach (var updateData in entityUpdate.GenericData) {
+                updateData.SenderId = id;
+
+                if (updateData.Type == EntityComponentType.Health &&
+                    !playerData.IsSceneHost &&
+                    IsHealingHealthUpdate(updateData)) {
+                    Logger.Info(
+                        $"Ignoring non-host health increase for entity {entityUpdate.Id} from player {id} in scene '{playerData.CurrentScene}'"
+                    );
+                    continue;
+                }
+
+                filteredGenericData.Add(updateData);
+            }
+
+            if (filteredGenericData.Count > 0) {
+                SendDataInSameScene(
+                    id,
+                    playerData.CurrentScene,
+                    otherId => {
+                        _netServer.GetUpdateManagerForClient(otherId)?.AddEntityData(
+                            entityUpdate.Id,
+                            filteredGenericData
+                        );
+                    }
+                );
+            }
+
+            void ReplaceExistingDataWithSameType(EntityNetworkData updateData) {
+                var existingData = entityData.GenericData.Find(d => d.Type == updateData.Type
                 );
                 if (existingData == null) {
-                    entityData.GenericData.Add(
-                        new EntityNetworkData {
-                            Type = type,
-                            Packet = data
-                        }
-                    );
+                    entityData.GenericData.Add(updateData.Clone());
                 } else {
-                    existingData.Packet = data;
+                    existingData.Packet = new Packet(updateData.Packet.ToArray());
+                    existingData.SenderId = updateData.SenderId;
                 }
             }
 
-            foreach (var updateData in entityUpdate.GenericData) {
-                if (updateData.Type > EntityComponentType.Death) {
-                    ReplaceExistingDataWithSameType(updateData.Type, updateData.Packet);
+            if (filteredGenericData.Count > 0) {
+                foreach (var updateData in filteredGenericData) {
+                    if (updateData.Type > EntityComponentType.Death) {
+                        ReplaceExistingDataWithSameType(updateData);
+                    }
                 }
+            }
+
+            // Helper to inspect an entity health packet and check if it represents a health increase.
+            // Returns: True if the update heals the entity; otherwise false.
+            static bool IsHealingHealthUpdate(EntityNetworkData updateData) {
+                var packet = new Packet(updateData.Packet.ToArray());
+                var previousHp = packet.ReadInt();
+                var newHp = packet.ReadInt();
+                return newHp > previousHp;
             }
         }
 
         if (entityUpdate.UpdateTypes.Contains(EntityUpdateType.HostFsm)) {
-            foreach (var pair in entityUpdate.HostFsmData) {
-                var fsmIndex = pair.Key;
-                var data = pair.Value;
-
+            foreach (var (fsmIndex, data) in entityUpdate.HostFsmData) {
                 if (!entityData.HostFsmData.TryGetValue(fsmIndex, out var existingData)) {
                     existingData = new EntityHostFsmData();
                     entityData.HostFsmData[fsmIndex] = existingData;
@@ -1050,43 +1140,38 @@ internal abstract class ServerManager : IServerManager {
 
         // Keep track of whether the scene that the player has left is now empty
         var isSceneNowEmpty = true;
-
-        foreach (var idPlayerDataPair in _playerData) {
-            if (idPlayerDataPair.Key == id) {
-                continue;
-            }
-
-            var otherPlayerData = idPlayerDataPair.Value;
-
-            // Send a packet to all clients in the scene that the player has left their scene
-            if (otherPlayerData.CurrentScene == sceneName) {
-                Logger.Info($"Sending leave scene packet to {idPlayerDataPair.Key}");
-
-                // We have now found at least one player that is still in this scene
+        var scenePlayers = new List<KeyValuePair<ushort, ServerPlayerData>>();
+        foreach (var pair in _playerData) {
+            if (pair.Key != id && pair.Value.CurrentScene == sceneName) {
                 isSceneNowEmpty = false;
+                scenePlayers.Add(pair);
+            }
+        }
 
-                var updateManager = _netServer.GetUpdateManagerForClient(idPlayerDataPair.Key);
+        if (FullSynchronisation && playerData.IsSceneHost && scenePlayers.Count > 0) {
+            var epoch = GetNextSceneHostEpoch(sceneName);
+            var newHostPair = scenePlayers[0];
+            newHostPair.Value.IsSceneHost = true;
+            playerData.IsSceneHost = false;
 
-                // We check if the player is the scene host, which will never be the case if FullSync is disabled
-                if (playerData.IsSceneHost) {
-                    // If the leaving player was the scene host, we can make this player the new scene host
-                    updateManager?.SetSceneHostTransfer(sceneName);
+            Logger.Info(
+                $"Player {id} left scene. Host transferred to {newHostPair.Key} in scene {sceneName} (epoch {epoch})"
+            );
 
-                    // Reset the scene host variable in the leaving player, so only a single other player
-                    // becomes the scene host
-                    playerData.IsSceneHost = false;
+            foreach (var pair in scenePlayers) {
+                var updateManager = _netServer.GetUpdateManagerForClient(pair.Key);
+                bool isNewHost = (pair.Key == newHostPair.Key);
+                updateManager?.SetSceneHostTransfer(sceneName, epoch, demote: !isNewHost);
+            }
+        }
 
-                    // Also set the player data of the new scene host
-                    otherPlayerData.IsSceneHost = true;
-
-                    Logger.Info($"  {idPlayerDataPair.Key} has become scene host");
-                }
-
-                if (disconnected) {
-                    updateManager?.AddPlayerDisconnectData(id, username, timeout);
-                } else {
-                    updateManager?.AddPlayerLeaveSceneData(id, sceneName);
-                }
+        foreach (var pair in scenePlayers) {
+            Logger.Info($"Sending leave scene packet to {pair.Key}");
+            var updateManager = _netServer.GetUpdateManagerForClient(pair.Key);
+            if (disconnected) {
+                updateManager?.AddPlayerDisconnectData(id, username, timeout);
+            } else {
+                updateManager?.AddPlayerLeaveSceneData(id, sceneName);
             }
         }
 
@@ -1169,6 +1254,34 @@ internal abstract class ServerManager : IServerManager {
             ServerSaveData.PlayerSaveData.Remove(playerData.AuthKey);
 
             Logger.Info("  Wiped player save data (Steel Soul)");
+        }
+
+        if (FullSynchronisation && playerData.IsSceneHost) {
+            var sceneName = playerData.CurrentScene;
+            var scenePlayers = new List<KeyValuePair<ushort, ServerPlayerData>>();
+            foreach (var pair in _playerData) {
+                if (pair.Key != id && pair.Value.CurrentScene == sceneName) {
+                    scenePlayers.Add(pair);
+                }
+            }
+
+            if (scenePlayers.Count > 0) {
+                var epoch = GetNextSceneHostEpoch(sceneName);
+                var newHostPair = scenePlayers[0];
+                newHostPair.Value.IsSceneHost = true;
+                playerData.IsSceneHost = false;
+                playerData.LastHostedScene = sceneName;
+
+                Logger.Info(
+                    $"Player {id} ({playerData.Username}) died. Host transferred to {newHostPair.Key} ({newHostPair.Value.Username}) in scene {sceneName} (epoch {epoch})"
+                );
+
+                foreach (var pair in scenePlayers) {
+                    var updateManager = _netServer.GetUpdateManagerForClient(pair.Key);
+                    var isNewHost = (pair.Key == newHostPair.Key);
+                    updateManager?.SetSceneHostTransfer(sceneName, epoch, demote: !isNewHost);
+                }
+            }
         }
 
         SendDataInSameScene(
