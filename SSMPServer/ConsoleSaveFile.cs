@@ -13,7 +13,7 @@ internal class ConsoleSaveFile : ModSaveFile {
     /// The global save data for the server. E.g. broken walls, open doors, etc.
     /// </summary>
     [JsonProperty("global_save_data")]
-    public SaveData GlobalSaveData { get; set; }
+    public new SaveData GlobalSaveData { get; set; }
 
     public ConsoleSaveFile() {
         GlobalSaveData = new SaveData();

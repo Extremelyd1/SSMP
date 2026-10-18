@@ -2,8 +2,10 @@ using System.Collections.Generic;
 using Newtonsoft.Json;
 using SSMP.Game.Client.Save;
 using SSMP.Util;
+
 // ReSharper disable MemberHidesStaticFromOuterClass
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider
+// adding the 'required' modifier or declaring as nullable.
 
 namespace SSMP.Game.Server.Save;
 
@@ -16,11 +18,13 @@ internal class ModSaveFile {
     /// The player specific save data mapped to player's auth keys.
     /// </summary>
     [JsonProperty("playerSaveData")]
-    public Dictionary<string, SaveData> PlayerSaveData { get; set; }
+    public Dictionary<string, SaveData> PlayerSaveData { get; set; } = new();
 
-    public ModSaveFile() {
-        PlayerSaveData = new Dictionary<string, SaveData>();
-    }
+    /// <summary>
+    /// The global save data for the server. E.g. broken walls, open doors, etc.
+    /// </summary>
+    [JsonProperty("globalSaveData")]
+    public SaveData GlobalSaveData { get; set; } = new();
 
     /// <summary>
     /// Convert this class to an encoded ServerSaveData.
@@ -28,12 +32,14 @@ internal class ModSaveFile {
     /// <returns>The converted ServerSaveData instance.</returns>
     public virtual ServerSaveData ToServerSaveData() {
         // Create new instance of server save data, which we return at the end
-        var serverSaveData = new ServerSaveData();
+        var serverSaveData = new ServerSaveData {
+            GlobalSaveData = EncodeUtil.ConvertToServerSaveData(GlobalSaveData)
+        };
 
         foreach (var authKey in PlayerSaveData.Keys) {
             serverSaveData.PlayerSaveData[authKey] = EncodeUtil.ConvertToServerSaveData(PlayerSaveData[authKey]);
         }
-        
+
         return serverSaveData;
     }
 
@@ -44,7 +50,9 @@ internal class ModSaveFile {
     /// <returns>An instance of this class.</returns>
     public static ModSaveFile FromServerSaveData(ServerSaveData serverSaveData) {
         // Create new instance of this class, which we return at the end
-        var modSaveFile = new ModSaveFile();
+        var modSaveFile = new ModSaveFile {
+            GlobalSaveData = EncodeUtil.ConvertFromServerSaveData(serverSaveData.GlobalSaveData)
+        };
 
         var playerSaveData = serverSaveData.PlayerSaveData;
         foreach (var authKey in playerSaveData.Keys) {
@@ -65,18 +73,13 @@ internal class ModSaveFile {
         /// <seealso cref="PlayerSaveDataConverter"/>
         /// </summary>
         [JsonProperty("playerData")]
-        public PlayerDataEntries PlayerDataEntries { get; set; }
+        public PlayerDataEntries PlayerDataEntries { get; set; } = [];
 
         /// <summary>
         /// SceneData instance that contains geo rocks and persistent items.
         /// </summary>
         [JsonProperty("sceneData")]
-        public SceneData SceneData { get; set; }
-
-        public SaveData() {
-            PlayerDataEntries = [];
-            SceneData = new SceneData();
-        }
+        public SceneData SceneData { get; set; } = new();
     }
 
     /// <summary>
@@ -87,23 +90,19 @@ internal class ModSaveFile {
         /// List of individual geo rocks.
         /// </summary>
         [JsonProperty("geoRocks")]
-        public List<GeoRockData> GeoRockData { get; set; }
+        public List<GeoRockData> GeoRockData { get; set; } = [];
+
         /// <summary>
         /// List of persistent booleans.
         /// </summary>
         [JsonProperty("persistentBoolItems")]
-        public List<PersistentBoolData> PersistentBoolData { get; set; }
+        public List<PersistentBoolData> PersistentBoolData { get; set; } = [];
+
         /// <summary>
         /// List of persistent integers.
         /// </summary>
         [JsonProperty("persistentIntItems")]
-        public List<PersistentIntData> PersistentIntData { get; set; }
-
-        public SceneData() {
-            GeoRockData = [];
-            PersistentBoolData = [];
-            PersistentIntData = [];
-        }
+        public List<PersistentIntData> PersistentIntData { get; set; } = [];
     }
 
     /// <summary>
@@ -147,7 +146,7 @@ internal class ModSaveFile {
         [JsonProperty("hitsLeft")]
         public int HitsLeft { get; set; }
     }
-    
+
     /// <summary>
     /// Serializable persistent boolean.
     /// </summary>
@@ -158,7 +157,7 @@ internal class ModSaveFile {
         [JsonProperty("activated")]
         public bool Activated { get; set; }
     }
-    
+
     /// <summary>
     /// Serializable persistent integer.
     /// </summary>
@@ -183,7 +182,8 @@ internal class ModSaveFile {
         /// <summary>
         /// The name of the PlayerData variable.
         /// </summary>
-        public string? Name { get; set; }
+        public string? Name { get; init; }
+
         /// <summary>
         /// The value of the PlayerData variable as an object.
         /// </summary>

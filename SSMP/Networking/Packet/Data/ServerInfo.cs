@@ -29,7 +29,7 @@ internal class ServerInfo : IPacketData {
     /// <summary>
     /// List of addon data that the server uses.
     /// </summary>
-    public List<AddonData> AddonData { get; set; } = [];
+    public List<AddonData> AddonData { get; private set; } = [];
 
     /// <summary>
     /// The order in which the addons have been assigned IDs.
@@ -69,11 +69,13 @@ internal class ServerInfo : IPacketData {
             }
 
             ServerSettingsUpdate.WriteData(packet);
-            
+
             packet.Write(FullSynchronisation);
 
-            // CurrentSave.WriteData(packet);
-        
+            if (FullSynchronisation)
+                CurrentSave.WriteData(packet);
+
+
             packet.Write((ushort) PlayerInfos.Count);
 
             foreach (var playerInfo in PlayerInfos) {
@@ -116,9 +118,11 @@ internal class ServerInfo : IPacketData {
 
             FullSynchronisation = packet.ReadBool();
 
-            // CurrentSave = new CurrentSave();
-            // CurrentSave.ReadData(packet);
-        
+            if (FullSynchronisation) {
+                CurrentSave = new CurrentSave();
+                CurrentSave.ReadData(packet);
+            }
+
             var length = packet.ReadUShort();
 
             PlayerInfos = [];
@@ -132,7 +136,7 @@ internal class ServerInfo : IPacketData {
         if (ConnectionResult == ServerConnectionResult.InvalidAddons) {
             var addonDataLength = packet.ReadByte();
 
-            AddonData = new List<AddonData>();
+            AddonData = [];
 
             for (var i = 0; i < addonDataLength; i++) {
                 var id = packet.ReadString();
@@ -159,18 +163,22 @@ internal class ServerInfo : IPacketData {
         /// The ID of the player.
         /// </summary>
         public required ushort Id { get; init; }
+
         /// <summary>
         /// The username of the player.
         /// </summary>
         public required string Username { get; init; }
+
         /// <summary>
         /// The team of the player.
         /// </summary>
         public required Team Team { get; init; }
+
         /// <summary>
         /// The skin ID of the player.
         /// </summary>
         public required byte SkinId { get; init; }
+
         /// <summary>
         /// The current crest type of the player.
         /// </summary>
