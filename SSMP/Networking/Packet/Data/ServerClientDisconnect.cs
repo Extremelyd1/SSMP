@@ -44,5 +44,10 @@ public enum DisconnectReason {
     /// <summary>
     /// When the client is banned from the server.
     /// </summary>
-    Banned
+    Banned,
+
+    /// <summary>
+    /// When the client needs to reconnect due to their save data being updated/copied.
+    /// </summary>
+    SaveCopy
 }
