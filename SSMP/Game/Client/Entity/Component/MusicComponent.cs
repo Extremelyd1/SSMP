@@ -11,13 +11,6 @@ using UnityEngine;
 using UnityEngine.Audio;
 using Logger = SSMP.Logging.Logger;
 
-// ReSharper disable ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
-// ReSharper disable UnusedMember.Local
-// ReSharper disable UnusedAutoPropertyAccessor.Local
-// ReSharper disable InconsistentNaming
-#pragma warning disable CS8625
-#pragma warning disable CS8618
-
 namespace SSMP.Game.Client.Entity.Component;
 
 /// <inheritdoc />
@@ -100,8 +93,8 @@ internal class MusicComponent : EntityComponent {
             (List<MusicCueData>, List<AudioMixerSnapshotData>)
         >(MusicDataFilePath);
 
-        MusicCueDataByName = new Dictionary<string, MusicCueData>(StringComparer.Ordinal);
-        SnapshotDataByName = new Dictionary<string, AudioMixerSnapshotData>(StringComparer.Ordinal);
+        MusicCueDataByName = new Dictionary<string, MusicCueData>();
+        SnapshotDataByName = new Dictionary<string, AudioMixerSnapshotData>();
         MusicCueDataByIndex = new Dictionary<byte, MusicCueData>();
         SnapshotDataByIndex = new Dictionary<byte, AudioMixerSnapshotData>();
 

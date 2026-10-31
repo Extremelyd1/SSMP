@@ -7027,42 +7027,42 @@
       "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "System.Int32",
+      "VarType": "System.UInt64",
       "Additive": false
     },
     "memoryOrbs_Clover_18_B": {
       "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "System.Int32",
+      "VarType": "System.UInt64",
       "Additive": false
     },
     "memoryOrbs_Clover_18_C": {
       "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "System.Int32",
+      "VarType": "System.UInt64",
       "Additive": false
     },
     "memoryOrbs_Clover_18_D": {
       "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "System.Int32",
+      "VarType": "System.UInt64",
       "Additive": false
     },
     "memoryOrbs_Clover_18_E": {
       "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "System.Int32",
+      "VarType": "System.UInt64",
       "Additive": false
     },
     "memoryOrbs_Clover_19": {
       "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "System.Int32",
+      "VarType": "System.UInt64",
       "Additive": false
     },
     "memoryOrbs_Clover_21": {

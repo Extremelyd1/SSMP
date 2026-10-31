@@ -50,7 +50,7 @@ internal abstract class ServerManager : IServerManager {
     /// <summary>
     /// The net server instance.
     /// </summary>
-    private readonly NetServer _netServer;
+    protected readonly NetServer NetServer;
 
     /// <summary>
     /// The packet manager instance for register and deregistering packet handlers.
@@ -216,7 +216,7 @@ internal abstract class ServerManager : IServerManager {
         PacketManager packetManager,
         ServerSettings serverSettings
     ) {
-        _netServer = netServer;
+        NetServer = netServer;
         _packetManager = packetManager;
         InternalServerSettings = serverSettings;
         _playerData = new ConcurrentDictionary<ushort, ServerPlayerData>();
@@ -226,7 +226,7 @@ internal abstract class ServerManager : IServerManager {
         CommandManager = new ServerCommandManager();
         var eventAggregator = new EventAggregator();
 
-        var serverApi = new ServerApi(this, CommandManager, _netServer, eventAggregator);
+        var serverApi = new ServerApi(this, CommandManager, NetServer, eventAggregator);
         AddonManager = new ServerAddonManager(serverApi);
 
         ServerSaveData = new ServerSaveData();
@@ -239,7 +239,7 @@ internal abstract class ServerManager : IServerManager {
         _listCommand = new ListCommand(this);
         _whiteListCommand = new WhiteListCommand(_whiteList, this);
         _authorizeCommand = new AuthorizeCommand(_authorizedList, this);
-        _announceCommand = new AnnounceCommand(_playerData, _netServer);
+        _announceCommand = new AnnounceCommand(_playerData, NetServer);
         _banCommand = new BanCommand(_banList, this);
         _kickCommand = new KickCommand(this);
         _teamCommand = new TeamCommand(this);
@@ -264,13 +264,13 @@ internal abstract class ServerManager : IServerManager {
     /// </summary>
     public virtual void Initialize() {
         // Register a timeout handler
-        _netServer.ClientTimeoutEvent += OnClientTimeout;
+        NetServer.ClientTimeoutEvent += OnClientTimeout;
 
         // Register server shutdown handler
-        _netServer.ShutdownEvent += OnServerShutdown;
+        NetServer.ShutdownEvent += OnServerShutdown;
 
         // Register a handler for when a client wants to connect
-        _netServer.ConnectionRequestEvent += OnConnectionRequest;
+        NetServer.ConnectionRequestEvent += OnConnectionRequest;
     }
 
     /// <summary>
@@ -407,7 +407,7 @@ internal abstract class ServerManager : IServerManager {
     public virtual void Start(int port, bool fullSynchronisation, IEncryptedTransportServer transportServer) {
         lock (_serverStateLock) {
             // Stop existing server (including deregistering commands)
-            if (_netServer.IsStarted) {
+            if (NetServer.IsStarted) {
                 Logger.Info("Server was running, shutting it down before starting");
                 StopInternal();
             }
@@ -418,7 +418,7 @@ internal abstract class ServerManager : IServerManager {
             RegisterPacketHandlers();
 
             // Start server again with given port
-            _netServer.Start(port, transportServer);
+            NetServer.Start(port, transportServer);
         }
     }
 
@@ -435,13 +435,13 @@ internal abstract class ServerManager : IServerManager {
     /// Internal stop logic without locking (called from Start and Stop).
     /// </summary>
     private void StopInternal() {
-        if (!_netServer.IsStarted) return;
+        if (!NetServer.IsStarted) return;
 
         // Before shutting down, send TCP packets to all clients indicating
         // that the server is shutting down
-        _netServer.SetDataForAllClients(updateManager => { updateManager.SetDisconnect(DisconnectReason.Shutdown); });
+        NetServer.SetDataForAllClients(updateManager => { updateManager.SetDisconnect(DisconnectReason.Shutdown); });
 
-        _netServer.Stop();
+        NetServer.Stop();
 
         DeregisterCommands();
         DeregisterPacketHandlers();
@@ -462,11 +462,11 @@ internal abstract class ServerManager : IServerManager {
     /// Called when the server settings are updated, and need to be broadcast.
     /// </summary>
     public void OnUpdateServerSettings() {
-        if (!_netServer.IsStarted) {
+        if (!NetServer.IsStarted) {
             return;
         }
 
-        _netServer.SetDataForAllClients(updateManager => { updateManager.UpdateServerSettings(InternalServerSettings); }
+        NetServer.SetDataForAllClients(updateManager => { updateManager.UpdateServerSettings(InternalServerSettings); }
         );
     }
 
@@ -519,7 +519,7 @@ internal abstract class ServerManager : IServerManager {
             if (otherPlayerData.CurrentScene.Equals(playerData.CurrentScene)) {
                 Logger.Debug($"Sending EnterScene data to {key}");
 
-                _netServer.GetUpdateManagerForClient(key)?.AddPlayerEnterSceneData(
+                NetServer.GetUpdateManagerForClient(key)?.AddPlayerEnterSceneData(
                     playerData.Id,
                     playerData.Position ?? Vector2.Zero,
                     playerData.Scale,
@@ -635,7 +635,7 @@ internal abstract class ServerManager : IServerManager {
                     if (otherPlayerData.IsSceneHost) {
                         otherPlayerData.IsSceneHost = false;
 
-                        _netServer
+                        NetServer
                             .GetUpdateManagerForClient(key)
                             ?.SetSceneHostTransfer(playerData.CurrentScene, epoch, demote: true);
 
@@ -643,7 +643,7 @@ internal abstract class ServerManager : IServerManager {
                             $"Demoted player {key} ({otherPlayerData.Username}) in scene {playerData.CurrentScene} since the previous host {playerData.Id} ({playerData.Username}) re-entered (epoch {epoch})"
                         );
                     } else {
-                        _netServer
+                        NetServer
                             .GetUpdateManagerForClient(key)
                             ?.SetSceneHostTransfer(playerData.CurrentScene, epoch, demote: true);
                     }
@@ -659,7 +659,7 @@ internal abstract class ServerManager : IServerManager {
             sceneHostEpoch = _sceneHostEpochs.GetOrAdd(playerData.CurrentScene, 0u);
         }
 
-        _netServer.GetUpdateManagerForClient(playerData.Id)?.AddPlayerAlreadyInSceneData(
+        NetServer.GetUpdateManagerForClient(playerData.Id)?.AddPlayerAlreadyInSceneData(
             enterSceneList,
             entitySpawnList,
             entityUpdateList,
@@ -712,7 +712,7 @@ internal abstract class ServerManager : IServerManager {
                     continue;
                 }
 
-                _netServer.GetUpdateManagerForClient(otherId)?.UpdatePlayerPosition(id, playerUpdate.Position);
+                NetServer.GetUpdateManagerForClient(otherId)?.UpdatePlayerPosition(id, playerUpdate.Position);
             }
         }
 
@@ -728,7 +728,7 @@ internal abstract class ServerManager : IServerManager {
                     continue;
                 }
 
-                _netServer.GetUpdateManagerForClient(otherId)?.UpdatePlayerScale(id, playerUpdate.Scale);
+                NetServer.GetUpdateManagerForClient(otherId)?.UpdatePlayerScale(id, playerUpdate.Scale);
             }
         }
 
@@ -747,7 +747,7 @@ internal abstract class ServerManager : IServerManager {
                         continue;
                     }
 
-                    _netServer.GetUpdateManagerForClient(idPlayerDataPair.Key)?
+                    NetServer.GetUpdateManagerForClient(idPlayerDataPair.Key)?
                         .UpdatePlayerMapPosition(id, playerUpdate.MapPosition);
                 }
             }
@@ -778,7 +778,7 @@ internal abstract class ServerManager : IServerManager {
                         continue;
                     }
 
-                    var updateManager = _netServer.GetUpdateManagerForClient(otherId);
+                    var updateManager = NetServer.GetUpdateManagerForClient(otherId);
                     if (updateManager != null) {
                         foreach (var animationInfo in animationInfos) {
                             updateManager.UpdatePlayerAnimation(
@@ -812,12 +812,12 @@ internal abstract class ServerManager : IServerManager {
                 continue;
             }
 
-            _netServer.GetUpdateManagerForClient(idPlayerDataPair.Key)?
+            NetServer.GetUpdateManagerForClient(idPlayerDataPair.Key)?
                 .UpdatePlayerMapIcon(id, playerData.HasMapIcon);
 
             if (playerData.HasMapIcon && playerData.MapPosition != null) {
                 // If the player now has a map icon, we also send the map position
-                _netServer.GetUpdateManagerForClient(idPlayerDataPair.Key)?
+                NetServer.GetUpdateManagerForClient(idPlayerDataPair.Key)?
                     .UpdatePlayerMapPosition(id, playerData.MapPosition);
             }
         }
@@ -868,7 +868,7 @@ internal abstract class ServerManager : IServerManager {
             id,
             playerData.CurrentScene,
             otherId => {
-                _netServer.GetUpdateManagerForClient(otherId)?.SetEntitySpawn(
+                NetServer.GetUpdateManagerForClient(otherId)?.SetEntitySpawn(
                     entitySpawn.Id,
                     entitySpawn.SpawningType,
                     entitySpawn.SpawnedType
@@ -910,7 +910,7 @@ internal abstract class ServerManager : IServerManager {
                 id,
                 playerData.CurrentScene,
                 otherId => {
-                    _netServer.GetUpdateManagerForClient(otherId)?.UpdateEntityPosition(
+                    NetServer.GetUpdateManagerForClient(otherId)?.UpdateEntityPosition(
                         entityUpdate.Id,
                         entityUpdate.Position
                     );
@@ -925,7 +925,7 @@ internal abstract class ServerManager : IServerManager {
                 id,
                 playerData.CurrentScene,
                 otherId => {
-                    _netServer.GetUpdateManagerForClient(otherId)?.UpdateEntityScale(
+                    NetServer.GetUpdateManagerForClient(otherId)?.UpdateEntityScale(
                         entityUpdate.Id,
                         entityUpdate.Scale
                     );
@@ -940,7 +940,7 @@ internal abstract class ServerManager : IServerManager {
                 id,
                 playerData.CurrentScene,
                 otherId => {
-                    _netServer.GetUpdateManagerForClient(otherId)?.UpdateEntityAnimation(
+                    NetServer.GetUpdateManagerForClient(otherId)?.UpdateEntityAnimation(
                         entityUpdate.Id,
                         entityUpdate.AnimationId,
                         entityUpdate.AnimationWrapMode
@@ -986,7 +986,7 @@ internal abstract class ServerManager : IServerManager {
                 id,
                 playerData.CurrentScene,
                 otherId => {
-                    _netServer.GetUpdateManagerForClient(otherId)?.UpdateEntityIsActive(
+                    NetServer.GetUpdateManagerForClient(otherId)?.UpdateEntityIsActive(
                         entityUpdate.Id,
                         entityUpdate.IsActive
                     );
@@ -1019,7 +1019,7 @@ internal abstract class ServerManager : IServerManager {
                     id,
                     playerData.CurrentScene,
                     otherId => {
-                        _netServer.GetUpdateManagerForClient(otherId)?.AddEntityData(
+                        NetServer.GetUpdateManagerForClient(otherId)?.AddEntityData(
                             entityUpdate.Id,
                             filteredGenericData
                         );
@@ -1069,7 +1069,7 @@ internal abstract class ServerManager : IServerManager {
                     id,
                     playerData.CurrentScene,
                     otherId => {
-                        _netServer.GetUpdateManagerForClient(otherId)?.AddEntityHostFsmData(
+                        NetServer.GetUpdateManagerForClient(otherId)?.AddEntityHostFsmData(
                             entityUpdate.Id,
                             fsmIndex,
                             data
@@ -1101,7 +1101,7 @@ internal abstract class ServerManager : IServerManager {
     /// <param name="id">The ID of the player.</param>
     /// <param name="reason">The reason for the disconnect.</param>
     public void InternalDisconnectPlayer(ushort id, DisconnectReason reason) {
-        _netServer.GetUpdateManagerForClient(id)?.SetDisconnect(reason);
+        NetServer.GetUpdateManagerForClient(id)?.SetDisconnect(reason);
 
         ProcessPlayerDisconnect(id);
     }
@@ -1159,7 +1159,7 @@ internal abstract class ServerManager : IServerManager {
             );
 
             foreach (var pair in scenePlayers) {
-                var updateManager = _netServer.GetUpdateManagerForClient(pair.Key);
+                var updateManager = NetServer.GetUpdateManagerForClient(pair.Key);
                 bool isNewHost = (pair.Key == newHostPair.Key);
                 updateManager?.SetSceneHostTransfer(sceneName, epoch, demote: !isNewHost);
             }
@@ -1167,7 +1167,7 @@ internal abstract class ServerManager : IServerManager {
 
         foreach (var pair in scenePlayers) {
             Logger.Info($"Sending leave scene packet to {pair.Key}");
-            var updateManager = _netServer.GetUpdateManagerForClient(pair.Key);
+            var updateManager = NetServer.GetUpdateManagerForClient(pair.Key);
             if (disconnected) {
                 updateManager?.AddPlayerDisconnectData(id, username, timeout);
             } else {
@@ -1204,7 +1204,7 @@ internal abstract class ServerManager : IServerManager {
     private void ProcessPlayerDisconnect(ushort id, bool timeout = false) {
         if (!timeout) {
             // If this isn't a timeout, then we need to propagate this packet to the NetServer
-            _netServer.OnClientDisconnect(id);
+            NetServer.OnClientDisconnect(id);
         }
 
         if (!_playerData.TryGetValue(id, out var playerData)) {
@@ -1218,7 +1218,7 @@ internal abstract class ServerManager : IServerManager {
                 continue;
             }
 
-            _netServer.GetUpdateManagerForClient(idPlayerDataPair.Key)?.AddPlayerDisconnectData(
+            NetServer.GetUpdateManagerForClient(idPlayerDataPair.Key)?.AddPlayerDisconnectData(
                 id,
                 username,
                 timeout
@@ -1277,7 +1277,7 @@ internal abstract class ServerManager : IServerManager {
                 );
 
                 foreach (var pair in scenePlayers) {
-                    var updateManager = _netServer.GetUpdateManagerForClient(pair.Key);
+                    var updateManager = NetServer.GetUpdateManagerForClient(pair.Key);
                     var isNewHost = (pair.Key == newHostPair.Key);
                     updateManager?.SetSceneHostTransfer(sceneName, epoch, demote: !isNewHost);
                 }
@@ -1287,7 +1287,7 @@ internal abstract class ServerManager : IServerManager {
         SendDataInSameScene(
             id,
             playerData.CurrentScene,
-            otherId => { _netServer.GetUpdateManagerForClient(otherId)?.AddPlayerDeathData(id); }
+            otherId => { NetServer.GetUpdateManagerForClient(otherId)?.AddPlayerDeathData(id); }
         );
     }
 
@@ -1328,11 +1328,11 @@ internal abstract class ServerManager : IServerManager {
         // Broadcast the packet to all players except the player we received the update from
         foreach (var playerId in _playerData.Keys) {
             if (id == playerId) {
-                _netServer.GetUpdateManagerForClient(playerId)?.AddPlayerSettingUpdateData(team: team);
+                NetServer.GetUpdateManagerForClient(playerId)?.AddPlayerSettingUpdateData(team: team);
                 continue;
             }
 
-            _netServer.GetUpdateManagerForClient(playerId)?.AddOtherPlayerSettingUpdateData(
+            NetServer.GetUpdateManagerForClient(playerId)?.AddOtherPlayerSettingUpdateData(
                 id,
                 team: team
             );
@@ -1382,7 +1382,7 @@ internal abstract class ServerManager : IServerManager {
             var otherId = idPlayerDataPair.Key;
 
             if (otherId == id) {
-                _netServer.GetUpdateManagerForClient(id)?.AddPlayerSettingUpdateData(skinId: skinId);
+                NetServer.GetUpdateManagerForClient(id)?.AddPlayerSettingUpdateData(skinId: skinId);
                 continue;
             }
 
@@ -1393,7 +1393,7 @@ internal abstract class ServerManager : IServerManager {
                 continue;
             }
 
-            _netServer.GetUpdateManagerForClient(otherId)?.AddOtherPlayerSettingUpdateData(id, skinId: skinId);
+            NetServer.GetUpdateManagerForClient(otherId)?.AddOtherPlayerSettingUpdateData(id, skinId: skinId);
         }
 
         reason = null;
@@ -1588,7 +1588,7 @@ internal abstract class ServerManager : IServerManager {
             );
 
             // Send to the other players that this client has just connected
-            _netServer.GetUpdateManagerForClient(otherId)?.AddPlayerConnectData(
+            NetServer.GetUpdateManagerForClient(otherId)?.AddPlayerConnectData(
                 netServerClient.Id,
                 clientInfo.Username
             );
@@ -1713,7 +1713,7 @@ internal abstract class ServerManager : IServerManager {
                 new PlayerCommandSender(
                     _authorizedList.Contains(playerData.AuthKey),
                     id,
-                    _netServer.GetUpdateManagerForClient(id)
+                    NetServer.GetUpdateManagerForClient(id)
                 ),
                 chatMessage.Message
             )) {
@@ -1739,7 +1739,7 @@ internal abstract class ServerManager : IServerManager {
             var formattedMsg = $"[{playerData.Username}]: {message}";
 
             foreach (var idPlayerDataPair in _playerData) {
-                _netServer.GetUpdateManagerForClient(idPlayerDataPair.Key)?.AddChatMessage(formattedMsg);
+                NetServer.GetUpdateManagerForClient(idPlayerDataPair.Key)?.AddChatMessage(formattedMsg);
             }
         }
     }
@@ -1761,7 +1761,7 @@ internal abstract class ServerManager : IServerManager {
             Logger.Info("  Player is not authorized");
 
             SendMessage(id, "You are not authorized to change server settings");
-            _netServer.GetUpdateManagerForClient(id)?.UpdateServerSettings(InternalServerSettings);
+            NetServer.GetUpdateManagerForClient(id)?.UpdateServerSettings(InternalServerSettings);
 
             return;
         }
@@ -1812,7 +1812,7 @@ internal abstract class ServerManager : IServerManager {
                     continue;
                 }
 
-                _netServer.GetUpdateManagerForClient(otherId)
+                NetServer.GetUpdateManagerForClient(otherId)
                           ?.AddOtherPlayerSettingUpdateData(id, crestType: crestType);
             }
         }
@@ -1977,7 +1977,7 @@ internal abstract class ServerManager : IServerManager {
                     continue;
                 }
 
-                _netServer.GetUpdateManagerForClient(otherId)?.SetSaveUpdate(packet.SaveDataIndex, packet.Value);
+                NetServer.GetUpdateManagerForClient(otherId)?.SetSaveUpdate(packet.SaveDataIndex, packet.Value);
             }
         }
     }
@@ -2070,7 +2070,7 @@ internal abstract class ServerManager : IServerManager {
     public void SendMessage(ushort id, string message) {
         CheckValidMessage(message);
 
-        var updateManager = _netServer.GetUpdateManagerForClient(id);
+        var updateManager = NetServer.GetUpdateManagerForClient(id);
 
         // Break message up in parts denoted by newline
         var messages = message.Split('\n');

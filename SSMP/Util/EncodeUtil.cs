@@ -105,24 +105,21 @@ public static class EncodeUtil {
     /// missing implementation.</exception>
     public static byte[] EncodeSaveDataValue(object? value, string? name = null) {
         if (value == null) {
-            if (name != null && SaveDataMapping.Instance.PlayerDataVarProperties.TryGetValue(name, out var varProps)) {
-                var type = varProps.VarType;
-                switch (type) {
-                    case "System.String":
-                        // Sentinel index ushort.MaxValue (65535) and dynamic string prefix ushort.MaxValue for null
-                        return [255, 255, 255, 255];
-                    case "System.Collections.Generic.List`1[System.String]":
-                    case "HashSet<string>":
-                    case "System.Collections.Generic.List`1[SSMP.Math.Vector3]":
-                    case "System.Byte[]":
-                        return [0, 0]; // 0 length ushort
-                    case "System.Collections.Generic.List`1[System.Int32]":
-                        return [0]; // 0 length byte
-                }
-            }
+            // A null value has no runtime type, so only the variable type tells us that it is a collection, which is
+            // encoded as empty, because decoding it reads a length first. Anything else is encoded as a null string.
+            var varType = name != null &&
+                          SaveDataMapping.Instance.PlayerDataVarProperties.TryGetValue(name, out var varProps)
+                ? varProps.VarType
+                : null;
 
-            // Fallback representation for unspecified nulls: default empty string/list bytes
-            return [255, 255, 255, 255];
+            return varType switch {
+                "System.Collections.Generic.List`1[System.String]" or
+                    "HashSet<string>" or
+                    "System.Collections.Generic.List`1[SSMP.Math.Vector3]" or
+                    "System.Byte[]" => [0, 0], // 0 length ushort
+                "System.Collections.Generic.List`1[System.Int32]" => [0], // 0 length byte
+                _ => EncodeString(null)
+            };
         }
 
         switch (value) {
@@ -250,14 +247,12 @@ public static class EncodeUtil {
 
         throw new ArgumentException($"No encoding implementation for type: {value.GetType()}");
 
-        // To preserve network bandwidth, we encode known strings into indices, since there is a limited number of
-        // strings in the save data
+        // To preserve network bandwidth, we encode known strings into a ushort index, since there is a limited number
+        // of strings in the save data. An index of ushort.MaxValue means the string is not a known string and is
+        // followed by a ushort length and then the UTF-8 bytes of the string. A length of ushort.MaxValue means the
+        // string is null, which is why the length of a string must be lower than that.
         byte[] EncodeString(string? stringValue) {
             if (stringValue == null) {
-                if (TryGetStringIndex(null, out var nullIndex)) {
-                    return BitConverter.GetBytes(nullIndex);
-                }
-
                 return [255, 255, 255, 255];
             }
 
@@ -331,72 +326,36 @@ public static class EncodeUtil {
                 );
             case "System.Single":
                 return BitConverter.ToSingle(encodedValue, 0);
-            case "System.Int32" when encodedValue.Length == 8:
-                return (int) BitConverter.ToInt64(encodedValue, 0);
-            case "System.Int32" when encodedValue.Length == 2:
-                return (int) BitConverter.ToInt16(encodedValue, 0);
-            case "System.Int32" when encodedValue.Length == 1:
-                return (int) encodedValue[0];
             case "System.Int32" when encodedValue.Length != 4:
                 throw new ArgumentOutOfRangeException(
                     $"Encoded value has incorrect value length for int: {encodedValue.Length}"
                 );
             case "System.Int32":
                 return BitConverter.ToInt32(encodedValue, 0);
-            case "System.UInt64" when encodedValue.Length == 4:
-                return (ulong) BitConverter.ToUInt32(encodedValue, 0);
-            case "System.UInt64" when encodedValue.Length == 2:
-                return (ulong) BitConverter.ToUInt16(encodedValue, 0);
-            case "System.UInt64" when encodedValue.Length == 1:
-                return (ulong) encodedValue[0];
             case "System.UInt64" when encodedValue.Length != 8:
                 throw new ArgumentOutOfRangeException(
                     $"Encoded value has incorrect value length for ulong: {encodedValue.Length}"
                 );
             case "System.UInt64":
                 return BitConverter.ToUInt64(encodedValue, 0);
-            case "System.Int64" when encodedValue.Length == 4:
-                return (long) BitConverter.ToInt32(encodedValue, 0);
-            case "System.Int64" when encodedValue.Length == 2:
-                return (long) BitConverter.ToInt16(encodedValue, 0);
-            case "System.Int64" when encodedValue.Length == 1:
-                return (long) encodedValue[0];
             case "System.Int64" when encodedValue.Length != 8:
                 throw new ArgumentOutOfRangeException(
                     $"Encoded value has incorrect value length for long: {encodedValue.Length}"
                 );
             case "System.Int64":
                 return BitConverter.ToInt64(encodedValue, 0);
-            case "System.UInt32" when encodedValue.Length == 8:
-                return (uint) BitConverter.ToUInt64(encodedValue, 0);
-            case "System.UInt32" when encodedValue.Length == 2:
-                return (uint) BitConverter.ToUInt16(encodedValue, 0);
-            case "System.UInt32" when encodedValue.Length == 1:
-                return (uint) encodedValue[0];
             case "System.UInt32" when encodedValue.Length != 4:
                 throw new ArgumentOutOfRangeException(
                     $"Encoded value has incorrect value length for uint: {encodedValue.Length}"
                 );
             case "System.UInt32":
                 return BitConverter.ToUInt32(encodedValue, 0);
-            case "System.UInt16" when encodedValue.Length == 8:
-                return (ushort) BitConverter.ToUInt64(encodedValue, 0);
-            case "System.UInt16" when encodedValue.Length == 4:
-                return (ushort) BitConverter.ToUInt32(encodedValue, 0);
-            case "System.UInt16" when encodedValue.Length == 1:
-                return (ushort) encodedValue[0];
             case "System.UInt16" when encodedValue.Length != 2:
                 throw new ArgumentOutOfRangeException(
                     $"Encoded value has incorrect value length for ushort: {encodedValue.Length}"
                 );
             case "System.UInt16":
                 return BitConverter.ToUInt16(encodedValue, 0);
-            case "System.Int16" when encodedValue.Length == 8:
-                return (short) BitConverter.ToInt64(encodedValue, 0);
-            case "System.Int16" when encodedValue.Length == 4:
-                return (short) BitConverter.ToInt32(encodedValue, 0);
-            case "System.Int16" when encodedValue.Length == 1:
-                return (short) encodedValue[0];
             case "System.Int16" when encodedValue.Length != 2:
                 throw new ArgumentOutOfRangeException(
                     $"Encoded value has incorrect value length for short: {encodedValue.Length}"
@@ -565,8 +524,10 @@ public static class EncodeUtil {
         string? DecodeString(byte[] encoded, int startIndex) {
             var sceneIndex = BitConverter.ToUInt16(encoded, startIndex);
 
+            // Special index that indicates a dynamically encoded string, see EncodeString
             if (sceneIndex == ushort.MaxValue) {
                 var strLen = BitConverter.ToUInt16(encoded, startIndex + 2);
+                // Special length that indicates a null string
                 if (strLen == ushort.MaxValue) {
                     return null;
                 }

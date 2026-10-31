@@ -193,7 +193,8 @@ internal class SaveManager {
 
         foreach (var field in _playerDataCompoundSyncFields) {
             var value = field.GetValue(pd);
-            field.SetValue(_lastPlayerData, GetCompoundCopy(value));
+            // Unset compound fields (e.g. on a fresh PlayerData) stay unset
+            field.SetValue(_lastPlayerData, value == null ? null : GetCompoundCopy(value));
         }
     }
 
@@ -604,7 +605,10 @@ internal class SaveManager {
 
                     // Also update the current value in the PlayerData instance for last values
                     // We copy the value, because otherwise it will be updated whenever the list is updated
-                    _lastPlayerData.SetVariable(varName, (TVar) GetCompoundCopy(currentValue));
+                    _lastPlayerData.SetVariable(
+                        varName,
+                        currentValue == null ? currentValue : (TVar) GetCompoundCopy(currentValue)
+                    );
                 }
             }
         }
@@ -1158,11 +1162,8 @@ internal class SaveManager {
     /// <returns>The copy of the given value.</returns>
     /// <exception cref="ArgumentException">Thrown when a copy cannot be made, due to the given value being of a
     /// non-compound or non-PlayerData type.</exception>
-    private static object? GetCompoundCopy(object? value) {
+    private static object GetCompoundCopy(object value) {
         switch (value) {
-            // Unset compound fields (e.g. on a fresh PlayerData) stay unset
-            case null:
-                return null;
             case List<string> stringListValue:
                 return new List<string>(stringListValue);
             case List<int> intListValue:

@@ -14,6 +14,7 @@ using SSMP.Networking.Transport.UDP;
 using SSMP.Game.Server.Save;
 using SSMP.Game.Client.Save;
 using SSMP.Hooks;
+using SSMP.Logging;
 using SSMP.Ui;
 using SSMP.Util;
 
@@ -39,12 +40,6 @@ internal class ModServerManager : ServerManager {
     /// </summary>
     private readonly SettingsCommand _settingsCommand;
 
-
-    /// <summary>
-    /// The NetServer instance to check whether the server is started.
-    /// </summary>
-    private readonly NetServer _netServer;
-
     public ModServerManager(
         NetServer netServer,
         PacketManager packetManager,
@@ -52,7 +47,6 @@ internal class ModServerManager : ServerManager {
         UiManager uiManager,
         ModSettings modSettings
     ) : base(netServer, packetManager, serverSettings) {
-        _netServer = netServer;
         _uiManager = uiManager;
         _modSettings = modSettings;
         _settingsCommand = new SettingsCommand(this, InternalServerSettings);
@@ -93,8 +87,7 @@ internal class ModServerManager : ServerManager {
             ServerSaveData.GlobalSaveData = SaveManager.GetCurrentSaveData(true);
 
             // Load remote players' player-specific data from disk for the current profile ID
-            var profileId = global::GameManager.instance.profileID;
-            var modSavePath = Path.Combine(FileUtil.GetConfigPath(), $"user{profileId}.modsav");
+            var modSavePath = GetModSavePath(global::GameManager.instance.profileID);
             if (File.Exists(modSavePath)) {
                 try {
                     var json = File.ReadAllText(modSavePath);
@@ -106,14 +99,14 @@ internal class ModServerManager : ServerManager {
                             ServerSaveData.GlobalSaveData = serverSave.GlobalSaveData;
                         }
 
-                        Logging.Logger.Info($"Loaded remote players' save data from: {modSavePath}");
+                        Logger.Info($"Loaded remote players' save data from: {modSavePath}");
                     }
                 } catch (Exception e) {
-                    Logging.Logger.Error($"Could not load remote players' save data: {e}");
+                    Logger.Error($"Could not load remote players' save data: {e}");
                 }
             } else {
                 ServerSaveData.PlayerSaveData = new Dictionary<string, Dictionary<ushort, byte[]>>();
-                Logging.Logger.Info(
+                Logger.Info(
                     $"No remote player save file found at: {modSavePath}, initialized empty player save data."
                 );
             }
@@ -153,8 +146,6 @@ internal class ModServerManager : ServerManager {
         base.DeregisterCommands();
 
         CommandManager.DeregisterCommand(_settingsCommand);
-
-        EventHooks.GameManagerSaveGame -= OnGameSave;
     }
 
     /// <summary>
@@ -176,16 +167,25 @@ internal class ModServerManager : ServerManager {
     }
 
     /// <summary>
+    /// Get the path of the file that stores the remote players' save data for the given save slot.
+    /// </summary>
+    /// <param name="saveSlot">The save slot index.</param>
+    /// <returns>The path of the file.</returns>
+    private static string GetModSavePath(int saveSlot) {
+        return Path.Combine(FileUtil.GetConfigPath(), $"user{saveSlot}.modsav");
+    }
+
+    /// <summary>
     /// Intercepts native save events to serialize remote player-specific save data to disk.
     /// </summary>
     /// <param name="saveSlot">The save slot index.</param>
     private void OnGameSave(int saveSlot) {
-        if (!_netServer.IsStarted || !FullSynchronisation) {
+        if (!NetServer.IsStarted || !FullSynchronisation) {
             return;
         }
 
         try {
-            Logging.Logger.Info($"Intercepted native save for slot {saveSlot}. Saving remote players' save data...");
+            Logger.Info($"Intercepted native save for slot {saveSlot}. Saving remote players' save data...");
 
             // Create a copy of ServerSaveData for serialization
             var modSaveFile = ModSaveFile.FromServerSaveData(ServerSaveData);
@@ -201,13 +201,13 @@ internal class ModServerManager : ServerManager {
                 Directory.CreateDirectory(configPath);
             }
 
-            var modSavePath = Path.Combine(configPath, $"user{saveSlot}.modsav");
+            var modSavePath = GetModSavePath(saveSlot);
             var json = JsonConvert.SerializeObject(modSaveFile, Formatting.Indented);
             File.WriteAllText(modSavePath, json);
 
-            Logging.Logger.Info($"Remote players' save data successfully written to {modSavePath}");
+            Logger.Info($"Remote players' save data successfully written to {modSavePath}");
         } catch (Exception e) {
-            Logging.Logger.Error($"Could not save remote players' save data to disk: {e}");
+            Logger.Error($"Could not save remote players' save data to disk: {e}");
         }
     }
 }
