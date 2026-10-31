@@ -5,6 +5,7 @@ using System.Reflection;
 using GlobalEnums;
 using MonoMod.Cil;
 using MonoMod.RuntimeDetour;
+using SSMP.Logging;
 using TeamCherry.Localization;
 
 // ReSharper disable NotAccessedField.Local
@@ -514,7 +515,7 @@ public static class EventHooks {
         try {
             GameManagerSaveGame?.Invoke(saveSlot);
         } catch (Exception e) {
-            Logging.Logger.Error($"Exception thrown in GameManagerSaveGame event:\n{e}");
+            Logger.Error($"Exception thrown in GameManagerSaveGame event:\n{e}");
         }
     }
 

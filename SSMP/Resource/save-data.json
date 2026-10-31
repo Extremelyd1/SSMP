@@ -60392,8 +60392,6 @@
     "BelltownCouriersGenericQuests",
     "unlockedBossScenes"
   ],
-  "bossSequenceDoorCompletionVariables": [],
-  "bossStatueCompletionVariables": [],
   "vectorListVariables": [],
   "intListVariables": [
     "FleasCollectedTargetOrder"

@@ -1,8 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.IO;
-using System.Linq;
+using System.Text;
 using SSMP.Collection;
 using SSMP.Game.Client.Save;
 using SSMP.Game.Server.Save;
@@ -16,10 +15,61 @@ namespace SSMP.Util;
 /// Static class to help with encoding/decoding values to/from bytes.
 /// </summary>
 public static class EncodeUtil {
+    #region Constants
+
     /// <summary>
     /// The file path of the embedded resource file for string data.
     /// </summary>
     private const string StringDataFilePath = "SSMP.Resource.string-data.json";
+
+    /// <summary>
+    /// The size of the count at the start of an encoded string list, hashset, vector list or byte array.
+    /// </summary>
+    private const int CountPrefixSize = sizeof(ushort);
+
+    /// <summary>
+    /// The size of the index and the length at the start of a dynamically encoded string.
+    /// </summary>
+    private const int DynamicStringHeaderSize = 2 * sizeof(ushort);
+
+    /// <summary>
+    /// The size of an encoded Vector2.
+    /// </summary>
+    private const int Vector2Size = 2 * sizeof(float);
+
+    /// <summary>
+    /// The size of an encoded Vector3.
+    /// </summary>
+    private const int Vector3Size = 3 * sizeof(float);
+
+    /// <summary>
+    /// The variable type in the save data for a list of strings.
+    /// </summary>
+    private const string StringListType = "System.Collections.Generic.List`1[System.String]";
+
+    /// <summary>
+    /// The variable type in the save data for a hash set of strings.
+    /// </summary>
+    private const string StringSetType = "HashSet<string>";
+
+    /// <summary>
+    /// The variable type in the save data for a list of vectors.
+    /// </summary>
+    private const string Vector3ListType = "System.Collections.Generic.List`1[SSMP.Math.Vector3]";
+
+    /// <summary>
+    /// The variable type in the save data for a list of integers.
+    /// </summary>
+    private const string Int32ListType = "System.Collections.Generic.List`1[System.Int32]";
+
+    /// <summary>
+    /// The variable type in the save data for a byte array.
+    /// </summary>
+    private const string ByteArrayType = "System.Byte[]";
+
+    #endregion
+
+    #region Static initialisation
 
     /// <summary>
     /// Bi-directional lookup that maps strings (for encoding) to their indices.
@@ -43,55 +93,9 @@ public static class EncodeUtil {
         }
     }
 
-    /// <summary>
-    /// Get a single byte for the given array of booleans where each bit represents a boolean from the array.
-    /// </summary>
-    /// <param name="bits">An array of booleans of at most length 8.</param>
-    /// <returns>A byte representing the booleans.</returns>
-    private static byte GetByte(bool[] bits) {
-        byte result = 0;
-        for (var i = 0; i < bits.Length; i++) {
-            if (bits[i]) {
-                result |= (byte) (1 << i);
-            }
-        }
+    #endregion
 
-        return result;
-    }
-
-    /// <summary>
-    /// Get a boolean array representing the given byte where each boolean is a bit from the byte.
-    /// </summary>
-    /// <param name="b">A byte that contains boolean for each bit.</param>
-    /// <returns>An boolean array of length 8.</returns>
-    private static bool[] GetBoolsFromByte(byte b) {
-        var result = new bool[8];
-        for (var i = 0; i < result.Length; i++) {
-            result[i] = (b & (1 << i)) > 0;
-        }
-
-        return result;
-    }
-
-    /// <summary>
-    /// Try to get the string index corresponding to the given string for encoding/decoding purposes.
-    /// </summary>
-    /// <param name="sceneName">The string.</param>
-    /// <param name="index">The index of the string or default if the string could not be found.</param>
-    /// <returns>true if there is a corresponding index for the given string, false otherwise.</returns>
-    private static bool TryGetStringIndex(string? sceneName, out ushort index) {
-        return StringIndices.TryGetValue(sceneName, out index);
-    }
-
-    /// <summary>
-    /// Try to get the string corresponding to the given string index for encoding/decoding purposes.
-    /// </summary>
-    /// <param name="index">The string.</param>
-    /// <param name="sceneName">The string or default if the string index could not be found.</param>
-    /// <returns>true if there is a corresponding string for the given index, false otherwise.</returns>
-    private static bool TryGetStringName(ushort index, [MaybeNullWhen(false)] out string sceneName) {
-        return StringIndices.TryGetValue(index, out sceneName);
-    }
+    #region Public methods
 
     /// <summary>
     /// Encode a given value into a byte array in the context of save data.
@@ -101,193 +105,34 @@ public static class EncodeUtil {
     /// <returns>A byte array containing the encoded value.</returns>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the given value is out of range to be encoded.
     /// </exception>
-    /// <exception cref="NotImplementedException">Thrown when the given value has a type that cannot be encoded due to
-    /// missing implementation.</exception>
+    /// <exception cref="ArgumentException">Thrown when the value has an unsupported type.</exception>
     public static byte[] EncodeSaveDataValue(object? value, string? name = null) {
         if (value == null) {
-            // A null value has no runtime type, so only the variable type tells us that it is a collection, which is
-            // encoded as empty, because decoding it reads a length first. Anything else is encoded as a null string.
-            var varType = name != null &&
-                          SaveDataMapping.Instance.PlayerDataVarProperties.TryGetValue(name, out var varProps)
-                ? varProps.VarType
-                : null;
-
-            return varType switch {
-                "System.Collections.Generic.List`1[System.String]" or
-                    "HashSet<string>" or
-                    "System.Collections.Generic.List`1[SSMP.Math.Vector3]" or
-                    "System.Byte[]" => [0, 0], // 0 length ushort
-                "System.Collections.Generic.List`1[System.Int32]" => [0], // 0 length byte
-                _ => EncodeString(null)
-            };
+            return EncodeNullSaveDataValue(name);
         }
 
-        switch (value) {
-            case bool bValue:
-                return [(byte) (bValue ? 1 : 0)];
-            case Enum enumValue:
-                return BitConverter.GetBytes(Convert.ToInt32(enumValue));
-            case float fValue:
-                return BitConverter.GetBytes(fValue);
-            case int iValue:
-                return BitConverter.GetBytes(iValue);
-            case ulong ulValue:
-                return BitConverter.GetBytes(ulValue);
-            case long lValue:
-                return BitConverter.GetBytes(lValue);
-            case uint uiValue:
-                return BitConverter.GetBytes(uiValue);
-            case ushort usValue:
-                return BitConverter.GetBytes(usValue);
-            case short sValue:
-                return BitConverter.GetBytes(sValue);
-            case double dValue:
-                return BitConverter.GetBytes(dValue);
-            case string sValue:
-                return EncodeString(sValue);
-            case Vector2 vec2Value:
-                return EncodeVector2(vec2Value);
-            case Vector3 vecValue:
-                return EncodeVector3(vecValue);
-            case byte[] { Length: > ushort.MaxValue } byteArrayValue:
-                throw new ArgumentOutOfRangeException($"Could not encode byte array length: {byteArrayValue.Length}");
-            case byte[] byteArrayValue:
-                return BitConverter.GetBytes((ushort) byteArrayValue.Length)
-                                   .Concat(byteArrayValue)
-                                   .ToArray();
-            case List<string> { Count: > ushort.MaxValue } listValue:
-                throw new ArgumentOutOfRangeException($"Could not encode string list length: {listValue.Count}");
-            case List<string> listValue: {
-                var length = (ushort) listValue.Count;
-
-                IEnumerable<byte> byteArray = BitConverter.GetBytes(length);
-
-                for (var i = 0; i < length; i++) {
-                    var encoded = EncodeString(listValue[i]);
-
-                    byteArray = byteArray.Concat(encoded);
-                }
-
-                return byteArray.ToArray();
-            }
-            case HashSet<string> { Count: > ushort.MaxValue } hashSetValue:
-                throw new ArgumentOutOfRangeException(
-                    $"Could not encode hashset string list length: {hashSetValue.Count}"
-                );
-            case HashSet<string> hashSetValue: {
-                var listValue = hashSetValue.ToList();
-                var length = (ushort) listValue.Count;
-
-                IEnumerable<byte> byteArray = BitConverter.GetBytes(length);
-
-                for (var i = 0; i < length; i++) {
-                    var encoded = EncodeString(listValue[i]);
-
-                    byteArray = byteArray.Concat(encoded);
-                }
-
-                return byteArray.ToArray();
-            }
-            case BossSequenceDoorCompletion bsdCompValue: {
-                // For now we only encode the bools of completion struct
-                var firstBools = new[] {
-                    bsdCompValue.CanUnlock, bsdCompValue.Unlocked, bsdCompValue.Completed, bsdCompValue.AllBindings,
-                    bsdCompValue.NoHits, bsdCompValue.BoundNail, bsdCompValue.BoundShell, bsdCompValue.BoundCharms
-                };
-
-                var byte1 = GetByte(firstBools);
-
-                var byte2 = (byte) (bsdCompValue.BoundSoul ? 1 : 0);
-
-                return [byte1, byte2];
-            }
-            case BossStatueCompletion bsCompValue: {
-                var bools = new[] {
-                    bsCompValue.HasBeenSeen, bsCompValue.IsUnlocked, bsCompValue.CompletedTier1,
-                    bsCompValue.CompletedTier2,
-                    bsCompValue.CompletedTier3, bsCompValue.SeenTier3Unlock, bsCompValue.UsingAltVersion
-                };
-
-                return [GetByte(bools)];
-            }
-            case List<Vector3> { Count: > ushort.MaxValue } vecListValue:
-                throw new ArgumentOutOfRangeException($"Could not encode vector list length: {vecListValue.Count}");
-            case List<Vector3> vecListValue: {
-                var length = (ushort) vecListValue.Count;
-
-                IEnumerable<byte> byteArray = BitConverter.GetBytes(length);
-
-                for (var i = 0; i < length; i++) {
-                    var encoded = EncodeVector3(vecListValue[i]);
-
-                    byteArray = byteArray.Concat(encoded);
-                }
-
-                return byteArray.ToArray();
-            }
-            case MapZone mapZone:
-                return [(byte) mapZone];
-            case List<int> { Count: > byte.MaxValue } intListValue:
-                throw new ArgumentOutOfRangeException($"Could not encode int list length: {intListValue.Count}");
-            case List<int> intListValue: {
-                var length = (byte) intListValue.Count;
-
-                // Create a byte array for the encoded result that has the size of the length of the int list plus one
-                // for the length itself
-                var byteArray = new byte[length + 1];
-                byteArray[0] = length;
-
-                for (var i = 0; i < length; i++) {
-                    byteArray[i + 1] = (byte) intListValue[i];
-                }
-
-                return byteArray;
-            }
-        }
-
-        throw new ArgumentException($"No encoding implementation for type: {value.GetType()}");
-
-        // To preserve network bandwidth, we encode known strings into a ushort index, since there is a limited number
-        // of strings in the save data. An index of ushort.MaxValue means the string is not a known string and is
-        // followed by a ushort length and then the UTF-8 bytes of the string. A length of ushort.MaxValue means the
-        // string is null, which is why the length of a string must be lower than that.
-        byte[] EncodeString(string? stringValue) {
-            if (stringValue == null) {
-                return [255, 255, 255, 255];
-            }
-
-            if (!TryGetStringIndex(stringValue, out var index)) {
-                Logger.Info($"String '{stringValue}' not found in static indices, encoding dynamically.");
-                var utf8Bytes = System.Text.Encoding.UTF8.GetBytes(stringValue);
-                if (utf8Bytes.Length > ushort.MaxValue - 3) {
-                    throw new ArgumentOutOfRangeException($"String is too long to encode: {stringValue}");
-                }
-
-                var result = new byte[2 + 2 + utf8Bytes.Length];
-                // Sentinel index ushort.MaxValue (65535) indicates dynamic string
-                Array.Copy(BitConverter.GetBytes(ushort.MaxValue), 0, result, 0, 2);
-                // String length
-                Array.Copy(BitConverter.GetBytes((ushort) utf8Bytes.Length), 0, result, 2, 2);
-                // String bytes
-                Array.Copy(utf8Bytes, 0, result, 4, utf8Bytes.Length);
-                return result;
-            }
-
-            return BitConverter.GetBytes(index);
-        }
-
-        byte[] EncodeVector2(Vector2 vec2Value) {
-            return BitConverter.GetBytes(vec2Value.X)
-                               .Concat(BitConverter.GetBytes(vec2Value.Y))
-                               .ToArray();
-        }
-
-        byte[] EncodeVector3(Vector3 vec3Value) {
-            return BitConverter.GetBytes(vec3Value.X)
-                               .Concat(BitConverter.GetBytes(vec3Value.Y))
-                               .Concat(BitConverter.GetBytes(vec3Value.Z))
-                               .ToArray();
-        }
+        return value switch {
+            bool boolean              => [(byte) (boolean ? 1 : 0)],
+            Enum enumValue            => BitConverter.GetBytes(Convert.ToInt32(enumValue)),
+            float single              => BitConverter.GetBytes(single),
+            int integer               => BitConverter.GetBytes(integer),
+            ulong unsignedLong        => BitConverter.GetBytes(unsignedLong),
+            long signedLong           => BitConverter.GetBytes(signedLong),
+            uint unsignedInteger      => BitConverter.GetBytes(unsignedInteger),
+            ushort unsignedShort      => BitConverter.GetBytes(unsignedShort),
+            short signedShort         => BitConverter.GetBytes(signedShort),
+            double doubleValue        => BitConverter.GetBytes(doubleValue),
+            string text               => EncodeString(text),
+            Vector2 vector2           => EncodeVector2(vector2),
+            Vector3 vector3           => EncodeVector3(vector3),
+            byte[] bytes              => EncodeByteArray(bytes),
+            List<string> stringList   => EncodeCollection(stringList, "string list", EncodeString),
+            HashSet<string> stringSet => EncodeCollection(stringSet, "hashset string list", EncodeString),
+            List<Vector3> vectors     => EncodeCollection(vectors, "vector list", EncodeVector3),
+            MapZone mapZone           => [(byte) mapZone],
+            List<int> integers        => EncodeInt32List(integers),
+            _ => throw new ArgumentException($"No encoding implementation for type: {value.GetType()}")
+        };
     }
 
     /// <summary>
@@ -306,240 +151,38 @@ public static class EncodeUtil {
             return null;
         }
 
-        if (!SaveDataMapping.Instance.PlayerDataVarProperties.TryGetValue(name, out var varProps)) {
+        if (!SaveDataMapping.Instance.PlayerDataVarProperties.TryGetValue(name, out var varProperties)) {
             throw new InvalidOperationException(
                 $"Could not decode save data value with name: \"{name}\", missing variable properties"
             );
         }
 
-        var type = varProps.VarType;
-        switch (type) {
-            case "System.Boolean" when encodedValue.Length != 1:
-                throw new ArgumentOutOfRangeException(
-                    $"Encoded value has incorrect value length for bool: {encodedValue.Length}"
-                );
-            case "System.Boolean":
-                return encodedValue[0] == 1;
-            case "System.Single" when encodedValue.Length != 4:
-                throw new ArgumentOutOfRangeException(
-                    $"Encoded value has incorrect value length for float: {encodedValue.Length}"
-                );
-            case "System.Single":
-                return BitConverter.ToSingle(encodedValue, 0);
-            case "System.Int32" when encodedValue.Length != 4:
-                throw new ArgumentOutOfRangeException(
-                    $"Encoded value has incorrect value length for int: {encodedValue.Length}"
-                );
-            case "System.Int32":
-                return BitConverter.ToInt32(encodedValue, 0);
-            case "System.UInt64" when encodedValue.Length != 8:
-                throw new ArgumentOutOfRangeException(
-                    $"Encoded value has incorrect value length for ulong: {encodedValue.Length}"
-                );
-            case "System.UInt64":
-                return BitConverter.ToUInt64(encodedValue, 0);
-            case "System.Int64" when encodedValue.Length != 8:
-                throw new ArgumentOutOfRangeException(
-                    $"Encoded value has incorrect value length for long: {encodedValue.Length}"
-                );
-            case "System.Int64":
-                return BitConverter.ToInt64(encodedValue, 0);
-            case "System.UInt32" when encodedValue.Length != 4:
-                throw new ArgumentOutOfRangeException(
-                    $"Encoded value has incorrect value length for uint: {encodedValue.Length}"
-                );
-            case "System.UInt32":
-                return BitConverter.ToUInt32(encodedValue, 0);
-            case "System.UInt16" when encodedValue.Length != 2:
-                throw new ArgumentOutOfRangeException(
-                    $"Encoded value has incorrect value length for ushort: {encodedValue.Length}"
-                );
-            case "System.UInt16":
-                return BitConverter.ToUInt16(encodedValue, 0);
-            case "System.Int16" when encodedValue.Length != 2:
-                throw new ArgumentOutOfRangeException(
-                    $"Encoded value has incorrect value length for short: {encodedValue.Length}"
-                );
-            case "System.Int16":
-                return BitConverter.ToInt16(encodedValue, 0);
-            case "System.Double" when encodedValue.Length != 8:
-                throw new ArgumentOutOfRangeException(
-                    $"Encoded value has incorrect value length for double: {encodedValue.Length}"
-                );
-            case "System.Double":
-                return BitConverter.ToDouble(encodedValue, 0);
-            case "System.String":
-                return DecodeString(encodedValue, 0);
-            case "SSMP.Math.Vector2" when encodedValue.Length != 8:
-                throw new ArgumentOutOfRangeException(
-                    $"Encoded value has incorrect value length for Vector2: {encodedValue.Length}"
-                );
-            case "SSMP.Math.Vector2":
-                return new Vector2(
-                    BitConverter.ToSingle(encodedValue, 0),
-                    BitConverter.ToSingle(encodedValue, 4)
-                );
-            case "SSMP.Math.Vector3" when encodedValue.Length != 12:
-                throw new ArgumentOutOfRangeException(
-                    $"Encoded value has incorrect value length for Vector3: {encodedValue.Length}"
-                );
-            case "SSMP.Math.Vector3":
-                return new Vector3(
-                    BitConverter.ToSingle(encodedValue, 0),
-                    BitConverter.ToSingle(encodedValue, 4),
-                    BitConverter.ToSingle(encodedValue, 8)
-                );
-            case "System.Collections.Generic.List`1[System.String]": {
-                var length = BitConverter.ToUInt16(encodedValue, 0);
-
-                var list = new List<string>();
-                var offset = 2;
-                for (var i = 0; i < length; i++) {
-                    var sceneIndex = BitConverter.ToUInt16(encodedValue, offset);
-                    if (sceneIndex == ushort.MaxValue) {
-                        var strLen = BitConverter.ToUInt16(encodedValue, offset + 2);
-                        var decodedStr = System.Text.Encoding.UTF8.GetString(encodedValue, offset + 4, strLen);
-                        list.Add(decodedStr);
-                        offset += 4 + strLen;
-                    } else {
-                        if (!TryGetStringName(sceneIndex, out var sceneName)) {
-                            throw new ArgumentException(
-                                $"Could not decode string in list from save update: {sceneIndex}"
-                            );
-                        }
-
-                        list.Add(sceneName);
-                        offset += 2;
-                    }
-                }
-
-                return list;
-            }
-            case "HashSet<string>": {
-                var length = BitConverter.ToUInt16(encodedValue, 0);
-
-                var hashSet = new HashSet<string>();
-                var offset = 2;
-                for (var i = 0; i < length; i++) {
-                    var sceneIndex = BitConverter.ToUInt16(encodedValue, offset);
-                    if (sceneIndex == ushort.MaxValue) {
-                        var strLen = BitConverter.ToUInt16(encodedValue, offset + 2);
-                        var decodedStr = System.Text.Encoding.UTF8.GetString(encodedValue, offset + 4, strLen);
-                        hashSet.Add(decodedStr);
-                        offset += 4 + strLen;
-                    } else {
-                        if (!TryGetStringName(sceneIndex, out var sceneName)) {
-                            throw new ArgumentException(
-                                $"Could not decode string in hashset from save update: {sceneIndex}"
-                            );
-                        }
-
-                        hashSet.Add(sceneName);
-                        offset += 2;
-                    }
-                }
-
-                return hashSet;
-            }
-            case "SSMP.Serialization.BossSequenceDoorCompletion": {
-                var byte1 = encodedValue[0];
-                var byte2 = encodedValue[1];
-
-                var bools = GetBoolsFromByte(byte1);
-
-                return new BossSequenceDoorCompletion {
-                    CanUnlock = bools[0],
-                    Unlocked = bools[1],
-                    Completed = bools[2],
-                    AllBindings = bools[3],
-                    NoHits = bools[4],
-                    BoundNail = bools[5],
-                    BoundShell = bools[6],
-                    BoundCharms = bools[7],
-                    BoundSoul = byte2 == 1
-                };
-            }
-            case "SSMP.Serialization.BossStatueCompletion": {
-                var bools = GetBoolsFromByte(encodedValue[0]);
-
-                return new BossStatueCompletion {
-                    HasBeenSeen = bools[0],
-                    IsUnlocked = bools[1],
-                    CompletedTier1 = bools[2],
-                    CompletedTier2 = bools[3],
-                    CompletedTier3 = bools[4],
-                    SeenTier3Unlock = bools[5],
-                    UsingAltVersion = bools[6]
-                };
-            }
-            case "System.Collections.Generic.List`1[SSMP.Math.Vector3]": {
-                var length = BitConverter.ToUInt16(encodedValue, 0);
-
-                var list = new List<Vector3>();
-                for (var i = 0; i < length; i++) {
-                    // Decode the floats of the vector with offset indices 2, 6, and 10 because we already read 2
-                    // bytes as the length. The index is multiplied by 12 as this is the length of a single float
-                    var value = new Vector3(
-                        BitConverter.ToSingle(encodedValue, 2 + i * 12),
-                        BitConverter.ToSingle(encodedValue, 6 + i * 12),
-                        BitConverter.ToSingle(encodedValue, 10 + i * 12)
-                    );
-
-                    list.Add(value);
-                }
-
-                return list;
-            }
-            case "SSMP.Serialization.MapZone" when encodedValue.Length != 1:
-                throw new ArgumentOutOfRangeException(
-                    $"Encoded value has incorrect value length for MapZone: {encodedValue.Length}"
-                );
-            case "SSMP.Serialization.MapZone":
-                return (MapZone) encodedValue[0];
-            case "System.Collections.Generic.List`1[System.Int32]": {
-                var length = encodedValue[0];
-
-                var list = new List<int>();
-                for (var i = 0; i < length; i++) {
-                    list.Add(encodedValue[i + 1]);
-                }
-
-                return list;
-            }
-            case "System.Byte[]": {
-                var length = BitConverter.ToUInt16(encodedValue, 0);
-                if (encodedValue.Length != length + 2) {
-                    throw new ArgumentOutOfRangeException(
-                        $"Encoded value has incorrect value length for byte[]: {encodedValue.Length}"
-                    );
-                }
-
-                return encodedValue.Skip(2).Take(length).ToArray();
-            }
-        }
-
-        throw new ArgumentException($"Could not decode type: {type}");
-
-        // Decode a string from the given byte array and start index in that array
-        string? DecodeString(byte[] encoded, int startIndex) {
-            var sceneIndex = BitConverter.ToUInt16(encoded, startIndex);
-
-            // Special index that indicates a dynamically encoded string, see EncodeString
-            if (sceneIndex == ushort.MaxValue) {
-                var strLen = BitConverter.ToUInt16(encoded, startIndex + 2);
-                // Special length that indicates a null string
-                if (strLen == ushort.MaxValue) {
-                    return null;
-                }
-
-                return System.Text.Encoding.UTF8.GetString(encoded, startIndex + 4, strLen);
-            }
-
-            return !TryGetStringName(sceneIndex, out var value)
-                ? throw new ArgumentException($"Could not decode string from save update: {encodedValue}")
-                : value;
-        }
+        return varProperties.VarType switch {
+            "System.Boolean"             => DecodeBoolean(encodedValue),
+            "System.Single"              => DecodeSingle(encodedValue),
+            "System.Int32"               => DecodeInt32(encodedValue),
+            "System.UInt64"              => DecodeUInt64(encodedValue),
+            "System.Int64"               => DecodeInt64(encodedValue),
+            "System.UInt32"              => DecodeUInt32(encodedValue),
+            "System.UInt16"              => DecodeUInt16(encodedValue),
+            "System.Int16"               => DecodeInt16(encodedValue),
+            "System.Double"              => DecodeDouble(encodedValue),
+            "System.String"              => DecodeExactString(encodedValue),
+            "SSMP.Math.Vector2"          => DecodeVector2(encodedValue),
+            "SSMP.Math.Vector3"          => DecodeVector3(encodedValue),
+            "SSMP.Serialization.MapZone" => DecodeMapZone(encodedValue),
+            StringListType               => DecodeStrings<List<string>>(encodedValue, "List<string>"),
+            StringSetType                => DecodeStrings<HashSet<string>>(encodedValue, "HashSet<string>"),
+            Vector3ListType              => DecodeVector3List(encodedValue),
+            Int32ListType                => DecodeInt32List(encodedValue),
+            ByteArrayType                => DecodeByteArray(encodedValue),
+            var type              => throw new ArgumentException($"Could not decode type: {type}")
+        };
     }
+
+    #endregion
+
+    #region Save data conversion
 
     /// <summary>
     /// Convert the given <see cref="ModSaveFile.SaveData"/> to a dictionary of raw indices and byte arrays.
@@ -557,16 +200,22 @@ public static class EncodeUtil {
 
             //Logger.Debug($"Encoding entry: {name}, {decodedObject}");
 
-            CheckEncodeAddData(name, SaveDataMapping.Instance.PlayerDataIndices, decodedObject);
+            CheckEncodeAddData(encodedSaveData, name, SaveDataMapping.Instance.PlayerDataIndices, decodedObject);
         }
 
         var sceneData = saveData.SceneData;
         foreach (var geoRockData in sceneData.GeoRockData) {
-            CheckEncodeAddData(geoRockData.GetKey(), SaveDataMapping.Instance.GeoRockIndices, geoRockData.HitsLeft);
+            CheckEncodeAddData(
+                encodedSaveData,
+                geoRockData.GetKey(),
+                SaveDataMapping.Instance.GeoRockIndices,
+                geoRockData.HitsLeft
+            );
         }
 
         foreach (var persistentBoolData in sceneData.PersistentBoolData) {
             CheckEncodeAddData(
+                encodedSaveData,
                 persistentBoolData.GetKey(),
                 SaveDataMapping.Instance.PersistentBoolIndices,
                 persistentBoolData.Activated
@@ -575,6 +224,7 @@ public static class EncodeUtil {
 
         foreach (var persistentIntData in sceneData.PersistentIntData) {
             CheckEncodeAddData(
+                encodedSaveData,
                 persistentIntData.GetKey(),
                 SaveDataMapping.Instance.PersistentIntIndices,
                 persistentIntData.Value
@@ -582,30 +232,35 @@ public static class EncodeUtil {
         }
 
         return encodedSaveData;
+    }
 
-        void CheckEncodeAddData<TKey>(TKey key, BiLookup<TKey, ushort> lookup, object? decodedObject) {
-            if (!lookup.TryGetValue(key, out var index)) {
-                Logger.Warn($"Could not find index for data for key: {key}");
-                return;
-            }
-
-            // Try to encode the value into our byte array representation
-            byte[] encodedValue;
-            try {
-                encodedValue = EncodeSaveDataValue(decodedObject, key as string);
-            } catch (Exception e) {
-                Logger.Warn(
-                    decodedObject == null
-                        ? $"Could not encode null save data value, exception:\n{e}"
-                        : $"Could not encode save data value of type: {decodedObject.GetType()}, exception:\n{e}"
-                );
-
-                return;
-            }
-
-            // Finally, store the value in the dictionary we created for the player
-            encodedSaveData[index] = encodedValue;
+    private static void CheckEncodeAddData<TKey>(
+        Dictionary<ushort, byte[]> encodedSaveData,
+        TKey key,
+        BiLookup<TKey, ushort> lookup,
+        object? decodedObject
+    ) {
+        if (!lookup.TryGetValue(key, out var index)) {
+            Logger.Warn($"Could not find index for data for key: {key}");
+            return;
         }
+
+        // Try to encode the value into our byte array representation
+        byte[] encodedValue;
+        try {
+            encodedValue = EncodeSaveDataValue(decodedObject, key as string);
+        } catch (Exception e) {
+            Logger.Warn(
+                decodedObject == null
+                    ? $"Could not encode null save data value, exception:\n{e}"
+                    : $"Could not encode save data value of type: {decodedObject.GetType()}, exception:\n{e}"
+            );
+
+            return;
+        }
+
+        // Finally, store the value in the dictionary we created for the player
+        encodedSaveData[index] = encodedValue;
     }
 
     /// <summary>
@@ -614,94 +269,356 @@ public static class EncodeUtil {
     /// <param name="encodedSaveData">The dictionary containing raw values.</param>
     /// <returns>An instance of save data with the converted values.</returns>
     internal static ModSaveFile.SaveData ConvertFromServerSaveData(Dictionary<ushort, byte[]> encodedSaveData) {
+        var mapping = SaveDataMapping.Instance;
         var saveData = new ModSaveFile.SaveData();
+        var sceneData = saveData.SceneData;
 
-        foreach (var index in encodedSaveData.Keys) {
-            var encodedValue = encodedSaveData[index];
-
-            if (CheckDecodeAddData(
-                    index,
-                    SaveDataMapping.Instance.PlayerDataIndices,
-                    pdName => DecodeSaveDataValue(pdName, encodedValue),
-                    (pdName, decodedObj) => saveData.PlayerDataEntries.Add(
+        foreach (var (index, encodedValue) in encodedSaveData) {
+            try {
+                if (mapping.PlayerDataIndices.TryGetValue(index, out var pdName)) {
+                    saveData.PlayerDataEntries.Add(
                         new ModSaveFile.PlayerDataEntry {
                             Name = pdName,
-                            Value = decodedObj
+                            Value = DecodeSaveDataValue(pdName, encodedValue)
                         }
-                    )
-                )) {
-                continue;
-            }
-
-            if (CheckDecodeAddData(
-                    index,
-                    SaveDataMapping.Instance.GeoRockIndices,
-                    _ => encodedValue[0],
-                    (persistentItemData, decodedObj) => saveData.SceneData.GeoRockData.Add(
+                    );
+                } else if (mapping.GeoRockIndices.TryGetValue(index, out var itemKey)) {
+                    sceneData.GeoRockData.Add(
                         new ModSaveFile.GeoRockData {
-                            Id = persistentItemData.Id,
-                            SceneName = persistentItemData.SceneName,
-                            HitsLeft = decodedObj
+                            Id = itemKey.Id,
+                            SceneName = itemKey.SceneName,
+                            HitsLeft = encodedValue[0]
                         }
-                    )
-                )) {
-                continue;
-            }
-
-            if (CheckDecodeAddData(
-                    index,
-                    SaveDataMapping.Instance.PersistentBoolIndices,
-                    _ => encodedValue[0] == 1,
-                    (persistentItemData, decodedObj) => saveData.SceneData.PersistentBoolData.Add(
+                    );
+                } else if (mapping.PersistentBoolIndices.TryGetValue(index, out itemKey)) {
+                    sceneData.PersistentBoolData.Add(
                         new ModSaveFile.PersistentBoolData {
-                            Id = persistentItemData.Id,
-                            SceneName = persistentItemData.SceneName,
-                            Activated = decodedObj
+                            Id = itemKey.Id,
+                            SceneName = itemKey.SceneName,
+                            Activated = encodedValue[0] == 1
                         }
-                    )
-                )) {
-                continue;
-            }
-
-            if (!CheckDecodeAddData(
-                    index,
-                    SaveDataMapping.Instance.PersistentIntIndices,
-                    _ => (int) encodedValue[0],
-                    (persistentItemData, decodedObj) => saveData.SceneData.PersistentIntData.Add(
+                    );
+                } else if (mapping.PersistentIntIndices.TryGetValue(index, out itemKey)) {
+                    sceneData.PersistentIntData.Add(
                         new ModSaveFile.PersistentIntData {
-                            Id = persistentItemData.Id,
-                            SceneName = persistentItemData.SceneName,
-                            Value = decodedObj
+                            Id = itemKey.Id,
+                            SceneName = itemKey.SceneName,
+                            Value = encodedValue[0]
                         }
-                    )
-                )) {
-                Logger.Warn($"Could not decode/find key for index: {index}");
+                    );
+                } else {
+                    Logger.Warn($"Could not find key for index: {index}");
+                }
+            } catch (Exception e) {
+                Logger.Warn($"Could not decode save data value with index: {index}, exception:\n{e}");
             }
         }
 
         return saveData;
+    }
 
-        bool CheckDecodeAddData<TKey, TDecoded>(
-            ushort index,
-            BiLookup<TKey, ushort> lookup,
-            Func<TKey, TDecoded?> decodeFunc,
-            Action<TKey, TDecoded?> addAction
-        ) {
-            if (!lookup.TryGetValue(index, out var key)) {
-                return false;
-            }
+    #endregion
 
-            TDecoded? decodedObj;
-            try {
-                decodedObj = decodeFunc.Invoke(key);
-            } catch (Exception e) {
-                Logger.Warn($"Could not decode save data value with key: {key}, exception:\n{e}");
-                return false;
-            }
+    #region Validation
 
-            addAction.Invoke(key, decodedObj);
+    private static ushort ReadCollectionCount(byte[] encoded) {
+        EnsureAvailable(encoded, 0, CountPrefixSize);
+        return BitConverter.ToUInt16(encoded, 0);
+    }
 
-            return true;
+    private static void ValidateLength(byte[] encoded, int expected, string type) {
+        if (encoded.Length != expected) {
+            throw new ArgumentOutOfRangeException(
+                nameof(encoded),
+                $"Encoded value has incorrect value length for {type}: {encoded.Length}; expected {expected}"
+            );
         }
     }
+
+    private static void EnsureAvailable(byte[] encoded, int offset, int count) {
+        if (count > encoded.Length - offset) {
+            throw new ArgumentOutOfRangeException(
+                nameof(encoded),
+                $"Encoded value is truncated at offset {offset}; requires {count} bytes, " +
+                $"but only {encoded.Length} bytes are available"
+            );
+        }
+    }
+
+    #endregion
+
+    #region Encoding
+
+    private static byte[] EncodeNullSaveDataValue(string? name) {
+        // A null has no runtime type, so the variable type decides the encoding. Collections are encoded as empty,
+        // because decoding them reads a count first. Anything else is encoded as a null string.
+        var type = name != null &&
+                   SaveDataMapping.Instance.PlayerDataVarProperties.TryGetValue(name, out var properties)
+            ? properties.VarType
+            : null;
+
+        return type switch {
+            StringSetType or StringListType or Vector3ListType or ByteArrayType => [0, 0], // 0 count ushort
+            Int32ListType => [0], // 0 count byte
+            _ => EncodeString(null)
+        };
+    }
+
+    private static byte[] EncodeByteArray(byte[] values) {
+        if (values.Length > ushort.MaxValue) {
+            throw new ArgumentOutOfRangeException($"Could not encode byte array length: {values.Length}");
+        }
+
+        var encoded = new byte[CountPrefixSize + values.Length];
+        BitConverter.TryWriteBytes(encoded, (ushort) values.Length);
+        values.CopyTo(encoded, CountPrefixSize);
+        return encoded;
+    }
+
+    private static byte[] EncodeCollection<T>(
+        IReadOnlyCollection<T> values,
+        string kind,
+        Func<T, byte[]> encodeItem
+    ) {
+        if (values.Count > ushort.MaxValue) {
+            throw new ArgumentOutOfRangeException($"Could not encode {kind} length: {values.Count}");
+        }
+
+        using var stream = new MemoryStream();
+        var length = BitConverter.GetBytes((ushort) values.Count);
+        stream.Write(length, 0, length.Length);
+
+        foreach (var value in values) {
+            var encoded = encodeItem(value);
+            stream.Write(encoded, 0, encoded.Length);
+        }
+
+        return stream.ToArray();
+    }
+
+    private static byte[] EncodeInt32List(List<int> values) {
+        if (values.Count > byte.MaxValue) {
+            throw new ArgumentOutOfRangeException($"Could not encode int list length: {values.Count}");
+        }
+
+        // Preserve the existing protocol: one byte for the count and one byte per integer.
+        var encoded = new byte[values.Count + 1];
+        encoded[0] = (byte) values.Count;
+
+        for (var i = 0; i < values.Count; i++) {
+            // Only one byte is sent per integer, so a value outside this range arrives as a different number
+            if (values[i] is < 0 or > byte.MaxValue) {
+                Logger.Warn($"Integer list value does not fit in a byte and will change: {values[i]}");
+            }
+
+            encoded[i + 1] = (byte) values[i];
+        }
+
+        return encoded;
+    }
+
+    private static byte[] EncodeString(string? stringValue) {
+        // A null string is the special index ushort.MaxValue followed by the special length ushort.MaxValue
+        if (stringValue == null) {
+            return [255, 255, 255, 255];
+        }
+
+        // Known strings are encoded as just their ushort index to save bandwidth. Others are encoded as the special
+        // index, a ushort length and the UTF-8 bytes, so the length must stay below the special length.
+        if (!StringIndices.TryGetValue(stringValue, out var index)) {
+            Logger.Debug($"String '{stringValue}' not found in static indices, encoding dynamically.");
+            var utf8Bytes = Encoding.UTF8.GetBytes(stringValue);
+            if (utf8Bytes.Length > ushort.MaxValue - 3) {
+                throw new ArgumentOutOfRangeException($"String is too long to encode: {stringValue}");
+            }
+
+            var result = new byte[DynamicStringHeaderSize + utf8Bytes.Length];
+            // The special index that indicates a dynamically encoded string
+            BitConverter.TryWriteBytes(result, ushort.MaxValue);
+            // String length
+            BitConverter.TryWriteBytes(result.AsSpan(sizeof(ushort)), (ushort) utf8Bytes.Length);
+            // String bytes
+            utf8Bytes.CopyTo(result, DynamicStringHeaderSize);
+            return result;
+        }
+
+        return BitConverter.GetBytes(index);
+    }
+
+    private static byte[] EncodeVector2(Vector2 vec2Value) {
+        var encoded = new byte[Vector2Size];
+        BitConverter.TryWriteBytes(encoded, vec2Value.X);
+        BitConverter.TryWriteBytes(encoded.AsSpan(sizeof(float)), vec2Value.Y);
+        return encoded;
+    }
+
+    private static byte[] EncodeVector3(Vector3 vec3Value) {
+        var encoded = new byte[Vector3Size];
+        BitConverter.TryWriteBytes(encoded, vec3Value.X);
+        BitConverter.TryWriteBytes(encoded.AsSpan(sizeof(float)), vec3Value.Y);
+        BitConverter.TryWriteBytes(encoded.AsSpan(2 * sizeof(float)), vec3Value.Z);
+        return encoded;
+    }
+
+    #endregion
+
+    #region Decoding
+
+    private static bool DecodeBoolean(byte[] encoded) {
+        ValidateLength(encoded, sizeof(bool), "bool");
+        return encoded[0] == 1;
+    }
+
+    private static float DecodeSingle(byte[] encoded) {
+        ValidateLength(encoded, sizeof(float), "float");
+        return BitConverter.ToSingle(encoded, 0);
+    }
+
+    private static int DecodeInt32(byte[] encoded) {
+        ValidateLength(encoded, sizeof(int), "int");
+        return BitConverter.ToInt32(encoded, 0);
+    }
+
+    private static ulong DecodeUInt64(byte[] encoded) {
+        ValidateLength(encoded, sizeof(ulong), "ulong");
+        return BitConverter.ToUInt64(encoded, 0);
+    }
+
+    private static long DecodeInt64(byte[] encoded) {
+        ValidateLength(encoded, sizeof(long), "long");
+        return BitConverter.ToInt64(encoded, 0);
+    }
+
+    private static uint DecodeUInt32(byte[] encoded) {
+        ValidateLength(encoded, sizeof(uint), "uint");
+        return BitConverter.ToUInt32(encoded, 0);
+    }
+
+    private static ushort DecodeUInt16(byte[] encoded) {
+        ValidateLength(encoded, sizeof(ushort), "ushort");
+        return BitConverter.ToUInt16(encoded, 0);
+    }
+
+    private static short DecodeInt16(byte[] encoded) {
+        ValidateLength(encoded, sizeof(short), "short");
+        return BitConverter.ToInt16(encoded, 0);
+    }
+
+    private static double DecodeDouble(byte[] encoded) {
+        ValidateLength(encoded, sizeof(double), "double");
+        return BitConverter.ToDouble(encoded, 0);
+    }
+
+    private static Vector2 DecodeVector2(byte[] encoded) {
+        ValidateLength(encoded, Vector2Size, "Vector2");
+        return new Vector2(
+            BitConverter.ToSingle(encoded, 0),
+            BitConverter.ToSingle(encoded, sizeof(float))
+        );
+    }
+
+    private static Vector3 DecodeVector3(byte[] encoded) {
+        ValidateLength(encoded, Vector3Size, "Vector3");
+        return DecodeVector3At(encoded, 0);
+    }
+
+    private static Vector3 DecodeVector3At(byte[] encoded, int offset) {
+        // The caller validates that 12 bytes are available at the given offset.
+        return new Vector3(
+            BitConverter.ToSingle(encoded, offset),
+            BitConverter.ToSingle(encoded, offset + sizeof(float)),
+            BitConverter.ToSingle(encoded, offset + 2 * sizeof(float))
+        );
+    }
+
+    private static MapZone DecodeMapZone(byte[] encoded) {
+        ValidateLength(encoded, sizeof(byte), "MapZone");
+        return (MapZone) encoded[0];
+    }
+
+    private static string? DecodeExactString(byte[] encoded) {
+        var offset = 0;
+        var value = DecodeString(encoded, ref offset);
+
+        // Unlike a string in a collection, this string has to fill the entire array
+        ValidateLength(encoded, offset, "string");
+        return value;
+    }
+
+    private static TCollection DecodeStrings<TCollection>(byte[] encoded, string type)
+        where TCollection : ICollection<string>, new() {
+        var count = ReadCollectionCount(encoded);
+        var values = new TCollection();
+        var offset = CountPrefixSize;
+
+        for (var i = 0; i < count; i++) {
+            values.Add(DecodeString(encoded, ref offset)!);
+        }
+
+        ValidateLength(encoded, offset, type);
+        return values;
+    }
+
+    private static List<Vector3> DecodeVector3List(byte[] encoded) {
+        var count = ReadCollectionCount(encoded);
+        ValidateLength(encoded, CountPrefixSize + count * Vector3Size, "List<Vector3>");
+
+        var values = new List<Vector3>(count);
+        for (var i = 0; i < count; i++) {
+            values.Add(DecodeVector3At(encoded, CountPrefixSize + i * Vector3Size));
+        }
+
+        return values;
+    }
+
+    private static List<int> DecodeInt32List(byte[] encoded) {
+        // The existing wire format stores a byte count and one byte per int.
+        // Do not change this to four-byte ints without a versioned protocol migration.
+        EnsureAvailable(encoded, 0, sizeof(byte));
+        var count = encoded[0];
+        ValidateLength(encoded, sizeof(byte) + count, "List<int>");
+
+        var values = new List<int>(count);
+        for (var i = 0; i < count; i++) {
+            values.Add(encoded[i + 1]);
+        }
+
+        return values;
+    }
+
+    private static byte[] DecodeByteArray(byte[] encoded) {
+        var count = ReadCollectionCount(encoded);
+        ValidateLength(encoded, CountPrefixSize + count, "byte[]");
+        return [.. encoded.AsSpan(CountPrefixSize, count)];
+    }
+
+    private static string? DecodeString(byte[] encoded, ref int offset) {
+        // The offset is moved past the string, so that collections can decode their strings in sequence
+        EnsureAvailable(encoded, offset, sizeof(ushort));
+        var sceneIndex = BitConverter.ToUInt16(encoded, offset);
+
+        if (sceneIndex != ushort.MaxValue) {
+            offset += sizeof(ushort);
+            return StringIndices.TryGetValue(sceneIndex, out var name)
+                ? name
+                : throw new ArgumentException($"Could not decode string from save update: {sceneIndex}");
+        }
+
+        // The special index indicates a dynamically encoded string
+        EnsureAvailable(encoded, offset, DynamicStringHeaderSize);
+        var strLen = BitConverter.ToUInt16(encoded, offset + sizeof(ushort));
+
+        // The special length indicates a null string
+        if (strLen == ushort.MaxValue) {
+            offset += DynamicStringHeaderSize;
+            return null;
+        }
+
+        EnsureAvailable(encoded, offset + DynamicStringHeaderSize, strLen);
+        var decoded = Encoding.UTF8.GetString(encoded, offset + DynamicStringHeaderSize, strLen);
+        offset += DynamicStringHeaderSize + strLen;
+        return decoded;
+    }
+
+    #endregion
 }

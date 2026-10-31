@@ -74,7 +74,13 @@ public class PlayerSaveDataConverter : JsonConverter {
             // The use of the 'serializer' here is important to ensure we allow earlier defined converters from acting
             // on nested objects in the value of the entry (such as Unity's Vector3 being handled by the modding API's
             // Vector3 converter)
-            entry.Value = prop.Value.ToObject(type, serializer);
+            try {
+                entry.Value = prop.Value.ToObject(type, serializer);
+            } catch (Exception e) {
+                Logger.Warn($"Could not deserialize ModSaveFile.Entry for variable '{prop.Name}', skipping: {e}");
+                continue;
+            }
+
             entries.Add(entry);
         }
 

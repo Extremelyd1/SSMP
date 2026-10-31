@@ -95,14 +95,19 @@ internal class ModServerManager : ServerManager {
                     if (modSaveFile != null) {
                         var serverSave = modSaveFile.ToServerSaveData();
                         ServerSaveData.PlayerSaveData = serverSave.PlayerSaveData;
-                        if (serverSave.GlobalSaveData.Count > 0) {
-                            ServerSaveData.GlobalSaveData = serverSave.GlobalSaveData;
+
+                        // Merged, because the file can be missing values that are present in the loaded save
+                        foreach (var (index, value) in serverSave.GlobalSaveData) {
+                            ServerSaveData.GlobalSaveData[index] = value;
                         }
 
                         Logger.Info($"Loaded remote players' save data from: {modSavePath}");
                     }
                 } catch (Exception e) {
                     Logger.Error($"Could not load remote players' save data: {e}");
+
+                    // Keep a copy, because the next game save overwrites the file
+                    File.Copy(modSavePath, $"{modSavePath}.bak", true);
                 }
             } else {
                 ServerSaveData.PlayerSaveData = new Dictionary<string, Dictionary<ushort, byte[]>>();
