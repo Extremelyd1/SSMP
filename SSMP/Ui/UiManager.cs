@@ -543,7 +543,7 @@ internal class UiManager : IUiManager {
     /// <param name="newGame">True to start a new game, false to continue existing save</param>
     public void EnterGameFromMultiplayerMenu(bool newGame) {
         IH.StopUIInput();
-        _connectGroup.SetActive(false);
+        HideMultiplayerMenu();
         PlayMenuTransitionAudio();
 
         Logger.Debug($"Entering game from MP menu for {(newGame ? "new" : "continued")} game");

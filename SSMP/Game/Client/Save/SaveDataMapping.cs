@@ -7,11 +7,13 @@ using Newtonsoft.Json.Linq;
 using SSMP.Collection;
 using SSMP.Logging;
 using SSMP.Util;
+
 // ReSharper disable ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
 // ReSharper disable UnusedAutoPropertyAccessor.Global
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider
+// adding the 'required' modifier or declaring as nullable.
 
-namespace SSMP.Game.Client.Save; 
+namespace SSMP.Game.Client.Save;
 
 /// <summary>
 /// Serializable data class that stores mappings for what scene data should be synchronised and their indices used for networking.
@@ -21,13 +23,12 @@ internal class SaveDataMapping {
     /// The file path of the embedded resource file for save data.
     /// </summary>
     private const string SaveDataFilePath = "SSMP.Resource.save-data.json";
-    
+
     /// <summary>
     /// The static instance of the mapping.
     /// </summary>
-    [JsonIgnore]
-    private static SaveDataMapping _instance;
-    
+    [JsonIgnore] private static SaveDataMapping _instance;
+
     /// <inheritdoc cref="_instance"/>
     [JsonIgnore]
     public static SaveDataMapping Instance {
@@ -35,7 +36,8 @@ internal class SaveDataMapping {
             if (_instance == null) {
                 var loadedInstance = FileUtil.LoadObjectFromEmbeddedJson<SaveDataMapping>(SaveDataFilePath);
 
-                _instance = loadedInstance ?? throw new InvalidDataException("Could not load save data mapping from embedded JSON");
+                _instance = loadedInstance ??
+                            throw new InvalidDataException("Could not load save data mapping from embedded JSON");
                 _instance.Initialize();
             }
 
@@ -49,7 +51,7 @@ internal class SaveDataMapping {
     /// </summary>
     [JsonProperty("playerData")]
     public Dictionary<string?, VarProperties> PlayerDataVarProperties { get; private set; }
-    
+
     /// <summary>
     /// Bi-directional lookup that maps save data names and their indices.
     /// </summary>
@@ -60,10 +62,9 @@ internal class SaveDataMapping {
     /// Deserialized key-value pairs for the geo rock data in the JSON.
     /// </summary>
 #pragma warning disable 0649
-    [JsonProperty("geoRocks")]
-    private readonly List<KeyValuePair<PersistentItemKey, bool>> _geoRockDataValues;
+    [JsonProperty("geoRocks")] private readonly List<KeyValuePair<PersistentItemKey, bool>> _geoRockDataValues;
 #pragma warning restore 0649
-    
+
     /// <summary>
     /// Dictionary mapping geo rock item keys to booleans indicating whether they should be synchronised.
     /// </summary>
@@ -75,7 +76,7 @@ internal class SaveDataMapping {
     /// </summary>
     [JsonIgnore]
     public BiLookup<PersistentItemKey, ushort> GeoRockIndices { get; private set; }
-    
+
     /// <summary>
     /// Deserialized key-value pairs for the persistent bool data in the JSON.
     /// </summary>
@@ -83,7 +84,7 @@ internal class SaveDataMapping {
     [JsonProperty("persistentBoolItems")]
     private readonly List<KeyValuePair<PersistentItemKey, VarProperties>> _persistentBoolsDataValues;
 #pragma warning restore 0649
-    
+
     /// <summary>
     /// Dictionary mapping persistent bool item keys to variable properties (containing for example whether they
     /// should be synchronised).
@@ -96,7 +97,7 @@ internal class SaveDataMapping {
     /// </summary>
     [JsonIgnore]
     public BiLookup<PersistentItemKey, ushort> PersistentBoolIndices { get; private set; }
-    
+
     /// <summary>
     /// Deserialized key-value pairs for the persistent int data in the JSON.
     /// </summary>
@@ -104,7 +105,7 @@ internal class SaveDataMapping {
     [JsonProperty("persistentIntItems")]
     private readonly List<KeyValuePair<PersistentItemKey, VarProperties>> _persistentIntDataValues;
 #pragma warning restore 0649
-    
+
     /// <summary>
     /// Dictionary mapping persistent int item keys to variable properties (containing for example whether they
     /// should be synchronised).
@@ -121,37 +122,22 @@ internal class SaveDataMapping {
     /// <summary>
     /// Deserialized list of strings that represent variable names with the type of a string list.
     /// </summary>
-    [JsonProperty("stringListVariables")]
-    public readonly List<string?> StringListVariables;
-
-    /// <summary>
-    /// Deserialized list of strings that represent variable names with the type of BossSequenceDoor.Completion.
-    /// </summary>
-    [JsonProperty("bossSequenceDoorCompletionVariables")]
-    public readonly List<string?> BossSequenceDoorCompletionVariables;
-    
-    /// <summary>
-    /// Deserialized list of strings that represent variable names with the type of BossStatue.Completion.
-    /// </summary>
-    [JsonProperty("bossStatueCompletionVariables")]
-    public readonly List<string?> BossStatueCompletionVariables;
+    [JsonProperty("stringListVariables")] public readonly List<string?> StringListVariables;
 
     /// <summary>
     /// Deserialized list of strings that represent variable names with the type of a vector3 list.
     /// </summary>
-    [JsonProperty("vectorListVariables")]
-    public readonly List<string?> VectorListVariables;
-    
+    [JsonProperty("vectorListVariables")] public readonly List<string?> VectorListVariables;
+
     /// <summary>
     /// Deserialized list of strings that represent variable names with the type of integer list.
     /// </summary>
-    [JsonProperty("intListVariables")]
-    public readonly List<string?> IntListVariables;
+    [JsonProperty("intListVariables")] public readonly List<string?> IntListVariables;
 
     /// <summary>
     /// Initializes the class by converting the deserialized data fields into the various dictionaries and lookups.
     /// </summary>
-    public void Initialize() {
+    private void Initialize() {
         if (PlayerDataVarProperties == null) {
             Logger.Warn("Player data bools for save data is null");
             return;
@@ -161,17 +147,17 @@ internal class SaveDataMapping {
             Logger.Warn("Geo rock data values for save data is null");
             return;
         }
-        
+
         if (_persistentBoolsDataValues == null) {
             Logger.Warn("Persistent bools data values for save data is null");
             return;
         }
-        
+
         if (_persistentIntDataValues == null) {
             Logger.Warn("Persistent int data values for save data is null");
             return;
         }
-        
+
         PlayerDataIndices = new BiLookup<string?, ushort>();
         ushort index = 0;
         foreach (var playerDataBool in PlayerDataVarProperties.Keys) {
@@ -217,26 +203,31 @@ internal class SaveDataMapping {
         /// Whether to sync this value. If true, the variable <seealso cref="SyncType"/> indicates where to store
         /// the synced values.
         /// </summary>
-        public bool Sync { get; set; }
+        public bool Sync { get; init; }
+
         /// <summary>
         /// The sync type of this value. Type Player is used for player specific values and Server is used for
         /// global world specific values.
         /// </summary>
-        public SyncType SyncType { get; set; }
+        public SyncType SyncType { get; init; }
+
         /// <summary>
         /// Whether to ignore the check for scene host when sending/processing a save data for this value.
         /// </summary>
-        public bool IgnoreSceneHost { get; set; }
+        public bool IgnoreSceneHost { get; init; }
+
         /// <summary>
         /// The type of the variable that holds this value.
         /// </summary>
         public string VarType { get; set; }
+
         /// <summary>
         /// Whether the value for this variable should be handled additively, i.e. by networking the delta of the
         /// value instead of the actual value. This is used for variables that can be modified by multiple players
         /// at once and thus can have incorrect values due to networking race conditions.
         /// </summary>
         public bool Additive { get; set; }
+
         /// <summary>
         /// The initial value of the variable if it is not the default for the type. Otherwise, it will be null.
         /// </summary>

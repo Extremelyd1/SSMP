@@ -22,6 +22,9 @@ using SSMP.Networking.Packet.Data;
 using SSMP.Networking.Packet.Update;
 using SSMP.Networking.Server;
 using SSMP.Networking.Transport.Common;
+using SSMP.Game.Server.Save;
+using SSMP.Game.Client.Save;
+using SSMP.Util;
 
 // ReSharper disable InconsistentlySynchronizedField
 
@@ -47,7 +50,7 @@ internal abstract class ServerManager : IServerManager {
     /// <summary>
     /// The net server instance.
     /// </summary>
-    private readonly NetServer _netServer;
+    protected readonly NetServer NetServer;
 
     /// <summary>
     /// The packet manager instance for register and deregistering packet handlers.
@@ -107,13 +110,13 @@ internal abstract class ServerManager : IServerManager {
     /// <summary>
     /// Whether full synchronisation is enabled for the server.
     /// </summary>
-    private bool _fullSynchronisation;
+    protected bool FullSynchronisation;
 
-    // /// <summary>
-    // /// The save data for the server. The instance will be created in the constructor and is passed around to other
-    // /// objects. Therefore, it should not change instances.
-    // /// </summary>
-    // protected ServerSaveData ServerSaveData;
+    /// <summary>
+    /// The save data for the server. The instance will be created in the constructor and is passed around to other
+    /// objects. Therefore, it should not change instances.
+    /// </summary>
+    protected readonly ServerSaveData ServerSaveData;
 
     #endregion
 
@@ -163,10 +166,11 @@ internal abstract class ServerManager : IServerManager {
     /// The skin command.
     /// </summary>
     private readonly IServerCommand _skinCommand;
-    // /// <summary>
-    // /// The copy save command.
-    // /// </summary>
-    // private readonly IServerCommand _copySaveCommand;
+
+    /// <summary>
+    /// The copy save command.
+    /// </summary>
+    private readonly IServerCommand _copySaveCommand;
 
     #endregion
 
@@ -212,7 +216,7 @@ internal abstract class ServerManager : IServerManager {
         PacketManager packetManager,
         ServerSettings serverSettings
     ) {
-        _netServer = netServer;
+        NetServer = netServer;
         _packetManager = packetManager;
         InternalServerSettings = serverSettings;
         _playerData = new ConcurrentDictionary<ushort, ServerPlayerData>();
@@ -222,10 +226,10 @@ internal abstract class ServerManager : IServerManager {
         CommandManager = new ServerCommandManager();
         var eventAggregator = new EventAggregator();
 
-        var serverApi = new ServerApi(this, CommandManager, _netServer, eventAggregator);
+        var serverApi = new ServerApi(this, CommandManager, NetServer, eventAggregator);
         AddonManager = new ServerAddonManager(serverApi);
 
-        // ServerSaveData = new ServerSaveData();
+        ServerSaveData = new ServerSaveData();
 
         // Load the lists
         _whiteList = WhiteList.LoadFromFile();
@@ -235,13 +239,13 @@ internal abstract class ServerManager : IServerManager {
         _listCommand = new ListCommand(this);
         _whiteListCommand = new WhiteListCommand(_whiteList, this);
         _authorizeCommand = new AuthorizeCommand(_authorizedList, this);
-        _announceCommand = new AnnounceCommand(_playerData, _netServer);
+        _announceCommand = new AnnounceCommand(_playerData, NetServer);
         _banCommand = new BanCommand(_banList, this);
         _kickCommand = new KickCommand(this);
         _teamCommand = new TeamCommand(this);
         _skinCommand = new SkinCommand(this);
         _helpCommand = new HelpCommand(this);
-        // _copySaveCommand = new CopySaveCommand(this, ServerSaveData);
+        _copySaveCommand = new CopySaveCommand(this, ServerSaveData);
     }
 
     /// <summary>
@@ -260,13 +264,13 @@ internal abstract class ServerManager : IServerManager {
     /// </summary>
     public virtual void Initialize() {
         // Register a timeout handler
-        _netServer.ClientTimeoutEvent += OnClientTimeout;
+        NetServer.ClientTimeoutEvent += OnClientTimeout;
 
         // Register server shutdown handler
-        _netServer.ShutdownEvent += OnServerShutdown;
+        NetServer.ShutdownEvent += OnServerShutdown;
 
         // Register a handler for when a client wants to connect
-        _netServer.ConnectionRequestEvent += OnConnectionRequest;
+        NetServer.ConnectionRequestEvent += OnConnectionRequest;
     }
 
     /// <summary>
@@ -283,9 +287,9 @@ internal abstract class ServerManager : IServerManager {
         CommandManager.RegisterCommand(_skinCommand);
         CommandManager.RegisterCommand(_helpCommand);
 
-        // if (FullSynchronisation) {
-        //     CommandManager.RegisterCommand(_copySaveCommand);
-        // }
+        if (FullSynchronisation) {
+            CommandManager.RegisterCommand(_copySaveCommand);
+        }
     }
 
     /// <summary>
@@ -302,9 +306,9 @@ internal abstract class ServerManager : IServerManager {
         CommandManager.DeregisterCommand(_skinCommand);
         CommandManager.DeregisterCommand(_helpCommand);
 
-        // if (FullSynchronisation) {
-        //     CommandManager.DeregisterCommand(_copySaveCommand);
-        // }
+        if (FullSynchronisation) {
+            CommandManager.DeregisterCommand(_copySaveCommand);
+        }
     }
 
     /// <summary>
@@ -350,7 +354,7 @@ internal abstract class ServerManager : IServerManager {
             OnPlayerSettingUpdate
         );
 
-        if (_fullSynchronisation) {
+        if (FullSynchronisation) {
             _packetManager.RegisterServerUpdatePacketHandler<EntitySpawn>(
                 ServerUpdatePacketId.EntitySpawn,
                 OnEntitySpawn
@@ -386,7 +390,7 @@ internal abstract class ServerManager : IServerManager {
         _packetManager.DeregisterServerUpdatePacketHandler(ServerUpdatePacketId.ServerSettings);
         _packetManager.DeregisterServerUpdatePacketHandler(ServerUpdatePacketId.PlayerSetting);
 
-        if (_fullSynchronisation) {
+        if (FullSynchronisation) {
             _packetManager.DeregisterServerUpdatePacketHandler(ServerUpdatePacketId.EntitySpawn);
             _packetManager.DeregisterServerUpdatePacketHandler(ServerUpdatePacketId.EntityUpdate);
             _packetManager.DeregisterServerUpdatePacketHandler(ServerUpdatePacketId.ReliableEntityUpdate);
@@ -403,18 +407,18 @@ internal abstract class ServerManager : IServerManager {
     public virtual void Start(int port, bool fullSynchronisation, IEncryptedTransportServer transportServer) {
         lock (_serverStateLock) {
             // Stop existing server (including deregistering commands)
-            if (_netServer.IsStarted) {
+            if (NetServer.IsStarted) {
                 Logger.Info("Server was running, shutting it down before starting");
                 StopInternal();
             }
 
-            _fullSynchronisation = fullSynchronisation;
+            FullSynchronisation = fullSynchronisation;
 
             RegisterCommands();
             RegisterPacketHandlers();
 
             // Start server again with given port
-            _netServer.Start(port, transportServer);
+            NetServer.Start(port, transportServer);
         }
     }
 
@@ -431,13 +435,13 @@ internal abstract class ServerManager : IServerManager {
     /// Internal stop logic without locking (called from Start and Stop).
     /// </summary>
     private void StopInternal() {
-        if (!_netServer.IsStarted) return;
+        if (!NetServer.IsStarted) return;
 
         // Before shutting down, send TCP packets to all clients indicating
         // that the server is shutting down
-        _netServer.SetDataForAllClients(updateManager => { updateManager.SetDisconnect(DisconnectReason.Shutdown); });
+        NetServer.SetDataForAllClients(updateManager => { updateManager.SetDisconnect(DisconnectReason.Shutdown); });
 
-        _netServer.Stop();
+        NetServer.Stop();
 
         DeregisterCommands();
         DeregisterPacketHandlers();
@@ -458,11 +462,11 @@ internal abstract class ServerManager : IServerManager {
     /// Called when the server settings are updated, and need to be broadcast.
     /// </summary>
     public void OnUpdateServerSettings() {
-        if (!_netServer.IsStarted) {
+        if (!NetServer.IsStarted) {
             return;
         }
 
-        _netServer.SetDataForAllClients(updateManager => { updateManager.UpdateServerSettings(InternalServerSettings); }
+        NetServer.SetDataForAllClients(updateManager => { updateManager.UpdateServerSettings(InternalServerSettings); }
         );
     }
 
@@ -515,7 +519,7 @@ internal abstract class ServerManager : IServerManager {
             if (otherPlayerData.CurrentScene.Equals(playerData.CurrentScene)) {
                 Logger.Debug($"Sending EnterScene data to {key}");
 
-                _netServer.GetUpdateManagerForClient(key)?.AddPlayerEnterSceneData(
+                NetServer.GetUpdateManagerForClient(key)?.AddPlayerEnterSceneData(
                     playerData.Id,
                     playerData.Position ?? Vector2.Zero,
                     playerData.Scale,
@@ -545,7 +549,7 @@ internal abstract class ServerManager : IServerManager {
         var makeEnteringPlayerHost = false;
         var sceneHostEpoch = 0u;
 
-        if (_fullSynchronisation) {
+        if (FullSynchronisation) {
             foreach (var (entityKey, entityData) in _entityData) {
                 // Check which entities are actually in the scene that the player is entering
                 if (!entityKey.Scene.Equals(playerData.CurrentScene)) {
@@ -631,7 +635,7 @@ internal abstract class ServerManager : IServerManager {
                     if (otherPlayerData.IsSceneHost) {
                         otherPlayerData.IsSceneHost = false;
 
-                        _netServer
+                        NetServer
                             .GetUpdateManagerForClient(key)
                             ?.SetSceneHostTransfer(playerData.CurrentScene, epoch, demote: true);
 
@@ -639,7 +643,7 @@ internal abstract class ServerManager : IServerManager {
                             $"Demoted player {key} ({otherPlayerData.Username}) in scene {playerData.CurrentScene} since the previous host {playerData.Id} ({playerData.Username}) re-entered (epoch {epoch})"
                         );
                     } else {
-                        _netServer
+                        NetServer
                             .GetUpdateManagerForClient(key)
                             ?.SetSceneHostTransfer(playerData.CurrentScene, epoch, demote: true);
                     }
@@ -655,12 +659,12 @@ internal abstract class ServerManager : IServerManager {
             sceneHostEpoch = _sceneHostEpochs.GetOrAdd(playerData.CurrentScene, 0u);
         }
 
-        _netServer.GetUpdateManagerForClient(playerData.Id)?.AddPlayerAlreadyInSceneData(
+        NetServer.GetUpdateManagerForClient(playerData.Id)?.AddPlayerAlreadyInSceneData(
             enterSceneList,
             entitySpawnList,
             entityUpdateList,
             reliableEntityUpdateList,
-            _fullSynchronisation && makeEnteringPlayerHost,
+            FullSynchronisation && makeEnteringPlayerHost,
             sceneHostEpoch
         );
     }
@@ -708,7 +712,7 @@ internal abstract class ServerManager : IServerManager {
                     continue;
                 }
 
-                _netServer.GetUpdateManagerForClient(otherId)?.UpdatePlayerPosition(id, playerUpdate.Position);
+                NetServer.GetUpdateManagerForClient(otherId)?.UpdatePlayerPosition(id, playerUpdate.Position);
             }
         }
 
@@ -724,7 +728,7 @@ internal abstract class ServerManager : IServerManager {
                     continue;
                 }
 
-                _netServer.GetUpdateManagerForClient(otherId)?.UpdatePlayerScale(id, playerUpdate.Scale);
+                NetServer.GetUpdateManagerForClient(otherId)?.UpdatePlayerScale(id, playerUpdate.Scale);
             }
         }
 
@@ -743,7 +747,7 @@ internal abstract class ServerManager : IServerManager {
                         continue;
                     }
 
-                    _netServer.GetUpdateManagerForClient(idPlayerDataPair.Key)?
+                    NetServer.GetUpdateManagerForClient(idPlayerDataPair.Key)?
                         .UpdatePlayerMapPosition(id, playerUpdate.MapPosition);
                 }
             }
@@ -774,7 +778,7 @@ internal abstract class ServerManager : IServerManager {
                         continue;
                     }
 
-                    var updateManager = _netServer.GetUpdateManagerForClient(otherId);
+                    var updateManager = NetServer.GetUpdateManagerForClient(otherId);
                     if (updateManager != null) {
                         foreach (var animationInfo in animationInfos) {
                             updateManager.UpdatePlayerAnimation(
@@ -808,12 +812,12 @@ internal abstract class ServerManager : IServerManager {
                 continue;
             }
 
-            _netServer.GetUpdateManagerForClient(idPlayerDataPair.Key)?
+            NetServer.GetUpdateManagerForClient(idPlayerDataPair.Key)?
                 .UpdatePlayerMapIcon(id, playerData.HasMapIcon);
 
             if (playerData.HasMapIcon && playerData.MapPosition != null) {
                 // If the player now has a map icon, we also send the map position
-                _netServer.GetUpdateManagerForClient(idPlayerDataPair.Key)?
+                NetServer.GetUpdateManagerForClient(idPlayerDataPair.Key)?
                     .UpdatePlayerMapPosition(id, playerData.MapPosition);
             }
         }
@@ -825,7 +829,7 @@ internal abstract class ServerManager : IServerManager {
     /// <param name="id">The ID of the player.</param>
     /// <param name="entitySpawn">The EntitySpawn packet data.</param>
     private void OnEntitySpawn(ushort id, EntitySpawn entitySpawn) {
-        if (!_fullSynchronisation) {
+        if (!FullSynchronisation) {
             return;
         }
 
@@ -864,7 +868,7 @@ internal abstract class ServerManager : IServerManager {
             id,
             playerData.CurrentScene,
             otherId => {
-                _netServer.GetUpdateManagerForClient(otherId)?.SetEntitySpawn(
+                NetServer.GetUpdateManagerForClient(otherId)?.SetEntitySpawn(
                     entitySpawn.Id,
                     entitySpawn.SpawningType,
                     entitySpawn.SpawnedType
@@ -879,7 +883,7 @@ internal abstract class ServerManager : IServerManager {
     /// <param name="id">The ID of the player.</param>
     /// <param name="entityUpdate">The EntityUpdate packet data.</param>
     private void OnEntityUpdate(ushort id, EntityUpdate entityUpdate) {
-        if (!_fullSynchronisation) {
+        if (!FullSynchronisation) {
             return;
         }
 
@@ -906,7 +910,7 @@ internal abstract class ServerManager : IServerManager {
                 id,
                 playerData.CurrentScene,
                 otherId => {
-                    _netServer.GetUpdateManagerForClient(otherId)?.UpdateEntityPosition(
+                    NetServer.GetUpdateManagerForClient(otherId)?.UpdateEntityPosition(
                         entityUpdate.Id,
                         entityUpdate.Position
                     );
@@ -921,7 +925,7 @@ internal abstract class ServerManager : IServerManager {
                 id,
                 playerData.CurrentScene,
                 otherId => {
-                    _netServer.GetUpdateManagerForClient(otherId)?.UpdateEntityScale(
+                    NetServer.GetUpdateManagerForClient(otherId)?.UpdateEntityScale(
                         entityUpdate.Id,
                         entityUpdate.Scale
                     );
@@ -936,7 +940,7 @@ internal abstract class ServerManager : IServerManager {
                 id,
                 playerData.CurrentScene,
                 otherId => {
-                    _netServer.GetUpdateManagerForClient(otherId)?.UpdateEntityAnimation(
+                    NetServer.GetUpdateManagerForClient(otherId)?.UpdateEntityAnimation(
                         entityUpdate.Id,
                         entityUpdate.AnimationId,
                         entityUpdate.AnimationWrapMode
@@ -955,7 +959,7 @@ internal abstract class ServerManager : IServerManager {
     /// <param name="id">The ID of the player.</param>
     /// <param name="entityUpdate">The ReliableEntityUpdate packet data.</param>
     private void OnReliableEntityUpdate(ushort id, ReliableEntityUpdate entityUpdate) {
-        if (!_fullSynchronisation) {
+        if (!FullSynchronisation) {
             return;
         }
 
@@ -982,7 +986,7 @@ internal abstract class ServerManager : IServerManager {
                 id,
                 playerData.CurrentScene,
                 otherId => {
-                    _netServer.GetUpdateManagerForClient(otherId)?.UpdateEntityIsActive(
+                    NetServer.GetUpdateManagerForClient(otherId)?.UpdateEntityIsActive(
                         entityUpdate.Id,
                         entityUpdate.IsActive
                     );
@@ -1015,7 +1019,7 @@ internal abstract class ServerManager : IServerManager {
                     id,
                     playerData.CurrentScene,
                     otherId => {
-                        _netServer.GetUpdateManagerForClient(otherId)?.AddEntityData(
+                        NetServer.GetUpdateManagerForClient(otherId)?.AddEntityData(
                             entityUpdate.Id,
                             filteredGenericData
                         );
@@ -1065,7 +1069,7 @@ internal abstract class ServerManager : IServerManager {
                     id,
                     playerData.CurrentScene,
                     otherId => {
-                        _netServer.GetUpdateManagerForClient(otherId)?.AddEntityHostFsmData(
+                        NetServer.GetUpdateManagerForClient(otherId)?.AddEntityHostFsmData(
                             entityUpdate.Id,
                             fsmIndex,
                             data
@@ -1097,7 +1101,7 @@ internal abstract class ServerManager : IServerManager {
     /// <param name="id">The ID of the player.</param>
     /// <param name="reason">The reason for the disconnect.</param>
     public void InternalDisconnectPlayer(ushort id, DisconnectReason reason) {
-        _netServer.GetUpdateManagerForClient(id)?.SetDisconnect(reason);
+        NetServer.GetUpdateManagerForClient(id)?.SetDisconnect(reason);
 
         ProcessPlayerDisconnect(id);
     }
@@ -1144,7 +1148,7 @@ internal abstract class ServerManager : IServerManager {
             }
         }
 
-        if (_fullSynchronisation && playerData.IsSceneHost && scenePlayers.Count > 0) {
+        if (FullSynchronisation && playerData.IsSceneHost && scenePlayers.Count > 0) {
             var epoch = GetNextSceneHostEpoch(sceneName);
             var newHostPair = scenePlayers[0];
             newHostPair.Value.IsSceneHost = true;
@@ -1155,7 +1159,7 @@ internal abstract class ServerManager : IServerManager {
             );
 
             foreach (var pair in scenePlayers) {
-                var updateManager = _netServer.GetUpdateManagerForClient(pair.Key);
+                var updateManager = NetServer.GetUpdateManagerForClient(pair.Key);
                 bool isNewHost = (pair.Key == newHostPair.Key);
                 updateManager?.SetSceneHostTransfer(sceneName, epoch, demote: !isNewHost);
             }
@@ -1163,7 +1167,7 @@ internal abstract class ServerManager : IServerManager {
 
         foreach (var pair in scenePlayers) {
             Logger.Info($"Sending leave scene packet to {pair.Key}");
-            var updateManager = _netServer.GetUpdateManagerForClient(pair.Key);
+            var updateManager = NetServer.GetUpdateManagerForClient(pair.Key);
             if (disconnected) {
                 updateManager?.AddPlayerDisconnectData(id, username, timeout);
             } else {
@@ -1171,7 +1175,7 @@ internal abstract class ServerManager : IServerManager {
             }
         }
 
-        if (_fullSynchronisation) {
+        if (FullSynchronisation) {
             // In case there were no other players to make scene host, we still need to reset the leaving
             // player's status of scene host
             playerData.IsSceneHost = false;
@@ -1200,7 +1204,7 @@ internal abstract class ServerManager : IServerManager {
     private void ProcessPlayerDisconnect(ushort id, bool timeout = false) {
         if (!timeout) {
             // If this isn't a timeout, then we need to propagate this packet to the NetServer
-            _netServer.OnClientDisconnect(id);
+            NetServer.OnClientDisconnect(id);
         }
 
         if (!_playerData.TryGetValue(id, out var playerData)) {
@@ -1214,17 +1218,17 @@ internal abstract class ServerManager : IServerManager {
                 continue;
             }
 
-            _netServer.GetUpdateManagerForClient(idPlayerDataPair.Key)?.AddPlayerDisconnectData(
+            NetServer.GetUpdateManagerForClient(idPlayerDataPair.Key)?.AddPlayerDisconnectData(
                 id,
                 username,
                 timeout
             );
         }
 
+        HandlePlayerLeaveScene(id, true, timeout);
+
         // Now remove the client from the player data mapping
         _playerData.TryRemove(id, out _);
-
-        HandlePlayerLeaveScene(id, true, timeout);
 
         try {
             PlayerDisconnectEvent?.Invoke(playerData);
@@ -1245,14 +1249,14 @@ internal abstract class ServerManager : IServerManager {
 
         Logger.Info($"Received PlayerDeath data from ({id}, {playerData.Username})");
 
-        // if (ServerSaveData.IsSteelSoul()) {
-        //     // We are running a Steel Soul save file, so we wipe the player-specific data for the player
-        //     ServerSaveData.PlayerSaveData.Remove(playerData.AuthKey);
-        //     
-        //     Logger.Info("  Wiped player save data (Steel Soul)");
-        // }
+        if (ServerSaveData.IsSteelSoul()) {
+            // We are running a Steel Soul save file, so we wipe the player-specific data for the player
+            ServerSaveData.PlayerSaveData.Remove(playerData.AuthKey);
 
-        if (_fullSynchronisation && playerData.IsSceneHost) {
+            Logger.Info("  Wiped player save data (Steel Soul)");
+        }
+
+        if (FullSynchronisation && playerData.IsSceneHost) {
             var sceneName = playerData.CurrentScene;
             var scenePlayers = new List<KeyValuePair<ushort, ServerPlayerData>>();
             foreach (var pair in _playerData) {
@@ -1273,7 +1277,7 @@ internal abstract class ServerManager : IServerManager {
                 );
 
                 foreach (var pair in scenePlayers) {
-                    var updateManager = _netServer.GetUpdateManagerForClient(pair.Key);
+                    var updateManager = NetServer.GetUpdateManagerForClient(pair.Key);
                     var isNewHost = (pair.Key == newHostPair.Key);
                     updateManager?.SetSceneHostTransfer(sceneName, epoch, demote: !isNewHost);
                 }
@@ -1283,7 +1287,7 @@ internal abstract class ServerManager : IServerManager {
         SendDataInSameScene(
             id,
             playerData.CurrentScene,
-            otherId => { _netServer.GetUpdateManagerForClient(otherId)?.AddPlayerDeathData(id); }
+            otherId => { NetServer.GetUpdateManagerForClient(otherId)?.AddPlayerDeathData(id); }
         );
     }
 
@@ -1324,11 +1328,11 @@ internal abstract class ServerManager : IServerManager {
         // Broadcast the packet to all players except the player we received the update from
         foreach (var playerId in _playerData.Keys) {
             if (id == playerId) {
-                _netServer.GetUpdateManagerForClient(playerId)?.AddPlayerSettingUpdateData(team: team);
+                NetServer.GetUpdateManagerForClient(playerId)?.AddPlayerSettingUpdateData(team: team);
                 continue;
             }
 
-            _netServer.GetUpdateManagerForClient(playerId)?.AddOtherPlayerSettingUpdateData(
+            NetServer.GetUpdateManagerForClient(playerId)?.AddOtherPlayerSettingUpdateData(
                 id,
                 team: team
             );
@@ -1378,7 +1382,7 @@ internal abstract class ServerManager : IServerManager {
             var otherId = idPlayerDataPair.Key;
 
             if (otherId == id) {
-                _netServer.GetUpdateManagerForClient(id)?.AddPlayerSettingUpdateData(skinId: skinId);
+                NetServer.GetUpdateManagerForClient(id)?.AddPlayerSettingUpdateData(skinId: skinId);
                 continue;
             }
 
@@ -1389,7 +1393,7 @@ internal abstract class ServerManager : IServerManager {
                 continue;
             }
 
-            _netServer.GetUpdateManagerForClient(otherId)?.AddOtherPlayerSettingUpdateData(id, skinId: skinId);
+            NetServer.GetUpdateManagerForClient(otherId)?.AddOtherPlayerSettingUpdateData(id, skinId: skinId);
         }
 
         reason = null;
@@ -1560,7 +1564,7 @@ internal abstract class ServerManager : IServerManager {
             ServerSettings = InternalServerSettings
         };
 
-        serverInfo.FullSynchronisation = _fullSynchronisation;
+        serverInfo.FullSynchronisation = FullSynchronisation;
 
         // Construct the player info to send to the new client in the server info
         var playerInfo = new List<ServerInfo.PlayerInfo>();
@@ -1584,7 +1588,7 @@ internal abstract class ServerManager : IServerManager {
             );
 
             // Send to the other players that this client has just connected
-            _netServer.GetUpdateManagerForClient(otherId)?.AddPlayerConnectData(
+            NetServer.GetUpdateManagerForClient(otherId)?.AddPlayerConnectData(
                 netServerClient.Id,
                 clientInfo.Username
             );
@@ -1592,10 +1596,10 @@ internal abstract class ServerManager : IServerManager {
 
         serverInfo.PlayerInfos = playerInfo;
 
-        // if (FullSynchronisation) {
-        //     // Obtain the save data for the connecting client and add it to the server info
-        //     serverInfo.CurrentSave = ServerSaveData.GetCurrentSaveData(clientInfo.AuthKey);
-        // }
+        if (FullSynchronisation) {
+            // Obtain the save data for the connecting client and add it to the server info
+            serverInfo.CurrentSave = ServerSaveData.GetCurrentSaveData(clientInfo.AuthKey);
+        }
 
         // Create new player data and store it
         var playerData = new ServerPlayerData(
@@ -1709,7 +1713,7 @@ internal abstract class ServerManager : IServerManager {
                 new PlayerCommandSender(
                     _authorizedList.Contains(playerData.AuthKey),
                     id,
-                    _netServer.GetUpdateManagerForClient(id)
+                    NetServer.GetUpdateManagerForClient(id)
                 ),
                 chatMessage.Message
             )) {
@@ -1735,7 +1739,7 @@ internal abstract class ServerManager : IServerManager {
             var formattedMsg = $"[{playerData.Username}]: {message}";
 
             foreach (var idPlayerDataPair in _playerData) {
-                _netServer.GetUpdateManagerForClient(idPlayerDataPair.Key)?.AddChatMessage(formattedMsg);
+                NetServer.GetUpdateManagerForClient(idPlayerDataPair.Key)?.AddChatMessage(formattedMsg);
             }
         }
     }
@@ -1757,7 +1761,7 @@ internal abstract class ServerManager : IServerManager {
             Logger.Info("  Player is not authorized");
 
             SendMessage(id, "You are not authorized to change server settings");
-            _netServer.GetUpdateManagerForClient(id)?.UpdateServerSettings(InternalServerSettings);
+            NetServer.GetUpdateManagerForClient(id)?.UpdateServerSettings(InternalServerSettings);
 
             return;
         }
@@ -1808,7 +1812,7 @@ internal abstract class ServerManager : IServerManager {
                     continue;
                 }
 
-                _netServer.GetUpdateManagerForClient(otherId)
+                NetServer.GetUpdateManagerForClient(otherId)
                           ?.AddOtherPlayerSettingUpdateData(id, crestType: crestType);
             }
         }
@@ -1820,146 +1824,213 @@ internal abstract class ServerManager : IServerManager {
     /// <param name="id">The ID of the player.</param>
     /// <param name="packet">The SaveUpdate packet data.</param>
     protected virtual void OnSaveUpdate(ushort id, SaveUpdate packet) {
-        // if (!FullSynchronisation) {
-        //     return;
-        // }
-        //
-        // if (!_playerData.TryGetValue(id, out var playerData)) {
-        //     Logger.Debug($"Could not process save update from unknown player ID: {id}");
-        //     return;
-        // }
-        //
-        // Logger.Info($"Save update from ({id}, {playerData.Username}), index: {packet.SaveDataIndex}");
-        //
-        // // Find the properties for syncing this save update, based on whether it is a geo rock, player data or 
-        // // persistent bool/int item
-        // SaveDataMapping.VarProperties varProps;
-        // string? pdVarName = null;
-        // if (SaveDataMapping.Instance.GeoRockIndices.TryGetValue(packet.SaveDataIndex, out var persistentItemData)) {
-        //     Logger.Debug($"  Found GeoRockData: {persistentItemData.Id}, {persistentItemData.SceneName}");
-        //     
-        //     if (!SaveDataMapping.Instance.GeoRockBools.TryGetValue(persistentItemData, out _)) {
-        //         return;
-        //     }
-        //
-        //     varProps = new SaveDataMapping.VarProperties {
-        //         Sync = true,
-        //         SyncType = SaveDataMapping.SyncType.Server,
-        //         IgnoreSceneHost = false
-        //     };
-        // } else if (SaveDataMapping.Instance.PlayerDataIndices.TryGetValue(packet.SaveDataIndex, out pdVarName)) {
-        //     Logger.Debug($"  Found PlayerData: {pdVarName}");
-        //     
-        //     if (!SaveDataMapping.Instance.PlayerDataVarProperties.TryGetValue(pdVarName, out varProps)) {
-        //         return;
-        //     }
-        // } else if (SaveDataMapping.Instance.PersistentBoolIndices.TryGetValue(
-        //     packet.SaveDataIndex, 
-        //     out persistentItemData)
-        // ) {
-        //     Logger.Debug($"  Found PersistentBoolData: {persistentItemData.Id}, {persistentItemData.SceneName}");
-        //     
-        //     if (!SaveDataMapping.Instance.PersistentBoolVarProperties.TryGetValue(persistentItemData, out varProps))
-        // {
-        //         return;
-        //     }
-        // } else if (SaveDataMapping.Instance.PersistentIntIndices.TryGetValue(
-        //     packet.SaveDataIndex, 
-        //     out persistentItemData)
-        // ) {
-        //     Logger.Debug($"  Found PersistentIntData: {persistentItemData.Id}, {persistentItemData.SceneName}");
-        //     
-        //     if (!SaveDataMapping.Instance.PersistentIntVarProperties.TryGetValue(persistentItemData, out varProps)) {
-        //         return;
-        //     }
-        // } else {
-        //     Logger.Debug("  Could not find sync props for save update");
-        //     return;
-        // }
-        //
-        // // Check whether this save update requires the player to be scene host and do the check for it
-        // if (!varProps.IgnoreSceneHost && !playerData.IsSceneHost) {
-        //     Logger.Debug("  Player is not scene host, but should be for update, not broadcasting");
-        //     return;
-        // }
-        //
-        // if (varProps.SyncType == SaveDataMapping.SyncType.Player) {
-        //     Logger.Debug("  SyncType is Player");
-        //     
-        //     if (!ServerSaveData.PlayerSaveData.TryGetValue(playerData.AuthKey, out var playerSaveData)) {
-        //         Logger.Debug("  No PlayerSaveData for player yet, creating one");
-        //         playerSaveData = new Dictionary<ushort, byte[]>();
-        //         ServerSaveData.PlayerSaveData[playerData.AuthKey] = playerSaveData;
-        //     }
-        //     
-        //     Logger.Debug("  Storing player data");
-        //
-        //     playerSaveData[packet.SaveDataIndex] = packet.Value;
-        // } else if (varProps.SyncType == SaveDataMapping.SyncType.Server) {
-        //     if (varProps.Additive) {
-        //         if (pdVarName == null) {
-        //             Logger.Debug("  Cannot decode value, name for variable is null");
-        //             return;
-        //         }
-        //
-        //         object? decodedCurrentValue = null;
-        //         var decodedDeltaValue = EncodeUtil.DecodeSaveDataValue(pdVarName, packet.Value);
-        //
-        //         if (!ServerSaveData.GlobalSaveData.TryGetValue(packet.SaveDataIndex, out var currentValue)) {
-        //             Logger.Debug($"No current value is stored in the global save data for: {pdVarName}");
-        //
-        //             if (varProps.InitialValue != null) {
-        //                 Logger.Debug($"  Taking initial value: {varProps.InitialValue}");
-        //                 decodedCurrentValue = varProps.InitialValue;
-        //             } else {
-        //                 Logger.Debug("  No initial value defined, using delta as absolute");
-        //                 packet.Value = EncodeUtil.EncodeSaveDataValue(decodedDeltaValue);
-        //             }
-        //         } else {
-        //             decodedCurrentValue = EncodeUtil.DecodeSaveDataValue(pdVarName, currentValue);
-        //         }
-        //
-        //         if (decodedCurrentValue != null) {
-        //             object? decodedNewValue;
-        //
-        //             if (decodedCurrentValue is int decodedCurrentInt && decodedDeltaValue is int decodedDeltaInt) {
-        //                 decodedNewValue = decodedCurrentInt + decodedDeltaInt;
-        //             } else if (decodedCurrentValue is List<string> decodedCurrentStringList &&
-        //                        decodedDeltaValue is List<string> decodedDeltaStringList) {
-        //
-        //                 // Loop over the delta list and add only non-duplicates
-        //                 foreach (var str in decodedDeltaStringList) {
-        //                     if (!decodedCurrentStringList.Contains(str)) {
-        //                         decodedCurrentStringList.Add(str);
-        //                     }
-        //                 }
-        //
-        //                 decodedNewValue = decodedCurrentStringList;
-        //             } else {
-        //                 Logger.Debug($"  Type of decoded values did not match: {decodedCurrentValue.GetType()}");
-        //                 return;
-        //             }
-        //
-        //             packet.Value = EncodeUtil.EncodeSaveDataValue(decodedNewValue);
-        //         }
-        //     }
-        //     
-        //     Logger.Debug("  SyncType is Server, broadcasting save update");
-        //     
-        //     ServerSaveData.GlobalSaveData[packet.SaveDataIndex] = packet.Value;
-        //     
-        //     foreach (var idPlayerDataPair in _playerData) {
-        //         var otherId = idPlayerDataPair.Key;
-        //         // For additive properties, it might happen (due to race conditions) that the resulting value needs
-        // to
-        //         // be sent to the sender of this packet as well
-        //         if (id == otherId && !varProps.Additive) {
-        //             continue;
-        //         }
-        //
-        //         _netServer.GetUpdateManagerForClient(otherId)?.SetSaveUpdate(packet.SaveDataIndex, packet.Value);
-        //     }
-        // }
+        if (!FullSynchronisation) {
+            return;
+        }
+
+        if (!_playerData.TryGetValue(id, out var playerData)) {
+            Logger.Debug($"Could not process save update from unknown player ID: {id}");
+            return;
+        }
+
+        Logger.Info($"Save update from ({id}, {playerData.Username}), index: {packet.SaveDataIndex}");
+
+        // Find the properties for syncing this save update, based on whether it is a geo rock, player data or 
+        // persistent bool/int item
+        SaveDataMapping.VarProperties varProps;
+        string? pdVarName = null;
+        if (SaveDataMapping.Instance.GeoRockIndices.TryGetValue(packet.SaveDataIndex, out var persistentItemData)) {
+            Logger.Debug($"  Found GeoRockData: {persistentItemData.Id}, {persistentItemData.SceneName}");
+
+            if (!SaveDataMapping.Instance.GeoRockBools.TryGetValue(persistentItemData, out _)) {
+                return;
+            }
+
+            varProps = new SaveDataMapping.VarProperties {
+                Sync = true,
+                SyncType = SaveDataMapping.SyncType.Server,
+                IgnoreSceneHost = false
+            };
+        } else if (SaveDataMapping.Instance.PlayerDataIndices.TryGetValue(packet.SaveDataIndex, out pdVarName)) {
+            Logger.Debug($"  Found PlayerData: {pdVarName}");
+
+            if (!SaveDataMapping.Instance.PlayerDataVarProperties.TryGetValue(pdVarName, out varProps)) {
+                return;
+            }
+        } else if (SaveDataMapping.Instance.PersistentBoolIndices.TryGetValue(
+                       packet.SaveDataIndex,
+                       out persistentItemData
+                   )
+                  ) {
+            Logger.Debug($"  Found PersistentBoolData: {persistentItemData.Id}, {persistentItemData.SceneName}");
+
+            if (!SaveDataMapping.Instance.PersistentBoolVarProperties.TryGetValue(persistentItemData, out varProps)) {
+                return;
+            }
+        } else if (SaveDataMapping.Instance.PersistentIntIndices.TryGetValue(
+                       packet.SaveDataIndex,
+                       out persistentItemData
+                   )
+                  ) {
+            Logger.Debug($"  Found PersistentIntData: {persistentItemData.Id}, {persistentItemData.SceneName}");
+
+            if (!SaveDataMapping.Instance.PersistentIntVarProperties.TryGetValue(persistentItemData, out varProps)) {
+                return;
+            }
+        } else {
+            Logger.Debug("  Could not find sync props for save update");
+            return;
+        }
+
+        // Check whether this save update requires the player to be scene host and do the check for it
+        if (!varProps.IgnoreSceneHost && !playerData.IsSceneHost) {
+            Logger.Debug("  Player is not scene host, but should be for update, not broadcasting");
+            return;
+        }
+
+        // Validate and normalize the packet value by decoding and re-encoding it
+        var normalizedValue = ValidateAndNormalizeSaveData(packet.SaveDataIndex, packet.Value, pdVarName);
+        if (normalizedValue == null) {
+            Logger.Warn($"Save update value validation failed for index {packet.SaveDataIndex}, rejecting update");
+            return;
+        }
+
+        packet.Value = normalizedValue;
+
+        if (varProps.SyncType == SaveDataMapping.SyncType.Player) {
+            Logger.Debug("  SyncType is Player");
+
+            if (!ServerSaveData.PlayerSaveData.TryGetValue(playerData.AuthKey, out var playerSaveData)) {
+                Logger.Debug("  No PlayerSaveData for player yet, creating one");
+                playerSaveData = new Dictionary<ushort, byte[]>();
+                ServerSaveData.PlayerSaveData[playerData.AuthKey] = playerSaveData;
+            }
+
+            Logger.Debug("  Storing player data");
+
+            playerSaveData[packet.SaveDataIndex] = packet.Value;
+        } else if (varProps.SyncType == SaveDataMapping.SyncType.Server) {
+            if (varProps.Additive) {
+                if (pdVarName == null) {
+                    Logger.Debug("  Cannot decode value, name for variable is null");
+                    return;
+                }
+
+                object? decodedCurrentValue = null;
+                var decodedDeltaValue = EncodeUtil.DecodeSaveDataValue(pdVarName, packet.Value);
+
+                if (!ServerSaveData.GlobalSaveData.TryGetValue(packet.SaveDataIndex, out var currentValue)) {
+                    Logger.Debug($"No current value is stored in the global save data for: {pdVarName}");
+
+                    if (varProps.InitialValue != null) {
+                        Logger.Debug($"  Taking initial value: {varProps.InitialValue}");
+                        decodedCurrentValue = varProps.InitialValue;
+                    } else {
+                        Logger.Debug("  No initial value defined, using delta as absolute");
+                        packet.Value = EncodeUtil.EncodeSaveDataValue(decodedDeltaValue, pdVarName);
+                    }
+                } else {
+                    decodedCurrentValue = EncodeUtil.DecodeSaveDataValue(pdVarName, currentValue);
+                }
+
+                if (decodedCurrentValue != null) {
+                    object? decodedNewValue;
+
+                    if (decodedCurrentValue is int decodedCurrentInt && decodedDeltaValue is int decodedDeltaInt) {
+                        decodedNewValue = decodedCurrentInt + decodedDeltaInt;
+                    } else if (decodedCurrentValue is List<string> decodedCurrentStringList &&
+                               decodedDeltaValue is IEnumerable<string> decodedDeltaStringEnum) {
+                        // Loop over the delta list and add only non-duplicates
+                        foreach (var str in decodedDeltaStringEnum) {
+                            if (!decodedCurrentStringList.Contains(str)) {
+                                decodedCurrentStringList.Add(str);
+                            }
+                        }
+
+                        decodedNewValue = decodedCurrentStringList;
+                    } else if (decodedCurrentValue is HashSet<string> decodedCurrentSet &&
+                               decodedDeltaValue is IEnumerable<string> decodedDeltaEnum) {
+                        // Loop over the delta list and add to the HashSet
+                        foreach (var str in decodedDeltaEnum) {
+                            decodedCurrentSet.Add(str);
+                        }
+
+                        decodedNewValue = decodedCurrentSet;
+                    } else {
+                        Logger.Debug($"  Type of decoded values did not match: {decodedCurrentValue.GetType()}");
+                        return;
+                    }
+
+                    packet.Value = EncodeUtil.EncodeSaveDataValue(decodedNewValue, pdVarName);
+                }
+            }
+
+            Logger.Debug("  SyncType is Server, broadcasting save update");
+
+            ServerSaveData.GlobalSaveData[packet.SaveDataIndex] = packet.Value;
+
+            foreach (var idPlayerDataPair in _playerData) {
+                var otherId = idPlayerDataPair.Key;
+                // For additive properties, it might happen (due to race conditions) that the resulting value needs to
+                // be sent to the sender of this packet as well
+                if (id == otherId && !varProps.Additive) {
+                    continue;
+                }
+
+                NetServer.GetUpdateManagerForClient(otherId)?.SetSaveUpdate(packet.SaveDataIndex, packet.Value);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates and normalizes the incoming save data packet value by decoding and re-encoding it.
+    /// </summary>
+    /// <remarks>
+    /// This sanitization step prevents server and client-side corruption by:
+    /// <list type="bullet">
+    /// <item>
+    /// <description><b>Sanitization:</b> Decoding the byte payload against the expected schema/serializer type to ensure the data is well-formed.</description>
+    /// </item>
+    /// <item>
+    /// <description><b>Normalization:</b> Re-encoding the parsed object to ensure a standardized binary layout before persisting or broadcasting.</description>
+    /// </item>
+    /// <item>
+    /// <description><b>Fail-Safe Protection:</b> Catching serialization errors early so malformed inputs are discarded instead of corrupting save state files.</description>
+    /// </item>
+    /// </list>
+    /// </remarks>
+    /// <param name="index">The mapped save data index corresponding to the variable or persistent item.</param>
+    /// <param name="value">The raw encoded byte array value received from the player.</param>
+    /// <param name="pdVarName">The PlayerData variable name, or null if the index represents a persistent item.</param>
+    /// <returns>A normalized byte array representing the validated value if successful; otherwise, <c>null</c>.</returns>
+    private byte[]? ValidateAndNormalizeSaveData(ushort index, byte[] value, string? pdVarName) {
+        try {
+            if (pdVarName != null) {
+                // PlayerData variable
+                var decoded = EncodeUtil.DecodeSaveDataValue(pdVarName, value);
+                return EncodeUtil.EncodeSaveDataValue(decoded, pdVarName);
+            }
+
+            // Persistent items (GeoRock, PersistentBool, PersistentInt)
+            if (SaveDataMapping.Instance.GeoRockIndices.ContainsSecond(index)) {
+                if (value.Length < 1) return null;
+                return [value[0]];
+            }
+
+            if (SaveDataMapping.Instance.PersistentBoolIndices.ContainsSecond(index)) {
+                if (value.Length < 1) return null;
+                return [(byte) (value[0] == 1 ? 1 : 0)];
+            }
+
+            if (SaveDataMapping.Instance.PersistentIntIndices.ContainsSecond(index)) {
+                if (value.Length < 1) return null;
+                return [value[0]];
+            }
+        } catch (Exception e) {
+            Logger.Warn($"Failed to validate and normalize save data for index {index}: {e}");
+        }
+
+        return null;
     }
 
     #endregion
@@ -1999,7 +2070,7 @@ internal abstract class ServerManager : IServerManager {
     public void SendMessage(ushort id, string message) {
         CheckValidMessage(message);
 
-        var updateManager = _netServer.GetUpdateManagerForClient(id);
+        var updateManager = NetServer.GetUpdateManagerForClient(id);
 
         // Break message up in parts denoted by newline
         var messages = message.Split('\n');

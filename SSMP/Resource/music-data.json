@@ -1,93 +1,918 @@
 {
     "Item1": [
         {
-            "Type": "None",
+            "Type": "MusicCue",
+            "Name": "Abyss"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Abyss Ascent"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Abyss Tension"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Ambience Citadel Surrounds"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Aqueducts"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "BellBattle"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Bell_Surrounds"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Belltown"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Belltown Act3"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Belltown_Cursed"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Boneforest"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Bonetown"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Boss Strive"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Chapel"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "CitadelHalls"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "CitadelHalls Act3"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "CitadelHang"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Cloak Battle"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "CloverDancers"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Cloverland"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Cogwork Core"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Coral King"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Coral Ruins"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Coral Tower Ambient"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Coral Tower Battle"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Coral_Gorge"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Coral_River"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Cradle"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Crawl"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Creepy Boss Ambient"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Creepy Boss Main"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Deep Deep Docks"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Deep Docks"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Dustpens"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Enclave"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Enemy Battle Abyss"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Enemy Battle Grind"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Enemy Battle Mid"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Enemy Battle Small"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "FinalJudge"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "FirstWeaver"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "FlowerBattle"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Grand Forum Battle"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Greymoor"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Hunter Queen Carmelita"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Hunters Trail"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "LaceBattle"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "LaceDefeated"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "LastDivePrologue"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "LostLace"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "LostLace2"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Memorium"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Memory"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "MistMaze"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "MistMaze_Organ"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "MossCave"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "MossCave Act3"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Mosstown"
+        },
+        {
+            "Type": "MusicCue",
             "Name": "None"
         },
         {
-            "Type": "FalseKnight",
-            "Name": "Boss1"
+            "Type": "MusicCue",
+            "Name": "Peak"
         },
         {
-            "Type": "Hornet",
-            "Name": "BossHornet"
+            "Type": "MusicCue",
+            "Name": "Phantom"
         },
         {
-            "Type": "GGHornet",
-            "Name": "GGHornet"
+            "Type": "MusicCue",
+            "Name": "Pinstress"
         },
         {
-            "Type": "MantisLords",
-            "Name": "BossMantisLords"
+            "Type": "MusicCue",
+            "Name": "Red Memory"
         },
         {
-            "Type": "SoulMaster",
-            "Name": "BossMageLord"
+            "Type": "MusicCue",
+            "Name": "RipAndShred"
         },
         {
-            "Type": "SoulMaster2",
-            "Name": "MageLord2"
+            "Type": "MusicCue",
+            "Name": "Seth Battle"
         },
         {
-            "Type": "GGHeavy",
-            "Name": "GG Heavy"
+            "Type": "MusicCue",
+            "Name": "Shadow"
         },
         {
-            "Type": "EnemyBattle",
-            "Name": "EnemyBattle"
+            "Type": "MusicCue",
+            "Name": "Shellwood"
         },
         {
-            "Type": "DreamFight",
-            "Name": "DreamFight"
+            "Type": "MusicCue",
+            "Name": "Shrine"
         },
         {
-            "Type": "Hive",
-            "Name": "Hive"
+            "Type": "MusicCue",
+            "Name": "Silk Boss A"
         },
         {
-            "Type": "HiveKnight",
-            "Name": "HiveKnight"
+            "Type": "MusicCue",
+            "Name": "Silk Boss Ambient A"
         },
         {
-            "Type": "DungDefender",
-            "Name": "DungDefender"
+            "Type": "MusicCue",
+            "Name": "Silk Boss Ambient B"
         },
         {
-            "Type": "BrokenVessel",
-            "Name": "BossIK"
+            "Type": "MusicCue",
+            "Name": "Silk Boss B"
         },
         {
-            "Type": "Nosk",
-            "Name": "MimicSpider"
-        },{
-            "Type": "TheHollowKnight",
-            "Name": "HKBattle"
+            "Type": "MusicCue",
+            "Name": "Slab"
         },
         {
-            "Type": "Greenpath",
-            "Name": "Greenpath"
+            "Type": "MusicCue",
+            "Name": "SmallBattle"
         },
         {
-            "Type": "Waterways",
-            "Name": "Waterways"
+            "Type": "MusicCue",
+            "Name": "SongGolem"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Spinner"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "SpinnerRage"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "SurfaceAscent"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Title"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "TormentedTrobbio"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Trobbio"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Understore"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Vaults"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Ward"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Weaverlands"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Wilds"
+        },
+        {
+            "Type": "MusicCue",
+            "Name": "Wisp"
         }
     ],
     "Item2": [
         {
-            "Type": "Silent",
-            "Name": "Silent"
+            "Type": "AudioMixerSnapshot",
+            "Name": "Action"
         },
         {
-            "Type": "None",
-            "Name": "None"
+            "Type": "AudioMixerSnapshot",
+            "Name": "Action Only"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Action and Sub"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Boneforest Lava"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Cinematic"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Cogwork Main"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Cogwork Sub"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Cradle Normal"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Cradle Rise"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Cradle Tension"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Cradle Top"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Custom Music"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Damaged"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Default"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "HK Decline 2"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "HK Decline 3"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "HK Decline 4"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "HK Decline 5"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "HK Decline 6"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Hit Distort"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Lost In Maze 1"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Lost In Maze 2"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Low Health"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Main Alt Only"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Main Only"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Main Only JudgeArena"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Main and Action"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Master On"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Master Silence"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Mosstown"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Muffled"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Normal"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Normal - Gramaphone"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Normal - MuffledOrgan"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Normal - SlightlyMuffledOrgan"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Normal Alt"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Normal Flange"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Normal Flangier"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Normal Greymoor"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Normal Music"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Normal Slightly Soft"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Normal Soft"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Normal Softer"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Not Playing"
         },
         {
             "Type": "Off",
             "Name": "Off"
         },
         {
-            "Type": "Normal",
-            "Name": "Normal"
+            "Type": "AudioMixerSnapshot",
+            "Name": "On"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Outside House"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Paused"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Peak Crystal"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Peak Main"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Peak Sub"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Playing"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Red Memory Deepnest"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Red Memory Hive"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Red Memory Palace"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Red Memory Stand"
+        },
+        {
+            "Type": "Silent",
+            "Name": "Silent"
+        },
+        {
+            "Type": "Silent",
+            "Name": "Silent Flange"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Snapshot"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Sound Options - Default"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Sound Options - Muffled"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Sub Area"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Sub Area Quiet"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Sub Area SlightlyQuiet"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Tension Only"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Understore"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "Wish Promised"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Abyss Interior"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at All Layers"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Bellhart"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Belltown Room"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Boneforest Interior"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Citadel Exterior"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Citadel Inner Shaft"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Citadel Quiet Entrance"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Citadel Quiet Room"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Citadel Ruined Pipes"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Citadel Ruined Pipes Cave"
+        },
+        {
+            "Type": "Silent",
+            "Name": "at Citadel Ruined Pipes Silent"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at CitadelUndercave"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at CitadelUndercave Upper"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Cog Quiet Room"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Cradle Quiet"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Judge Arena Entry"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Judge Arena Far End"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Layer 1"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Layer 1 Caravan Spa Coral Judge"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Layer 1 MoreMuffled"
+        },
+        {
+            "Type": "Silent",
+            "Name": "at Layer 1 MoreMuffled - Silent"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Layer 1 Muffled"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Layer 1 Quiet"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Layer 1 SlightlyMoreMuffled"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Layer 1+2"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Layer 1+2 - Peak Nook"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Layer 1+2+4"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Layer 1+3"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Layer 1+3 - Quiet"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Layer 1+4"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Layer 2"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Layer 2 MoreMuffled"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Layer 2 Muffled"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Layer 2+3"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Layer 2+3 - Peak Nook"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Layer 2+3 - Peak Nook Quieter"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Layer 2+4"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Layer 3"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Layer 3 MoreMuffled"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Layer 3 Muffled"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Layer 4"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Layer 5"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Library Quiet Room"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Mistmaze Last Hall"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Mosstown Interior"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at NeedolinGet"
+        },
+        {
+            "Type": "None",
+            "Name": "at None"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Peak Bellway Interior"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Seamstress"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Shellwood Quiet Room"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Slab FarFromBlizzard"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Slab NearBlizzard"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Slab Quiet Room"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at UnderstoreNearLava"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at UnderstoreQuiet"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Verdania Ruins"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "at Verdania Ruins Rainy"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "en Arena"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "en Cave"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "en Cliffs"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "en Dream"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "en Fog Canyon"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "en Memory"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "en Room"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "en Sewerpipe"
+        },
+        {
+            "Type": "Silent",
+            "Name": "en Silent"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "en Spa"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "en Steps Wind Cave"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "en Vent"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "en WeaverZone"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "en Woozy"
+        },
+        {
+            "Type": "Silent",
+            "Name": "en WoozySilent"
+        },
+        {
+            "Type": "AudioMixerSnapshot",
+            "Name": "en Zapnest"
         }
     ]
 }

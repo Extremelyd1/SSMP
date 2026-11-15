@@ -44,7 +44,7 @@ internal static class ComponentFactory {
             case EntityComponentType.ChallengePrompt:
                 return new ChallengePromptComponent(netClient, entityId, objects);
             case EntityComponentType.Music:
-                return MusicComponent.CreateInstance(netClient, entityId, objects, out var musicComponent)
+                return MusicComponent.TryCreateInstance(netClient, entityId, objects, out var musicComponent)
                     ? musicComponent
                     : null;
             case EntityComponentType.DreamPlatform:

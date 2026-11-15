@@ -5,6 +5,7 @@ using System.Reflection;
 using GlobalEnums;
 using MonoMod.Cil;
 using MonoMod.RuntimeDetour;
+using SSMP.Logging;
 using TeamCherry.Localization;
 
 // ReSharper disable NotAccessedField.Local
@@ -27,14 +28,17 @@ public static class EventHooks {
     /// Hook for UIManager.Awake.
     /// </summary>
     private static Hook? _uiManagerAwakeHook;
+
     /// <summary>
     /// Hook for UIManager.SetState.
     /// </summary>
     private static Hook? _uiManagerSetStateHook;
+
     /// <summary>
     /// Hook for UIManager.UIGoToMainMenu.
     /// </summary>
     private static Hook? _uiManagerUIGoToMainMenuHook;
+
     /// <summary>
     /// Hook for UIManager.ReturnToMainMenu.
     /// </summary>
@@ -44,6 +48,7 @@ public static class EventHooks {
     /// Hook for Language.Has.
     /// </summary>
     private static Hook? _languageHasHook;
+
     /// <summary>
     /// Hook for Language.Get.
     /// </summary>
@@ -53,23 +58,32 @@ public static class EventHooks {
     /// Hook for GameManager.StartNewGame.
     /// </summary>
     private static Hook? _gameManagerStartNewGameHook;
+
     /// <summary>
     /// Hook for GameManager.ContinueGame.
     /// </summary>
     private static Hook? _gameManagerContinueGameHook;
+
     /// <summary>
     /// Hook for GameManager.QuitGame.
     /// </summary>
     private static Hook? _gameManagerQuitGameHook;
 
     /// <summary>
+    /// Hook for GameManager.SaveGame.
+    /// </summary>
+    private static Hook? _gameManagerSaveGameHook;
+
+    /// <summary>
     /// Hook for tk2dSpriteAnimator.Play.
     /// </summary>
     private static Hook? _spriteAnimatorPlayHook;
+
     /// <summary>
     /// Hook for tk2dSpriteAnimator.WarpClipToLocalTime.
     /// </summary>
     private static Hook? _spriteAnimatorWarpClipToLocalTimeHook;
+
     /// <summary>
     /// Hook for tk2dSpriteAnimator.ProcessEvents.
     /// </summary>
@@ -94,6 +108,7 @@ public static class EventHooks {
     /// Hook for GameMap.PositionCompassAndCorpse.
     /// </summary>
     private static Hook? _gameMapPositionCompassAndCorpseHook;
+
     /// <summary>
     /// Hook for GameMap.CloseQuickMap.
     /// </summary>
@@ -112,29 +127,33 @@ public static class EventHooks {
     /// <summary>
     /// Hooks for InteractableBase.AddInside.
     /// </summary>
-    private static Dictionary<Action<ILContext>, ILHook> _interactableBaseAddInsideHooks = new();
+    private static readonly Dictionary<Action<ILContext>, ILHook> InteractableBaseAddInsideHooks = new();
+
     /// <summary>
     /// Hooks for InteractableBase.LocalAddInside.
     /// </summary>
-    private static Dictionary<Action<ILContext>, ILHook> _interactableBaseLocalAddInsideHooks = new();
-    
+    private static readonly Dictionary<Action<ILContext>, ILHook> InteractableBaseLocalAddInsideHooks = new();
+
     /// <summary>
     /// Hooks for TransitionPoint.OnTriggerEnter2D.
     /// </summary>
-    private static Dictionary<Action<ILContext>, ILHook> _transitionPointOnTriggerEnter2DHooks = new();
+    private static readonly Dictionary<Action<ILContext>, ILHook> TransitionPointOnTriggerEnter2DHooks = new();
+
     /// <summary>
     /// Hooks for TransitionPoint.OnTriggerStay2D.
     /// </summary>
-    private static Dictionary<Action<ILContext>, ILHook> _transitionPointOnTriggerStay2DHooks = new();
+    private static readonly Dictionary<Action<ILContext>, ILHook> TransitionPointOnTriggerStay2DHooks = new();
 
     /// <summary>
     /// Event that is called after UIManager.SetState is called.
     /// </summary>
     public static event Action<UIManager, UIState>? UIManagerSetState;
+
     /// <summary>
     /// Event that is called after UIManager.UIGoToMainMenu is called.
     /// </summary>
     public static event Action? UIManagerUIGoToMainMenu;
+
     /// <summary>
     /// Event that is called after UIManager.ReturnToMainMenu is called.
     /// </summary>
@@ -144,6 +163,7 @@ public static class EventHooks {
     /// Event that is called when Language.Has is called. Can be used to modify the return value of the call.
     /// </summary>
     public static event Func<string, string, bool?>? LanguageHas;
+
     /// <summary>
     /// Event that is called when Language.Get is called. Can be used to modify the return value of the call.
     /// </summary>
@@ -153,23 +173,32 @@ public static class EventHooks {
     /// Event that is called when GameManager.StartNewGame is called.
     /// </summary>
     public static event Action? GameManagerStartNewGame;
+
     /// <summary>
     /// Event that is called when GameManager.ContinueGame is called.
     /// </summary>
     public static event Action? GameManagerContinueGame;
+
     /// <summary>
     /// Event that is called before GameManager.QuitGame is called.
     /// </summary>
     public static event Action? GameManagerQuitGame;
 
     /// <summary>
+    /// Event that is called when GameManager.SaveGame is called.
+    /// </summary>
+    public static event Action<int>? GameManagerSaveGame;
+
+    /// <summary>
     /// Event that is called when tk2dSpriteAnimator.Play is called.
     /// </summary>
     public static event Action<tk2dSpriteAnimator, tk2dSpriteAnimationClip, float, float>? SpriteAnimatorPlay;
+
     /// <summary>
     /// Event that is called when tk2dSpriteAnimator.WarpClipToLocalTime is called.
     /// </summary>
     public static event Action<tk2dSpriteAnimator, tk2dSpriteAnimationClip, float>? SpriteAnimatorWarpClipToLocalTime;
+
     /// <summary>
     /// Event that is called when tk2dSpriteAnimator.ProcessEvents is called.
     /// </summary>
@@ -195,6 +224,7 @@ public static class EventHooks {
     /// Event that is called when GameMap.PositionCompassAndCorpse is called.
     /// </summary>
     public static event Action<GameMap>? GameMapPositionCompassAndCorpse;
+
     /// <summary>
     /// Event that is called when GameMap.CloseQuickMap is called.
     /// </summary>
@@ -215,12 +245,13 @@ public static class EventHooks {
     /// </summary>
     public static event Action<ILContext>? InteractableBaseAddInsideIL {
         add => AddIlHookEvent(
-            value, 
+            value,
             typeof(InteractableBase).GetMethod(nameof(InteractableBase.AddInside), BindingFlags),
-            _interactableBaseAddInsideHooks
+            InteractableBaseAddInsideHooks
         );
-        remove => RemoveIlHookEvent(value, _interactableBaseAddInsideHooks);
+        remove => RemoveIlHookEvent(value, InteractableBaseAddInsideHooks);
     }
+
     /// <summary>
     /// Event that is called when the IL for InteractableBase.LocalAddInside is generated.
     /// </summary>
@@ -228,34 +259,35 @@ public static class EventHooks {
         add => AddIlHookEvent(
             value,
             typeof(InteractableBase).GetMethod(nameof(InteractableBase.LocalAddInside), BindingFlags),
-            _interactableBaseLocalAddInsideHooks
+            InteractableBaseLocalAddInsideHooks
         );
-        remove => RemoveIlHookEvent(value, _interactableBaseLocalAddInsideHooks);
+        remove => RemoveIlHookEvent(value, InteractableBaseLocalAddInsideHooks);
     }
-    
+
     /// <summary>
     /// Event that is called when the IL for TransitionPoint.OnTriggerEnter2D is generated.
     /// </summary>
     // ReSharper disable once InconsistentNaming
     public static event Action<ILContext>? TransitionPointOnTriggerEnter2DIL {
         add => AddIlHookEvent(
-            value, 
+            value,
             typeof(TransitionPoint).GetMethod(nameof(TransitionPoint.OnTriggerEnter2D), BindingFlags),
-            _transitionPointOnTriggerEnter2DHooks
+            TransitionPointOnTriggerEnter2DHooks
         );
-        remove => RemoveIlHookEvent(value, _transitionPointOnTriggerEnter2DHooks);
+        remove => RemoveIlHookEvent(value, TransitionPointOnTriggerEnter2DHooks);
     }
+
     /// <summary>
     /// Event that is called when the IL for TransitionPoint.OnTriggerStay2D is generated.
     /// </summary>
     // ReSharper disable once InconsistentNaming
     public static event Action<ILContext>? TransitionPointOnTriggerStay2DIL {
         add => AddIlHookEvent(
-            value, 
+            value,
             typeof(TransitionPoint).GetMethod(nameof(TransitionPoint.OnTriggerStay2D), BindingFlags),
-            _transitionPointOnTriggerStay2DHooks
+            TransitionPointOnTriggerStay2DHooks
         );
-        remove => RemoveIlHookEvent(value, _transitionPointOnTriggerStay2DHooks);
+        remove => RemoveIlHookEvent(value, TransitionPointOnTriggerStay2DHooks);
     }
 
     /// <summary>
@@ -266,7 +298,7 @@ public static class EventHooks {
             typeof(UIManager).GetMethod(nameof(UIManager.Awake), BindingFlags),
             OnUIManagerAwake
         );
-        
+
         _uiManagerSetStateHook = new Hook(
             typeof(UIManager).GetMethod(nameof(UIManager.SetState)),
             OnUIManagerSetState
@@ -279,7 +311,7 @@ public static class EventHooks {
             typeof(UIManager).GetMethod(nameof(UIManager.ReturnToMainMenu)),
             OnUIManagerReturnToMainMenu
         );
-        
+
         _gameManagerStartNewGameHook = new Hook(
             typeof(GameManager).GetMethod(nameof(GameManager.StartNewGame)),
             OnGameManagerStartNewGame
@@ -292,6 +324,16 @@ public static class EventHooks {
             typeof(GameManager).GetMethod(nameof(GameManager.QuitGame)),
             OnGameManagerQuitGame
         );
+        _gameManagerSaveGameHook = new Hook(
+            typeof(GameManager).GetMethod(
+                nameof(GameManager.SaveGame),
+                BindingFlags,
+                null,
+                [typeof(int), typeof(Action<bool>), typeof(bool), typeof(AutoSaveName)],
+                null
+            ),
+            OnGameManagerSaveGame
+        );
 
         _spriteAnimatorPlayHook = new Hook(
             typeof(tk2dSpriteAnimator).GetMethod(
@@ -302,7 +344,7 @@ public static class EventHooks {
         );
         _spriteAnimatorWarpClipToLocalTimeHook = new Hook(
             typeof(tk2dSpriteAnimator).GetMethod(
-                nameof(tk2dSpriteAnimator.WarpClipToLocalTime), 
+                nameof(tk2dSpriteAnimator.WarpClipToLocalTime),
                 BindingFlags
             ),
             OnSpriteAnimatorWarpClipToLocalTime
@@ -358,20 +400,20 @@ public static class EventHooks {
     /// <param name="methodBase">The method base to IL hook.</param>
     /// <param name="backingDict">The dictionary containing subscriptions for this event.</param>
     private static void AddIlHookEvent(
-        Action<ILContext>? value, 
-        MethodBase? methodBase, 
+        Action<ILContext>? value,
+        MethodBase? methodBase,
         Dictionary<Action<ILContext>, ILHook> backingDict
     ) {
         if (value == null || methodBase == null) {
             return;
         }
-            
+
         if (backingDict.TryGetValue(value, out var hook)) {
             hook.Dispose();
         }
 
         backingDict[value] = new ILHook(
-            methodBase, 
+            methodBase,
             value.Invoke
         );
     }
@@ -398,7 +440,7 @@ public static class EventHooks {
 
     private static void OnUIManagerAwake(Action<UIManager> orig, UIManager self) {
         orig(self);
-        
+
         _languageHasHook = new Hook(
             typeof(Language).GetMethod("Has", [typeof(string), typeof(string)]),
             OnLanguageHas
@@ -426,7 +468,7 @@ public static class EventHooks {
 
         return orig(self);
     }
-    
+
     private static bool OnLanguageHas(Func<string, string, bool> orig, string key, string sheet) {
         var result = LanguageHas?.Invoke(key, sheet);
         return result ?? orig(key, sheet);
@@ -437,8 +479,12 @@ public static class EventHooks {
         return result ?? orig(key, sheet);
     }
 
-    private static void OnGameManagerStartNewGame(Action<GameManager, bool, bool> orig, GameManager self,
-        bool permaDeathMode, bool bossRushMode) {
+    private static void OnGameManagerStartNewGame(
+        Action<GameManager, bool, bool> orig,
+        GameManager self,
+        bool permaDeathMode,
+        bool bossRushMode
+    ) {
         orig(self, permaDeathMode, bossRushMode);
 
         GameManagerStartNewGame?.Invoke();
@@ -456,6 +502,23 @@ public static class EventHooks {
         return orig(self);
     }
 
+    private static void OnGameManagerSaveGame(
+        Action<GameManager, int, Action<bool>, bool, AutoSaveName> orig,
+        GameManager self,
+        int saveSlot,
+        Action<bool> ogCallback,
+        bool withAutoSave,
+        AutoSaveName autoSaveName
+    ) {
+        orig(self, saveSlot, ogCallback, withAutoSave, autoSaveName);
+
+        try {
+            GameManagerSaveGame?.Invoke(saveSlot);
+        } catch (Exception e) {
+            Logger.Error($"Exception thrown in GameManagerSaveGame event:\n{e}");
+        }
+    }
+
     private static void OnSpriteAnimatorPlay(
         Action<tk2dSpriteAnimator, tk2dSpriteAnimationClip, float, float> orig,
         tk2dSpriteAnimator self,
@@ -464,10 +527,10 @@ public static class EventHooks {
         float overrideFps
     ) {
         orig(self, clip, clipStartTime, overrideFps);
-        
+
         SpriteAnimatorPlay?.Invoke(self, clip, clipStartTime, overrideFps);
     }
-    
+
     private static void OnSpriteAnimatorWarpClipToLocalTime(
         Action<tk2dSpriteAnimator, tk2dSpriteAnimationClip, float> orig,
         tk2dSpriteAnimator self,
@@ -475,10 +538,10 @@ public static class EventHooks {
         float time
     ) {
         orig(self, clip, time);
-        
+
         SpriteAnimatorWarpClipToLocalTime?.Invoke(self, clip, time);
     }
-    
+
     private static void OnSpriteAnimatorProcessEvents(
         Action<tk2dSpriteAnimator, int, int, int> orig,
         tk2dSpriteAnimator self,
@@ -487,7 +550,7 @@ public static class EventHooks {
         int direction
     ) {
         orig(self, start, last, direction);
-        
+
         SpriteAnimatorProcessEvents?.Invoke(self, start, last, direction);
     }
 
@@ -502,7 +565,7 @@ public static class EventHooks {
         HeroController self,
         bool nonLethal,
         bool frostDeath
-        ) {
+    ) {
         HeroControllerDie?.Invoke(nonLethal, frostDeath);
 
         return orig(self, nonLethal, frostDeath);
@@ -537,7 +600,7 @@ public static class EventHooks {
 
     private static void OnCameraLockAreaAwake(Action<CameraLockArea> orig, CameraLockArea self) {
         orig(self);
-        
+
         CameraLockAreaAwake?.Invoke(self);
     }
 }
