@@ -40,17 +40,7 @@ internal class SpriteRendererComponent : EntityComponent {
             return;
         }
 
-        var newEnabled = _spriteRenderer.Host.enabled;
-        if (newEnabled != _lastEnabled) {
-            _lastEnabled = newEnabled;
-            
-            var data = new EntityNetworkData {
-                Type = EntityComponentType.SpriteRenderer
-            };
-            data.Packet.Write(newEnabled);
-
-            SendData(data);
-        }
+        SendIfChanged(EntityComponentType.SpriteRenderer, _spriteRenderer.Host.enabled, ref _lastEnabled);
     }
 
     /// <inheritdoc />

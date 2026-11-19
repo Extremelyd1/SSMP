@@ -43,17 +43,7 @@ internal class MeshRendererComponent : EntityComponent {
             return;
         }
 
-        var newEnabled = _meshRenderer.Host.enabled;
-        if (newEnabled != _lastEnabled) {
-            _lastEnabled = newEnabled;
-
-            var data = new EntityNetworkData {
-                Type = EntityComponentType.MeshRenderer
-            };
-            data.Packet.Write(newEnabled);
-
-            SendData(data);
-        }
+        SendIfChanged(EntityComponentType.MeshRenderer, _meshRenderer.Host.enabled, ref _lastEnabled);
     }
 
     /// <inheritdoc />

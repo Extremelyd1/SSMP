@@ -45,17 +45,7 @@ internal class ChildrenActivationComponent : EntityComponent {
             return;
         }
 
-        var newActive = _hostChildren[0].activeSelf;
-        if (newActive != _lastActive) {
-            _lastActive = newActive;
-
-            var data = new EntityNetworkData {
-                Type = EntityComponentType.ChildrenActivation
-            };
-            data.Packet.Write(newActive);
-
-            SendData(data);
-        }
+        SendIfChanged(EntityComponentType.ChildrenActivation, _hostChildren[0].activeSelf, ref _lastActive);
     }
 
     /// <inheritdoc />

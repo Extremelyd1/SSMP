@@ -56,7 +56,7 @@ internal static partial class EntityFsmActions {
     /// <summary>
     /// Event that is called when an entity is spawned from an object.
     /// </summary>
-    public static event Func<EntitySpawnDetails, bool> EntitySpawnEvent;
+    public static event Func<EntitySpawnDetails, bool>? EntitySpawnEvent;
 
     /// <summary>
     /// Dictionary mapping a type of an FSM action to the corresponding method info of the "get" method in this class.

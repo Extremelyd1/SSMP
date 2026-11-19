@@ -52,6 +52,48 @@ internal abstract class EntityComponent {
     }
 
     /// <summary>
+    /// Sends the given bool as component data if it differs from the last sent value, and stores it.
+    /// </summary>
+    /// <param name="type">The component type of the data.</param>
+    /// <param name="value">The current value.</param>
+    /// <param name="last">The last sent value, updated if changed.</param>
+    protected void SendIfChanged(EntityComponentType type, bool value, ref bool last) {
+        if (value == last) {
+            return;
+        }
+
+        last = value;
+
+        var data = new EntityNetworkData {
+            Type = type
+        };
+        data.Packet.Write(value);
+
+        SendData(data);
+    }
+
+    /// <summary>
+    /// Sends the given float as component data if it differs from the last sent value, and stores it.
+    /// </summary>
+    /// <param name="type">The component type of the data.</param>
+    /// <param name="value">The current value.</param>
+    /// <param name="last">The last sent value, updated if changed.</param>
+    protected void SendIfChanged(EntityComponentType type, float value, ref float last) {
+        if (last.Equals(value)) {
+            return;
+        }
+
+        last = value;
+
+        var data = new EntityNetworkData {
+            Type = type
+        };
+        data.Packet.Write(value);
+
+        SendData(data);
+    }
+
+    /// <summary>
     /// Initializes the entity component when the client user is the scene host.
     /// </summary>
     protected virtual void InitializeHost() {

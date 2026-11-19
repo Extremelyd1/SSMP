@@ -21,13 +21,13 @@ internal static partial class EntityFsmActions {
         // We first check whether this action results in the spawning of an entity that is managed by the
         // system. Because if so, it would already be handled by an EntitySpawn packet instead, and this will only
         // duplicate the spawning and leave it uncontrolled. So we don't send the data at all
-        if (EntitySpawnEvent.Invoke(
+        if (EntitySpawnEvent?.Invoke(
                 new EntitySpawnDetails {
                     Type = EntitySpawnType.FsmAction,
                     Action = action,
                     GameObject = action.storeObject.Value
                 }
-            )) {
+            ) == true) {
             //Logger.Debug($"Tried getting SpawnObjectFromGlobalPool network data, but spawned object is entity");
             return false;
         }

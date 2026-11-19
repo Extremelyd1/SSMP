@@ -51,17 +51,7 @@ internal class GravityScaleComponent : EntityComponent {
             _receivedGravityScale = null;
         }
 
-        var newGravityScale = _rigidbody.gravityScale;
-        if (!newGravityScale.Equals(_lastScale)) {
-            _lastScale = newGravityScale;
-
-            var data = new EntityNetworkData {
-                Type = EntityComponentType.GravityScale
-            };
-            data.Packet.Write(newGravityScale);
-
-            SendData(data);
-        }
+        SendIfChanged(EntityComponentType.GravityScale, _rigidbody.gravityScale, ref _lastScale);
     }
 
     /// <inheritdoc />

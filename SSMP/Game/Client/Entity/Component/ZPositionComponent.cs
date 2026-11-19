@@ -33,17 +33,7 @@ internal class ZPositionComponent : EntityComponent {
             return;
         }
 
-        var newZ = GameObject.Host.transform.position.z;
-        if (!_lastZ.Equals(newZ)) {
-            _lastZ = newZ;
-
-            var data = new EntityNetworkData {
-                Type = EntityComponentType.ZPosition
-            };
-            data.Packet.Write(newZ);
-
-            SendData(data);
-        }
+        SendIfChanged(EntityComponentType.ZPosition, GameObject.Host.transform.position.z, ref _lastZ);
     }
 
     /// <inheritdoc />
