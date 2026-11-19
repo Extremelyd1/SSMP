@@ -23,10 +23,17 @@ public class InterEvent {
     /// <summary>
     /// Unsubscribes an action from the event by its token.
     /// </summary>
+    /// <remarks>
+    /// This method is public and virtual by design, so addons can call it directly and subclasses can override it.
+    /// Disposing the token does the same, because every token calls this method when it is disposed. That way you
+    /// can unsubscribe without keeping a reference to the event.
+    /// </remarks>
     /// <param name="token">The token that denotes the subscription.</param>
-    private void Unsubscribe(SubscriptionToken token) {
+    // ReSharper disable once MemberCanBeProtected.Global
+    // ReSharper disable once VirtualMemberNeverOverridden.Global
+    public virtual void Unsubscribe(SubscriptionToken token) {
         lock (_lock) {
-            _subscriptions = _subscriptions.Where(s => !s.SubscriptionToken.Equals(token)).ToArray();
+            _subscriptions = [.. _subscriptions.Where(s => !s.SubscriptionToken.Equals(token))];
         }
     }
 
@@ -39,7 +46,7 @@ public class InterEvent {
         var sub = new EventSubscription(new SubscriptionToken(Unsubscribe), strategy);
 
         lock (_lock) {
-            _subscriptions = [.._subscriptions, sub];
+            _subscriptions = [.. _subscriptions, sub];
         }
 
         return sub.SubscriptionToken;
