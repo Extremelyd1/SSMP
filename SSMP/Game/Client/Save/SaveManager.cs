@@ -70,6 +70,40 @@ internal class SaveManager {
     private readonly Dictionary<string?, int> _listHashes;
 
     /// <summary>
+    /// Dictionary of the last JSON values of the <see cref="JsonFields"/> for comparing changes against.
+    /// </summary>
+    private readonly Dictionary<string, string> _jsonValues;
+
+    /// <summary>
+    /// The unscaled time at which the <see cref="JsonFields"/> should next be checked for changes.
+    /// </summary>
+    private float _nextJsonCheckTime;
+
+    /// <summary>
+    /// The minimum unscaled time in seconds between two save updates for the same float field. Some floats are timers
+    /// that change every frame and would otherwise be sent at every check.
+    /// </summary>
+    private const float FloatSendInterval = 1f;
+
+    /// <summary>
+    /// The unscaled time at which each float field may next be sent as a save update.
+    /// </summary>
+    private readonly Dictionary<string, float> _nextFloatSendTimes = new();
+
+    /// <summary>
+    /// PlayerData fields of game types (inventory, tools, crests, quests, etc.) that are synced as UTF-8 JSON in a
+    /// byte array, since the server cannot reference these types. They are the fields with "System.Byte[]" as
+    /// variable type in the save data, whose actual type is not a byte array.
+    /// </summary>
+    private static readonly Dictionary<string, FieldInfo> JsonFields = typeof(PlayerData)
+        .GetFields()
+        .Where(field => field.FieldType != typeof(byte[]) &&
+                        SaveDataMapping.PlayerDataVarProperties.TryGetValue(field.Name, out var varProps) &&
+                        varProps.VarType == "System.Byte[]"
+        )
+        .ToDictionary(field => field.Name);
+
+    /// <summary>
     /// List of FieldInfo for fields in PlayerData that are simple values that should be synced. Used for looping
     /// over to check for changes and network those changes.
     /// </summary>
@@ -120,6 +154,7 @@ internal class SaveManager {
 
         _persistentFsmData = [];
         _listHashes = new Dictionary<string?, int>();
+        _jsonValues = new Dictionary<string, string>();
         _playerDataSimpleSyncFields = [];
         _playerDataCompoundSyncFields = [];
     }
@@ -135,6 +170,7 @@ internal class SaveManager {
 
             if (!SaveDataMapping.PlayerDataVarProperties.TryGetValue(fieldName, out var varProps)
                 || !varProps.Sync
+                || JsonFields.ContainsKey(fieldName)
                ) {
                 continue;
             }
@@ -160,6 +196,7 @@ internal class SaveManager {
 
         MonoBehaviourUtil.Instance.OnUpdateEvent += OnUpdatePlayerDataChecks;
         MonoBehaviourUtil.Instance.OnUpdateEvent += OnUpdatePersistents;
+        MonoBehaviourUtil.Instance.OnUpdateEvent += OnUpdateJsonFields;
     }
 
     /// <summary>
@@ -170,6 +207,7 @@ internal class SaveManager {
 
         MonoBehaviourUtil.Instance.OnUpdateEvent -= OnUpdatePlayerDataChecks;
         MonoBehaviourUtil.Instance.OnUpdateEvent -= OnUpdatePersistents;
+        MonoBehaviourUtil.Instance.OnUpdateEvent -= OnUpdateJsonFields;
     }
 
     /// <summary>
@@ -179,6 +217,7 @@ internal class SaveManager {
     private void OnConnect(ServerInfo serverInfo) {
         if (serverInfo.FullSynchronisation) {
             ResetLastPlayerData();
+            _jsonValues.Clear();
         }
     }
 
@@ -241,6 +280,16 @@ internal class SaveManager {
 
             if (Equals(currentValue, lastValue)) {
                 continue;
+            }
+
+            // Throttle floats by leaving the last value stale, so the latest value is sent once the interval passed
+            if (field.FieldType == typeof(float)) {
+                if (_nextFloatSendTimes.TryGetValue(field.Name, out var nextSendTime)
+                    && Time.unscaledTime < nextSendTime) {
+                    continue;
+                }
+
+                _nextFloatSendTimes[field.Name] = Time.unscaledTime + FloatSendInterval;
             }
 
             Logger.Debug($"PlayerData value changed from: {lastValue} to {currentValue}");
@@ -710,6 +759,38 @@ internal class SaveManager {
     }
 
     /// <summary>
+    /// Called every unity update. Checks the <see cref="JsonFields"/> for changes by comparing their JSON, which is
+    /// only done once per second, since serialising them is too costly to do every frame.
+    /// </summary>
+    private void OnUpdateJsonFields() {
+        if (_lastPlayerData == null || Time.unscaledTime < _nextJsonCheckTime) {
+            return;
+        }
+
+        _nextJsonCheckTime = Time.unscaledTime + 1f;
+
+        var gm = global::GameManager.instance;
+        if (!gm || gm.GameState == GameState.MAIN_MENU) {
+            return;
+        }
+
+        foreach (var (name, field) in JsonFields) {
+            var value = field.GetValue(PlayerData.instance);
+            var json = JsonUtil.ToJson(value, field.FieldType);
+
+            // The first value is only stored, since it is either the value received from the server or the
+            // initial value of the save
+            if (_jsonValues.TryGetValue(name, out var lastJson) && lastJson != json) {
+                Logger.Debug($"JSON variable ({name}) changed value");
+
+                CheckSendSaveUpdate(name, () => EncodeSaveDataValue(name, value));
+            }
+
+            _jsonValues[name] = json;
+        }
+    }
+
+    /// <summary>
     /// Callback method for when a save update is received.
     /// </summary>
     /// <param name="saveUpdate">The save update that was received.</param>
@@ -775,6 +856,18 @@ internal class SaveManager {
 
             var decodedObject = DecodeSaveDataValue(name, encodedValue);
 
+            if (JsonFields.TryGetValue(name, out var jsonField)) {
+                // An empty value would wipe the field, so it is ignored
+                if (decodedObject != null) {
+                    // First set the new JSON value, so we don't trigger an update and subsequently a feedback loop
+                    _jsonValues[name] = JsonUtil.ToJson(decodedObject, jsonField.FieldType);
+                    jsonField.SetValue(pd, decodedObject);
+                }
+
+                _saveChanges.ApplyPlayerDataSaveChange(name);
+                return;
+            }
+
             switch (decodedObject) {
                 case bool decodedBool:
                     _lastPlayerData?.SetBool(name, decodedBool);
@@ -815,6 +908,15 @@ internal class SaveManager {
                 case string decodedString:
                     _lastPlayerData?.SetString(name, decodedString);
                     pd.SetString(name, decodedString);
+                    break;
+                case null:
+                    // Unset strings (e.g. HeroCorpseScene without a corpse) decode to null
+                    if (SaveDataMapping.Instance.PlayerDataVarProperties.TryGetValue(name, out var nullVarProps)
+                        && nullVarProps.VarType == typeof(string).FullName) {
+                        _lastPlayerData?.SetString(name, null!);
+                        pd.SetString(name, null!);
+                    }
+
                     break;
                 case Vector2 decodedVec2:
                     _lastPlayerData?.SetVariable(name, decodedVec2);
@@ -1011,6 +1113,8 @@ internal class SaveManager {
             Vector3 v => (Math.Vector3) v,
             MapZone m => (Serialization.MapZone) m,
             List<Vector3> l => l.Select(v => (Math.Vector3) v).ToList(),
+            _ when name != null && JsonFields.TryGetValue(name, out var field) =>
+                System.Text.Encoding.UTF8.GetBytes(JsonUtil.ToJson(value, field.FieldType)),
             _ => value
         };
 
@@ -1034,6 +1138,8 @@ internal class SaveManager {
             Math.Vector3 v => (Vector3) v,
             Serialization.MapZone m => (MapZone) m,
             List<Math.Vector3> l => l.Select(v => (Vector3) v).ToList(),
+            byte[] b when name != null && JsonFields.TryGetValue(name, out var field) =>
+                JsonUtil.FromJson(System.Text.Encoding.UTF8.GetString(b), field.FieldType),
             int i when name != null && PlayerDataFields.TryGetValue(name, out var enumField) &&
                        enumField.FieldType.IsEnum => Enum.ToObject(enumField.FieldType, i),
             _ => val

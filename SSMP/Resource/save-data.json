@@ -393,10 +393,11 @@
       "Additive": false
     },
     "BelltownHousePlayingInfo": {
-      "Sync": false,
+      "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "CollectionGramaphone.PlayingInfo"
+      "VarType": "System.Byte[]",
+      "Additive": false
     },
     "BelltownHouseState": {
       "Sync": true,
@@ -757,10 +758,11 @@
       "Additive": false
     },
     "Collectables": {
-      "Sync": false,
+      "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "CollectableItemsData"
+      "VarType": "System.Byte[]",
+      "Additive": false
     },
     "CollectedCommonSpine": {
       "Sync": true,
@@ -903,16 +905,18 @@
       "Additive": false
     },
     "CrawbellCurrency": {
-      "Sync": false,
+      "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "int[]"
+      "VarType": "System.Byte[]",
+      "Additive": false
     },
     "CrawbellCurrencyCaps": {
-      "Sync": false,
+      "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "int[]"
+      "VarType": "System.Byte[]",
+      "Additive": false
     },
     "CrawbellInstalled": {
       "Sync": true,
@@ -1133,10 +1137,11 @@
       "Additive": false
     },
     "EnemyJournalKillData": {
-      "Sync": false,
+      "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "EnemyJournalKillData"
+      "VarType": "System.Byte[]",
+      "Additive": false
     },
     "EnteredMazeRestScene": {
       "Sync": true,
@@ -1146,10 +1151,11 @@
       "Additive": false
     },
     "ExtraToolEquips": {
-      "Sync": false,
+      "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "FloatingCrestSlotsData"
+      "VarType": "System.Byte[]",
+      "Additive": false
     },
     "FastTravelNPCLocation": {
       "Sync": true,
@@ -1160,20 +1166,20 @@
     },
     "FisherWalkerDirection": {
       "Sync": true,
-      "SyncType": "Player",
+      "SyncType": "Server",
       "IgnoreSceneHost": true,
       "VarType": "System.Boolean",
       "Additive": false
     },
     "FisherWalkerIdleTimeLeft": {
-      "Sync": true,
+      "Sync": false,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
       "VarType": "System.Single",
       "Additive": false
     },
     "FisherWalkerTimer": {
-      "Sync": true,
+      "Sync": false,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
       "VarType": "System.Single",
@@ -1390,10 +1396,11 @@
       "Additive": false
     },
     "GrubFarmerMimicValueList": {
-      "Sync": false,
+      "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "int[]"
+      "VarType": "System.Byte[]",
+      "Additive": false
     },
     "GrubFarmerSilkGrubsSold": {
       "Sync": true,
@@ -2013,10 +2020,11 @@
       "Additive": false
     },
     "LibrarianPlayingInfo": {
-      "Sync": false,
+      "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "CollectionGramaphone.PlayingInfo"
+      "VarType": "System.Byte[]",
+      "Additive": false
     },
     "LightningToolToggle": {
       "Sync": true,
@@ -2180,10 +2188,11 @@
       "Additive": false
     },
     "MateriumCollected": {
-      "Sync": false,
+      "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "MateriumItemsData"
+      "VarType": "System.Byte[]",
+      "Additive": false
     },
     "MazeEntranceDoor": {
       "Sync": true,
@@ -2225,10 +2234,11 @@
       "Additive": false
     },
     "MementosDeposited": {
-      "Sync": false,
+      "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "CollectableMementosData"
+      "VarType": "System.Byte[]",
+      "Additive": false
     },
     "MerchantEnclaveShellFragment": {
       "Sync": true,
@@ -2750,10 +2760,11 @@
       "Additive": false
     },
     "PreMemoryState": {
-      "Sync": false,
+      "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "HeroItemsState"
+      "VarType": "System.Byte[]",
+      "Additive": false
     },
     "PreviousCrestID": {
       "Sync": true,
@@ -2868,10 +2879,11 @@
       "Additive": false
     },
     "QuestCompletionData": {
-      "Sync": false,
+      "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "QuestCompletionData"
+      "VarType": "System.Byte[]",
+      "Additive": false
     },
     "QuestPaneHasNew": {
       "Sync": true,
@@ -2881,10 +2893,11 @@
       "Additive": false
     },
     "QuestRumourData": {
-      "Sync": false,
+      "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "QuestRumourData"
+      "VarType": "System.Byte[]",
+      "Additive": false
     },
     "QuillState": {
       "Sync": true,
@@ -2894,10 +2907,11 @@
       "Additive": false
     },
     "Relics": {
-      "Sync": false,
+      "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "CollectableRelicsData"
+      "VarType": "System.Byte[]",
+      "Additive": false
     },
     "RevisionBreak": {
       "Sync": true,
@@ -3475,10 +3489,11 @@
       "Additive": false
     },
     "SteelQuestSpots": {
-      "Sync": false,
+      "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "SteelSoulQuestSpot.Spot[]"
+      "VarType": "System.Byte[]",
+      "Additive": false
     },
     "SteelSentinelMet": {
       "Sync": true,
@@ -3495,10 +3510,11 @@
       "Additive": false
     },
     "StoryEvents": {
-      "Sync": false,
+      "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "List<PlayerStory.EventInfo>"
+      "VarType": "System.Byte[]",
+      "Additive": false
     },
     "TempGeoStore": {
       "Sync": true,
@@ -3515,10 +3531,11 @@
       "Additive": false
     },
     "ToolEquips": {
-      "Sync": false,
+      "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "ToolCrestsData"
+      "VarType": "System.Byte[]",
+      "Additive": false
     },
     "ToolKitUpgrades": {
       "Sync": true,
@@ -3528,10 +3545,11 @@
       "Additive": false
     },
     "ToolLiquids": {
-      "Sync": false,
+      "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "ToolItemLiquidsData"
+      "VarType": "System.Byte[]",
+      "Additive": false
     },
     "ToolPaneHasNew": {
       "Sync": true,
@@ -3548,10 +3566,11 @@
       "Additive": false
     },
     "Tools": {
-      "Sync": false,
+      "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "ToolItemsData"
+      "VarType": "System.Byte[]",
+      "Additive": false
     },
     "TroupeHunterWildAct3Convo": {
       "Sync": true,
@@ -4818,10 +4837,11 @@
       "Additive": false
     },
     "currentBossSequence": {
-      "Sync": false,
+      "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "BossSequenceController.BossSequenceData"
+      "VarType": "System.Byte[]",
+      "Additive": false
     },
     "currentBossStatueCompletionKey": {
       "Sync": true,
@@ -7199,10 +7219,11 @@
       "Additive": false
     },
     "mossBerryValueList": {
-      "Sync": false,
+      "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "int[]"
+      "VarType": "System.Byte[]",
+      "Additive": false
     },
     "mosstown01_shortcut": {
       "Sync": true,
@@ -7664,10 +7685,11 @@
       "Additive": false
     },
     "placedMarkers": {
-      "Sync": false,
+      "Sync": true,
       "SyncType": "Player",
       "IgnoreSceneHost": true,
-      "VarType": "WrappedVector2List[]"
+      "VarType": "System.Byte[]",
+      "Additive": false
     },
     "playTime": {
       "Sync": true,
