@@ -1,7 +1,7 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using SSMP.Eventing;
+using SSMP.Logging;
 
 namespace SSMP.Api.Eventing;
 
@@ -10,19 +10,30 @@ namespace SSMP.Api.Eventing;
 /// </summary>
 public class InterEvent {
     /// <summary>
-    /// List containing event subscriptions for this event.
+    /// Copy-on-write array containing event subscriptions for this event. Writers replace the array under
+    /// <see cref="_lock"/>; publishers iterate over the array they read, so handlers may (un)subscribe safely.
     /// </summary>
-    private readonly List<EventSubscription> _subscriptions = [];
+    private volatile EventSubscription[] _subscriptions = [];
+
+    /// <summary>
+    /// Object to lock writes to <see cref="_subscriptions"/>.
+    /// </summary>
+    private readonly object _lock = new();
 
     /// <summary>
     /// Unsubscribes an action from the event by its token.
     /// </summary>
+    /// <remarks>
+    /// This method is public and virtual by design, so addons can call it directly and subclasses can override it.
+    /// Disposing the token does the same, because every token calls this method when it is disposed. That way you
+    /// can unsubscribe without keeping a reference to the event.
+    /// </remarks>
     /// <param name="token">The token that denotes the subscription.</param>
+    // ReSharper disable once MemberCanBeProtected.Global
+    // ReSharper disable once VirtualMemberNeverOverridden.Global
     public virtual void Unsubscribe(SubscriptionToken token) {
-        var sub = _subscriptions.FirstOrDefault(t => t.SubscriptionToken.Equals(token));
-
-        if (sub != null) {
-            _subscriptions.Remove(sub);
+        lock (_lock) {
+            _subscriptions = [.. _subscriptions.Where(s => !s.SubscriptionToken.Equals(token))];
         }
     }
 
@@ -31,9 +42,13 @@ public class InterEvent {
     /// </summary>
     /// <param name="strategy">The strategy to execute when an event is triggered.</param>
     /// <returns>A token that represents this subscription and can be used to unsubscribe.</returns>
-    protected internal SubscriptionToken SubscribeInternal(Action<object> strategy) {
+    protected SubscriptionToken SubscribeInternal(Action<object> strategy) {
         var sub = new EventSubscription(new SubscriptionToken(Unsubscribe), strategy);
-        _subscriptions.Add(sub);
+
+        lock (_lock) {
+            _subscriptions = [.. _subscriptions, sub];
+        }
+
         return sub.SubscriptionToken;
     }
 
@@ -41,9 +56,15 @@ public class InterEvent {
     /// Internal implementation of publish, with types erased.
     /// </summary>
     /// <param name="payload">The payload object to publish.</param>
-    protected internal void PublishInternal(object payload) {
+    protected void PublishInternal(object payload) {
+        // Reading without the lock is safe, since the array is only ever replaced and never modified
+        // ReSharper disable once InconsistentlySynchronizedField
         foreach (var subscription in _subscriptions) {
-            subscription.ExecutionStrategy(payload);
+            try {
+                subscription.ExecutionStrategy(payload);
+            } catch (Exception e) {
+                Logger.Error($"Exception in event handler for {GetType()}: {e}");
+            }
         }
     }
 }

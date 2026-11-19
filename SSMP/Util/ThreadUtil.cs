@@ -1,5 +1,5 @@
 using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using UnityEngine;
 
 namespace SSMP.Util;
@@ -9,14 +9,9 @@ namespace SSMP.Util;
 /// </summary>
 internal class ThreadUtil : MonoBehaviour {
     /// <summary>
-    /// Object to lock asynchronous access.
+    /// Queue of actions that need to be run on the Unity main thread.
     /// </summary>
-    private static readonly object Lock = new object();
-
-    /// <summary>
-    /// List of actions that need to be run on the Unity main thread.
-    /// </summary>
-    private static readonly List<Action> ActionsToRun = new List<Action>();
+    private static readonly ConcurrentQueue<Action> ActionsToRun = new ConcurrentQueue<Action>();
 
     /// <summary>
     /// Instantiate this static class.
@@ -32,20 +27,13 @@ internal class ThreadUtil : MonoBehaviour {
     /// </summary>
     /// <param name="action">The action to run.</param>
     public static void RunActionOnMainThread(Action action) {
-        lock (Lock) {
-            ActionsToRun.Add(action);
-        }
+        ActionsToRun.Enqueue(action);
     }
 
     public void Update() {
-        List<Action> actions;
-
-        lock (Lock) {
-            actions = new List<Action>(ActionsToRun);
-            ActionsToRun.Clear();
-        }
-
-        foreach (var action in actions) {
+        // Only drain what is queued now; actions enqueued by these actions run next frame
+        var count = ActionsToRun.Count;
+        while (count-- > 0 && ActionsToRun.TryDequeue(out var action)) {
             action.Invoke();
         }
     }
