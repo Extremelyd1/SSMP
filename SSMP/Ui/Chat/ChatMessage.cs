@@ -40,11 +40,6 @@ internal class ChatMessage {
     private float _fadeElapsed;
 
     /// <summary>
-    /// The current alpha of the message.
-    /// </summary>
-    private float _alpha = 1f;
-
-    /// <summary>
     /// Whether this message is already completely faded out.
     /// </summary>
     private bool _isFadedOut;
@@ -119,14 +114,6 @@ internal class ChatMessage {
     }
 
     /// <summary>
-    /// Moves the message by the specified offset.
-    /// </summary>
-    /// <param name="offset">The amount to move in each direction.</param>
-    public void Move(Vector2 offset) {
-        _textComponent.SetPosition(_textComponent.GetPosition() + offset);
-    }
-
-    /// <summary>
     /// Sets the absolute position of the message.
     /// </summary>
     /// <param name="position">The new screen position.</param>
@@ -180,9 +167,8 @@ internal class ChatMessage {
     /// </summary>
     /// <param name="alpha">Alpha value from 0 (transparent) to 1 (opaque).</param>
     private void SetAlpha(float alpha) {
-        _alpha = Mathf.Clamp01(alpha);
         var color = _textComponent.GetColor();
-        _textComponent.SetColor(new Color(color.r, color.g, color.b, _alpha));
+        _textComponent.SetColor(new Color(color.r, color.g, color.b, Mathf.Clamp01(alpha)));
     }
 
     /// <summary>

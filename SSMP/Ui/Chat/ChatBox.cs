@@ -9,7 +9,6 @@ using SSMP.Util;
 using UnityEngine;
 using UnityEngine.UI;
 using Logger = SSMP.Logging.Logger;
-using Object = UnityEngine.Object;
 
 namespace SSMP.Ui.Chat;
 
@@ -234,11 +233,10 @@ internal class ChatBox : IChatBox {
     /// Check whether the chat can be opened. Is based on various game state and UI checks.
     /// </summary>
     /// <returns>True if the chat can be opened, otherwise false.</returns>
-    private bool CanOpenChat() {
+    private static bool CanOpenChat() {
         if (!IsGameStateValid()) return false;
         if (IsHeroCharging()) return false;
         if (IsInventoryOpen()) return false;
-        if (IsGodHomeMenuOpen()) return false;
         if (IsAnyInputFieldFocused()) return false;
         return true;
     }
@@ -878,16 +876,6 @@ internal class ChatBox : IChatBox {
         if (invFsm == null || !invFsm.Active) return false;
         var stateName = invFsm.ActiveStateName;
         return stateName != "Closed" && stateName != "Can Open Inventory?";
-    }
-
-    /// <summary>
-    /// Whether the GodHome menu is open.
-    /// </summary>
-    /// <returns>True if the GodHome menu is open, otherwise false.</returns>
-    private static bool IsGodHomeMenuOpen() {
-        var bossChallengeUi = Object.FindObjectsByType<BossChallengeUI>(FindObjectsSortMode.None);
-        var bossDoorChallengeUi = Object.FindObjectsByType<BossDoorChallengeUI>(FindObjectsSortMode.None);
-        return bossChallengeUi.Length != 0 || bossDoorChallengeUi.Length != 0;
     }
 
     #endregion
