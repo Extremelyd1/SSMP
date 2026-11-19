@@ -16,20 +16,6 @@ internal class PortInputComponent : InputComponent {
     public PortInputComponent(
         ComponentGroup componentGroup,
         Vector2 position,
-        string defaultValue,
-        string placeholderText
-    ) : this(
-        componentGroup,
-        position,
-        new Vector2(DefaultWidth, DefaultHeight),
-        defaultValue,
-        placeholderText
-    ) {
-    }
-
-    public PortInputComponent(
-        ComponentGroup componentGroup,
-        Vector2 position,
         Vector2 size,
         string defaultValue,
         string placeholderText

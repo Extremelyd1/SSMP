@@ -7,28 +7,45 @@ namespace SSMP.Ui.Util;
 /// </summary>
 public static class UiUtils {
     /// <summary>
+    /// A shared 256x1 horizontal gradient sprite (bright center, fade to edges). Must not be modified by callers.
+    /// </summary>
+    public static Sprite HorizontalGradientSprite {
+        get {
+            if (field == null) {
+                field = Sprite.Create(
+                    CreateHorizontalGradientTexture(256, 1),
+                    new Rect(0, 0, 256, 1),
+                    new Vector2(0.5f, 0.5f)
+                );
+            }
+
+            return field;
+        }
+    }
+
+    /// <summary>
     /// Creates a horizontal gradient texture (bright center, fade to edges).
     /// </summary>
     /// <param name="width">Width of the texture.</param>
     /// <param name="height">Height of the texture.</param>
     /// <returns>The gradient texture.</returns>
-    public static Texture2D CreateHorizontalGradientTexture(int width, int height) {
+    private static Texture2D CreateHorizontalGradientTexture(int width, int height) {
         var texture = new Texture2D(width, height);
         var pixels = new Color[width * height];
-        
+
         for (var x = 0; x < width; x++) {
             // Calculate alpha based on distance from center
             var distFromCenter = Mathf.Abs((x / (float) width) - 0.5f) * 2f; // 0 at center, 1 at edges
             var alpha = 1f - distFromCenter; // 1 at center, 0 at edges
             alpha = Mathf.Pow(alpha, 2f); // Sharper falloff
-            
+
             var pixelColor = new Color(1f, 1f, 1f, alpha);
-            
+
             for (var y = 0; y < height; y++) {
                 pixels[y * width + x] = pixelColor;
             }
         }
-        
+
         texture.SetPixels(pixels);
         texture.Apply();
         return texture;
@@ -45,22 +62,22 @@ public static class UiUtils {
     public static Texture2D CreateRoundedRectTexture(int width, int height, int borderWidth, int radius) {
         var texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
         var pixels = new Color[width * height];
-        
+
         // Pre-calculate radius squared for performance
         var radiusSq = radius * radius;
         var borderThreshold = radius - borderWidth;
         var borderThresholdSq = borderThreshold * borderThreshold;
-        
+
         var fillColor = new Color(0.1f, 0.1f, 0.1f, 0.85f);
-        
+
         for (var y = 0; y < height; y++) {
             for (var x = 0; x < width; x++) {
                 var index = y * width + x;
-                
+
                 // Check if in corner regions
                 var inCorner = false;
                 float distSq = 0;
-                
+
                 if (x < radius && y >= height - radius) {
                     // Top-left
                     float dx = radius - x;
@@ -102,7 +119,7 @@ public static class UiUtils {
                         continue;
                     }
                 }
-                
+
                 // Determine if border or fill
                 var isBorder = inCorner
                     ? distSq > borderThresholdSq
@@ -111,7 +128,7 @@ public static class UiUtils {
                 pixels[index] = isBorder ? Color.black : fillColor;
             }
         }
-        
+
         texture.SetPixels(pixels);
         texture.Apply();
         texture.filterMode = FilterMode.Bilinear;

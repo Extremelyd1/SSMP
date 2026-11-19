@@ -27,26 +27,6 @@ internal class HiddenInputComponent : InputComponent {
     protected HiddenInputComponent(
         ComponentGroup componentGroup,
         Vector2 position,
-        string defaultValue,
-        string placeholderText,
-        int fontSize,
-        InputField.CharacterValidation characterValidation = InputField.CharacterValidation.None
-    ) : this(
-        componentGroup,
-        position,
-        new Vector2(DefaultWidth, DefaultHeight),
-        defaultValue,
-        placeholderText,
-        TextureManager.InputFieldBg,
-        Resources.FontManager.UIFontRegular,
-        fontSize,
-        characterValidation
-    ) {
-    }
-
-    protected HiddenInputComponent(
-        ComponentGroup componentGroup,
-        Vector2 position,
         Vector2 size,
         string defaultValue,
         string placeholderText,

@@ -4,7 +4,6 @@ using SSMP.Ui.Util;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
-using Object = UnityEngine.Object;
 
 namespace SSMP.Ui.Component;
 
@@ -97,7 +96,7 @@ internal class ButtonComponent : Component, IButtonComponent {
     ) {
     }
 
-    public ButtonComponent(
+    private ButtonComponent(
         ComponentGroup componentGroup,
         Vector2 position,
         Vector2 size,
@@ -132,32 +131,20 @@ internal class ButtonComponent : Component, IButtonComponent {
         
         _shineOverlay = shineObject.AddComponent<Image>();
         
-        // Create horizontal gradient texture (bright center, fade to edges)
-        var gradientTexture = UiUtils.CreateHorizontalGradientTexture(256, 1);
-        var gradientSprite = Sprite.Create(
-            gradientTexture,
-            new Rect(0, 0, 256, 1),
-            new Vector2(0.5f, 0.5f)
-        );
-        _shineOverlay.sprite = gradientSprite;
+        // Shared horizontal gradient (bright center, fade to edges)
+        _shineOverlay.sprite = UiUtils.HorizontalGradientSprite;
         _shineOverlay.color = new Color(1f, 0.7f, 0.3f, 0f); // Orange tint, initially invisible
         
         shineObject.transform.SetParent(GameObject.transform, false);
-        Object.DontDestroyOnLoad(shineObject);
 
         // Create the text component in the button
-        var textObject = new GameObject();
-        textObject.AddComponent<RectTransform>().sizeDelta = size;
+        var textObject = CreateChildObject(size);
         _text = textObject.AddComponent<Text>();
         _text.text = text;
         _text.font = font;
         _text.fontSize = fontSize;
         _text.alignment = TextAnchor.MiddleCenter;
         _text.color = textColor;
-
-        // Set the transform parent to the ButtonComponent gameObject
-        textObject.transform.SetParent(GameObject.transform, false);
-        Object.DontDestroyOnLoad(textObject);
 
         var eventTrigger = GameObject.AddComponent<EventTrigger>();
         _isMouseDown = false;
@@ -171,11 +158,7 @@ internal class ButtonComponent : Component, IButtonComponent {
                 // Add warm glow to button background
                 _image.color = new Color(0.15f, 0.12f, 0.1f, 1f); // Slightly warmer/brighter
                 // Show shine effect
-                if (_shineOverlay != null) {
-                    var color = _shineOverlay.color;
-                    color.a = 0.5f; // 50% opacity
-                    _shineOverlay.color = color;
-                }
+                SetShineAlpha(0.5f);
             }
         });
         AddEventTrigger(eventTrigger, EventTriggerType.PointerExit, _ => {
@@ -185,11 +168,7 @@ internal class ButtonComponent : Component, IButtonComponent {
                 // Return to normal dark color
                 _image.color = new Color(0.1f, 0.1f, 0.1f, 1f);
                 // Hide shine effect
-                if (_shineOverlay != null) {
-                    var color = _shineOverlay.color;
-                    color.a = 0f;
-                    _shineOverlay.color = color;
-                }
+                SetShineAlpha(0f);
             }
         });
         AddEventTrigger(eventTrigger, EventTriggerType.PointerDown, _ => {
@@ -200,11 +179,7 @@ internal class ButtonComponent : Component, IButtonComponent {
                 // Even warmer/brighter on click
                 _image.color = new Color(0.2f, 0.15f, 0.12f, 1f);
                 // Brighter shine on click
-                if (_shineOverlay != null) {
-                    var color = _shineOverlay.color;
-                    color.a = 0.7f; // 70% opacity
-                    _shineOverlay.color = color;
-                }
+                SetShineAlpha(0.7f);
             }
         });
         AddEventTrigger(eventTrigger, EventTriggerType.PointerUp, _ => {
@@ -216,20 +191,12 @@ internal class ButtonComponent : Component, IButtonComponent {
                     _image.color = new Color(0.15f, 0.12f, 0.1f, 1f); // Back to hover glow
                     _onPress?.Invoke();
                     // Return to hover shine
-                    if (_shineOverlay != null) {
-                        var color = _shineOverlay.color;
-                        color.a = 0.5f;
-                        _shineOverlay.color = color;
-                    }
+                    SetShineAlpha(0.5f);
                 } else {
                     _image.sprite = bgSprite.Neutral;
                     _image.color = new Color(0.1f, 0.1f, 0.1f, 1f); // Back to normal
                     // Hide shine
-                    if (_shineOverlay != null) {
-                        var color = _shineOverlay.color;
-                        color.a = 0f;
-                        _shineOverlay.color = color;
-                    }
+                    SetShineAlpha(0f);
                 }
             }
         });
@@ -250,15 +217,19 @@ internal class ButtonComponent : Component, IButtonComponent {
         _interactable = interactable;
 
         var color = _text.color;
-
-        if (interactable) {
-            _image.sprite = _bgSprite.Neutral;
-            color.a = 1f;
-        } else {
-            _image.sprite = _bgSprite.Disabled;
-            color.a = NotInteractableOpacity;
-        }
-
+        color.a = ApplyInteractableSprite(_image, _bgSprite, interactable);
         _text.color = color;
+    }
+
+    /// <summary>
+    /// Set the alpha of the shine overlay.
+    /// </summary>
+    /// <param name="alpha">The new alpha.</param>
+    private void SetShineAlpha(float alpha) {
+        if (_shineOverlay != null) {
+            var color = _shineOverlay.color;
+            color.a = alpha;
+            _shineOverlay.color = color;
+        }
     }
 }
