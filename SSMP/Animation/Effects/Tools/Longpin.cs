@@ -70,11 +70,8 @@ internal class Longpin : BaseAttackTool {
         var prefab = fsm.GetFirstAction<SpawnProjectileV2>("Fisherpin");
 
         // Create a new version to modify
-        _modifiedPrefab = EffectUtils.SpawnGlobalPoolObject(prefab.Prefab.Value, playerObject.transform, 0);
+        _modifiedPrefab = PreparePrefab(EffectUtils.SpawnGlobalPoolObject(prefab.Prefab.Value, playerObject.transform, 0), "LONGPIN");
         if (!_modifiedPrefab) return null;
-
-        _modifiedPrefab.SetActive(false);
-        _modifiedPrefab.name = "LONGPIN";
 
         // Set up rebound effect
         var longPinTool = _modifiedPrefab.GetComponent<ToolPin>();
@@ -143,13 +140,6 @@ internal class Longpin : BaseAttackTool {
         SetDamageHeroState(pin, ServerSettings.LongpinDamage);
 
         // Set poison settings and deflection
-        if (pin.TryGetComponent<ToolPin>(out var controller)) {
-            StraightPin.SetPinPoison(controller, poisoned);
-
-            // Allows deflecting pins, but causes some side effects that make it look a bit worse (disappears
-            // immediately after hitting walls)
-            controller.tinked = ServerSettings.IsPvpEnabled && ShouldDoDamage;
-            controller.VelocityWasSet();
-        }
+        ApplyPinState(pin, poisoned)?.VelocityWasSet();
     }
 }

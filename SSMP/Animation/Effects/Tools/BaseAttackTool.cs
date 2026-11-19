@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using GlobalSettings;
+using UnityEngine;
 
 namespace SSMP.Animation.Effects.Tools;
 
@@ -55,6 +56,37 @@ internal abstract class BaseAttackTool : DamageAnimationEffect {
     }
 
     /// <summary>
+    /// Finishes a freshly spawned global pool copy so it can be used as a cached prefab.
+    /// </summary>
+    /// <param name="spawned">The spawned copy, or null if spawning failed.</param>
+    /// <param name="name">The name to give the prefab.</param>
+    /// <returns>The deactivated, renamed prefab, or null if spawning failed.</returns>
+    protected static GameObject? PreparePrefab(GameObject? spawned, string name) {
+        if (!spawned) return null;
+
+        spawned.SetActive(false);
+        spawned.name = name;
+        return spawned;
+    }
+
+    /// <summary>
+    /// Applies the poison and deflection settings to a spawned pin-based tool.
+    /// </summary>
+    /// <param name="pin">The spawned pin.</param>
+    /// <param name="poisoned">Whether the pin is poisoned.</param>
+    /// <returns>The pin's controller, or null if it has none.</returns>
+    protected ToolPin? ApplyPinState(GameObject pin, bool poisoned) {
+        if (!pin.TryGetComponent<ToolPin>(out var controller)) return null;
+
+        StraightPin.SetPinPoison(controller, poisoned);
+
+        // Allows deflecting pins, but causes some side effects that make it look a bit worse (disappears
+        // immediately after hitting walls)
+        controller.tinked = ServerSettings.IsPvpEnabled && ShouldDoDamage;
+        return controller;
+    }
+
+    /// <summary>
     /// Determines whether the local player's tools have the Pollip Pouch poison effect.
     /// </summary>
     /// <returns>True if the player has the Pollip Pouch equipped, otherwise false.</returns>
@@ -68,7 +100,7 @@ internal abstract class BaseAttackTool : DamageAnimationEffect {
     /// <param name="effectInfo">The effect info sent over the network.</param>
     /// <returns>True if the effect should use poison, false otherwise.</returns>
     protected static bool EffectIsPoisoned(byte[]? effectInfo) {
-        return effectInfo != null && effectInfo.Length > 0 && effectInfo[0] == 1;
+        return effectInfo is { Length: > 0 } && effectInfo[0] == 1;
     }
 
     /// <summary>
@@ -77,6 +109,6 @@ internal abstract class BaseAttackTool : DamageAnimationEffect {
     /// <param name="effectInfo">The effect info sent over the network.</param>
     /// <returns>True if the player is on a wall, false otherwise.</returns>
     protected static bool EffectIsOnWall(byte[]? effectInfo) {
-        return effectInfo != null && effectInfo.Length > 2 && effectInfo[2] == 1;
+        return effectInfo is { Length: > 2 } && effectInfo[2] == 1;
     }
 }

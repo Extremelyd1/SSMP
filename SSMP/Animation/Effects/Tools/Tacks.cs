@@ -197,12 +197,9 @@ internal class Tacks : BaseAttackTool {
             var fsm = HeroController.instance.toolsFSM;
 
             var tacks = fsm.GetFirstAction<FlingObjectsFromGlobalPool>("Tacks L").gameObject.Value;
-            _modifiedPrefab = EffectUtils.SpawnGlobalPoolObject(tacks, playerObject.transform, 0);
+            _modifiedPrefab = PreparePrefab(EffectUtils.SpawnGlobalPoolObject(tacks, playerObject.transform, 0), "TACK");
 
             if (!_modifiedPrefab) return null;
-
-            _modifiedPrefab.SetActive(false);
-            _modifiedPrefab.name = "TACK";
 
             // Remove interfering components
             _modifiedPrefab.DestroyComponent<ToolItemLimiter>();

@@ -23,11 +23,8 @@ internal class ThreefoldPin : BaseAttackTool {
         if (!_modifiedPrefab) {
             var prefab = fsm.GetFirstAction<SpawnObjectFromGlobalPool>("TriPin Ground L");
 
-            _modifiedPrefab = EffectUtils.SpawnGlobalPoolObject(prefab, playerObject.transform, 0);
+            _modifiedPrefab = PreparePrefab(EffectUtils.SpawnGlobalPoolObject(prefab, playerObject.transform, 0), "THREEFOLD PIN");
             if (!_modifiedPrefab) return;
-
-            _modifiedPrefab.SetActive(false);
-            _modifiedPrefab.name = "THREEFOLD PIN";
         }
 
         // Play audio
@@ -97,12 +94,6 @@ internal class ThreefoldPin : BaseAttackTool {
         SetDamageHeroState(pin, ServerSettings.ThreefoldPinDamage);
 
         // Set poison settings and deflection
-        if (pin.TryGetComponent<ToolPin>(out var controller)) {
-            StraightPin.SetPinPoison(controller, poisoned);
-
-            // Allows deflecting pins, but causes some side effects that make it look a bit worse (disappears
-            // immediately after hitting walls)
-            controller.tinked = ServerSettings.IsPvpEnabled && ShouldDoDamage;
-        }
+        ApplyPinState(pin, poisoned);
     }
 }

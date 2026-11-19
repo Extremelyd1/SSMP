@@ -25,11 +25,8 @@ internal class StraightPin : BaseAttackTool {
         // Set up modified prefab
         if (!_modifiedPrefab) {
             var prefab = tool.usageOptions.ThrowPrefab;
-            _modifiedPrefab = EffectUtils.SpawnGlobalPoolObject(prefab, playerObject.transform, 0);
+            _modifiedPrefab = PreparePrefab(EffectUtils.SpawnGlobalPoolObject(prefab, playerObject.transform, 0), "STRAIGHT PIN");
             if (!_modifiedPrefab) return;
-
-            _modifiedPrefab.SetActive(false);
-            _modifiedPrefab.name = "STRAIGHT PIN";
         }
 
         // Spawn in prefab
@@ -53,12 +50,7 @@ internal class StraightPin : BaseAttackTool {
         }
 
         // Set poison settings and deflection
-        if (pin.TryGetComponent<ToolPin>(out var controller)) {
-            SetPinPoison(controller, poisoned);
-
-            // Allows deflecting pins, but causes some side effects that make it look a bit worse (disappears immediately after hitting walls)
-            controller.tinked = ServerSettings.IsPvpEnabled && ShouldDoDamage;
-        }
+        ApplyPinState(pin, poisoned);
     }
 
     /// <summary>
