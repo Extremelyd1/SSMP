@@ -55,7 +55,7 @@ internal class RollingFileLogger : BaseLogger {
     /// <summary>
     /// Lock object to prevent concurrent access.
     /// </summary>
-    private readonly object _logLock = new object();
+    private readonly Lock _logLock = new();
 
     /// <summary>
     /// The current stream writer to write to the log file.
@@ -164,68 +164,35 @@ internal class RollingFileLogger : BaseLogger {
         }
     }
 
-    /// <inheritdoc />
-    public override void Info(string message) {
+    /// <summary>
+    /// Log a message with the given level tag to the current file.
+    /// </summary>
+    /// <param name="level">The level tag to prefix the message with.</param>
+    /// <param name="message">The message to log.</param>
+    private void Log(string level, string message) {
         if (!ShouldLogMessage(message)) {
             return;
         }
         
 #if DEBUG
-        LogMessage($"[INFO] [{GetOriginClassName()}] {message}");
+        LogMessage($"[{level}] [{GetOriginClassName()}] {message}");
 #else
-        LogMessage($"[INFO] {message}");
+        LogMessage($"[{level}] {message}");
 #endif
     }
 
     /// <inheritdoc />
-    public override void Message(string message) {
-        if (!ShouldLogMessage(message)) {
-            return;
-        }
-        
-#if DEBUG
-        LogMessage($"[MESSAGE] [{GetOriginClassName()}] {message}");
-#else
-        LogMessage($"[MESSAGE] {message}");
-#endif
-    }
+    public override void Info(string message) => Log("INFO", message);
 
     /// <inheritdoc />
-    public override void Debug(string message) {
-        if (!ShouldLogMessage(message)) {
-            return;
-        }
-        
-#if DEBUG
-        LogMessage($"[DEBUG] [{GetOriginClassName()}] {message}");
-#else
-        LogMessage($"[DEBUG] {message}");
-#endif
-    }
+    public override void Message(string message) => Log("MESSAGE", message);
 
     /// <inheritdoc />
-    public override void Warn(string message) {
-        if (!ShouldLogMessage(message)) {
-            return;
-        }
-        
-#if DEBUG
-        LogMessage($"[WARN] [{GetOriginClassName()}] {message}");
-#else
-        LogMessage($"[WARN] {message}");
-#endif
-    }
+    public override void Debug(string message) => Log("DEBUG", message);
 
     /// <inheritdoc />
-    public override void Error(string message) {
-        if (!ShouldLogMessage(message)) {
-            return;
-        }
-        
-#if DEBUG
-        LogMessage($"[ERROR] [{GetOriginClassName()}] {message}");
-#else
-        LogMessage($"[ERROR] {message}");
-#endif
-    }
+    public override void Warn(string message) => Log("WARN", message);
+
+    /// <inheritdoc />
+    public override void Error(string message) => Log("ERROR", message);
 }

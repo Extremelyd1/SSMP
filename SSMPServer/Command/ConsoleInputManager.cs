@@ -12,7 +12,7 @@ internal class ConsoleInputManager {
     /// <summary>
     /// Object for locking asynchronous access.
     /// </summary>
-    private readonly object _lock = new object();
+    private readonly Lock _lock = new();
 
     /// <summary>
     /// The currently inputted text in the console.
@@ -80,9 +80,7 @@ internal class ConsoleInputManager {
                     var current = CurrentInput;
                     if (current.Length > 0) {
                         // Erase current input inline and redraw shortened input
-                        Console.Write('\r');
-                        Console.Write(new string(' ', current.Length));
-                        Console.Write('\r');
+                        EraseInput(current.Length);
 
                         current = current.Substring(0, current.Length - 1);
                         CurrentInput = current;
@@ -107,9 +105,8 @@ internal class ConsoleInputManager {
                 continue;
             }
 
-            CurrentInput += consoleKeyInfo.KeyChar;
-
             lock (_lock) {
+                _currentInput += consoleKeyInfo.KeyChar;
                 Console.Write('\r');
                 Console.Write(CurrentInput);
             }
@@ -123,17 +120,13 @@ internal class ConsoleInputManager {
     public void WriteLine(string line) {
         lock (_lock) {
             var current = CurrentInput; // snapshot current input
-            var text = (line ?? string.Empty).TrimEnd('\r', '\n');
+            var text = line.TrimEnd('\r', '\n');
 
             // If the line is empty after trimming, skip writing entirely to avoid blank gaps
             if (text.Length == 0) return;
 
-            if (current.Length > 0) {
-                // Clear the visible input in-place without moving to a new row
-                Console.Write('\r');
-                Console.Write(new string(' ', current.Length));
-                Console.Write('\r');
-            }
+            // Clear the visible input in-place without moving to a new row
+            EraseInput(current.Length);
 
             Console.WriteLine(text);
 
@@ -146,9 +139,18 @@ internal class ConsoleInputManager {
     /// Clears the current input.
     /// </summary>
     private void Clear() {
-        var length = CurrentInput.Length;
-        if (length == 0)
+        EraseInput(CurrentInput.Length);
+    }
+
+    /// <summary>
+    /// Erases the given number of visible input characters in-place and returns the cursor to the line start.
+    /// </summary>
+    /// <param name="length">The number of characters to erase.</param>
+    private static void EraseInput(int length) {
+        if (length == 0) {
             return;
+        }
+
         Console.Write('\r');
         Console.Write(new string(' ', length));
         Console.Write('\r');

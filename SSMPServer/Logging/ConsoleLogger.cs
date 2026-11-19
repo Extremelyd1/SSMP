@@ -17,11 +17,6 @@ internal class ConsoleLogger : BaseLogger {
     /// </summary>
     public readonly HashSet<Level> LoggableLevels;
 
-    /// <summary>
-    /// Whether to enable color/formatting code parsing for console output.
-    /// </summary>
-    private bool _enableColorParsing = true;
-
     public ConsoleLogger(ConsoleInputManager consoleInputManager) {
         _consoleInputManager = consoleInputManager;
         LoggableLevels = [
@@ -32,89 +27,45 @@ internal class ConsoleLogger : BaseLogger {
     }
 
     /// <summary>
-    /// Set whether to enable color parsing. Set to false if your console doesn't support ANSI codes.
+    /// Format a message for console output by turning its color codes into ANSI codes, followed by a reset
+    /// code so the color does not carry over to the next output.
     /// </summary>
-    /// <param name="enabled">Whether to enable color parsing.</param>
-    public void SetColorParsingEnabled(bool enabled) {
-        _enableColorParsing = enabled;
+    private string FormatForConsole(string message) {
+        return ColorCodeParser.ParseToAnsi(message) + "\e[0m";
     }
 
     /// <summary>
-    /// Format a message for console output, applying ANSI color codes if enabled.
-    /// Always appends a reset code when colors are used.
-    /// When disabled, color codes are stripped to avoid raw tokens in output.
+    /// Write a message to the console if the given level is loggable.
     /// </summary>
-    private string FormatForConsole(string message) {
-        if (_enableColorParsing) {
-            return ColorCodeParser.ParseToAnsi(message) + "\x1b[0m";
-        }
-        return ColorCodeParser.StripColorCodes(message);
-    }
-
-    /// <inheritdoc />
-    public override void Info(string message) {
-        if (!LoggableLevels.Contains(Level.Info) || !ShouldLogMessage(message)) {
+    /// <param name="level">The log level of the message.</param>
+    /// <param name="message">The message to log.</param>
+    private void Log(Level level, string message) {
+        if (!LoggableLevels.Contains(level) || !ShouldLogMessage(message)) {
             return;
         }
 
+        var tag = level.ToString().ToUpperInvariant();
 #if DEBUG
-        _consoleInputManager.WriteLine($"[INFO] [{GetOriginClassName()}] {FormatForConsole(message)}");
+        _consoleInputManager.WriteLine($"[{tag}] [{GetOriginClassName()}] {FormatForConsole(message)}");
 #else
-        _consoleInputManager.WriteLine($"[INFO] {FormatForConsole(message)}");
+        _consoleInputManager.WriteLine($"[{tag}] {FormatForConsole(message)}");
 #endif
     }
 
     /// <inheritdoc />
-    public override void Message(string message) {
-        if (!LoggableLevels.Contains(Level.Message) || !ShouldLogMessage(message)) {
-            return;
-        }
-
-#if DEBUG
-        _consoleInputManager.WriteLine($"[MESSAGE] [{GetOriginClassName()}] {FormatForConsole(message)}");
-#else
-        _consoleInputManager.WriteLine($"[MESSAGE] {FormatForConsole(message)}");
-#endif
-    }
+    public override void Info(string message) => Log(Level.Info, message);
 
     /// <inheritdoc />
-    public override void Debug(string message) {
-        if (!LoggableLevels.Contains(Level.Debug) || !ShouldLogMessage(message)) {
-            return;
-        }
-
-#if DEBUG
-        _consoleInputManager.WriteLine($"[DEBUG] [{GetOriginClassName()}] {FormatForConsole(message)}");
-#else
-        _consoleInputManager.WriteLine($"[DEBUG] {FormatForConsole(message)}");
-#endif
-    }
+    public override void Message(string message) => Log(Level.Message, message);
 
     /// <inheritdoc />
-    public override void Warn(string message) {
-        if (!LoggableLevels.Contains(Level.Warn) || !ShouldLogMessage(message)) {
-            return;
-        }
-
-#if DEBUG
-        _consoleInputManager.WriteLine($"[WARN] [{GetOriginClassName()}] {FormatForConsole(message)}");
-#else
-        _consoleInputManager.WriteLine($"[WARN] {FormatForConsole(message)}");
-#endif
-    }
+    public override void Debug(string message) => Log(Level.Debug, message);
 
     /// <inheritdoc />
-    public override void Error(string message) {
-        if (!LoggableLevels.Contains(Level.Error) || !ShouldLogMessage(message)) {
-            return;
-        }
+    public override void Warn(string message) => Log(Level.Warn, message);
 
-#if DEBUG
-        _consoleInputManager.WriteLine($"[ERROR] [{GetOriginClassName()}] {FormatForConsole(message)}");
-#else
-        _consoleInputManager.WriteLine($"[ERROR] {FormatForConsole(message)}");
-#endif
-    }
+    /// <inheritdoc />
+    public override void Error(string message) => Log(Level.Error, message);
 
     public enum Level {
         Error,

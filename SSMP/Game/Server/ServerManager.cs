@@ -260,6 +260,22 @@ internal abstract class ServerManager : IServerManager {
     #region Internal server manager methods
 
     /// <summary>
+    /// Try to get the data of the player with the given ID, logging a warning if the player is not in the mapping.
+    /// </summary>
+    /// <param name="id">The ID of the player.</param>
+    /// <param name="context">Description of the received data, used in the warning message.</param>
+    /// <param name="playerData">The player data if found, otherwise null.</param>
+    /// <returns>True if the player was found, false otherwise.</returns>
+    private bool TryGetPlayerData(ushort id, string context, [NotNullWhen(true)] out ServerPlayerData? playerData) {
+        if (_playerData.TryGetValue(id, out playerData)) {
+            return true;
+        }
+
+        Logger.Warn($"Received {context}, but player with ID {id} is not in mapping");
+        return false;
+    }
+
+    /// <summary>
     /// Initializes the server manager.
     /// </summary>
     public virtual void Initialize() {
@@ -695,8 +711,7 @@ internal abstract class ServerManager : IServerManager {
     /// <param name="id">The ID of the player.</param>
     /// <param name="playerUpdate">The PlayerUpdate packet data.</param>
     private void OnPlayerUpdate(ushort id, PlayerUpdate playerUpdate) {
-        if (!_playerData.TryGetValue(id, out var playerData)) {
-            Logger.Warn($"Received PlayerUpdate data, but player with ID {id} is not in mapping");
+        if (!TryGetPlayerData(id, "PlayerUpdate data", out var playerData)) {
             return;
         }
 
@@ -800,8 +815,7 @@ internal abstract class ServerManager : IServerManager {
     /// <param name="id">The ID of the player.</param>
     /// <param name="playerMapUpdate">The PlayerMapUpdate packet data.</param>
     private void OnPlayerMapUpdate(ushort id, PlayerMapUpdate playerMapUpdate) {
-        if (!_playerData.TryGetValue(id, out var playerData)) {
-            Logger.Warn($"Received PlayerMapUpdate data, but player with ID {id} is not in mapping");
+        if (!TryGetPlayerData(id, "PlayerMapUpdate data", out var playerData)) {
             return;
         }
 
@@ -887,8 +901,7 @@ internal abstract class ServerManager : IServerManager {
             return;
         }
 
-        if (!_playerData.TryGetValue(id, out var playerData)) {
-            Logger.Warn($"Received EntityUpdate data, but player with ID {id} is not in mapping");
+        if (!TryGetPlayerData(id, "EntityUpdate data", out var playerData)) {
             return;
         }
 
@@ -963,8 +976,7 @@ internal abstract class ServerManager : IServerManager {
             return;
         }
 
-        if (!_playerData.TryGetValue(id, out var playerData)) {
-            Logger.Warn($"Received ReliableEntityUpdate data, but player with ID {id} is not in mapping");
+        if (!TryGetPlayerData(id, "ReliableEntityUpdate data", out var playerData)) {
             return;
         }
 
@@ -1085,8 +1097,7 @@ internal abstract class ServerManager : IServerManager {
     /// </summary>
     /// <param name="id">The ID of the player.</param>
     private void OnPlayerDisconnect(ushort id) {
-        if (!_playerData.TryGetValue(id, out var playerData)) {
-            Logger.Warn($"Received PlayerDisconnect data, but player with ID {id} is not in mapping");
+        if (!TryGetPlayerData(id, "PlayerDisconnect data", out var playerData)) {
             return;
         }
 
@@ -1139,14 +1150,8 @@ internal abstract class ServerManager : IServerManager {
         var username = playerData.Username;
 
         // Keep track of whether the scene that the player has left is now empty
-        var isSceneNowEmpty = true;
-        var scenePlayers = new List<KeyValuePair<ushort, ServerPlayerData>>();
-        foreach (var pair in _playerData) {
-            if (pair.Key != id && pair.Value.CurrentScene == sceneName) {
-                isSceneNowEmpty = false;
-                scenePlayers.Add(pair);
-            }
-        }
+        var scenePlayers = GetOtherScenePlayers(id, sceneName);
+        var isSceneNowEmpty = scenePlayers.Count == 0;
 
         if (FullSynchronisation && playerData.IsSceneHost && scenePlayers.Count > 0) {
             var epoch = GetNextSceneHostEpoch(sceneName);
@@ -1242,8 +1247,7 @@ internal abstract class ServerManager : IServerManager {
     /// </summary>
     /// <param name="id">The ID of the player.</param>
     private void OnPlayerDeath(ushort id) {
-        if (!_playerData.TryGetValue(id, out var playerData)) {
-            Logger.Warn($"Received PlayerDeath data, but player with ID {id} is not in mapping");
+        if (!TryGetPlayerData(id, "PlayerDeath data", out var playerData)) {
             return;
         }
 
@@ -1258,12 +1262,7 @@ internal abstract class ServerManager : IServerManager {
 
         if (FullSynchronisation && playerData.IsSceneHost) {
             var sceneName = playerData.CurrentScene;
-            var scenePlayers = new List<KeyValuePair<ushort, ServerPlayerData>>();
-            foreach (var pair in _playerData) {
-                if (pair.Key != id && pair.Value.CurrentScene == sceneName) {
-                    scenePlayers.Add(pair);
-                }
-            }
+            var scenePlayers = GetOtherScenePlayers(id, sceneName);
 
             if (scenePlayers.Count > 0) {
                 var epoch = GetNextSceneHostEpoch(sceneName);
@@ -1299,9 +1298,7 @@ internal abstract class ServerManager : IServerManager {
     /// <param name="reason">The reason if the team could not be updated, otherwise null.</param>
     /// <returns>True if the player's team was updated, false otherwise.</returns>
     public bool TryUpdatePlayerTeam(ushort id, Team team, [MaybeNullWhen(true)] out string reason) {
-        if (!_playerData.TryGetValue(id, out var playerData)) {
-            Logger.Warn($"Received PlayerTeamUpdate data, but player with ID {id} is not in mapping");
-
+        if (!TryGetPlayerData(id, "PlayerTeamUpdate data", out var playerData)) {
             reason = "Could not find player";
             return false;
         }
@@ -1352,9 +1349,7 @@ internal abstract class ServerManager : IServerManager {
     /// <param name="reason">The reason if the skin could not be updated, otherwise null.</param>
     /// <returns>True if the player's team was updated, false otherwise.</returns>
     public bool TryUpdatePlayerSkin(ushort id, byte skinId, [MaybeNullWhen(true)] out string reason) {
-        if (!_playerData.TryGetValue(id, out var playerData)) {
-            Logger.Warn($"Received PlayerSkinUpdate data, but player with ID {id} is not in mapping");
-
+        if (!TryGetPlayerData(id, "PlayerSkinUpdate data", out var playerData)) {
             reason = "Could not find player";
             return false;
         }
@@ -1687,6 +1682,23 @@ internal abstract class ServerManager : IServerManager {
     }
 
     /// <summary>
+    /// Get the ID and data pairs of all players in the given scene except for the given player.
+    /// </summary>
+    /// <param name="id">The ID of the player to exclude.</param>
+    /// <param name="sceneName">The name of the scene.</param>
+    /// <returns>A list of the other players in the scene.</returns>
+    private List<KeyValuePair<ushort, ServerPlayerData>> GetOtherScenePlayers(ushort id, string sceneName) {
+        var scenePlayers = new List<KeyValuePair<ushort, ServerPlayerData>>();
+        foreach (var pair in _playerData) {
+            if (pair.Key != id && pair.Value.CurrentScene == sceneName) {
+                scenePlayers.Add(pair);
+            }
+        }
+
+        return scenePlayers;
+    }
+
+    /// <summary>
     /// Try and process a given message by a given command sender as a command.
     /// </summary>
     /// <param name="commandSender">The command sender that sent the message.</param>
@@ -1794,8 +1806,7 @@ internal abstract class ServerManager : IServerManager {
         }
 
         if (playerSettingUpdate.UpdateTypes.Contains(PlayerSettingUpdateType.Crest)) {
-            if (!_playerData.TryGetValue(id, out var playerData)) {
-                Logger.Warn($"Received crest update, but player with ID {id} is not in mapping");
+            if (!TryGetPlayerData(id, "crest update", out var playerData)) {
                 return;
             }
 
@@ -1833,7 +1844,7 @@ internal abstract class ServerManager : IServerManager {
             return;
         }
 
-        Logger.Info($"Save update from ({id}, {playerData.Username}), index: {packet.SaveDataIndex}");
+        Logger.Debug($"Save update from ({id}, {playerData.Username}), index: {packet.SaveDataIndex}");
 
         // Find the properties for syncing this save update, based on whether it is a geo rock, player data or 
         // persistent bool/int item
