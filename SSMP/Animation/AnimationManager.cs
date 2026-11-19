@@ -16,41 +16,32 @@ using SSMP.Networking.Client;
 using SSMP.Util;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using ClipWrapMode = tk2dSpriteAnimationClip.WrapMode;
 using Logger = SSMP.Logging.Logger;
 
 namespace SSMP.Animation;
 
 /// <summary>
-/// Class that manages all forms of animation from clients.
+/// Synchronizes player animations between clients: sends the local player's animation clips and effects to the
+/// server, and plays received clips and effects on remote player objects.
 /// </summary>
 internal class AnimationManager {
     /// <summary>
-    /// Whether to log debug messages about animations. For debugging purposes this can be enabled so that all
-    /// animation events are logged.
+    /// Define this compilation symbol to log every animation event. Calls to <see cref="LogTrace"/> are removed
+    /// entirely by the compiler otherwise, including evaluation of their interpolated strings.
     /// </summary>
-    private static bool _debugLogAnimations = false;
-    
-    /// <summary>
-    /// The distance threshold for playing certain effects.
-    /// </summary>
-    public const float EffectDistanceThreshold = 25f;
-
-    #region Clip Tables
+    private const string TraceSymbol = "SSMP_TRACE_ANIMATIONS";
 
     /// <summary>
-    /// Animations that are allowed to loop, because they need to transmit the effect.
+    /// The PlayMaker event the hero receives when resting on a bench.
     /// </summary>
-    private static readonly string[] AllowedLoopAnimations = [
-        "Airborne", 
-        "Wall Slide"
-    ];
+    private const string BenchRestEvent = "BENCHREST START";
 
     /// <summary>
-    /// Clip names of animations that are handled by the animation controller.
+    /// Looping animations that are re-sent on every loop, because their effect must be transmitted each time.
     /// </summary>
-    private static readonly string[] AnimationControllerClipNames = [
-        // "Airborne"
-    ];
+    private static readonly HashSet<string> AllowedLoopAnimations = ["Airborne", "Wall Slide"];
+
 
     /// <summary>
     /// Bi-directional lookup table for linking animation clip names with their respective animation clip enum
@@ -80,22 +71,22 @@ internal class AnimationManager {
         { "Run To Idle", AnimationClip.RunToIdle },
         { "Run To Idle C", AnimationClip.RunToIdleC },
         { "Idle", AnimationClip.Idle },
-        { "Idle Backward", AnimationClip.IdleBackward},
-        { "Idle BG", AnimationClip.IdleBG},
-        { "Idle Hurt", AnimationClip.IdleHurt},
-        { "Idle Hurt Listen", AnimationClip.IdleHurtListen},
-        { "Idle Hurt Listen Backward", AnimationClip.IdleHurtListenBackward},
-        { "Idle Hurt Listen Windy", AnimationClip.IdleHurtListenWindy},
-        { "Idle Hurt NoNeedle", AnimationClip.IdleHurtNoNeedle},
-        { "Idle Hurt Talk", AnimationClip.IdleHurtTalk},
-        { "Idle Hurt Talk Backward", AnimationClip.IdleHurtTalkBackward},
-        { "Idle Hurt Talk Turn Backward", AnimationClip.IdleHurtTalkTurnBackward},
-        { "Idle Hurt Talk Turn Forward", AnimationClip.IdleHurtTalkTurnForward},
-        { "Idle Hurt Talk Windy", AnimationClip.IdleHurtTalkWindy},
-        { "Idle Hurt Windy", AnimationClip.IdleHurtWindy},
-        { "Idle Slap", AnimationClip.IdleSlap},
-        { "Idle To Run Short", AnimationClip.IdleToRunShort},
-        { "Idle To Run Weak", AnimationClip.IdleToRunWeak},
+        { "Idle Backward", AnimationClip.IdleBackward },
+        { "Idle BG", AnimationClip.IdleBG },
+        { "Idle Hurt", AnimationClip.IdleHurt },
+        { "Idle Hurt Listen", AnimationClip.IdleHurtListen },
+        { "Idle Hurt Listen Backward", AnimationClip.IdleHurtListenBackward },
+        { "Idle Hurt Listen Windy", AnimationClip.IdleHurtListenWindy },
+        { "Idle Hurt NoNeedle", AnimationClip.IdleHurtNoNeedle },
+        { "Idle Hurt Talk", AnimationClip.IdleHurtTalk },
+        { "Idle Hurt Talk Backward", AnimationClip.IdleHurtTalkBackward },
+        { "Idle Hurt Talk Turn Backward", AnimationClip.IdleHurtTalkTurnBackward },
+        { "Idle Hurt Talk Turn Forward", AnimationClip.IdleHurtTalkTurnForward },
+        { "Idle Hurt Talk Windy", AnimationClip.IdleHurtTalkWindy },
+        { "Idle Hurt Windy", AnimationClip.IdleHurtWindy },
+        { "Idle Slap", AnimationClip.IdleSlap },
+        { "Idle To Run Short", AnimationClip.IdleToRunShort },
+        { "Idle To Run Weak", AnimationClip.IdleToRunWeak },
         { "Idle To Run", AnimationClip.IdleToRun },
         { "Idle Windy", AnimationClip.IdleWindy },
         { "Walk To Idle", AnimationClip.WalkToIdle },
@@ -266,7 +257,7 @@ internal class AnimationManager {
         { "Reserve BindCharge Ground", AnimationClip.ReserveBindChargeGround },
         { "LookDown", AnimationClip.LookDown },
         { "LookDownEnd", AnimationClip.LookDownEnd },
-        
+
         { "Super Jump Antic", AnimationClip.SuperJumpAntic },
         { "Super Jump Throw", AnimationClip.SuperJumpThrow },
         { "Super Jump Throw Wait", AnimationClip.SuperJumpThrowWait },
@@ -327,7 +318,7 @@ internal class AnimationManager {
         { "SpinBall Launch", AnimationClip.SpinBallLaunch },
         { "SpinBall", AnimationClip.SpinBall },
         { "NeedleArt Dash", AnimationClip.NeedleArtDash },
-        
+
         { "Rage Bind", AnimationClip.RageBind },
         { "Rage Bind Quick", AnimationClip.RageBindQuick },
         { "Rage Bind Long", AnimationClip.RageBindLong },
@@ -344,11 +335,11 @@ internal class AnimationManager {
         { "Dash Attack 1", AnimationClip.DashAttack1 },
         { "Dash Attack Antic 2", AnimationClip.DashAttackAntic2 },
         { "Dash Attack 2", AnimationClip.DashAttack2 },
-        
+
         { "BindCharge Witch", AnimationClip.BindChargeWitch },
         { "BindCharge Witch Quick", AnimationClip.BindChargeWitchQuick },
         { "BindCharge Witch Long", AnimationClip.BindChargeWitchLong },
-        
+
         { "DownSpike Charge", AnimationClip.DownSpikeCharge },
         { "DownSpike Charged", AnimationClip.DownSpikeCharged },
         { "Dash Attack Charge", AnimationClip.DashAttackCharge },
@@ -359,10 +350,10 @@ internal class AnimationManager {
         { "BindCharge Ground Land", AnimationClip.BindChargeGroundLand },
         { "BindCharge Heal Burst", AnimationClip.BindChargeHealBurst },
         { "BindCharge End", AnimationClip.BindChargeEnd },
-        
+
         { "BindCharge Twirl Air", AnimationClip.BindChargeTwirlAir },
         { "BindCharge Twirl Ground", AnimationClip.BindChargeTwirlGround },
-        
+
         { "NeedleThrow AnticG", AnimationClip.NeedleThrowAnticG },
         { "NeedleThrow AnticA", AnimationClip.NeedleThrowAnticA },
         { "NeedleThrow Throwing", AnimationClip.NeedleThrowThrowing },
@@ -394,7 +385,7 @@ internal class AnimationManager {
         { "AirSphere Attack", AnimationClip.AirSphereAttack },
         { "AirSphere End", AnimationClip.AirSphereEnd },
         { "AirSphere Refresh", AnimationClip.AirSphereRefresh },
-        
+
         { "Silk Charge Antic", AnimationClip.SilkChargeAntic },
         { "Silk Charge", AnimationClip.SilkCharge },
         { "Silk Charge Recover", AnimationClip.SilkChargeRecover },
@@ -402,13 +393,12 @@ internal class AnimationManager {
         { "Silk Charge Recover Zap", AnimationClip.SilkChargeRecoverZap },
         { "Silk Charge Antic Zap", AnimationClip.SilkChargeAnticZap },
 
-
         { "Silk Bomb Antic", AnimationClip.SilkBombAntic },
         { "Silk Bomb Antic Q", AnimationClip.SilkBombAnticQ },
         { "Silk Bomb Loop", AnimationClip.SilkBombLoop },
         { "Silk Bomb Recover", AnimationClip.SilkBombRecover },
         { "Silk Bomb Locations", AnimationClip.SilkBombLocations },
-        
+
         { "Sit Craft", AnimationClip.SitCraft },
         { "Sit Craft Silk", AnimationClip.SitCraftSilk },
         { "ToolThrow Up", AnimationClip.ToolThrowUp },
@@ -420,7 +410,7 @@ internal class AnimationManager {
         { "Recoil Twirl", AnimationClip.RecoilTwirl },
         { "DownSpikeBounce 1", AnimationClip.DownSpikeBounce1 },
         { "DownSpikeBounce 2", AnimationClip.DownSpikeBounce2 },
-        
+
         { "Charge Up", AnimationClip.ChargeUp },
         { "Charge Up Air", AnimationClip.ChargeUpAir },
         { "Charge Up Bench", AnimationClip.ChargeUpBench },
@@ -442,7 +432,7 @@ internal class AnimationManager {
         { "TurnToChallengeTalk", AnimationClip.TurnToChallengeTalk },
         { "TurnToFG", AnimationClip.TurnToFG },
         { "TurnToIdle", AnimationClip.TurnToIdle },
-        
+
         { "Walk", AnimationClip.Walk },
         { "Walk Q", AnimationClip.WalkQ },
         { "Look Up Half", AnimationClip.LookUpHalf },
@@ -474,12 +464,12 @@ internal class AnimationManager {
         { "Scuttle Jump", AnimationClip.ScuttleJump },
         { "Scuttle Climb", AnimationClip.ScuttleClimb },
         { "Scuttle Climb End", AnimationClip.ScuttleClimbEnd },
-        
+
         { "Stun", AnimationClip.Stun },
         { "Recoil", AnimationClip.Recoil },
-        
+
         { "Grab Escape", AnimationClip.GrabEscape },
-        
+
         { "Idle Updraft", AnimationClip.IdleUpdraft },
         { "Updraft Antic", AnimationClip.UpdraftAntic },
         { "Updraft Antic DJ", AnimationClip.UpdraftAnticDJ },
@@ -506,7 +496,6 @@ internal class AnimationManager {
         { "Weak Idle Look Up", AnimationClip.WeakIdleLookUp },
         { "Weak Walk Faster", AnimationClip.WeakWalkFaster },
         { "Weak Walk To Idle", AnimationClip.WeakWalkToIdle },
-
 
         { "Taunt Collapse1", AnimationClip.TauntCollapse1 },
         { "Taunt Collapse2", AnimationClip.TauntCollapse2 },
@@ -634,11 +623,13 @@ internal class AnimationManager {
         { "Tool Flea Brew", AnimationClip.ToolFleaBrew },
         { "Tool Fractured Mask", AnimationClip.ToolFracturedMask },
         { "Tool Magma Bell", AnimationClip.ToolMagmaBell },
-        { "Tool Straight Pin ", AnimationClip.ToolStraightPin  },
+        { "Tool Straight Pin ", AnimationClip.ToolStraightPin },
         { "Tool Threefold Pin", AnimationClip.ToolThreefoldPin },
         { "Tool Long Pin", AnimationClip.ToolLongpin },
         { "Tool Tacks", AnimationClip.ToolTacks }
     };
+
+    #region Effect Tables
 
     /// <summary>
     /// Dictionary mapping animation clip enum values to IAnimationEffect instantiations.
@@ -691,6 +682,9 @@ internal class AnimationManager {
         { AnimationClip.SilkBossNeedleCast, new PaleNails { IsAntic = true } },
     };
 
+    /// <summary>
+    /// Effects for clips that have no sprite animation of their own and are raised by FSM hooks or tool events.
+    /// </summary>
     private static readonly Dictionary<AnimationClip, IAnimationEffect> SubAnimationEffects = new() {
         { AnimationClip.WitchTentacles, BindBurst.Instance },
         { AnimationClip.ShamanCancel, new Bind { BindState = Bind.State.ShamanCancel } },
@@ -715,81 +709,39 @@ internal class AnimationManager {
 
     #endregion
 
-    /// <summary>
-    /// The net client for sending animation updates.
-    /// </summary>
     private readonly NetClient _netClient;
-
-    /// <summary>
-    /// The player manager to get player objects.
-    /// </summary>
     private readonly PlayerManager _playerManager;
 
     /// <summary>
-    /// Copied instance of the player data to get positions for targeting of Silk Skills.
+    /// Shared player data, used to find positions when targeting players with Silk Skills.
     /// </summary>
     private readonly Dictionary<ushort, ClientPlayerData> _playerData;
 
     /// <summary>
-    /// Copied instance of the server settings for checking whether PvP, Teams, etc. are enabled.
+    /// Server settings, used to check whether PvP, teams, etc. are enabled.
     /// </summary>
     private ServerSettings _serverSettings;
 
     /// <summary>
-    /// The last animation clip sent.
+    /// The local hero's sprite animator, cached because the sprite animator hooks fire for every animator in the
+    /// scene and must reject non-hero animators cheaply.
+    /// </summary>
+    private tk2dSpriteAnimator? _heroAnimator;
+
+    /// <summary>
+    /// Name of the last clip sent, used to avoid re-sending a looping clip every loop.
     /// </summary>
     private string? _lastAnimationClip;
 
-    // /// <summary>
-    // /// Whether the animation controller was responsible for the last clip that was sent.
-    // /// </summary>
-    // private bool _animationControllerWasLastSent;
-
     /// <summary>
-    /// Whether we should stop sending animations until the scene has changed.
+    /// Whether to stop sending animations until the scene has changed.
     /// </summary>
     private bool _stopSendingAnimationUntilSceneChange;
 
     /// <summary>
-    /// Whether the current dash has ended and we can start a new one.
-    /// </summary>
-    private bool _dashHasEnded = true;
-
-    /// <summary>
-    /// List of encoded positions for Rune Rage blasts. Used to gather encoded positions before sending effect info to
-    /// server.
+    /// Encoded Rune Rage blast positions, gathered across several FSM states before being sent in one update.
     /// </summary>
     private readonly List<byte> _runeRagePositions = [];
-
-    // /// <summary>
-    // /// Whether the player has sent that they stopped crystal dashing.
-    // /// </summary>
-    // private bool _hasSentCrystalDashEnd = true;
-
-    // /// <summary>
-    // /// Whether the charge effect was last update active.
-    // /// </summary>
-    // private bool _lastChargeEffectActive;
-    //
-    // /// <summary>
-    // /// Whether the charged effect was last update active
-    // /// </summary>
-    // private bool _lastChargedEffectActive;
-
-    // /// <summary>
-    // /// Stopwatch to keep track of a delay before being able to send another update for the charged effect.
-    // /// </summary>
-    // private readonly Stopwatch _chargedEffectStopwatch;
-    //
-    // /// <summary>
-    // /// Stopwatch to keep track of a delay before being able to send another update for the charged end effect.
-    // /// </summary>
-    // private readonly Stopwatch _chargedEndEffectStopwatch;
-
-    // /// <summary>
-    // /// Whether the player was wall sliding last update.
-    // /// </summary>
-    // private bool _lastWallSlideActive;
 
     public AnimationManager(
         NetClient netClient,
@@ -799,69 +751,37 @@ internal class AnimationManager {
     ) {
         _netClient = netClient;
         _playerManager = playerManager;
-        _playerData = playerData;
         _serverSettings = serverSettings;
-
-        // _chargedEffectStopwatch = new Stopwatch();
-        // _chargedEndEffectStopwatch = new Stopwatch();
+        _playerData = playerData;
     }
 
     /// <summary>
-    /// Initialize the animation manager by registering packet handlers and initializing animation effects.
+    /// Pass the server settings to the manager and all animation effects.
     /// </summary>
     public void Initialize(ServerSettings serverSettings) {
         _serverSettings = serverSettings;
 
-        // Set the server settings for all animation effects
-        foreach (var effect in AnimationEffects.Values) {
-            effect.SetServerSettings(serverSettings);
-        }
-
-        foreach (var effect in SubAnimationEffects.Values) {
+        foreach (var effect in AnimationEffects.Values.Concat(SubAnimationEffects.Values)) {
             effect.SetServerSettings(serverSettings);
         }
     }
 
-    #region Core Animation Hooks
+    #region Hook Lifecycle
 
     /// <summary>
     /// Register the game hooks for the animation manager.
     /// </summary>
     public void RegisterHooks() {
-        // Register scene change, which is where we update the animation event handler
         SceneManager.activeSceneChanged += OnSceneChange;
-
-        // Register callbacks for the hero animation controller for the Airborne animation
-        // On.HeroAnimationController.Play += HeroAnimationControllerOnPlay;
-        // On.HeroAnimationController.PlayFromFrame += HeroAnimationControllerOnPlayFromFrame;
-
-        // Register callbacks for tracking the start of playing animation clips
-        EventHooks.SpriteAnimatorWarpClipToLocalTime += Tk2dSpriteAnimatorOnWarpClipToLocalTime;
-        EventHooks.SpriteAnimatorProcessEvents += Tk2dSpriteAnimatorOnProcessEvents;
-
+        EventHooks.SpriteAnimatorWarpClipToLocalTime += OnSpriteAnimatorWarpClipToLocalTime;
         EventHooks.HeroControllerDie += OnDeath;
-
-        // Register FSM hooks for certain bind actions
-        HeroController.OnHeroInstanceSet += CreateHeroHooks;
-        if (HeroController.SilentInstance != null) {
-            CreateHeroHooks(HeroController.instance);
-        }
-
         EventHooks.UseLavaBell += OnMagmaBell;
 
-        // Register a callback so we know when the dash has finished
-        // On.HeroController.CancelDash += HeroControllerOnCancelDash;
-
-        // Register a callback so we can check the nail art charge status
-        // ModHooks.HeroUpdateHook += OnHeroUpdateHook;
-
-        // Register a callback for when we get hit by a hazard
-        // On.HeroController.DieFromHazard += HeroControllerOnDieFromHazard;
-        // Also register a callback from when we respawn from a hazard
-        // On.GameManager.HazardRespawn += GameManagerOnHazardRespawn;
-
-        // Relinquish Control cancels a lot of effects, so we need to broadcast the end of these effects
-        // On.HeroController.RelinquishControl += HeroControllerOnRelinquishControl;
+        HeroController.OnHeroInstanceSet += CreateHeroHooks;
+        var hero = HeroController.SilentInstance;
+        if (hero != null) {
+            CreateHeroHooks(hero);
+        }
     }
 
     /// <summary>
@@ -869,86 +789,94 @@ internal class AnimationManager {
     /// </summary>
     public void DeregisterHooks() {
         SceneManager.activeSceneChanged -= OnSceneChange;
-
-        HeroController.OnHeroInstanceSet -= CreateHeroHooks;
-        FsmStateActionInjector.UninjectAll();
-
-        MagnetiteDice.Unhook();
-
+        EventHooks.SpriteAnimatorWarpClipToLocalTime -= OnSpriteAnimatorWarpClipToLocalTime;
         EventHooks.HeroControllerDie -= OnDeath;
         EventHooks.UseLavaBell -= OnMagmaBell;
 
+        HeroController.OnHeroInstanceSet -= CreateHeroHooks;
+        FsmStateActionInjector.UninjectAll();
+        MagnetiteDice.Unhook();
         ToolItemManager.BoundAttackToolUsed -= AttackToolUsed;
 
-        // Remove listener for benching
-        var eventRegister = HeroController.SilentInstance?.gameObject.GetComponents<EventRegister>().FirstOrDefault(r => r.SubscribedEvent == "BENCHREST START");
-        if (eventRegister) {
-            eventRegister.ReceivedEvent -= OnBench;
+        var benchRegister = FindBenchEventRegister(HeroController.SilentInstance);
+        if (benchRegister) {
+            benchRegister.ReceivedEvent -= OnBench;
         }
-        
-        // On.HeroAnimationController.Play -= HeroAnimationControllerOnPlay;
-        // On.HeroAnimationController.PlayFromFrame -= HeroAnimationControllerOnPlayFromFrame;
 
-        // On.tk2dSpriteAnimator.WarpClipToLocalTime -= Tk2dSpriteAnimatorOnWarpClipToLocalTime;
-        // On.tk2dSpriteAnimator.ProcessEvents -= Tk2dSpriteAnimatorOnProcessEvents;
-
-        // On.HeroController.CancelDash -= HeroControllerOnCancelDash;
-
-        // ModHooks.HeroUpdateHook -= OnHeroUpdateHook;
-
-        // On.HeroController.DieFromHazard -= HeroControllerOnDieFromHazard;
-        // On.GameManager.HazardRespawn -= GameManagerOnHazardRespawn;
-
-        // On.HeroController.RelinquishControl -= HeroControllerOnRelinquishControl;
+        _heroAnimator = null;
     }
 
     /// <summary>
-    /// Callback method when a player animation update is received. Will update the player object with the new
-    /// animation.
+    /// Hook the FSMs and events of a hero instance. Called whenever the hero instance is (re)created.
+    /// </summary>
+    private void CreateHeroHooks(HeroController hero) {
+        _heroAnimator = hero.GetComponent<tk2dSpriteAnimator>();
+
+        // The warding bell FSM is filled in from its template on init, so make sure that has happened
+        var bellFsm = hero.bellBindFSM;
+        if (!bellFsm.fsm.initialized) {
+            bellFsm.Init();
+        }
+
+        CreateSkillHooks(hero);
+        CreateToolHooks(hero);
+        CreateBindHooks(hero);
+
+        var benchRegister = FindBenchEventRegister(hero);
+        if (benchRegister) {
+            benchRegister.ReceivedEvent += OnBench;
+        }
+    }
+
+    /// <summary>
+    /// Find the event register on the hero that receives the bench rest event.
+    /// </summary>
+    /// <param name="hero">The hero to search, or null.</param>
+    /// <returns>The event register, or null if the hero is null or has none.</returns>
+    private static EventRegister? FindBenchEventRegister(HeroController? hero) =>
+        hero == null
+            ? null
+            : hero.GetComponents<EventRegister>().FirstOrDefault(r => r.SubscribedEvent == BenchRestEvent);
+
+    /// <summary>
+    /// Callback for when the scene changes. Resumes sending animations that entering a building paused.
+    /// </summary>
+    /// <param name="oldScene">The scene that was active.</param>
+    /// <param name="newScene">The scene that is now active.</param>
+    private void OnSceneChange(Scene oldScene, Scene newScene) => _stopSendingAnimationUntilSceneChange = false;
+
+    #endregion
+
+    #region Receiving
+
+    /// <summary>
+    /// Callback for a received player animation update. Plays the clip and its effect, if any, on the player object.
     /// </summary>
     /// <param name="id">The ID of the player.</param>
     /// <param name="clipId">The ID of the animation clip.</param>
     /// <param name="frame">The frame that the animation should play from.</param>
     /// <param name="effectInfo">A byte array containing effect info for the animation.</param>
     public void OnPlayerAnimationUpdate(ushort id, int clipId, int frame, byte[]? effectInfo) {
-        var crestType = _playerManager.GetPlayerCrestType(id);
-        
-        UpdatePlayerAnimation(id, clipId, frame, crestType);
+        var playerObject = _playerManager.GetPlayerObject(id);
+        if (!playerObject) {
+            return;
+        }
 
+        var crestType = _playerManager.GetPlayerCrestType(id);
         var animationClip = (AnimationClip) clipId;
 
-        if (!AnimationEffects.TryGetValue(animationClip, out var animationEffect)) {
-            SubAnimationEffects.TryGetValue(animationClip, out animationEffect);
+        PlayClip(playerObject, animationClip, frame, crestType);
+
+        if (FindEffect(animationClip) is not { } effect) {
+            return;
         }
 
-        if (animationEffect != null) {
-            var playerObject = _playerManager.GetPlayerObject(id);
-            if (!playerObject) {
-                // Logger.Get().Warn(this, $"Tried to play animation effect {clipName} with ID: {id}, but player object doesn't exist");
-                return;
-            }
-
-            // Check if the animation effect is a DamageAnimationEffect and if so,
-            // set whether it should deal damage based on player teams
-            if (animationEffect is DamageAnimationEffect damageAnimationEffect) {
-                var localPlayerTeam = _playerManager.LocalPlayerTeam;
-                var otherPlayerTeam = _playerManager.GetPlayerTeam(id);
-
-                damageAnimationEffect.SetShouldDoDamage(
-                    otherPlayerTeam != localPlayerTeam
-                    || otherPlayerTeam.Equals(Team.None)
-                    || localPlayerTeam.Equals(Team.None)
-                );
-            }
-            
-            if (_debugLogAnimations) Logger.Info($"Playing animation effect for animation clip: {animationClip}, {animationEffect.GetType()}");
-
-            animationEffect.Play(
-                playerObject,
-                crestType,
-                effectInfo
-            );
+        if (effect is DamageAnimationEffect damageEffect) {
+            damageEffect.SetShouldDoDamage(CanDamageLocalPlayer(id));
         }
+
+        LogTrace($"Playing animation effect for animation clip: {animationClip}, {effect.GetType()}");
+        effect.Play(playerObject, crestType, effectInfo);
     }
 
     /// <summary>
@@ -960,300 +888,265 @@ internal class AnimationManager {
     /// <param name="crestType">The type of crest the player is using.</param>
     public void UpdatePlayerAnimation(ushort id, int clipId, int frame, CrestType crestType) {
         var playerObject = _playerManager.GetPlayerObject(id);
-        if (!playerObject) {
-            // Logger.Get().Warn(this, $"Tried to update animation, but there was not matching player object for ID {id}");
-            return;
+        if (playerObject) {
+            PlayClip(playerObject, (AnimationClip) clipId, frame, crestType);
         }
+    }
 
-        var animationClip = (AnimationClip) clipId;
+    /// <summary>
+    /// Play a clip on a player's sprite animator, preferring the crest's override libraries over the base library.
+    /// </summary>
+    private static void PlayClip(GameObject playerObject, AnimationClip animationClip, int frame, CrestType crestType) {
+        LogTrace($"Received PlayerAnimationUpdate: {animationClip}");
 
-        if (_debugLogAnimations) Logger.Info($"Received PlayerAnimationUpdate: {animationClip}");
-
+        // Sub-animations only carry an effect; there is no sprite clip to play
         if (SubAnimationEffects.ContainsKey(animationClip)) {
-            if (_debugLogAnimations) Logger.Info($"PlayerAnimationUpdate was sub-effect: {animationClip}");
             return;
         }
 
-        if (!ClipEnumNames.ContainsSecond(animationClip)) {
-            // This happens when we send custom clips, that can't be played by the sprite animator, so for now we
-            // don't log it. This warning might be useful if we seem to be missing animations from the Knights
-            // sprite animator.
-
-            if (_debugLogAnimations) Logger.Warn($"Tried to update animation, but there was no entry for clip ID: {clipId}, enum: {animationClip}");
+        // Custom clips are expected here: they exist for their effect and the sprite animator can't play them
+        if (ClipEnumNames[animationClip] is not { } clipName) {
+            LogTrace($"No clip name for clip: {animationClip}");
             return;
         }
 
-        var clipName = ClipEnumNames[animationClip];
-        if (clipName == null) {
-            Logger.Warn($"Clip name was null after lookup in {nameof(ClipEnumNames)}");
-            return;
-        }
-
-        if (_debugLogAnimations) Logger.Info($"  clipName: {clipName}");
-
-        // Get the sprite animator and check whether this clip can be played before playing it
-        var spriteAnimator = playerObject.GetComponent<tk2dSpriteAnimator>();
-
-        var clip = spriteAnimator.GetClipByName(clipName);
-
-        // Get the config groups for the used crest type, so we can find animation clips that should override the
-        // normal animation library
-        if (!AnimationUtil.GetConfigsFromCrestType(
-            crestType,
-            out var configGroup,
-            out var overrideGroup
-        )) {
+        if (!AnimationUtil.GetConfigsFromCrestType(crestType, out var configGroup, out var overrideGroup)) {
             Logger.Warn($"Could not get configs from crest type: {crestType}");
             return;
         }
 
-        var clipInOverrideGroupLib = false;
+        var spriteAnimator = playerObject.GetComponent<tk2dSpriteAnimator>();
 
-        if (overrideGroup != null) {
-            if (AnimationUtil.TryFindClipInOverrideGroup(overrideGroup, clipName, out var overrideGroupClip)) {
-                clip = overrideGroupClip;
-                clipInOverrideGroupLib = true;
-                
-                if (_debugLogAnimations) Logger.Info("Found clip in override group's override animation library");
-            }
+        // Precedence: override group's library, then config group's library, then the base library
+        tk2dSpriteAnimationClip? clip = null;
+        if (overrideGroup != null &&
+            AnimationUtil.TryFindClipInOverrideGroup(overrideGroup, clipName, out var overrideClip)) {
+            clip = overrideClip;
+        } else if (configGroup != null &&
+                   AnimationUtil.TryFindClipInOverrideGroup(configGroup, clipName, out var configClip)) {
+            clip = configClip;
         }
 
-        if (configGroup != null && !clipInOverrideGroupLib) {
-            if (AnimationUtil.TryFindClipInOverrideGroup(configGroup, clipName, out var configGroupClip)) {
-                clip = configGroupClip;
-                
-                if (_debugLogAnimations) Logger.Info("Found clip in config group's override animation library");
-            }
-        }
+        clip ??= spriteAnimator.GetClipByName(clipName);
 
         if (clip == null) {
-            Logger.Warn("Could not find clip in normal library, config group's override library, or override group's override library");
+            Logger.Warn($"Could not find clip '{clipName}' in the base library or the crest's override libraries");
             return;
         }
 
-        if (_debugLogAnimations) Logger.Info($"  playing clip: {clipName}");
+        LogTrace($"  playing clip: {clipName}");
         spriteAnimator.PlayFromFrame(clip, frame);
     }
 
     /// <summary>
-    /// Callback method when the scene changes.
+    /// Teammates can't damage each other; a player without a team can damage and be damaged by anyone.
     /// </summary>
-    /// <param name="oldScene">The old scene instance.</param>
-    /// <param name="newScene">The name scene instance.</param>
-    private void OnSceneChange(Scene oldScene, Scene newScene) {
-        // A scene change occurs, so we can send again
-        _stopSendingAnimationUntilSceneChange = false;
+    private bool CanDamageLocalPlayer(ushort id) {
+        var localTeam = _playerManager.LocalPlayerTeam;
+        var otherTeam = _playerManager.GetPlayerTeam(id);
+
+        return otherTeam != localTeam || otherTeam == Team.None || localTeam == Team.None;
     }
 
     /// <summary>
-    /// Callback method when a player leaves the scene. Used to destroy leftover animation effect objects.
+    /// Callback for when a player leaves the scene. Destroys leftover effect objects.
     /// </summary>
-    /// <param name="player">The player that left the scene.</param>
-    public void OnPlayerLeaveScene(ClientPlayerData player) {
-        Tacks.DestroyPlayerTacks(player.PlayerObject);
+    public void OnPlayerLeaveScene(ClientPlayerData player) => Tacks.DestroyPlayerTacks(player.PlayerObject);
+
+    #endregion
+
+    #region Sending
+
+    /// <summary>
+    /// Get the AnimationClip enum value for the currently playing animation of the local player.
+    /// </summary>
+    /// <returns>The clip, or <c>default</c> if the current clip is unknown.</returns>
+    public static AnimationClip GetCurrentAnimationClip() {
+        var clipName = HeroController.instance.GetComponent<tk2dSpriteAnimator>().CurrentClip.name;
+
+        return ClipEnumNames.ContainsFirst(clipName) ? ClipEnumNames[clipName] : default;
     }
 
     /// <summary>
-    /// Callback method when an animation fires in the sprite animator.
+    /// Hook on tk2dSpriteAnimator#WarpClipToLocalTime, which fires the animation events of clips. Used to detect
+    /// when the local hero starts playing a clip.
     /// </summary>
-    /// <param name="clip">The sprite animation clip.</param>
+    private void OnSpriteAnimatorWarpClipToLocalTime(
+        tk2dSpriteAnimator animator,
+        tk2dSpriteAnimationClip clip,
+        float time
+    ) {
+        // Fires for every sprite animator in the scene, so reject non-hero animators first and as cheaply as possible
+        if (!ReferenceEquals(animator, _heroAnimator)) {
+            return;
+        }
+
+        var frames = clip.frames;
+        if (frames.Length == 0) {
+            return;
+        }
+
+        var index = (int) animator.clipTime % frames.Length;
+        if (index == 0 || frames[index].triggerEvent || AllowedLoopAnimations.Contains(clip.name)) {
+            LogTrace($"Animation event from WarpClipToLocalTime: {clip.name}, frame index: {index}");
+            OnAnimationEvent(clip);
+        }
+    }
+
+    /// <summary>
+    /// Send a clip played by the local hero (or raised synthetically by an FSM hook) to the server.
+    /// </summary>
     private void OnAnimationEvent(tk2dSpriteAnimationClip clip) {
-        if (_debugLogAnimations) Logger.Info($"Animation event with name: {clip.name}");
+        var clipName = clip.name;
+        LogTrace($"Animation event with name: {clipName}");
 
-        // If we are not connected, there is nothing to send to
+        if (!_netClient.IsConnected || _stopSendingAnimationUntilSceneChange) {
+            return;
+        }
+
+        // A looping clip is sent once when it starts, unless its effect must be re-sent each loop
+        var isRepeatedLoop = clipName == _lastAnimationClip
+                             && clip.wrapMode != ClipWrapMode.Once
+                             && !AllowedLoopAnimations.Contains(clipName);
+        if (isRepeatedLoop) {
+            return;
+        }
+
+        if (clip.wrapMode is not (ClipWrapMode.Loop or ClipWrapMode.LoopSection or ClipWrapMode.Once)) {
+            return;
+        }
+
+        // Entering a building starts a scene transition, so stop sending until the new scene is active
+        // TODO: exiting a building has the same issue, but that is less trivial to solve
+        if (clipName == "Enter") {
+            _stopSendingAnimationUntilSceneChange = true;
+        }
+
+        if (!ClipEnumNames.ContainsFirst(clipName)) {
+            Logger.Warn($"Player sprite animator played unknown clip, name: {clipName}");
+            return;
+        }
+
+        var animationClip = ClipEnumNames[clipName];
+
+        LogTrace($"  Sending animation: {animationClip}");
+        _netClient.UpdateManager.UpdatePlayerAnimation(animationClip, 0, FindEffect(animationClip)?.GetEffectInfo());
+
+        _lastAnimationClip = clipName;
+    }
+
+    /// <summary>
+    /// Raise an animation event for a clip that has no sprite animation, so it goes through the normal send path.
+    /// </summary>
+    private void RaiseSyntheticClip(string clipName) => OnAnimationEvent(
+        new tk2dSpriteAnimationClip {
+            name = clipName,
+            wrapMode = ClipWrapMode.Once
+        }
+    );
+
+    /// <summary>
+    /// Send the given animation clip to the server if the client is connected.
+    /// </summary>
+    /// <param name="clip">The animation clip to send.</param>
+    /// <param name="effectInfo">Additional info for the effect of the clip, or null if there is none.</param>
+    private void SendIfConnected(AnimationClip clip, byte[]? effectInfo = null) {
+        if (_netClient.IsConnected) {
+            _netClient.UpdateManager.UpdatePlayerAnimation(clip, 0, effectInfo);
+        }
+    }
+
+    /// <summary>
+    /// Find the effect of the given animation clip in both the effects and the sub-animation effects.
+    /// </summary>
+    /// <param name="clip">The animation clip to find the effect for.</param>
+    /// <returns>The effect, or null if the clip has none.</returns>
+    private static IAnimationEffect? FindEffect(AnimationClip clip) =>
+        AnimationEffects.TryGetValue(clip, out var effect) || SubAnimationEffects.TryGetValue(clip, out effect)
+            ? effect
+            : null;
+
+    /// <summary>
+    /// Callback for when the local player dies.
+    /// </summary>
+    private void OnDeath(bool nonLethal, bool frostDeath) {
         if (!_netClient.IsConnected) {
             return;
         }
 
-        // If we need to stop sending until a scene change occurs, we skip
-        if (_stopSendingAnimationUntilSceneChange) {
-            return;
-        }
-
-        // If this is a clip that should be handled by the animation controller hook, we return
-        if (AnimationControllerClipNames.Contains(clip.name)) {
-            // Update the last clip name
-            _lastAnimationClip = clip.name;
-
-            return;
-        }
-
-        if (_debugLogAnimations) Logger.Info($"  conditions 1: {clip.name.Equals(_lastAnimationClip)}, {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Once}, {!AllowedLoopAnimations.Contains(clip.name)}");
-
-        // Skip event handling when we already handled this clip, unless it is a clip with wrap mode once
-        if (clip.name.Equals(_lastAnimationClip)
-            && clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Once
-            && !AllowedLoopAnimations.Contains(clip.name)) {
-            return;
-        }
-
-        if (_debugLogAnimations) Logger.Info($"  conditions 2: {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Loop}, {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.LoopSection}, {clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Once}");
-
-        // Skip clips that do not have the wrap mode loop, loop-section or once
-        if (clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Loop &&
-            clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.LoopSection &&
-            clip.wrapMode != tk2dSpriteAnimationClip.WrapMode.Once) {
-            return;
-        }
-
-        // Make sure that when we enter a building, we don't transmit any more animation events
-        // TODO: the same issue applied to exiting a building, but that is less trivial to solve
-        if (clip.name.Equals("Enter")) {
-            _stopSendingAnimationUntilSceneChange = true;
-        }
-
-        // Check special case of downwards dashes that trigger the animation event twice
-        // We only send it once if the current dash has ended
-        if (clip.name.Equals("Dash Down Test1")
-            || clip.name.Equals("Shadow Dash Down Test1")
-            || clip.name.Equals("Shadow Dash Down Sharp Test1")) {
-            if (!_dashHasEnded) {
-                return;
-            }
-
-            _dashHasEnded = false;
-        }
-
-        if (!ClipEnumNames.ContainsFirst(clip.name)) {
-            Logger.Warn($"Player sprite animator played unknown clip, name: {clip.name}");
-            return;
-        }
-
-        var animationClip = ClipEnumNames[clip.name];
-
-        // Check whether there is an effect that adds info to this packet
-        if (AnimationEffects.TryGetValue(animationClip, out var effect)) {
-            var effectInfo = effect.GetEffectInfo();
-
-            _netClient.UpdateManager.UpdatePlayerAnimation(animationClip, 0, effectInfo);
-        } else if (SubAnimationEffects.TryGetValue(animationClip, out var subEffect)) {
-            var effectInfo = subEffect.GetEffectInfo();
-
-            _netClient.UpdateManager.UpdatePlayerAnimation(animationClip, 0, effectInfo);
-        } else {
-            _netClient.UpdateManager.UpdatePlayerAnimation(animationClip);
-        }
-
-        if (_debugLogAnimations) Logger.Info($"  Sending animation: {animationClip}");
-
-        // Update the last clip name, since it changed
-        _lastAnimationClip = clip.name;
-
-        // // We have sent a different clip, so we can reset this
-        // _animationControllerWasLastSent = false;
+        Logger.Debug("Client has died, sending PlayerDeath data");
+        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.Death, 0, [(byte) (frostDeath ? 1 : 0)]);
     }
 
     /// <summary>
-    /// Creates hooks for the Witch Tentacles and Shaman Cancel states in
-    /// the Bind fsm once the HeroController is ready.
+    /// Callback for when the local player rests on a bench.
     /// </summary>
-    private void CreateHeroHooks(HeroController hc) {
-        // Initialize warding bell FSM if it isn't already.
-        // This fills it in with the template
-        var bellFsm = HeroController.instance.bellBindFSM;
-        if (!bellFsm.fsm.initialized) {
-            bellFsm.Init();
-        }
-
-        CreateSkillHooks();
-        CreateToolHooks();
-
-        // Find bind FSM
-        var heroFsms = hc.GetComponents<PlayMakerFSM>();
-
-        var bindFsm = heroFsms.FirstOrDefault(fsm => fsm.FsmName == "Bind");
-        if (bindFsm != null) {
-            // Find FSM states to inject
-            var tentacles = bindFsm.GetState("Witch Tentancles!"); // no that's not a typo... at least on my end
-            FsmStateActionInjector.Inject(tentacles, OnWitchTentacles, 4);
-        
-            var shamanCancel = bindFsm.GetState("Shaman Air Cancel");
-            FsmStateActionInjector.Inject(shamanCancel, OnShamanCancel);
-
-            var bindInterrupt = bindFsm.GetState("Remove Silk?");
-            FsmStateActionInjector.Inject(bindInterrupt, OnBindInterrupt, 2);
-        } else {
-            Logger.Warn("Unable to find Bind FSM to hook.");
-        }
-
-        // Add listener for benching
-        var eventRegister = hc.gameObject.GetComponents<EventRegister>().FirstOrDefault(r => r.SubscribedEvent == "BENCHREST START");
-        if (eventRegister) {
-            eventRegister.ReceivedEvent += OnBench;
-        }
-    }
+    private void OnBench() => SendIfConnected(AnimationClip.Bench);
 
     #endregion
 
     #region Bind Hooks
 
     /// <summary>
-    /// Animation subanimation hook for the Witch Tentacles FSM state.
+    /// Inject the actions into the Bind FSM of the hero that send the bind animations without a sprite clip.
     /// </summary>
-    private void OnWitchTentacles(PlayMakerFSM fsm) {
-        var dummyClip = new tk2dSpriteAnimationClip {
-            name = "Witch Tentacles!",
-            wrapMode = tk2dSpriteAnimationClip.WrapMode.Once
-        };
-        OnAnimationEvent(dummyClip);
+    /// <param name="hero">The hero whose Bind FSM is hooked.</param>
+    private void CreateBindHooks(HeroController hero) {
+        var bindFsm = hero.GetComponents<PlayMakerFSM>().FirstOrDefault(fsm => fsm.FsmName == "Bind");
+        if (bindFsm == null) {
+            Logger.Warn("Unable to find Bind FSM to hook.");
+            return;
+        }
+
+        // "Tentancles" is the game's own spelling of the state name
+        FsmStateActionInjector.Inject(bindFsm.GetState("Witch Tentancles!"), OnWitchTentacles, 4);
+        FsmStateActionInjector.Inject(bindFsm.GetState("Shaman Air Cancel"), OnShamanCancel);
+        FsmStateActionInjector.Inject(bindFsm.GetState("Remove Silk?"), OnBindInterrupt, 2);
     }
 
     /// <summary>
-    /// Animation subanimation hook for the Shaman Air Cancel FSM state.
+    /// Callback for when the Witch crest bind spawns its tentacles.
     /// </summary>
-    
-    private void OnShamanCancel(PlayMakerFSM fsm) {
-        var dummyClip = new tk2dSpriteAnimationClip {
-            name = "Shaman Cancel",
-            wrapMode = tk2dSpriteAnimationClip.WrapMode.Once
-        };
-        OnAnimationEvent(dummyClip);
-    }
-    
+    /// <param name="fsm">The FSM that ran the injected action.</param>
+    private void OnWitchTentacles(PlayMakerFSM fsm) => RaiseSyntheticClip("Witch Tentacles!");
+
     /// <summary>
-    /// Animation subanimation hook for interrupted binds.
+    /// Callback for when the Shaman crest bind is cancelled in the air.
     /// </summary>
-    private void OnBindInterrupt(PlayMakerFSM fsm) {
-        var dummyClip = new tk2dSpriteAnimationClip {
-            name = "Bind Fail Burst",
-            wrapMode = tk2dSpriteAnimationClip.WrapMode.Once
-        };
-        OnAnimationEvent(dummyClip);
-    }
+    /// <param name="fsm">The FSM that ran the injected action.</param>
+    private void OnShamanCancel(PlayMakerFSM fsm) => RaiseSyntheticClip("Shaman Cancel");
+
+    /// <summary>
+    /// Callback for when a bind is interrupted before it finishes.
+    /// </summary>
+    /// <param name="fsm">The FSM that ran the injected action.</param>
+    private void OnBindInterrupt(PlayMakerFSM fsm) => RaiseSyntheticClip("Bind Fail Burst");
 
     #endregion
 
     #region Silk Skill Hooks
 
     /// <summary>
-    /// Creates hooks for silk skills.
+    /// Inject the actions into the silk skill FSMs of the hero that send the silk skill animations.
     /// </summary>
-    private void CreateSkillHooks() {
-        // Silk skill injections
-        var silkSkillFsm = HeroController.instance.silkSpecialFSM;
+    /// <param name="hero">The hero whose silk skill FSMs are hooked.</param>
+    private void CreateSkillHooks(HeroController hero) {
+        var silkSkillFsm = hero.silkSpecialFSM;
         if (silkSkillFsm == null) {
             Logger.Warn("Unable to find Silk Skill FSM to hook.");
             return;
         }
 
         // Thread Storm
-        var threadStormExtend = silkSkillFsm.GetState("Extend");
-        FsmStateActionInjector.Inject(threadStormExtend, OnThreadStormExtend);
+        FsmStateActionInjector.Inject(silkSkillFsm.GetState("Extend"), OnThreadStormExtend);
 
         // Rune Rage
-        var sonarBuildArray = silkSkillFsm.GetState("Build Enemy Array");
-        FsmStateActionInjector.Inject(sonarBuildArray, OnBuildRuneRageArray);
+        FsmStateActionInjector.Inject(silkSkillFsm.GetState("Build Enemy Array"), OnBuildRuneRageArray);
+        FsmStateActionInjector.Inject(silkSkillFsm.GetState("Blast Enemy"), OnRuneBlastEnemy, 4);
+        FsmStateActionInjector.Inject(silkSkillFsm.GetState("Random Blasts"), OnRuneBlastRandom, 3);
+        FsmStateActionInjector.Inject(silkSkillFsm.GetState("Silk Bomb Recover"), OnRuneBlastFinished);
 
-        var blastEnemy = silkSkillFsm.GetState("Blast Enemy");
-        FsmStateActionInjector.Inject(blastEnemy, OnRuneBlastEnemy, 4);
-
-        var blastRandom = silkSkillFsm.GetState("Random Blasts");
-        FsmStateActionInjector.Inject(blastRandom, OnRuneBlastRandom, 3);
-
-        var blastFinished = silkSkillFsm.GetState("Silk Bomb Recover");
-        FsmStateActionInjector.Inject(blastFinished, OnRuneBlastFinished);
-
-        // Pale Nails
+        // Pale Nails: each nail is a pooled object with its own FSM, so inject into every existing instance
         var nailObject = silkSkillFsm.GetAction<SpawnObjectFromGlobalPool>("BossNeedle Cast", 5)?.gameObject.Value;
         var nailFsm = nailObject?.LocateMyFSM("Control");
         if (nailObject == null || nailFsm == null) {
@@ -1261,37 +1154,30 @@ internal class AnimationManager {
             return;
         }
 
-        // Find all existing pale nails
-        List<GameObject> nails = [
-            nailObject
-        ];
-
-        if (ObjectPool.instance.pooledObjects.TryGetValue(nailObject, out var globalPoolNails)) {
-            nails.AddRange(globalPoolNails);
+        List<GameObject> nails = [nailObject];
+        if (ObjectPool.instance.pooledObjects.TryGetValue(nailObject, out var pooledNails)) {
+            nails.AddRange(pooledNails);
         }
 
-        // Add injector components to all current instances of nails
+        var nailFsmName = nailFsm.FsmName;
         foreach (var nail in nails) {
-            var injector = nail.AddComponent<FsmActionInjectorComponent>();
             List<FsmActionInjectorComponent.Injection> injections = [
                 new() {
-                    fsmName = nailFsm.FsmName,
+                    fsmName = nailFsmName,
                     fsmStateName = "Follow HeroFacingLeft",
                     actionIndex = 12,
                     Hook = OnPaleNailAttackCheck,
                     hookName = "Nail Target"
                 },
-
                 new() {
-                    fsmName = nailFsm.FsmName,
+                    fsmName = nailFsmName,
                     fsmStateName = "Follow HeroFacingRight",
                     actionIndex = 12,
                     Hook = OnPaleNailAttackCheck,
                     hookName = "Nail Target"
                 },
-
                 new() {
-                    fsmName = nailFsm.FsmName,
+                    fsmName = nailFsmName,
                     fsmStateName = "Fire Antic",
                     actionIndex = 0,
                     Hook = OnPaleNailFire,
@@ -1299,75 +1185,67 @@ internal class AnimationManager {
                 }
             ];
 
-            injector.SetInjections(injections);
+            nail.AddComponent<FsmActionInjectorComponent>().SetInjections(injections);
         }
     }
 
     /// <summary>
-    /// Animation subanimation hook for extending a thread storm.
+    /// Callback for when Thread Storm is extended while it is active.
     /// </summary>
-    private void OnThreadStormExtend(PlayMakerFSM fsm) {
-        var effectInfo = BaseSilkSkill.GetEffectFlags();
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.AirSphereRefresh, 0, effectInfo);
-    }
+    /// <param name="fsm">The FSM that ran the injected action.</param>
+    private void OnThreadStormExtend(PlayMakerFSM fsm) =>
+        SendIfConnected(AnimationClip.AirSphereRefresh, BaseSilkSkill.GetEffectFlags());
 
     /// <summary>
-    /// Influences Rune Rage to be able to target players that can be attacked.
+    /// Adds hostile players inside the Rune Rage sonar to its target list, so they can be targeted.
     /// </summary>
     private void OnBuildRuneRageArray(PlayMakerFSM fsm) {
-        // If we are not connected, there is nothing to send to
         if (!_netClient.IsConnected) {
             return;
         }
 
         _runeRagePositions.Clear();
 
-        // Find tracker for Rune Rage
         var sonarObject = HeroController.instance.gameObject
-            .FindGameObjectInChildren("Special Attacks")?
-            .FindGameObjectInChildren("Sonar Enemy Tracker");
+                                        .FindGameObjectInChildren("Special Attacks")?
+                                        .FindGameObjectInChildren("Sonar Enemy Tracker");
+        if (sonarObject == null) {
+            return;
+        }
 
-        if (sonarObject == null) return;
-
-        // Get needed components
         var sonar = sonarObject.GetComponent<TrackTriggerObjects>();
-        if (sonar == null) return;
-
         var sonarCollider = sonarObject.GetComponent<CircleCollider2D>();
-        if (sonarCollider == null) return;
+        if (sonar == null || sonarCollider == null) {
+            return;
+        }
 
-        // Remove any old player objects
+        // Remove stale player objects
         sonar.Refresh();
 
-        // No need to target if pvp is off
         if (!_serverSettings.IsPvpEnabled) {
             return;
         }
 
+        Vector2 center = sonarCollider.transform.position;
         var radius = sonarCollider.radius * sonar.transform.GetScaleX();
-
         var inSonar = sonar.insideObjectsList;
 
-        // Find all players within sonar
         foreach (var player in _playerData.Values) {
             if (!player.IsInLocalScene || !player.PlayerObject) {
                 continue;
             }
 
-            // Don't bother to target players on same team
-            if (_serverSettings.TeamsEnabled && player.Team == _playerManager.LocalPlayerTeam && player.Team != Team.None) {
+            if (IsTeammate(player)) {
                 inSonar.Remove(player.PlayerObject);
                 continue;
             }
 
             var collider = player.PlayerObject.GetComponent<BoxCollider2D>();
-            if (!collider) continue;
+            if (!collider) {
+                continue;
+            }
 
-            // Determine if the player is within the sonar circle
-            var closestPlayerPoint = collider.ClosestPoint(sonarCollider.transform.position);
-            var distanceFromCenter = Vector2.Distance(closestPlayerPoint, sonarCollider.transform.position);
-
-            if (distanceFromCenter <= radius) {
+            if (IsWithinRadius(collider, center, radius)) {
                 inSonar.AddIfNotPresent(player.PlayerObject);
             } else {
                 inSonar.Remove(player.PlayerObject);
@@ -1376,544 +1254,199 @@ internal class AnimationManager {
     }
 
     /// <summary>
-    /// Intercepts the spawn locations for targeted Rune Rages.
+    /// Records the spawn position of a targeted Rune Rage blast.
     /// </summary>
     private void OnRuneBlastEnemy(PlayMakerFSM fsm) {
-        // At this point the rune cluster has been created with a position and a given offset from the object.
-        // This position is relative to the player.
-        var spawnPosition = fsm.FsmVariables.FindFsmVector3("Shift Pos");
-        if (spawnPosition != null) {
-            var position = RuneRage.EncodeRunePosition(spawnPosition.Value + HeroController.instance.transform.position);
-            _runeRagePositions.AddRange(position);
+        // The blast position is relative to the hero at this point
+        var shiftPosition = fsm.FsmVariables.FindFsmVector3("Shift Pos");
+        if (shiftPosition != null) {
+            var worldPosition = shiftPosition.Value + HeroController.instance.transform.position;
+            _runeRagePositions.AddRange(RuneRage.EncodeRunePosition(worldPosition));
         }
     }
 
     /// <summary>
-    /// Intercepts the spawn locations for random Rune Rages.
+    /// Records the spawn positions of random Rune Rage blasts, which fill in when there aren't enough targets.
     /// </summary>
     private void OnRuneBlastRandom(PlayMakerFSM fsm) {
-        // If there aren't enough targets, rune rage will spawn up to 3 other blasts
-        var spawnRadial = fsm.GetFirstAction<SpawnRandomObjectsRadialRandom>("Random Blasts");
-        // Get the positions of spawned blasts
-        var positions = spawnRadial.tempPosStore;
-
-        // Add to collection of positions
-        foreach (var position in positions) {
-            var encodedPosition = RuneRage.EncodeRunePosition(position);
-            _runeRagePositions.AddRange(encodedPosition);
+        var spawner = fsm.GetFirstAction<SpawnRandomObjectsRadialRandom>("Random Blasts");
+        foreach (var position in spawner.tempPosStore) {
+            _runeRagePositions.AddRange(RuneRage.EncodeRunePosition(position));
         }
     }
 
     /// <summary>
-    /// Animation hook to send Rune Rage positions.
+    /// Sends all recorded Rune Rage blast positions once the skill has finished.
     /// </summary>
     private void OnRuneBlastFinished(PlayMakerFSM fsm) {
-        var effectInfo = BaseSilkSkill.GetEffectFlags().ToList();
-        effectInfo.AddRange(_runeRagePositions);
-
+        byte[] effectInfo = [.. BaseSilkSkill.GetEffectFlags(), .. _runeRagePositions];
         _runeRagePositions.Clear();
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.SilkBombLocations, 0, effectInfo.ToArray());
+
+        SendIfConnected(AnimationClip.SilkBombLocations, effectInfo);
     }
 
     /// <summary>
-    /// Influences Pail Nails to be able to target players that can be attacked.
+    /// Adds hostile players that a Pale Nail can see to its target list, so they can be targeted.
     /// </summary>
     private void OnPaleNailAttackCheck(PlayMakerFSM fsm) {
-        // If we are not connected, there is nothing to send to
         if (!_netClient.IsConnected) {
             return;
         }
 
-        var sonarObject = fsm.gameObject;
+        var sonar = fsm.gameObject.GetComponentInChildren<TrackTriggerObjectsLineOfSight>();
+        var sonarCollider = fsm.gameObject.GetComponentInChildren<CircleCollider2D>();
+        if (sonar == null || sonarCollider == null) {
+            return;
+        }
 
-        // Get needed components
-        var sonar = sonarObject.GetComponentInChildren<TrackTriggerObjectsLineOfSight>();
-        if (sonar == null) return;
-
-        var sonarCollider = sonarObject.GetComponentInChildren<CircleCollider2D>();
-        if (sonarCollider == null) return;
-
-        // Remove any old player objects
+        // Remove stale player objects
         sonar.Refresh();
 
-        // Don't bother targeting if PvP is off
         if (!_serverSettings.IsPvpEnabled) {
             return;
         }
 
+        Vector2 center = sonarCollider.transform.position;
         var radius = sonarCollider.radius * sonar.transform.GetScaleX();
         var inSonar = sonar.insideObjectsList;
 
-        // Find all players within sonar
         foreach (var player in _playerData.Values) {
-            if (!player.IsInLocalScene || !player.PlayerObject) {
-                continue;
-            }
-
-            // Don't bother to target players on same team
-            if (_serverSettings.TeamsEnabled && player.Team == _playerManager.LocalPlayerTeam && player.Team != Team.None) {
+            if (!player.IsInLocalScene || !player.PlayerObject || IsTeammate(player)) {
                 continue;
             }
 
             var collider = player.PlayerObject.GetComponent<BoxCollider2D>();
-            if (!collider) continue;
+            if (!collider) {
+                continue;
+            }
 
-            // Determine if the player is within the sonar circle and is not obstructed
-            var closestPlayerPoint = collider.ClosestPoint(sonarCollider.transform.position);
-            var distanceFromCenter = Vector2.Distance(closestPlayerPoint, sonarCollider.transform.position);
-
-            if (distanceFromCenter <= radius && sonar.IsCounted(collider.gameObject)) {
+            if (IsWithinRadius(collider, center, radius) && sonar.IsCounted(collider.gameObject)) {
                 inSonar.AddIfNotPresent(player.PlayerObject);
             }
         }
     }
 
     /// <summary>
-    /// Sends an update to fire a set of nails at a specific target.
+    /// Sends the target of a Pale Nails volley.
     /// </summary>
     private void OnPaleNailFire(PlayMakerFSM fsm) {
-        // Only get info from one needle position (the first one)
-        var needleOffset = fsm.FsmVariables.GetFsmVector3("Offset");
+        // Every nail runs this state; only the first nail (x offset 3) reports, so the target is sent once
+        var offset = fsm.FsmVariables.GetFsmVector3("Offset").Value;
         // ReSharper disable once CompareOfFloatsByEqualityOperator
-        if (needleOffset.Value.x != 3) return;
+        if (offset.x != 3) {
+            return;
+        }
 
-        // Don't send if no target, it'll go off on its own.
+        // Without a target the nails fire on their own, so there is nothing to sync
         var target = fsm.FsmVariables.FindFsmGameObject("Target").Value;
         if (target == null) {
             return;
         }
 
-        // Send nail target info
-        var effectInfo = PaleNails.EncodeTargetInfo(target);
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.SilkBossNeedleFire, 0, effectInfo);
+        SendIfConnected(AnimationClip.SilkBossNeedleFire, PaleNails.EncodeTargetInfo(target));
     }
+
+    /// <summary>
+    /// Whether the given player is on the same team as the local player, which is only the case when teams are
+    /// enabled.
+    /// </summary>
+    /// <param name="player">The player to check.</param>
+    /// <returns>True if the player is a teammate, otherwise false.</returns>
+    private bool IsTeammate(ClientPlayerData player) =>
+        _serverSettings.TeamsEnabled
+        && player.Team != Team.None
+        && player.Team == _playerManager.LocalPlayerTeam;
+
+    /// <summary>
+    /// Whether the closest point of the given collider is within the radius around the center.
+    /// </summary>
+    /// <param name="collider">The collider to check.</param>
+    /// <param name="center">The center of the radius.</param>
+    /// <param name="radius">The radius around the center.</param>
+    /// <returns>True if the collider is within the radius, otherwise false.</returns>
+    private static bool IsWithinRadius(Collider2D collider, Vector2 center, float radius) =>
+        Vector2.Distance(collider.ClosestPoint(center), center) <= radius;
 
     #endregion
 
     #region Tool Hooks
 
     /// <summary>
-    /// Creates hooks for tools.
+    /// Register the hooks that send the animations of tools.
     /// </summary>
-    private void CreateToolHooks() {
+    /// <param name="hero">The hero whose tool FSMs are hooked.</param>
+    private void CreateToolHooks(HeroController hero) {
         MagnetiteDice.Hook(OnDiceEnable);
         MagmaBell.HookRecharge(OnMagmaBellRecharge);
 
-        var toolFsm = HeroController.instance.toolsFSM;
-        var brewBurst = toolFsm.GetState("Flea Brew Burst");
-        FsmStateActionInjector.Inject(brewBurst, OnFleaBrew, 0, "Flea Brew");
+        FsmStateActionInjector.Inject(hero.toolsFSM.GetState("Flea Brew Burst"), OnFleaBrew, 0, "Flea Brew");
 
-        var maskFsm = HeroController.instance.gameObject
-            .FindGameObjectInChildren("Charm Effects")?
-            .FindGameObjectInChildren("Fractured Mask Break")?
-            .LocateMyFSM("Spawn Effect");
-
+        var maskFsm = hero.gameObject
+                          .FindGameObjectInChildren("Charm Effects")?
+                          .FindGameObjectInChildren("Fractured Mask Break")?
+                          .LocateMyFSM("Spawn Effect");
         if (maskFsm) {
-            var maskEffect = maskFsm.GetState("Instantiate Effect");
-            FsmStateActionInjector.Inject(maskEffect, OnFracturedMaskBreak, 0, "Fractured Mask Break");
+            FsmStateActionInjector.Inject(
+                maskFsm.GetState("Instantiate Effect"), OnFracturedMaskBreak, 0, "Fractured Mask Break"
+            );
         }
 
+        // Static event that outlives the hero: unsubscribe first so a new hero instance doesn't add a duplicate
+        ToolItemManager.BoundAttackToolUsed -= AttackToolUsed;
         ToolItemManager.BoundAttackToolUsed += AttackToolUsed;
     }
 
     /// <summary>
-    /// Callback method for when the local player uses a tool.
+    /// Callback for when the local player uses an attack tool.
     /// </summary>
-    /// <param name="binding">The AttackToolBinding enum for the used tool.</param>
     private void AttackToolUsed(AttackToolBinding binding) {
+        if (!_netClient.IsConnected) {
+            return;
+        }
+
         var tool = ToolItemManager.GetBoundAttackTool(binding, ToolEquippedReadSource.Active);
-        if (tool == null) {
+        if (tool == null || !BaseAttackTool.ToolNameMap.TryGetValue(tool.name, out var toolClip)) {
             return;
         }
 
-        // If we are not connected, there is nothing to send to
-        if (!_netClient.IsConnected) {
-            return;
-        }
-
-        // Get proper clip from tool name
-        if (!BaseAttackTool.ToolNameMap.TryGetValue(tool.name, out var toolClip)) {
-            return;
-        }
-
-        var effectInfo = BaseAttackTool.GetToolInfo();
-        _netClient.UpdateManager.UpdatePlayerAnimation(toolClip, 0, effectInfo);
+        _netClient.UpdateManager.UpdatePlayerAnimation(toolClip, 0, BaseAttackTool.GetToolInfo());
     }
 
     /// <summary>
-    /// Hook for the magnetite dice being triggered.
+    /// Callback for when the shield effect of the Magnetite Dice is enabled.
     /// </summary>
-    private void OnDiceEnable() {
-        // If we are not connected, there is nothing to send to
-        if (!_netClient.IsConnected) {
-            return;
-        }
-
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.ToolMagnetiteDice);
-    }
+    private void OnDiceEnable() => SendIfConnected(AnimationClip.ToolMagnetiteDice);
 
     /// <summary>
-    /// Hook for the flea brew being triggered.
+    /// Callback for when the local player drinks a Flea Brew.
     /// </summary>
-    private void OnFleaBrew(PlayMakerFSM fsm) {
-        // If we are not connected, there is nothing to send to
-        if (!_netClient.IsConnected) {
-            return;
-        }
-
-        var effectInfo = FleaBrew.Instance.GetEffectInfo();
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.ToolFleaBrew, 0, effectInfo);
-    }
+    /// <param name="fsm">The FSM that ran the injected action.</param>
+    private void OnFleaBrew(PlayMakerFSM fsm) =>
+        SendIfConnected(AnimationClip.ToolFleaBrew, FleaBrew.Instance.GetEffectInfo());
 
     /// <summary>
-    /// Hook for the fractured mask being triggered.
+    /// Callback for when the Fractured Mask of the local player breaks.
     /// </summary>
-    private void OnFracturedMaskBreak(PlayMakerFSM fsm) {
-        // If we are not connected, there is nothing to send to
-        if (!_netClient.IsConnected) {
-            return;
-        }
-
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.ToolFracturedMask);
-    }
+    /// <param name="fsm">The FSM that ran the injected action.</param>
+    private void OnFracturedMaskBreak(PlayMakerFSM fsm) => SendIfConnected(AnimationClip.ToolFracturedMask);
 
     /// <summary>
-    /// Hook for the magma bell being triggered.
+    /// Callback for when the Magma Bell is used.
     /// </summary>
-    private void OnMagmaBell() {
-        // If we are not connected, there is nothing to send to
-        if (!_netClient.IsConnected) {
-            return;
-        }
-
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.ToolMagmaBell, 0, [0]);
-    }
+    private void OnMagmaBell() => SendIfConnected(AnimationClip.ToolMagmaBell, [0]);
 
     /// <summary>
-    /// Hook for the magma bell being triggered.
+    /// Callback for when the Magma Bell has recharged.
     /// </summary>
-    private void OnMagmaBellRecharge() {
-        // If we are not connected, there is nothing to send to
-        if (!_netClient.IsConnected) {
-            return;
-        }
-
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.ToolMagmaBell, 0, [1]);
-    }
-
-    /// <summary>
-    /// Hook for resting on a bench.
-    /// </summary>
-    private void OnBench() {
-        // If we are not connected, there is nothing to send to
-        if (!_netClient.IsConnected) {
-            return;
-        }
-
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.Bench);
-    }
+    private void OnMagmaBellRecharge() => SendIfConnected(AnimationClip.ToolMagmaBell, [1]);
 
     #endregion
 
-    // /// <summary>
-    // /// Callback method on the HeroAnimationController#Play method.
-    // /// </summary>
-    // /// <param name="self">The hero animation controller instance.</param>
-    // /// <param name="clipName">The name of the clip to play.</param>
-    // private void HeroAnimationControllerOnPlay(HeroAnimationController self, string clipName) {
-    //     OnAnimationControllerPlay(clipName, 0);
-    // }
-    //
-    // /// <summary>
-    // /// Callback method on the HeroAnimationController#PlayFromFrame method.
-    // /// </summary>
-    // /// <param name="self">The hero animation controller instance.</param>
-    // /// <param name="clipName">The name of the clip to play.</param>
-    // /// <param name="frame">The frame from which to play the clip.</param>
-    // private void HeroAnimationControllerOnPlayFromFrame(HeroAnimationController self, string clipName, int frame) {
-    //     OnAnimationControllerPlay(clipName, frame);
-    // }
-    //
-    // /// <summary>
-    // /// Callback method when the HeroAnimationController plays an animation.
-    // /// </summary>
-    // /// <param name="clipName">The name of the clip to play.</param>
-    // /// <param name="frame">The frame from which to play the clip.</param>
-    // private void OnAnimationControllerPlay(string clipName, int frame) {
-    //     // If we are not connected, there is nothing to send to
-    //     if (!_netClient.IsConnected) {
-    //         return;
-    //     }
-    //
-    //     // If this is not a clip that should be handled by the animation controller hook, we return
-    //     if (!AnimationControllerClipNames.Contains(clipName)) {
-    //         return;
-    //     }
-    //
-    //     // If the animation controller is responsible for the last sent clip, we skip
-    //     // this is to ensure that we don't spam packets of the same clip
-    //     if (!_animationControllerWasLastSent) {
-    //         if (!ClipEnumNames.ContainsFirst(clipName)) {
-    //             Logger.Warn($"Player animation controller played unknown clip, name: {clipName}");
-    //             return;
-    //         }
-    //
-    //         var clipId = ClipEnumNames[clipName];
-    //
-    //         _netClient.UpdateManager.UpdatePlayerAnimation(clipId, frame);
-    //
-    //         // This was the last clip we sent
-    //         _animationControllerWasLastSent = true;
-    //     }
-    // }
-    //
-    // /// <summary>
-    // /// Callback method on the HeroController#CancelDash method.
-    // /// </summary>
-    // /// <param name="orig">The original method.</param>
-    // /// <param name="self">The HeroController instance.</param>
-    // private void HeroControllerOnCancelDash(On.HeroController.orig_CancelDash orig, HeroController self) {
-    //     orig(self);
-    //
-    //     // If we are not connected, there is nothing to send to
-    //     if (!_netClient.IsConnected) {
-    //         return;
-    //     }
-    //
-    //     _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.DashEnd);
-    //
-    //     // The dash has ended, so we can send a new one when we dash
-    //     _dashHasEnded = true;
-    // }
-    //
-    // /// <summary>
-    // /// Callback method for when the hero updates.
-    // /// </summary>
-    // private void OnHeroUpdateHook() {
-    //     // If we are not connected, there is nothing to send to
-    //     if (!_netClient.IsConnected) {
-    //         return;
-    //     }
-    //
-    //     var chargeEffectActive = HeroController.instance.artChargeEffect.activeSelf;
-    //     var chargedEffectActive = HeroController.instance.artChargedEffect.activeSelf;
-    //
-    //     if (chargeEffectActive && !_lastChargeEffectActive) {
-    //         // Charge effect is now active, which wasn't last update, so we can send the charge animation packet
-    //         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.NailArtCharge);
-    //     }
-    //
-    //     if (chargedEffectActive && !_lastChargedEffectActive) {
-    //         if (!_chargedEffectStopwatch.IsRunning || _chargedEffectStopwatch.ElapsedMilliseconds > 100) {
-    //             // Charged effect is now active, which wasn't last update, so we can send the charged animation packet
-    //             _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.NailArtCharged);
-    //
-    //             // Start the stopwatch to make sure this animation is not triggered repeatedly
-    //             _chargedEffectStopwatch.Restart();
-    //         }
-    //     }
-    //
-    //     if (!chargeEffectActive && _lastChargeEffectActive && !chargedEffectActive) {
-    //         // The charge effect is now inactive and we are not fully charged
-    //         // This means that we cancelled the nail art charge
-    //         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.NailArtChargeEnd);
-    //     }
-    //
-    //     if (!chargedEffectActive && _lastChargedEffectActive) {
-    //         if (!_chargedEndEffectStopwatch.IsRunning || _chargedEndEffectStopwatch.ElapsedMilliseconds > 100) {
-    //             // The charged effect is now inactive, so we are done with the nail art
-    //             _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.NailArtChargeEnd);
-    //
-    //             // Set the delay variable to make sure this animation is not triggered repeatedly
-    //             _chargedEndEffectStopwatch.Restart();
-    //         }
-    //     }
-    //
-    //     // Update the latest states
-    //     _lastChargeEffectActive = chargeEffectActive;
-    //     _lastChargedEffectActive = chargedEffectActive;
-    //
-    //     // Obtain the current wall slide state
-    //     var wallSlideActive = HeroController.instance.cState.wallSliding;
-    //
-    //     if (!wallSlideActive && _lastWallSlideActive) {
-    //         // We were wall sliding last update, but not anymore, so we send a wall slide end animation
-    //         _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.WallSlideEnd);
-    //     }
-    //
-    //     // Update the last state
-    //     _lastWallSlideActive = wallSlideActive;
-    // }
-
     /// <summary>
-    /// Callback method on the tk2dSpriteAnimator#WarpClipToLocalTime method. This method executes
-    /// the animation event for clips, and we want to know when those clips start playing.
+    /// Log an animation trace message. Calls are removed by the compiler unless <see cref="TraceSymbol"/> is
+    /// defined.
     /// </summary>
-    /// <param name="self">The tk2dSpriteAnimator instance.</param>
-    /// <param name="clip">The tk2dSpriteAnimationClip instance.</param>
-    /// <param name="time">The time to warp to.</param>
-    private void Tk2dSpriteAnimatorOnWarpClipToLocalTime(
-        tk2dSpriteAnimator self,
-        tk2dSpriteAnimationClip clip,
-        float time
-    ) {
-        var localPlayer = HeroController.instance;
-        if (!localPlayer) {
-            return;
-        }
-    
-        var spriteAnimator = localPlayer.GetComponent<tk2dSpriteAnimator>();
-        if (self != spriteAnimator) {
-            return;
-        }
-
-        var clipTime = self.clipTime;
-        var index = (int) clipTime % clip.frames.Length;
-        var frame = clip.frames[index];
-    
-        if (index == 0 || frame.triggerEvent || AllowedLoopAnimations.Contains(clip.name)) {
-            if (_debugLogAnimations) Logger.Info($"OnAnimationEvent from tk2dSpriteAnimatorOnWarpClipToLocalTime: {clip.name}, conditions: {index == 0}, {frame.triggerEvent}, {AllowedLoopAnimations.Contains(clip.name)}");
-            OnAnimationEvent(clip);
-        }
-    }
-
-    /// <summary>
-    /// Callback method on the tk2dSpriteAnimator#OnProcessEvents method. This method executes
-    /// the animation event for clips, and we want to know when those clips start playing.
-    /// </summary>
-    /// <param name="self">The tk2dSpriteAnimator instance.</param>
-    /// <param name="start">The start of frames to process.</param>
-    /// <param name="last">The last frame to process.</param>
-    /// <param name="direction">The direction in which to process.</param>
-    private void Tk2dSpriteAnimatorOnProcessEvents(
-        tk2dSpriteAnimator self,
-        int start,
-        int last,
-        int direction
-    ) {
-        var localPlayer = HeroController.instance;
-        if (!localPlayer) {
-            return;
-        }
-
-        var spriteAnimator = localPlayer.GetComponent<tk2dSpriteAnimator>();
-        if (self != spriteAnimator) {
-            return;
-        }
-
-        if (start == last) {
-            return;
-        }
-
-        var num = last + direction;
-        var frames = self.CurrentClip.frames;
-
-        var allowedClipNames = new[] { "" };
-
-        for (var i = start + direction; i != num; i += direction) {
-            if (i >= frames.Length || i < 0) {
-                Logger.Warn("tk2dSpriteAnimator ProcessEvents index out of bounds!");
-                continue;
-            }
-
-            if (i != 0 && !frames[i].triggerEvent) {
-                continue;
-            }
-
-            // if (!allowedClipNames.Contains(self.CurrentClip.name)) {
-            //     continue;
-            // }
-        
-            if (_debugLogAnimations) Logger.Info($"OnAnimationEvent from tk2dSpriteAnimatorOnProcessEvents: {self.CurrentClip.name}, conditions: {i}, {frames[i].triggerEvent}");
-            // OnAnimationEvent(self.CurrentClip);
-        }
-    }
-
-    // /// <summary>
-    // /// Callback method on the HeroController#DieFromHazard method.
-    // /// </summary>
-    // /// <param name="self">The HeroController instance.</param>
-    // /// <param name="hazardType">The type of hazard.</param>
-    // /// <param name="angle">The angle at which the hero entered the hazard.</param>
-    // /// <returns>An enumerator for this coroutine.</returns>
-    // private void HeroControllerOnDieFromHazard(HeroController self, HazardType hazardType, float angle) {
-    //     // If we are not connected, there is nothing to send to
-    //     if (!_netClient.IsConnected) {
-    //         return;
-    //     }
-    //
-    //     _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.HazardDeath, 0, [
-    //         // hazardType.Equals(HazardType.SPIKES),
-    //         // hazardType.Equals(HazardType.ACID)
-    //     ]);
-    // }
-    //
-    // /// <summary>
-    // /// Callback method on the GameManager#HazardRespawn method.
-    // /// </summary>
-    // /// <param name="self">The GameManager instance.</param>
-    // private void GameManagerOnHazardRespawn(GameManager self) {
-    //     // If we are not connected, there is nothing to send to
-    //     if (!_netClient.IsConnected) {
-    //         return;
-    //     }
-    //
-    //     // _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.HazardRespawn);
-    // }
-
-    // /// <summary>
-    // /// Callback method for when the local player dies.
-    // /// </summary>
-    private void OnDeath(bool nonLethal, bool frostDeath) {
-        // If we are not connected, there is nothing to send to
-        if (!_netClient.IsConnected) {
-            return;
-        }
-
-        Logger.Debug("Client has died, sending PlayerDeath data");
-
-        // Let the server know that we have died
-        byte[] effectInfo = [
-            (byte)(frostDeath ? 1 : 0)
-        ];
-        _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.Death, 0, effectInfo);
-    }
-
-    // /// <summary>
-    // /// Callback method on the HeroController#RelinquishControl method.
-    // /// </summary>
-    // /// <param name="self">The HeroController instance.</param>
-    // private void HeroControllerOnRelinquishControl(HeroController self) {
-    //     // If we are not connected, there is no need to send
-    //     if (!_netClient.IsConnected) {
-    //         return;
-    //     }
-    //
-    //     // If we need to stop sending until a scene change occurs, we skip
-    //     if (_stopSendingAnimationUntilSceneChange) {
-    //         return;
-    //     }
-    //
-    //     // If the player has not sent the end of the crystal dash animation then we need to do it now,
-    //     // because crystal dash is cancelled when relinquishing control
-    //     if (!_hasSentCrystalDashEnd) {
-    //         // _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.SDAirBrake);
-    //     }
-    //
-    //     // _netClient.UpdateManager.UpdatePlayerAnimation(AnimationClip.DashEnd);
-    // }
-
-    /// <summary>
-    /// Get the AnimationClip enum value for the currently playing animation of the local player.
-    /// </summary>
-    /// <returns>An AnimationClip enum value.</returns>
-    public static AnimationClip GetCurrentAnimationClip() {
-        var currentClipName = HeroController.instance.GetComponent<tk2dSpriteAnimator>().CurrentClip.name;
-
-        if (ClipEnumNames.ContainsFirst(currentClipName)) {
-            return ClipEnumNames[currentClipName];
-        }
-
-        return 0;
-    }
+    /// <param name="message">The message to log.</param>
+    [System.Diagnostics.Conditional(TraceSymbol)]
+    private static void LogTrace(string message) => Logger.Info(message);
 }
