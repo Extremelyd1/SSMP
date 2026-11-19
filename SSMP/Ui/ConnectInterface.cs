@@ -296,6 +296,16 @@ internal class ConnectInterface {
     #region Error & Status Messages
 
     /// <summary>
+    /// Error message when joining a matchmaking lobby fails.
+    /// </summary>
+    private const string ErrorLobbyJoinFailed = "Lobby not found, offline, or join failed";
+
+    /// <summary>
+    /// Error message when Steam is not available.
+    /// </summary>
+    private const string ErrorSteamUnavailable = "Steam is not available.";
+
+    /// <summary>
     /// Error message when address input is missing.
     /// </summary>
     private const string ErrorEnterAddress = "Failed to connect:\nYou must enter an address";
@@ -447,19 +457,6 @@ internal class ConnectInterface {
     /// </summary>
     private readonly LobbyConfigPanel _lobbyConfigPanel;
 
-    // Steam tab components
-    /// <summary>
-    /// Button to create a new Steam lobby.
-    /// </summary>
-    // ReSharper disable once NotAccessedField.Local
-    private IButtonComponent? _createLobbyButton;
-
-    /// <summary>
-    /// Button to open the lobby browser.
-    /// </summary>
-    // ReSharper disable once NotAccessedField.Local
-    private IButtonComponent? _browseLobbyButton;
-
     /// <summary>
     /// Scrollable panel for browsing public lobbies on Steam tab.
     /// </summary>
@@ -470,12 +467,7 @@ internal class ConnectInterface {
     /// </summary>
     private readonly LobbyConfigPanel? _steamLobbyConfigPanel;
 
-    /// <summary>
-    /// Button to join a friend via invite.
-    /// </summary>
     // ReSharper disable once NotAccessedField.Local
-    private IButtonComponent? _joinFriendButton;
-
     /// <summary>
     /// Steam lobby ID for a newly created hosted Steam lobby that still needs post-start finalization.
     /// </summary>
@@ -603,7 +595,7 @@ internal class ConnectInterface {
 
         // Build UI from top to bottom
         CreateHeader(connectGroup, ref currentY);
-        _glowingNotch = CreateNotch(ref currentY);
+        _glowingNotch = ConnectInterfaceHelpers.CreateGlowingNotch(InitialX, currentY);
         _backgroundPanel = CreateBackgroundPanel(ref currentY);
 
         _usernameInput = CreateUsernameSection(ref currentY);
@@ -626,23 +618,14 @@ internal class ConnectInterface {
         );
         _lobbyBrowserPanel.SetOnLobbySelected(lobby => {
                 _lobbyIdInput.SetInput(lobby.LobbyCode);
-                _lobbyBrowserPanel.Hide();
-                _matchmakingGroup.SetActive(true);
+                ReturnFromPanel(_lobbyBrowserPanel, _matchmakingGroup);
                 ShowFeedback(Color.green, $"Selected lobby: {lobby.LobbyCode}");
             }
         );
-        _lobbyBrowserPanel.SetOnBack(() => {
-                _lobbyBrowserPanel.Hide();
-                _matchmakingGroup.SetActive(true);
-            }
-        );
-        _lobbyBrowserPanel.SetOnRefresh(() => { MonoBehaviourUtil.Instance.StartCoroutine(FetchLobbiesCoroutine()); });
+        _lobbyBrowserPanel.SetOnBack(() => ReturnFromPanel(_lobbyBrowserPanel, _matchmakingGroup));
+        _lobbyBrowserPanel.SetOnRefresh(() => MonoBehaviourUtil.Instance.StartCoroutine(FetchLobbiesCoroutine()));
 
-        var steamComponents = CreateSteamTab(currentY);
-        _steamGroup = steamComponents.group;
-        _createLobbyButton = steamComponents.createButton;
-        _browseLobbyButton = steamComponents.browseButton;
-        _joinFriendButton = steamComponents.joinButton;
+        _steamGroup = CreateSteamTab(currentY);
 
         // Create Steam lobby browser panel (same layout as matchmaking)
         if (_steamGroup != null) {
@@ -652,8 +635,7 @@ internal class ConnectInterface {
                 new Vector2(ContentWidth, 280f)
             );
             _steamLobbyBrowserPanel.SetOnLobbySelected(lobby => {
-                    _steamLobbyBrowserPanel.Hide();
-                    _steamGroup.SetActive(true);
+                    ReturnFromPanel(_steamLobbyBrowserPanel, _steamGroup);
 
                     // Steam lobbies join via Steam ID (ConnectionData)
                     if (lobby.LobbyType == PublicLobbyType.Steam) {
@@ -663,15 +645,8 @@ internal class ConnectInterface {
                     }
                 }
             );
-            _steamLobbyBrowserPanel.SetOnBack(() => {
-                    _steamLobbyBrowserPanel.Hide();
-                    _steamGroup.SetActive(true);
-                }
-            );
-            _steamLobbyBrowserPanel.SetOnRefresh(() => {
-                    MonoBehaviourUtil.Instance.StartCoroutine(FetchSteamLobbiesCoroutine());
-                }
-            );
+            _steamLobbyBrowserPanel.SetOnBack(() => ReturnFromPanel(_steamLobbyBrowserPanel, _steamGroup));
+            _steamLobbyBrowserPanel.SetOnRefresh(() => MonoBehaviourUtil.Instance.StartCoroutine(FetchSteamLobbiesCoroutine()));
 
             // Create Steam lobby config panel
             _steamLobbyConfigPanel = new LobbyConfigPanel(
@@ -681,16 +656,11 @@ internal class ConnectInterface {
                 PublicLobbyType.Steam
             );
             _steamLobbyConfigPanel.SetOnCreate(visibility => {
-                    _steamLobbyConfigPanel.Hide();
-                    _steamGroup?.SetActive(true);
+                    ReturnFromPanel(_steamLobbyConfigPanel, _steamGroup);
                     CreateSteamLobbyWithConfig(visibility);
                 }
             );
-            _steamLobbyConfigPanel.SetOnCancel(() => {
-                    _steamLobbyConfigPanel.Hide();
-                    _steamGroup?.SetActive(true);
-                }
-            );
+            _steamLobbyConfigPanel.SetOnCancel(() => ReturnFromPanel(_steamLobbyConfigPanel, _steamGroup));
         }
 
         // Create matchmaking lobby config panel
@@ -700,16 +670,11 @@ internal class ConnectInterface {
             new Vector2(ContentWidth, 280f)
         );
         _lobbyConfigPanel.SetOnCreate(visibility => {
-                _lobbyConfigPanel.Hide();
-                _matchmakingGroup.SetActive(true);
+                ReturnFromPanel(_lobbyConfigPanel, _matchmakingGroup);
                 CreateMatchmakingLobbyWithConfig(visibility);
             }
         );
-        _lobbyConfigPanel.SetOnCancel(() => {
-                _lobbyConfigPanel.Hide();
-                _matchmakingGroup.SetActive(true);
-            }
-        );
+        _lobbyConfigPanel.SetOnCancel(() => ReturnFromPanel(_lobbyConfigPanel, _matchmakingGroup));
 
         var directIpComponents = CreateDirectIpTab(currentY);
         _directIpGroup = directIpComponents.group;
@@ -750,14 +715,6 @@ internal class ConnectInterface {
         );
 
         currentY -= HeaderToNotchSpacing / UiManager.ScreenHeightRatio;
-    }
-
-    /// <summary>
-    /// Creates the glowing decorative notch below the header.
-    /// </summary>
-    private GameObject CreateNotch(ref float currentY) {
-        var notch = ConnectInterfaceHelpers.CreateGlowingNotch(InitialX, currentY);
-        return notch;
     }
 
     /// <summary>
@@ -849,10 +806,100 @@ internal class ConnectInterface {
     #region Tab Content Creation
 
     /// <summary>
+    /// Hides an overlay panel and re-activates the tab content group behind it.
+    /// </summary>
+    /// <param name="panel">The panel to hide.</param>
+    /// <param name="group">The tab content group to show.</param>
+    private static void ReturnFromPanel(PanelComponent panel, ComponentGroup? group) {
+        panel.Hide();
+        group?.SetActive(true);
+    }
+
+    /// <summary>
+    /// Deactivates the tab content group and shows an overlay panel instead.
+    /// </summary>
+    /// <param name="group">The tab content group to deactivate.</param>
+    /// <param name="panel">The panel to show.</param>
+    private static void OpenPanel(ComponentGroup group, PanelComponent panel) {
+        group.SetActive(false);
+        panel.Show();
+    }
+
+    /// <summary>
+    /// Shows feedback summarising how many public lobbies were found.
+    /// </summary>
+    /// <param name="count">The number of lobbies found.</param>
+    private void ShowLobbyCountFeedback(int count) {
+        if (count == 0) {
+            ShowFeedback(Color.yellow, "No public lobbies found.");
+        } else {
+            ShowFeedback(Color.green, $"Found {count} {(count == 1 ? "Lobby" : "Lobbies")}");
+        }
+    }
+
+    /// <summary>
+    /// Creates a standard action button in the given group.
+    /// </summary>
+    /// <param name="group">The component group.</param>
+    /// <param name="position">The position of the button.</param>
+    /// <param name="size">The size of the button.</param>
+    /// <param name="text">The button text.</param>
+    /// <param name="onPress">The press callback.</param>
+    /// <returns>The created button.</returns>
+    private static ButtonComponent CreateActionButton(
+        ComponentGroup group,
+        Vector2 position,
+        Vector2 size,
+        string text,
+        Action onPress
+    ) {
+        var button = new ButtonComponent(
+            group,
+            position,
+            size,
+            text,
+            Resources.TextureManager.ButtonBg,
+            Resources.FontManager.UIFontRegular,
+            UiManager.NormalFontSize
+        );
+        button.SetOnPress(onPress);
+        return button;
+    }
+
+    /// <summary>
+    /// Creates two half-width action buttons side-by-side at the given height.
+    /// </summary>
+    /// <param name="group">The component group.</param>
+    /// <param name="y">The y position of both buttons.</param>
+    /// <param name="leftText">Text of the left button.</param>
+    /// <param name="leftPress">Press callback of the left button.</param>
+    /// <param name="rightText">Text of the right button.</param>
+    /// <param name="rightPress">Press callback of the right button.</param>
+    /// <returns>The left and right buttons.</returns>
+    private static (ButtonComponent left, ButtonComponent right) CreateButtonPair(
+        ComponentGroup group,
+        float y,
+        string leftText,
+        Action leftPress,
+        string rightText,
+        Action rightPress
+    ) {
+        var buttonGap = 10f;
+        var buttonWidth = (ContentWidth - buttonGap) / 2f;
+        var buttonOffset = ((buttonWidth + buttonGap) / 2f) /
+                           (float) System.Math.Pow(UiManager.ScreenHeightRatio, 2);
+        var size = new Vector2(buttonWidth, UniformHeight);
+
+        return (
+            CreateActionButton(group, new Vector2(InitialX - buttonOffset, y), size, leftText, leftPress),
+            CreateActionButton(group, new Vector2(InitialX + buttonOffset, y), size, rightText, rightPress)
+        );
+    }
+
+    /// <summary>
     /// Creates the Matchmaking tab content with lobby ID input and connect/host buttons.
     /// </summary>
-    private (ComponentGroup group, IInputComponent lobbyIdInput, IButtonComponent connectButton, IButtonComponent
-        hostButton)
+    private (ComponentGroup group, IInputComponent lobbyIdInput, IButtonComponent connectButton)
         CreateMatchmakingTab(float startY) {
         var group = new ComponentGroup(parent: _backgroundGroup);
         var y = startY;
@@ -902,59 +949,32 @@ internal class ConnectInterface {
         y -= (UniformHeight + 20f) / UiManager.ScreenHeightRatio;
 
         // Two buttons side-by-side (same layout as Direct IP tab)
-        var buttonGap = 10f;
-        var buttonWidth = (ContentWidth - buttonGap) / 2f;
-        var buttonOffset = ((buttonWidth + buttonGap) / 2f) /
-                           (float) System.Math.Pow(UiManager.ScreenHeightRatio, 2);
-
-        // Connect button (left)
-        var connectButton = new ButtonComponent(
-            group,
-            new Vector2(InitialX - buttonOffset, y),
-            new Vector2(buttonWidth, UniformHeight),
-            LobbyConnectButtonText,
-            Resources.TextureManager.ButtonBg,
-            Resources.FontManager.UIFontRegular,
-            UiManager.NormalFontSize
+        var (connectButton, _) = CreateButtonPair(
+            group, y,
+            LobbyConnectButtonText, OnLobbyConnectButtonPressed,
+            HostLobbyButtonText, OnHostLobbyButtonPressed
         );
-        connectButton.SetOnPress(OnLobbyConnectButtonPressed);
-
-        // Host Lobby button (right)
-        var hostButton = new ButtonComponent(
-            group,
-            new Vector2(InitialX + buttonOffset, y),
-            new Vector2(buttonWidth, UniformHeight),
-            HostLobbyButtonText,
-            Resources.TextureManager.ButtonBg,
-            Resources.FontManager.UIFontRegular,
-            UiManager.NormalFontSize
-        );
-        hostButton.SetOnPress(OnHostLobbyButtonPressed);
 
         y -= (UniformHeight + 15f) / UiManager.ScreenHeightRatio;
 
         // Browse Lobbies button (full width)
-        var browseButton = new ButtonComponent(
+        CreateActionButton(
             group,
             new Vector2(InitialX, y),
             new Vector2(ContentWidth, UniformHeight),
-            "☰ BROWSE PUBLIC LOBBIES",
-            Resources.TextureManager.ButtonBg,
-            Resources.FontManager.UIFontRegular,
-            UiManager.NormalFontSize
+            BrowseLobbyButtonText,
+            OnBrowseMatchmakingLobbiesPressed
         );
-        browseButton.SetOnPress(OnBrowseMatchmakingLobbiesPressed);
 
-        return (group, lobbyIdInput, connectButton, hostButton);
+        return (group, lobbyIdInput, connectButton);
     }
 
     /// <summary>
     /// Creates the Steam tab content with lobby management buttons.
     /// </summary>
-    private (ComponentGroup? group, IButtonComponent? createButton, IButtonComponent? browseButton,
-        IButtonComponent? joinButton) CreateSteamTab(float startY) {
+    private ComponentGroup? CreateSteamTab(float startY) {
         if (!SteamManager.IsInitialized) {
-            return (null, null, null, null);
+            return null;
         }
 
         var group = new ComponentGroup(activeSelf: false, parent: _backgroundGroup);
@@ -971,45 +991,24 @@ internal class ConnectInterface {
         );
         y -= SteamTextSpacing / UiManager.ScreenHeightRatio;
 
+        var buttonSize = new Vector2(ContentWidth, UniformHeight);
+        var buttonStep = (UniformHeight + SteamButtonSpacing) / UiManager.ScreenHeightRatio;
+
         // Create lobby button
-        var createButton = new ButtonComponent(
-            group,
-            new Vector2(InitialX, y),
-            new Vector2(ContentWidth, UniformHeight),
-            CreateLobbyButtonText,
-            Resources.TextureManager.ButtonBg,
-            Resources.FontManager.UIFontRegular,
-            UiManager.NormalFontSize
-        );
-        createButton.SetOnPress(OnCreateLobbyButtonPressed);
-        y -= (UniformHeight + SteamButtonSpacing) / UiManager.ScreenHeightRatio;
+        CreateActionButton(group, new Vector2(InitialX, y), buttonSize, CreateLobbyButtonText,
+            OnCreateLobbyButtonPressed);
+        y -= buttonStep;
 
         // Browse lobbies button
-        var browseButton = new ButtonComponent(
-            group,
-            new Vector2(InitialX, y),
-            new Vector2(ContentWidth, UniformHeight),
-            BrowseLobbyButtonText,
-            Resources.TextureManager.ButtonBg,
-            Resources.FontManager.UIFontRegular,
-            UiManager.NormalFontSize
-        );
-        browseButton.SetOnPress(OnBrowseLobbyButtonPressed);
-        y -= (UniformHeight + SteamButtonSpacing) / UiManager.ScreenHeightRatio;
+        CreateActionButton(group, new Vector2(InitialX, y), buttonSize, BrowseLobbyButtonText,
+            OnBrowseLobbyButtonPressed);
+        y -= buttonStep;
 
         // Join friend button
-        var joinButton = new ButtonComponent(
-            group,
-            new Vector2(InitialX, y),
-            new Vector2(ContentWidth, UniformHeight),
-            JoinFriendButtonText,
-            Resources.TextureManager.ButtonBg,
-            Resources.FontManager.UIFontRegular,
-            UiManager.NormalFontSize
-        );
-        joinButton.SetOnPress(OnJoinFriendButtonPressed);
+        CreateActionButton(group, new Vector2(InitialX, y), buttonSize, JoinFriendButtonText,
+            OnJoinFriendButtonPressed);
 
-        return (group, createButton, browseButton, joinButton);
+        return group;
     }
 
     /// <summary>
@@ -1062,35 +1061,11 @@ internal class ConnectInterface {
         );
         y -= (UniformHeight + 20f) / UiManager.ScreenHeightRatio;
 
-        // Direct IP button values
-        var buttonGap = 10f;
-        var buttonWidth = (ContentWidth - buttonGap) / 2f;
-        var buttonOffset = ((buttonWidth + buttonGap) / 2f) /
-                           (float) System.Math.Pow(UiManager.ScreenHeightRatio, 2);
-
-        // Connect button (left)
-        var connectButton = new ButtonComponent(
-            group,
-            new Vector2(InitialX - buttonOffset, y),
-            new Vector2(buttonWidth, UniformHeight),
-            DirectConnectButtonText,
-            Resources.TextureManager.ButtonBg,
-            Resources.FontManager.UIFontRegular,
-            UiManager.NormalFontSize
+        var (connectButton, hostButton) = CreateButtonPair(
+            group, y,
+            DirectConnectButtonText, OnDirectConnectButtonPressed,
+            HostButtonText, OnStartButtonPressed
         );
-        connectButton.SetOnPress(OnDirectConnectButtonPressed);
-
-        // Host button (right)
-        var hostButton = new ButtonComponent(
-            group,
-            new Vector2(InitialX + buttonOffset, y),
-            new Vector2(buttonWidth, UniformHeight),
-            HostButtonText,
-            Resources.TextureManager.ButtonBg,
-            Resources.FontManager.UIFontRegular,
-            UiManager.NormalFontSize
-        );
-        hostButton.SetOnPress(OnStartButtonPressed);
 
         return (group, addressInput, portInput, connectButton, hostButton);
     }
@@ -1250,7 +1225,7 @@ internal class ConnectInterface {
             Logger.Error(
                 $"ConnectInterface: JoinLobbyAsync failed: {task.Exception?.GetBaseException().Message ?? "cancelled"}"
             );
-            ShowFeedback(Color.red, "Lobby not found, offline, or join failed");
+            ShowFeedback(Color.red, ErrorLobbyJoinFailed);
             yield break;
         }
 
@@ -1264,7 +1239,7 @@ internal class ConnectInterface {
                 yield break;
             }
 
-            ShowFeedback(Color.red, "Lobby not found, offline, or join failed");
+            ShowFeedback(Color.red, ErrorLobbyJoinFailed);
             yield break;
         }
 
@@ -1281,7 +1256,7 @@ internal class ConnectInterface {
             if (string.IsNullOrEmpty(joinId)) {
                 CleanupHolePunchSocket(holePunchSocket);
                 ResetConnectionButtons();
-                ShowFeedback(Color.red, "Lobby not found, offline, or join failed");
+                ShowFeedback(Color.red, ErrorLobbyJoinFailed);
                 yield break;
             }
 
@@ -1298,7 +1273,7 @@ internal class ConnectInterface {
                 Logger.Error(
                     $"ConnectInterface: CoordinateMatchmakingJoinAsync failed: {joinTask.Exception?.GetBaseException().Message ?? "cancelled"}"
                 );
-                ShowFeedback(Color.red, "Lobby not found, offline, or join failed");
+                ShowFeedback(Color.red, ErrorLobbyJoinFailed);
                 yield break;
             }
 
@@ -1317,7 +1292,7 @@ internal class ConnectInterface {
                     yield break;
                 }
 
-                ShowFeedback(Color.red, "Lobby not found, offline, or join failed");
+                ShowFeedback(Color.red, ErrorLobbyJoinFailed);
                 yield break;
             }
 
@@ -1345,8 +1320,7 @@ internal class ConnectInterface {
         }
 
         // Show config panel with default name
-        _matchmakingGroup.SetActive(false);
-        _lobbyConfigPanel.Show();
+        OpenPanel(_matchmakingGroup, _lobbyConfigPanel);
     }
 
     /// <summary>
@@ -1511,8 +1485,7 @@ internal class ConnectInterface {
         }
 
         // Hide matchmaking content and show lobby browser
-        _matchmakingGroup.SetActive(false);
-        _lobbyBrowserPanel.Show();
+        OpenPanel(_matchmakingGroup, _lobbyBrowserPanel);
 
         ShowFeedback(Color.yellow, "Fetching lobbies...");
         MonoBehaviourUtil.Instance.StartCoroutine(FetchLobbiesCoroutine());
@@ -1543,12 +1516,7 @@ internal class ConnectInterface {
         _lobbyBrowserPanel.SetLobbies(lobbies);
         _lobbyBrowserPanel.Show();
 
-        if (lobbies.Count == 0) {
-            ShowFeedback(Color.yellow, "No public lobbies found.");
-        } else {
-            var word = lobbies.Count == 1 ? "Lobby" : "Lobbies";
-            ShowFeedback(Color.green, $"Found {lobbies.Count} {word}");
-        }
+        ShowLobbyCountFeedback(lobbies.Count);
 
         Logger.Info($"ConnectInterface: Displaying {lobbies.Count} public lobbies");
     }
@@ -1575,8 +1543,7 @@ internal class ConnectInterface {
         if (_steamLobbyConfigPanel == null || _steamGroup == null) return;
 
         // Show config panel with default name
-        _steamGroup.SetActive(false);
-        _steamLobbyConfigPanel.Show();
+        OpenPanel(_steamGroup, _steamLobbyConfigPanel);
     }
 
     /// <summary>
@@ -1585,15 +1552,14 @@ internal class ConnectInterface {
     /// </summary>
     private void OnBrowseLobbyButtonPressed() {
         if (!SteamManager.IsInitialized) {
-            ShowFeedback(Color.red, "Steam is not available.");
+            ShowFeedback(Color.red, ErrorSteamUnavailable);
             return;
         }
 
         if (_steamLobbyBrowserPanel == null || _steamGroup == null) return;
 
         // Hide Steam content and show lobby browser
-        _steamGroup.SetActive(false);
-        _steamLobbyBrowserPanel.Show();
+        OpenPanel(_steamGroup, _steamLobbyBrowserPanel);
 
         ShowFeedback(Color.yellow, "Fetching lobbies...");
         MonoBehaviourUtil.Instance.StartCoroutine(FetchSteamLobbiesCoroutine());
@@ -1615,12 +1581,7 @@ internal class ConnectInterface {
 
         _steamLobbyBrowserPanel?.SetLobbies(lobbies);
 
-        ShowFeedback(
-            lobbies.Count == 0 ? Color.yellow : Color.green,
-            lobbies.Count == 0
-                ? "No public lobbies found."
-                : $"Found {lobbies.Count} {(lobbies.Count == 1 ? "Lobby" : "Lobbies")}"
-        );
+        ShowLobbyCountFeedback(lobbies.Count);
 
         Logger.Info($"ConnectInterface: Displaying {lobbies.Count} public lobbies (Steam tab)");
     }
@@ -1632,7 +1593,7 @@ internal class ConnectInterface {
     /// <param name="steamLobbyIdString">The Steam lobby ID as a string.</param>
     private void JoinSteamLobbyFromBrowser(string steamLobbyIdString) {
         if (!SteamManager.IsInitialized) {
-            ShowFeedback(Color.red, "Steam is not available.");
+            ShowFeedback(Color.red, ErrorSteamUnavailable);
             return;
         }
 
@@ -1651,7 +1612,7 @@ internal class ConnectInterface {
     /// </summary>
     private void OnJoinFriendButtonPressed() {
         if (!SteamManager.IsInitialized) {
-            ShowFeedback(Color.red, "Steam is not available.");
+            ShowFeedback(Color.red, ErrorSteamUnavailable);
             return;
         }
 

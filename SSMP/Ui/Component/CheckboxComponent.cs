@@ -50,7 +50,7 @@ internal class CheckboxComponent : Component, ICheckboxComponent {
     /// <inheritdoc />
     public bool IsToggled {
         get => _isToggled;
-        set {
+        private set {
             _isToggled = value;
 
             _checkmarkObject.SetActive(value);
@@ -73,25 +73,19 @@ internal class CheckboxComponent : Component, ICheckboxComponent {
         _isToggled = defaultValue;
 
         // Create background object with image
-        var backgroundObject = new GameObject();
-        backgroundObject.AddComponent<RectTransform>().sizeDelta = size;
+        var backgroundObject = CreateChildObject(size);
         backgroundObject.AddComponent<CanvasRenderer>();
 
         _bgImage = backgroundObject.AddComponent<Image>();
         _bgImage.sprite = bgSprite.Neutral;
         _bgImage.type = Image.Type.Sliced;
 
-        backgroundObject.transform.SetParent(GameObject.transform, false);
-
         // Create checkmark object with image
-        _checkmarkObject = new GameObject();
-        _checkmarkObject.AddComponent<RectTransform>().sizeDelta = size;
+        _checkmarkObject = CreateChildObject(size);
 
         _checkmarkImage = _checkmarkObject.AddComponent<Image>();
         _checkmarkImage.sprite = checkSprite;
         _checkmarkImage.type = Image.Type.Sliced;
-
-        _checkmarkObject.transform.SetParent(GameObject.transform, false);
         _checkmarkObject.SetActive(defaultValue);
 
         var eventTrigger = GameObject.AddComponent<EventTrigger>();
@@ -164,16 +158,7 @@ internal class CheckboxComponent : Component, ICheckboxComponent {
         _interactable = interactable;
 
         var color = _checkmarkImage.color;
-        if (interactable) {
-            _bgImage.sprite = _bgSprite.Neutral;
-
-            color.a = 1f;
-        } else {
-            _bgImage.sprite = _bgSprite.Disabled;
-
-            color.a = NotInteractableOpacity;
-        }
-
+        color.a = ApplyInteractableSprite(_bgImage, _bgSprite, interactable);
         _checkmarkImage.color = color;
     }
 }

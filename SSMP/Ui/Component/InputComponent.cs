@@ -3,7 +3,6 @@ using SSMP.Ui.Resources;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
-using Object = UnityEngine.Object;
 
 namespace SSMP.Ui.Component;
 
@@ -12,12 +11,12 @@ internal class InputComponent : Component, IInputComponent {
     /// <summary>
     /// The default width of the component.
     /// </summary>
-    protected const float DefaultWidth = 240f;
+    private const float DefaultWidth = 240f;
 
     /// <summary>
     /// The default height of the component.
     /// </summary>
-    public const float DefaultHeight = 38f;
+    private const float DefaultHeight = 38f;
 
     /// <summary>
     /// The margin of the text with the borders of the component.
@@ -123,8 +122,7 @@ internal class InputComponent : Component, IInputComponent {
         Image.sprite = bgSprite.Neutral;
         Image.type = Image.Type.Sliced;
 
-        var placeholder = new GameObject();
-        placeholder.AddComponent<RectTransform>().sizeDelta = size;
+        var placeholder = CreateChildObject(size);
         var placeholderTextComponent = placeholder.AddComponent<Text>();
         placeholderTextComponent.text = placeholderText;
         placeholderTextComponent.font = font;
@@ -133,12 +131,7 @@ internal class InputComponent : Component, IInputComponent {
         // Make the color white with opacity so it is clearly different from inputted text
         placeholderTextComponent.color = new Color(1f, 1f, 1f, 0.5f);
 
-        // Set the transform parent to the InputComponent gameObject
-        placeholder.transform.SetParent(GameObject.transform, false);
-        Object.DontDestroyOnLoad(placeholder);
-
-        var textObject = new GameObject();
-        textObject.AddComponent<RectTransform>().sizeDelta = size - new Vector2(TextMargin * 2f, 0f);
+        var textObject = CreateChildObject(size - new Vector2(TextMargin * 2f, 0f));
         Text = textObject.AddComponent<Text>();
         Text.text = defaultValue;
         Text.font = font;
@@ -147,10 +140,6 @@ internal class InputComponent : Component, IInputComponent {
         Text.color = Color.white;
 
         // Set the transform parent to the InputComponent gameObject
-        textObject.transform.SetParent(GameObject.transform, false);
-
-        Object.DontDestroyOnLoad(textObject);
-
         // Create the actual inputField component
         InputField = GameObject.AddComponent<InputField>();
         InputField.targetGraphic = Image;
@@ -202,13 +191,7 @@ internal class InputComponent : Component, IInputComponent {
 
         InputField.interactable = interactable;
 
-        if (interactable) {
-            Image.sprite = _bgSprite.Neutral;
-            SetTextAlpha(1f);
-        } else {
-            Image.sprite = _bgSprite.Disabled;
-            SetTextAlpha(NotInteractableOpacity);
-        }
+        SetTextAlpha(ApplyInteractableSprite(Image, _bgSprite, interactable));
     }
 
     /// <inheritdoc />

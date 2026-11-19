@@ -2,7 +2,6 @@ using System;
 using SSMP.Networking.Matchmaking.Protocol;
 using UnityEngine;
 using UnityEngine.UI;
-using Object = UnityEngine.Object;
 
 namespace SSMP.Ui.Component;
 
@@ -10,10 +9,7 @@ namespace SSMP.Ui.Component;
 /// A modal panel for configuring lobby settings before creation.
 /// Shows lobby name, max players, visibility toggle, and create/cancel buttons.
 /// </summary>
-internal class LobbyConfigPanel : IComponent {
-    /// <summary>The root GameObject for this panel.</summary>
-    private GameObject GameObject { get; }
-
+internal class LobbyConfigPanel : PanelComponent {
     /// <summary>Text displaying the current visibility option (Steam only).</summary>
     private readonly Text _visibilityText;
 
@@ -25,12 +21,6 @@ internal class LobbyConfigPanel : IComponent {
 
     /// <summary>Callback invoked when Cancel is pressed.</summary>
     private Action? _onCancel;
-
-    /// <summary>Tracks the panel's own active state.</summary>
-    private bool _activeSelf;
-
-    /// <summary>Parent component group for visibility management.</summary>
-    private readonly ComponentGroup _componentGroup;
 
     /// <summary>The lobby type: Steam or Matchmaking.</summary>
     private readonly PublicLobbyType _lobbyType;
@@ -58,19 +48,12 @@ internal class LobbyConfigPanel : IComponent {
     /// <param name="size">Panel size</param>
     /// <param name="lobbyType">Type of lobby.</param>
     public LobbyConfigPanel(
-        ComponentGroup parent, 
-        Vector2 position, 
-        Vector2 size, 
+        ComponentGroup parent,
+        Vector2 position,
+        Vector2 size,
         PublicLobbyType lobbyType = PublicLobbyType.Matchmaking
-    ) {
+    ) : base("LobbyConfigPanel", parent, position, size) {
         _lobbyType = lobbyType;
-
-        // Create main container
-        GameObject = new GameObject("LobbyConfigPanel");
-        var rect = GameObject.AddComponent<RectTransform>();
-        rect.anchorMin = rect.anchorMax = new Vector2(position.x / 1920f, position.y / 1080f);
-        rect.sizeDelta = size;
-        rect.pivot = new Vector2(0.5f, 1f);
 
         var currentY = 0f;
 
@@ -142,13 +125,7 @@ internal class LobbyConfigPanel : IComponent {
         );
         createBtn.transform.SetParent(GameObject.transform, false);
 
-        // Component group setup - same pattern as LobbyBrowserPanel
-        _componentGroup = parent;
-        _activeSelf = false;
-        parent.AddComponent(this);
-        GameObject.transform.SetParent(UiManager.UiGameObject!.transform, false);
-        Object.DontDestroyOnLoad(GameObject);
-        GameObject.SetActive(false);
+        Register();
     }
 
     #region Public API
@@ -168,47 +145,17 @@ internal class LobbyConfigPanel : IComponent {
     /// <summary>
     /// Shows the panel.
     /// </summary>
-    public void Show() {
+    public override void Show() {
         GameObject.SetActive(true);
-        _activeSelf = true;
+        ActiveSelf = true;
     }
 
     /// <summary>
     /// Hides the panel.
     /// </summary>
-    public void Hide() {
+    public override void Hide() {
         GameObject.SetActive(false);
-        _activeSelf = false;
-    }
-
-    #endregion
-
-    #region IComponent
-
-    public void SetGroupActive(bool groupActive) {
-        if (GameObject == null) return;
-        GameObject.SetActive(_activeSelf && groupActive);
-    }
-
-    public void SetActive(bool active) {
-        _activeSelf = active;
-        GameObject.SetActive(_activeSelf && _componentGroup.IsActive());
-    }
-
-    public Vector2 GetPosition() {
-        var rectTransform = GameObject.GetComponent<RectTransform>();
-        var position = rectTransform.anchorMin;
-        return new Vector2(position.x * 1920f, position.y * 1080f);
-    }
-
-    public void SetPosition(Vector2 position) {
-        var rect = GameObject.GetComponent<RectTransform>();
-        rect.anchorMin = rect.anchorMax = new Vector2(position.x / 1920f, position.y / 1080f);
-    }
-
-    public Vector2 GetSize() {
-        var rect = GameObject.GetComponent<RectTransform>();
-        return rect.sizeDelta;
+        ActiveSelf = false;
     }
 
     #endregion
@@ -219,36 +166,25 @@ internal class LobbyConfigPanel : IComponent {
         _onCreate?.Invoke(_visibility);
     }
 
-    private void OnPrevVisibility() {
-        // For matchmaking, skip FriendsOnly (Steam-specific)
-        if (_lobbyType == PublicLobbyType.Matchmaking) {
-            _visibility = _visibility == LobbyVisibility.Public 
-                ? LobbyVisibility.Private 
-                : LobbyVisibility.Public;
-        } else {
-            _visibility = _visibility switch {
-                LobbyVisibility.Public => LobbyVisibility.Private,
-                LobbyVisibility.FriendsOnly => LobbyVisibility.Public,
-                LobbyVisibility.Private => LobbyVisibility.FriendsOnly,
-                _ => LobbyVisibility.Public
-            };
-        }
-        UpdateVisibilityText();
-    }
+    private void OnPrevVisibility() => StepVisibility(-1);
 
-    private void OnNextVisibility() {
+    private void OnNextVisibility() => StepVisibility(1);
+
+    /// <summary>
+    /// Moves the visibility one step through the available options, wrapping around.
+    /// </summary>
+    /// <param name="step">+1 for next, -1 for previous.</param>
+    private void StepVisibility(int step) {
         // For matchmaking, skip FriendsOnly (Steam-specific)
         if (_lobbyType == PublicLobbyType.Matchmaking) {
-            _visibility = _visibility == LobbyVisibility.Public 
-                ? LobbyVisibility.Private 
+            _visibility = _visibility == LobbyVisibility.Public
+                ? LobbyVisibility.Private
                 : LobbyVisibility.Public;
         } else {
-            _visibility = _visibility switch {
-                LobbyVisibility.Public => LobbyVisibility.FriendsOnly,
-                LobbyVisibility.FriendsOnly => LobbyVisibility.Private,
-                _ => LobbyVisibility.Public
-            };
+            // Relies on the enum order Public, FriendsOnly, Private
+            _visibility = (LobbyVisibility) (((int) _visibility + step + 3) % 3);
         }
+
         UpdateVisibilityText();
     }
 

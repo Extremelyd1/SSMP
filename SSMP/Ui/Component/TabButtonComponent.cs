@@ -3,7 +3,6 @@ using SSMP.Ui.Util;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
-using Object = UnityEngine.Object;
 
 namespace SSMP.Ui.Component;
 
@@ -24,7 +23,7 @@ internal class TabButtonComponent : Component, IButtonComponent {
     /// <summary>
     /// The shine overlay image component.
     /// </summary>
-    private readonly Image? _shineOverlay;
+    private readonly Image _shineOverlay;
 
     /// <summary>
     /// The action to execute when the button is pressed.
@@ -90,30 +89,19 @@ internal class TabButtonComponent : Component, IButtonComponent {
         
         _shineOverlay = shineObject.AddComponent<Image>();
         
-        var gradientTexture = UiUtils.CreateHorizontalGradientTexture(256, 1);
-        var gradientSprite = Sprite.Create(
-            gradientTexture,
-            new Rect(0, 0, 256, 1),
-            new Vector2(0.5f, 0.5f)
-        );
-        _shineOverlay.sprite = gradientSprite;
+        _shineOverlay.sprite = UiUtils.HorizontalGradientSprite;
         _shineOverlay.color = new Color(1f, 0.7f, 0.3f, 0f); // Initially invisible
         
         shineObject.transform.SetParent(GameObject.transform, false);
-        Object.DontDestroyOnLoad(shineObject);
 
         // Create the text component
-        var textObject = new GameObject();
-        textObject.AddComponent<RectTransform>().sizeDelta = size;
+        var textObject = CreateChildObject(size);
         _text = textObject.AddComponent<Text>();
         _text.text = text;
         _text.font = font;
         _text.fontSize = fontSize;
         _text.alignment = TextAnchor.MiddleCenter;
         _text.color = Color.white;
-
-        textObject.transform.SetParent(GameObject.transform, false);
-        Object.DontDestroyOnLoad(textObject);
 
         var eventTrigger = GameObject.AddComponent<EventTrigger>();
         _isMouseDown = false;
@@ -123,11 +111,7 @@ internal class TabButtonComponent : Component, IButtonComponent {
             _isHover = true;
             if (_interactable && !_isActive) {
                 _image.color = new Color(0.12f, 0.1f, 0.08f, 1f);
-                if (_shineOverlay != null) {
-                    var color = _shineOverlay.color;
-                    color.a = 0.4f;
-                    _shineOverlay.color = color;
-                }
+                SetShineAlpha(0.4f);
             }
         });
 
@@ -135,11 +119,7 @@ internal class TabButtonComponent : Component, IButtonComponent {
             _isHover = false;
             if (_interactable && !_isMouseDown && !_isActive) {
                 _image.color = new Color(0.05f, 0.05f, 0.05f, 1f);
-                if (_shineOverlay != null) {
-                    var color = _shineOverlay.color;
-                    color.a = 0f;
-                    _shineOverlay.color = color;
-                }
+                SetShineAlpha(0f);
             }
         });
 
@@ -147,11 +127,7 @@ internal class TabButtonComponent : Component, IButtonComponent {
             _isMouseDown = true;
             if (_interactable) {
                 _image.color = new Color(0.15f, 0.12f, 0.1f, 1f);
-                if (_shineOverlay != null) {
-                    var color = _shineOverlay.color;
-                    color.a = 0.6f;
-                    _shineOverlay.color = color;
-                }
+                SetShineAlpha(0.6f);
             }
         });
 
@@ -173,23 +149,25 @@ internal class TabButtonComponent : Component, IButtonComponent {
         
         if (active) {
             // Active tab - darker background with persistent glow
-            if (_image != null) _image.color = new Color(0.1f, 0.1f, 0.1f, 1f);
-            if (_text != null) _text.color = new Color(1.0f, 0.7f, 0.3f, 1f); // Orange
-            if (_shineOverlay != null) {
-                var color = _shineOverlay.color;
-                color.a = 0.6f; // Persistent glow
-                _shineOverlay.color = color;
-            }
+            _image.color = new Color(0.1f, 0.1f, 0.1f, 1f);
+            _text.color = new Color(1.0f, 0.7f, 0.3f, 1f); // Orange
+            SetShineAlpha(0.6f);
         } else {
             // Inactive tab
-            if (_image != null) _image.color = new Color(0.05f, 0.05f, 0.05f, 1f);
-            if (_text != null) _text.color = Color.white;
-            if (_shineOverlay != null && !_isHover) {
-                var color = _shineOverlay.color;
-                color.a = 0f;
-                _shineOverlay.color = color;
-            }
+            _image.color = new Color(0.05f, 0.05f, 0.05f, 1f);
+            _text.color = Color.white;
+            if (!_isHover) SetShineAlpha(0f);
         }
+    }
+
+    /// <summary>
+    /// Sets the alpha of the shine overlay, keeping its colour.
+    /// </summary>
+    /// <param name="alpha">The new alpha.</param>
+    private void SetShineAlpha(float alpha) {
+        var color = _shineOverlay.color;
+        color.a = alpha;
+        _shineOverlay.color = color;
     }
 
     /// <summary>

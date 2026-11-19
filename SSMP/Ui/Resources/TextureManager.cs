@@ -43,7 +43,7 @@ internal static class TextureManager {
     /// <summary>
     /// The close button background sprites.
     /// </summary>
-    public static MultiStateSprite CloseButtonBg;
+    private static MultiStateSprite _closeButtonBg;
 
     /// <summary>
     /// The radio button toggle sprite.
@@ -56,11 +56,6 @@ internal static class TextureManager {
     public static Sprite CheckBoxToggle = null!;
 
     /// <summary>
-    /// The HKMP logo sprite.
-    /// </summary>
-    public static Sprite HkmpLogo = null!;
-
-    /// <summary>
     /// The network icon sprite.
     /// </summary>
     public static Sprite NetworkIcon = null!;
@@ -69,11 +64,12 @@ internal static class TextureManager {
     /// Load texture by searching for the embedded resources in the assembly.
     /// </summary>
     public static void LoadTextures() {
-        var resourceNames = Assembly.GetExecutingAssembly().GetManifestResourceNames();
+        var assembly = Assembly.GetExecutingAssembly();
+        var resourceNames = assembly.GetManifestResourceNames();
         foreach (var name in resourceNames) {
             if (name.StartsWith(ImagePathPrefix) && name.EndsWith(ImageSuffix)) {
                 try {
-                    var texture = GetTextureFromManifestResource(name);
+                    var texture = GetTextureFromManifestResource(assembly, name);
                     if (texture == null) {
                         Logger.Error($"Could not find texture for manifest resource: {name}");
                         continue;
@@ -83,11 +79,11 @@ internal static class TextureManager {
                     // For example, for 'SSMP.Images.some_name.png' we get the 'some_name'
                     // which is the second to last in the split
                     var splitName = name.Split('.');
-                    var textureName = splitName[splitName.Length - 2];
+                    var textureName = splitName[^2];
 
                     Stream? textureDataStream;
                     try {
-                        textureDataStream = Assembly.GetExecutingAssembly()
+                        textureDataStream = assembly
                             .GetManifestResourceStream(ImagePathPrefix + textureName + TextureDataSuffix);
                     } catch {
                         // No data found for this texture
@@ -95,6 +91,7 @@ internal static class TextureManager {
                         continue;
                     }
 
+                    using var dataStreamScope = textureDataStream;
                     if (textureDataStream == null) {
                         var sprite = CreateSpriteFromTexture(texture);
                         SetSpriteVariableByName(textureName, sprite);
@@ -119,7 +116,8 @@ internal static class TextureManager {
     /// <param name="textureDataStream">The texture data stream.</param>
     /// <returns>A Vector4 containing border data.</returns>
     private static Vector4 GetTextureBorderDataFromStream(Stream textureDataStream) {
-        var dataString = new StreamReader(textureDataStream).ReadToEnd();
+        using var reader = new StreamReader(textureDataStream);
+        var dataString = reader.ReadToEnd();
         var splitData = dataString.Split(',');
         if (splitData.Length != 4) {
             Logger.Error("Texture data does not contain 4 entries");
@@ -145,14 +143,15 @@ internal static class TextureManager {
     /// <summary>
     /// Get a texture from a manifest resource name.
     /// </summary>
+    /// <param name="assembly">The assembly containing the resource.</param>
     /// <param name="manifestResourceName">The name of the manifest resource.</param>
     /// <returns>The Texture2D instance if it could be loaded; otherwise null.</returns>
-    private static Texture2D? GetTextureFromManifestResource(string manifestResourceName) {
+    private static Texture2D? GetTextureFromManifestResource(Assembly assembly, string manifestResourceName) {
         // Get the texture stream from assembly by name
         Stream? textureStream;
 
         try {
-            textureStream = Assembly.GetExecutingAssembly().GetManifestResourceStream(manifestResourceName);
+            textureStream = assembly.GetManifestResourceStream(manifestResourceName);
         } catch (Exception e) {
             Logger.Error(
                 $"Could not get manifest resource stream for name \"{manifestResourceName}\":\n{e}");
@@ -163,6 +162,8 @@ internal static class TextureManager {
             Logger.Error($"Could not load resource with name {manifestResourceName}, textureStream was null");
             return null;
         }
+
+        using var streamScope = textureStream;
 
         // Read texture stream to byte buffer
         var readBuffer = new byte[textureStream.Length];
@@ -236,19 +237,16 @@ internal static class TextureManager {
                 CheckBoxToggle = sprite;
                 return;
             case "close_neutral":
-                CloseButtonBg.Neutral = sprite;
+                _closeButtonBg.Neutral = sprite;
                 return;
             case "close_hover":
-                CloseButtonBg.Hover = sprite;
+                _closeButtonBg.Hover = sprite;
                 return;
             case "close_active":
-                CloseButtonBg.Active = sprite;
+                _closeButtonBg.Active = sprite;
                 return;
             case "close_disabled":
-                CloseButtonBg.Disabled = sprite;
-                return;
-            case "hkmp_logo":
-                HkmpLogo = sprite;
+                _closeButtonBg.Disabled = sprite;
                 return;
             case "network_icon":
                 NetworkIcon = sprite;

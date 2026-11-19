@@ -88,12 +88,20 @@ internal class PingInterface {
         );
 
         // Register on update so we can set the text to the latest average RTT
+        // Only reformat the text when the value changes
+        var lastRtt = -1;
         MonoBehaviourUtil.Instance.OnUpdateEvent += () => {
             if (!netClient.IsConnected) {
                 return;
             }
 
-            pingTextComponent.SetText(netClient.UpdateManager.AverageRtt.ToString());
+            var rtt = netClient.UpdateManager.AverageRtt;
+            if (rtt == lastRtt) {
+                return;
+            }
+
+            lastRtt = rtt;
+            pingTextComponent.SetText(rtt.ToString());
         };
     }
 

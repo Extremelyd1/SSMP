@@ -4,7 +4,6 @@ using SSMP.Game.Server;
 using SSMP.Ui.Component;
 using SSMP.Util;
 using UnityEngine;
-using Object = UnityEngine.Object;
 
 namespace SSMP.Ui.Util;
 
@@ -54,23 +53,11 @@ internal static class ConnectInterfaceHelpers {
     /// <param name="y">The y position.</param>
     /// <returns>The created notch GameObject.</returns>
     public static GameObject CreateGlowingNotch(float x, float y) {
-        var notchObject = new GameObject("GlowingNotch");
-        var rect = notchObject.AddComponent<RectTransform>();
-        rect.anchorMin = rect.anchorMax = new Vector2(x / 1920f, y / 1080f);
-        rect.sizeDelta = new Vector2(NotchWidth, NotchHeight);
-        rect.pivot = new Vector2(0.5f, 0.5f);
+        var notchObject = CreateInactiveRoot("GlowingNotch", x, y, new Vector2(NotchWidth, NotchHeight), 0.5f);
 
         var image = notchObject.AddComponent<UnityEngine.UI.Image>();
-        image.sprite = Sprite.Create(
-            UiUtils.CreateHorizontalGradientTexture(256, 1),
-            new Rect(0, 0, 256, 1),
-            new Vector2(0.5f, 0.5f)
-        );
+        image.sprite = UiUtils.HorizontalGradientSprite;
         image.color = Color.white;
-
-        notchObject.transform.SetParent(UiManager.UiGameObject!.transform, false);
-        Object.DontDestroyOnLoad(notchObject);
-        notchObject.SetActive(false);
 
         return notchObject;
     }
@@ -82,11 +69,7 @@ internal static class ConnectInterfaceHelpers {
     /// <param name="y">The y position.</param>
     /// <returns>The background panel GameObject.</returns>
     public static GameObject CreateBackgroundPanel(float x, float y) {
-        var panel = new GameObject("MenuBackground");
-        var rect = panel.AddComponent<RectTransform>();
-        rect.anchorMin = rect.anchorMax = new Vector2(x / 1920f, y / 1080f);
-        rect.sizeDelta = new Vector2(PanelWidth, PanelHeight);
-        rect.pivot = new Vector2(0.5f, 1f);
+        var panel = CreateInactiveRoot("MenuBackground", x, y, new Vector2(PanelWidth, PanelHeight), 1f);
 
         var image = panel.AddComponent<UnityEngine.UI.Image>();
         image.color = Color.white;
@@ -108,11 +91,29 @@ internal static class ConnectInterfaceHelpers {
         );
         image.type = UnityEngine.UI.Image.Type.Sliced;
 
-        panel.transform.SetParent(UiManager.UiGameObject!.transform, false);
         panel.transform.SetAsFirstSibling();
-        Object.DontDestroyOnLoad(panel);
-        panel.SetActive(false);
         return panel;
+    }
+
+    /// <summary>
+    /// Creates an inactive, anchored RectTransform object parented to the UI root.
+    /// </summary>
+    /// <param name="name">The name of the object.</param>
+    /// <param name="x">The x position.</param>
+    /// <param name="y">The y position.</param>
+    /// <param name="size">The size of the object.</param>
+    /// <param name="pivotY">The vertical pivot.</param>
+    /// <returns>The created GameObject.</returns>
+    private static GameObject CreateInactiveRoot(string name, float x, float y, Vector2 size, float pivotY) {
+        var obj = new GameObject(name);
+        var rect = obj.AddComponent<RectTransform>();
+        rect.anchorMin = rect.anchorMax = new Vector2(x / 1920f, y / 1080f);
+        rect.sizeDelta = size;
+        rect.pivot = new Vector2(0.5f, pivotY);
+
+        obj.transform.SetParent(UiManager.UiGameObject!.transform, false);
+        obj.SetActive(false);
+        return obj;
     }
 
     /// <summary>
@@ -243,27 +244,18 @@ internal static class ConnectInterfaceHelpers {
         newCoroutine = currentCoroutine;
         username = usernameInput.GetInput();
 
-        if (username.Length == 0) {
-            newCoroutine = SetFeedbackText(
-                feedbackText,
-                Color.red,
-                "Failed to connect:\nYou must enter a username",
-                currentCoroutine
-            );
-            return false;
+        var error = username.Length switch {
+            0 => "You must enter a username",
+            > ServerManager.MaxUsernameLength => "Username is too long",
+            _ => null
+        };
+
+        if (error == null) {
+            return true;
         }
 
-        if (username.Length > ServerManager.MaxUsernameLength) {
-            newCoroutine = SetFeedbackText(
-                feedbackText,
-                Color.red,
-                "Failed to connect:\nUsername is too long",
-                currentCoroutine
-            );
-            return false;
-        }
-
-        return true;
+        newCoroutine = SetFeedbackText(feedbackText, Color.red, $"Failed to connect:\n{error}", currentCoroutine);
+        return false;
     }
 
     /// <summary>

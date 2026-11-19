@@ -11,10 +11,7 @@ namespace SSMP.Ui.Component;
 /// A full-screen overlay panel that displays public lobbies from MMS.
 /// Includes Back and Refresh buttons at the bottom.
 /// </summary>
-internal class LobbyBrowserPanel : IComponent {
-    /// <summary>The root GameObject for this panel.</summary>
-    private GameObject GameObject { get; }
-
+internal class LobbyBrowserPanel : PanelComponent {
     /// <summary>Content container for the scrollable lobby list.</summary>
     private readonly RectTransform _content;
 
@@ -33,12 +30,6 @@ internal class LobbyBrowserPanel : IComponent {
     /// <summary>Callback invoked when Refresh is pressed.</summary>
     private Action? _onRefresh;
 
-    /// <summary>Tracks the panel's own active state.</summary>
-    private bool _activeSelf;
-
-    /// <summary>Parent component group for visibility management.</summary>
-    private readonly ComponentGroup _componentGroup;
-
     /// <summary>Height of each lobby entry row.</summary>
     private const float EntryHeight = 50f;
 
@@ -54,14 +45,10 @@ internal class LobbyBrowserPanel : IComponent {
     /// <summary>Height of the bottom button area.</summary>
     private const float ButtonAreaHeight = 60f;
 
-    public LobbyBrowserPanel(ComponentGroup parent, Vector2 position, Vector2 size) {
+    // Main container has no background and sits inside the existing panel
+    public LobbyBrowserPanel(ComponentGroup parent, Vector2 position, Vector2 size)
+        : base("LobbyBrowserPanel", parent, position, size) {
         // Create main container - no background, sits inside existing panel
-        GameObject = new GameObject("LobbyBrowserPanel");
-        var rect = GameObject.AddComponent<RectTransform>();
-        rect.anchorMin = rect.anchorMax = new Vector2(position.x / 1920f, position.y / 1080f);
-        rect.sizeDelta = size;
-        rect.pivot = new Vector2(0.5f, 1f); // Top-center pivot to align with content area
-
         // Header: "PUBLIC LOBBIES"
         var header = new GameObject("Header");
         var headerRect = header.AddComponent<RectTransform>();
@@ -141,25 +128,43 @@ internal class LobbyBrowserPanel : IComponent {
         buttonArea.transform.SetParent(GameObject.transform, false);
 
         // Back button (left)
-        CreateButton(buttonArea.transform, "BackButton", "← BACK", 
+        CreateButton(
+            buttonArea.transform, "BackButton", "← BACK", 16,
             new Vector2(0.02f, 0.12f), new Vector2(0.48f, 0.88f),
-            new Color(0.15f, 0.15f, 0.18f, 1f), () => _onBack?.Invoke());
+            new Color(0.15f, 0.15f, 0.18f, 1f), () => _onBack?.Invoke()
+        );
 
         // Refresh button (right)
-        CreateButton(buttonArea.transform, "RefreshButton", "↻ REFRESH",
+        CreateButton(
+            buttonArea.transform, "RefreshButton", "↻ REFRESH", 16,
             new Vector2(0.52f, 0.12f), new Vector2(0.98f, 0.88f),
-            new Color(0.15f, 0.4f, 0.25f, 1f), () => _onRefresh?.Invoke());
+            new Color(0.15f, 0.4f, 0.25f, 1f), () => _onRefresh?.Invoke()
+        );
 
-        _componentGroup = parent;
-        _activeSelf = false;
-        parent.AddComponent(this);
-        GameObject.transform.SetParent(UiManager.UiGameObject!.transform, false);
-        Object.DontDestroyOnLoad(GameObject);
-        GameObject.SetActive(false);
+        Register();
     }
 
-    private void CreateButton(Transform parent, string name, string text, 
-        Vector2 anchorMin, Vector2 anchorMax, Color bgColor, Action onClick) {
+    /// <summary>
+    /// Creates a coloured button with a centred label.
+    /// </summary>
+    /// <param name="parent">The parent transform.</param>
+    /// <param name="name">The name of the button object.</param>
+    /// <param name="text">The label text.</param>
+    /// <param name="fontSize">The label font size.</param>
+    /// <param name="anchorMin">The minimum anchor.</param>
+    /// <param name="anchorMax">The maximum anchor.</param>
+    /// <param name="bgColor">The background colour.</param>
+    /// <param name="onClick">The click callback.</param>
+    private static void CreateButton(
+        Transform parent,
+        string name,
+        string text,
+        int fontSize,
+        Vector2 anchorMin,
+        Vector2 anchorMax,
+        Color bgColor,
+        Action onClick
+    ) {
         var btnObj = new GameObject(name);
         var btnRect = btnObj.AddComponent<RectTransform>();
         btnRect.anchorMin = anchorMin;
@@ -179,7 +184,7 @@ internal class LobbyBrowserPanel : IComponent {
         var textComp = btnText.AddComponent<Text>();
         textComp.text = text;
         textComp.font = Resources.FontManager.UIFontRegular;
-        textComp.fontSize = 16;
+        textComp.fontSize = fontSize;
         textComp.alignment = TextAnchor.MiddleCenter;
         textComp.color = Color.white;
         btnText.transform.SetParent(btnObj.transform, false);
@@ -188,7 +193,6 @@ internal class LobbyBrowserPanel : IComponent {
         button.onClick.AddListener(() => onClick());
 
         btnObj.transform.SetParent(parent, false);
-        Object.DontDestroyOnLoad(btnObj);
     }
 
     /// <summary>
@@ -217,6 +221,7 @@ internal class LobbyBrowserPanel : IComponent {
         foreach (var entry in _lobbyEntries) {
             Object.Destroy(entry);
         }
+
         _lobbyEntries.Clear();
 
         if (lobbies == null || lobbies.Count == 0) {
@@ -277,85 +282,37 @@ internal class LobbyBrowserPanel : IComponent {
         typeText.font = Resources.FontManager.UIFontRegular;
         typeText.fontSize = 14;
         typeText.alignment = TextAnchor.MiddleCenter;
-        typeText.color = lobby.LobbyType == PublicLobbyType.Steam ? new Color(0.4f, 0.7f, 1f, 1f) : new Color(1f, 0.85f, 0.6f, 1f);
+        typeText.color = lobby.LobbyType == PublicLobbyType.Steam
+            ? new Color(0.4f, 0.7f, 1f, 1f)
+            : new Color(1f, 0.85f, 0.6f, 1f);
         typeObj.transform.SetParent(entry.transform, false);
 
         // Join button (right)
-        var btnObj = new GameObject("JoinButton");
-        var btnRect = btnObj.AddComponent<RectTransform>();
-        btnRect.anchorMin = new Vector2(0.72f, 0.15f);
-        btnRect.anchorMax = new Vector2(0.98f, 0.85f);
-        btnRect.offsetMin = Vector2.zero;
-        btnRect.offsetMax = Vector2.zero;
-        var btnImage = btnObj.AddComponent<Image>();
-        btnImage.color = new Color(0.2f, 0.5f, 0.3f, 1f);
-
-        var btnText = new GameObject("Text");
-        var btnTextRect = btnText.AddComponent<RectTransform>();
-        btnTextRect.anchorMin = Vector2.zero;
-        btnTextRect.anchorMax = Vector2.one;
-        btnTextRect.offsetMin = Vector2.zero;
-        btnTextRect.offsetMax = Vector2.zero;
-        var btnTextComp = btnText.AddComponent<Text>();
-        btnTextComp.text = "JOIN";
-        btnTextComp.font = Resources.FontManager.UIFontRegular;
-        btnTextComp.fontSize = 14;
-        btnTextComp.alignment = TextAnchor.MiddleCenter;
-        btnTextComp.color = Color.white;
-        btnText.transform.SetParent(btnObj.transform, false);
-        btnObj.transform.SetParent(entry.transform, false);
-
-        var button = btnObj.AddComponent<Button>();
         var capturedLobby = lobby;
-        button.onClick.AddListener(() => _onLobbySelected?.Invoke(capturedLobby));
+        CreateButton(
+            entry.transform, "JoinButton", "JOIN", 14,
+            new Vector2(0.72f, 0.15f), new Vector2(0.98f, 0.85f),
+            new Color(0.2f, 0.5f, 0.3f, 1f), () => _onLobbySelected?.Invoke(capturedLobby)
+        );
 
         entry.transform.SetParent(_content.transform, false);
-        Object.DontDestroyOnLoad(entry);
         return entry;
     }
 
     /// <summary>
     /// Shows the panel.
     /// </summary>
-    public void Show() => GameObject.SetActive(true);
+    public override void Show() => GameObject.SetActive(true);
 
     /// <summary>
     /// Hides the panel.
     /// </summary>
-    public void Hide() => GameObject.SetActive(false);
+    public override void Hide() => GameObject.SetActive(false);
 
     /// <summary>
     /// Gets whether the panel is currently visible.
     /// </summary>
     public bool IsVisible => GameObject.activeSelf;
-
-    /// <inheritdoc />
-    public void SetGroupActive(bool groupActive) {
-        if (GameObject == null) return;
-        GameObject.SetActive(_activeSelf && groupActive);
-    }
-
-    /// <inheritdoc />
-    public void SetActive(bool active) {
-        _activeSelf = active;
-        GameObject.SetActive(_activeSelf && _componentGroup.IsActive());
-    }
-
-    /// <inheritdoc />
-    public Vector2 GetPosition() {
-        var rectTransform = GameObject.GetComponent<RectTransform>();
-        var position = rectTransform.anchorMin;
-        return new Vector2(position.x * 1920f, position.y * 1080f);
-    }
-
-    /// <inheritdoc />
-    public void SetPosition(Vector2 position) {
-        var rectTransform = GameObject.GetComponent<RectTransform>();
-        rectTransform.anchorMin = rectTransform.anchorMax = new Vector2(position.x / 1920f, position.y / 1080f);
-    }
-
-    /// <inheritdoc />
-    public Vector2 GetSize() => GameObject.GetComponent<RectTransform>().sizeDelta;
 
     /// <summary>
     /// Breaks the given string by inserting a newline character just before the next uppercase character after a

@@ -1,6 +1,8 @@
 ﻿using System;
+using SSMP.Ui.Resources;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.UI;
 using Object = UnityEngine.Object;
 
 namespace SSMP.Ui.Component;
@@ -104,6 +106,30 @@ internal abstract class Component : IComponent {
     /// </summary>
     public void Destroy() {
         Object.Destroy(GameObject);
+    }
+
+    /// <summary>
+    /// Create a child object with a RectTransform of the given size, parented to this component's GameObject.
+    /// </summary>
+    /// <param name="size">The size of the child's RectTransform.</param>
+    /// <returns>The created child object.</returns>
+    protected GameObject CreateChildObject(Vector2 size) {
+        var child = new GameObject();
+        child.AddComponent<RectTransform>().sizeDelta = size;
+        child.transform.SetParent(GameObject.transform, false);
+        return child;
+    }
+
+    /// <summary>
+    /// Set the sprite of the given image to the neutral or disabled sprite based on interactability.
+    /// </summary>
+    /// <param name="image">The background image.</param>
+    /// <param name="sprites">The background sprites.</param>
+    /// <param name="interactable">Whether the component is interactable.</param>
+    /// <returns>The alpha that foreground graphics should use for the given interactability.</returns>
+    protected static float ApplyInteractableSprite(Image image, MultiStateSprite sprites, bool interactable) {
+        image.sprite = interactable ? sprites.Neutral : sprites.Disabled;
+        return interactable ? 1f : NotInteractableOpacity;
     }
 
     /// <summary>
